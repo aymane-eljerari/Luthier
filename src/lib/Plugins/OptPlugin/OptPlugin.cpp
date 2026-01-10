@@ -18,12 +18,17 @@
 /// Main file for the Luthier "opt" compiler plugin, which registers Luthier
 /// passes and their names with the new pass manager's pass builder when loaded.
 //===----------------------------------------------------------------------===//
+#include "luthier/Tooling/AMDGPUMockLoaderPrinter.h"
 #include "luthier/Tooling/AMDGPURegisterLiveness.h"
+#include "luthier/Tooling/CodeDiscoveryPass.h"
 #include "luthier/Tooling/CodeObjectManagerAnalysis.h"
+#include "luthier/Tooling/InitialEntryPointAnalysis.h"
+#include "luthier/Tooling/InstructionTracesAnalysis.h"
 #include "luthier/Tooling/InstrumentationPMDriver.h"
 #include "luthier/Tooling/IntrinsicMIRLoweringPass.h"
 #include "luthier/Tooling/LRCallgraph.h"
 #include "luthier/Tooling/MMISlotIndexesAnalysis.h"
+#include "luthier/Tooling/MetadataParserAnalysis.h"
 #include "luthier/Tooling/MockAMDGPULoader.h"
 #include "luthier/Tooling/MockLoadAMDGPUCodeObjects.h"
 #include "luthier/Tooling/PhysRegsNotInLiveInsAnalysis.h"
@@ -31,10 +36,6 @@
 #include "luthier/Tooling/SVStorageAndLoadLocations.h"
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Plugins/PassPlugin.h>
-#include <luthier/Tooling/CodeDiscoveryPass.h>
-#include <luthier/Tooling/InitialEntryPointAnalysis.h>
-#include <luthier/Tooling/InstructionTracesAnalysis.h>
-#include <luthier/Tooling/MetadataParserAnalysis.h>
 
 namespace luthier {
 
@@ -194,6 +195,10 @@ llvmGetPassPluginInfo() {
           if (Name == "luthier-mock-load-amdgpu-code-objects") {
             MPM.addPass(
                 luthier::MockLoadAMDGPUCodeObjects(luthier::MockLoaderOptions));
+            return true;
+          };
+          if (Name == "luthier-amdgpu-mock-loader-printer") {
+            MPM.addPass(luthier::AMDGPUMockLoaderPrinter(llvm::outs()));
             return true;
           };
           if (Name == "luthier-code-discovery") {

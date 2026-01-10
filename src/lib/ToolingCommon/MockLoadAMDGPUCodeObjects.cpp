@@ -20,6 +20,10 @@
 #include "luthier/Tooling/CodeObjectManagerAnalysis.h"
 #include <llvm/IR/Module.h>
 
+#undef DEBUG_TYPE
+
+#define DEBUG_TYPE "luthier-amdgpu-mock-loader-printer"
+
 namespace luthier {
 
 bool MockAMDGPULoaderExternalVarParser::parse(
