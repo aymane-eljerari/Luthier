@@ -95,9 +95,9 @@ MockLoadedCodeObject::MockLoadedCodeObject(MockAMDGPULoader &Owner,
     return;
   }
 
-  for (const auto Phdr : *ProgramHeadersOrErr) {
+  for (const auto &Phdr : *ProgramHeadersOrErr) {
     if (Phdr.p_type == llvm::ELF::PT_LOAD) {
-      PTLoadSegments.push_back(Phdr);
+      PTLoadSegments.push_back(&Phdr);
     }
   }
 
@@ -108,12 +108,12 @@ MockLoadedCodeObject::MockLoadedCodeObject(MockAMDGPULoader &Owner,
 
   /// Even though the load segments should be  pre-sorted w.r.t their
   /// virtual address, we take a precaution and sort it anyway
-  llvm::sort(PTLoadSegments, [](const auto &Lhs, const auto &Rhs) {
-    return Lhs.get().p_vaddr < Rhs.get().p_vaddr;
+  llvm::sort(PTLoadSegments, [](const auto *Lhs, const auto *Rhs) {
+    return Lhs->p_vaddr < Rhs->p_vaddr;
   });
 
   uint64_t Size =
-      PTLoadSegments.back().get().p_vaddr + PTLoadSegments.back().get().p_memsz;
+      PTLoadSegments.back()->p_vaddr + PTLoadSegments.back()->p_memsz;
 
   /// Allocate the region and zero its memory
   LoadedRegion = {new (std::align_val_t{AMD_ISA_ALIGN_BYTES}, std::nothrow)
@@ -130,9 +130,9 @@ MockLoadedCodeObject::MockLoadedCodeObject(MockAMDGPULoader &Owner,
   /// If region allocation was successful, load the PT_LOAD segments
 
   for (auto PTLoadSegment : PTLoadSegments) {
-    std::memcpy(&LoadedRegion[PTLoadSegment.get().p_vaddr],
-                &Elf.getBufferStart()[PTLoadSegment.get().p_offset],
-                PTLoadSegment.get().p_filesz);
+    std::memcpy(&LoadedRegion[PTLoadSegment->p_vaddr],
+                &Elf.getBufferStart()[PTLoadSegment->p_offset],
+                PTLoadSegment->p_filesz);
   }
 }
 

@@ -41,7 +41,7 @@ add_library(LuthierToolingCommon OBJECT
         MIRConvenience.cpp
         MockAMDGPULoader.cpp
         MetadataParserAnalysis.cpp
-        ImmutableMachineInstr.cpp
+        #        ImmutableMachineInstr.cpp
         IntrinsicProcessorRegistry.cpp
         IntrinsicProcessorsAnalysis.cpp
         InstrumentationPMDriver.cpp

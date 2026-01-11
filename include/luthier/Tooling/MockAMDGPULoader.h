@@ -43,9 +43,7 @@ class MockLoadedCodeObject {
   llvm::MutableArrayRef<std::byte> LoadedRegion{};
 
   /// List of load segments of the ELF, sorted w.r.t their virtual address
-  llvm::SmallVector<std::reference_wrapper<const llvm::object::ELF64LE::Phdr>,
-                    4>
-      PTLoadSegments{};
+  llvm::SmallVector<const llvm::object::ELF64LE::Phdr *, 4> PTLoadSegments{};
 
   MockLoadedCodeObject(MockAMDGPULoader &Owner, const llvm::MemoryBuffer &Elf,
                        llvm::Error &Err);
@@ -68,8 +66,7 @@ public:
 
   [[nodiscard]] MockAMDGPULoader &getExecutable() const { return Parent; }
 
-  llvm::ArrayRef<std::reference_wrapper<const llvm::object::ELF64LE::Phdr>>
-  getLoadSegments() const {
+  llvm::ArrayRef<const llvm::object::ELF64LE::Phdr *> getLoadSegments() const {
     return PTLoadSegments;
   }
 
@@ -165,6 +162,8 @@ public:
 
     MockLoadedCodeObject &operator*() const { return **It; }
 
+    MockLoadedCodeObject *operator->() const { return It->get(); }
+
     loaded_code_object_iterator &operator++() {
       ++It;
       return *this;
@@ -194,6 +193,8 @@ public:
 
     const MockLoadedCodeObject &operator*() const { return **It; }
 
+    const MockLoadedCodeObject *operator->() const { return It->get(); }
+
     const_loaded_code_object_iterator &operator++() {
       ++It;
       return *this;
@@ -219,7 +220,7 @@ public:
   }
 
   loaded_code_object_iterator loaded_code_objects_end() {
-    return loaded_code_object_iterator(LoadedCodeObjects.begin());
+    return loaded_code_object_iterator(LoadedCodeObjects.end());
   }
 
   llvm::iterator_range<loaded_code_object_iterator> loaded_code_objects() {

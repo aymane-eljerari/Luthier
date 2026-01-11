@@ -29,7 +29,7 @@ class AMDGPUMockLoaderPrinter
   llvm::raw_ostream &OS;
 
 public:
-  explicit AMDGPUMockLoaderPrinter(llvm::raw_ostream &OS) : OS(OS) {};
+  explicit AMDGPUMockLoaderPrinter(llvm::raw_ostream &OS);
 
   llvm::PreservedAnalyses run(llvm::Module &M,
                               llvm::ModuleAnalysisManager &MAM);

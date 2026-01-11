@@ -107,7 +107,7 @@ InstructionTracesAnalysis::Result InstructionTracesAnalysis::run(
   const MemoryAllocationAccessor &SegAccessor = MAMRes->getAccessor();
 
   const auto *EPRes =
-      MAMProxy.getCachedResult<MachineFunctionEntryPoints>(TargetM);
+      TargetMFAM.getCachedResult<MachineFunctionEntryPoints>(TargetMF);
 
   if (!EPRes) {
     LUTHIER_CTX_EMIT_ON_ERROR(
