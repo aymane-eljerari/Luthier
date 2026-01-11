@@ -103,7 +103,7 @@ llvm::PreservedAnalyses
 AMDGPUMockLoaderPrinter::run(llvm::Module &M,
                              llvm::ModuleAnalysisManager &MAM) {
   llvm::LLVMContext &Ctx = M.getContext();
-  /// Get the mock loader analysis
+  /// Get the mock loader analysis for printing
   MockAMDGPULoader &Loader =
       MAM.getResult<MockAMDGPULoaderAnalysis>(M).getLoader();
 
@@ -197,68 +197,63 @@ AMDGPUMockLoaderPrinter::run(llvm::Module &M,
         reinterpret_cast<uint64_t>(LCO.getLoadedRegion().data()));
     OS << llvm::formatv("\tLoad size: {0:x}\n", LCO.getLoadedRegion().size());
 
-    OS << "Loaded Segment Headers: \n";
+    OS << "Loaded Segments: \n";
 
-    // auto PHeaders = LCO.getCodeObject().getELFFile().program_headers();
-    // LUTHIER_CTX_EMIT_ON_ERROR(Ctx, PHeaders.takeError());
     for (const auto &[PHIdx, PH] : llvm::enumerate(LCO.getLoadSegments())) {
-      if (PH->p_type == llvm::ELF::PT_LOAD) {
-        OS << "PH Idx: " << PHIdx << "\n";
-        constexpr auto Fmt = "0x%016" PRIx64 " ";
-        OS << "\tType:";
-        printELFType(*PH, OS);
-        OS << "\n";
-        OS << "\tOffset: "
-           << llvm::format(Fmt, static_cast<uint64_t>(PH->p_offset)) << "\n";
-        OS << "\tVAddr: "
-           << llvm::format(Fmt, static_cast<uint64_t>(PH->p_vaddr)) << "\n";
-        OS << "\tPAddr: "
-           << llvm::format(Fmt, static_cast<uint64_t>(PH->p_paddr)) << "\n";
-        OS << llvm::format("\talign 2**%u",
-                           llvm::countr_zero<uint64_t>(PH->p_align))
-           << "\n";
-        OS << "\tFilesz: "
-           << llvm::format(Fmt, static_cast<uint64_t>(PH->p_filesz)) << "\n";
-        OS << "\tMemsz: "
-           << llvm::format(Fmt, static_cast<uint64_t>(PH->p_memsz)) << "\n";
-        OS << "\tFlags: " << ((PH->p_flags & llvm::ELF::PF_R) ? "r" : "-")
-           << ((PH->p_flags & llvm::ELF::PF_W) ? "w" : "-")
-           << ((PH->p_flags & llvm::ELF::PF_X) ? "x" : "-") << "\n";
+      OS << "PH Idx: " << PHIdx << "\n";
+      constexpr auto Fmt = "0x%016" PRIx64 " ";
+      OS << "\tType: ";
+      printELFType(*PH, OS);
+      OS << "\n";
+      OS << "\tOffset: "
+         << llvm::format(Fmt, static_cast<uint64_t>(PH->p_offset)) << "\n";
+      OS << "\tVAddr: " << llvm::format(Fmt, static_cast<uint64_t>(PH->p_vaddr))
+         << "\n";
+      OS << "\tPAddr: " << llvm::format(Fmt, static_cast<uint64_t>(PH->p_paddr))
+         << "\n";
+      OS << llvm::format("\talign 2**%u",
+                         llvm::countr_zero<uint64_t>(PH->p_align))
+         << "\n";
+      OS << "\tFilesz: "
+         << llvm::format(Fmt, static_cast<uint64_t>(PH->p_filesz)) << "\n";
+      OS << "\tMemsz: " << llvm::format(Fmt, static_cast<uint64_t>(PH->p_memsz))
+         << "\n";
+      OS << "\tFlags: " << ((PH->p_flags & llvm::ELF::PF_R) ? "r" : "-")
+         << ((PH->p_flags & llvm::ELF::PF_W) ? "w" : "-")
+         << ((PH->p_flags & llvm::ELF::PF_X) ? "x" : "-") << "\n";
 
-        if ((PH->p_flags & llvm::ELF::PF_X)) {
-          OS << "\tSegment disassembly:\n";
-          /// Disassemble both the loaded segmet
-          uint64_t SegmentCurrAddr =
-              reinterpret_cast<uint64_t>(LCO.getLoadedRegion().data()) +
-              PH->p_vaddr;
-          uint64_t SegmentEndAddr = SegmentCurrAddr + PH->p_filesz;
-          uint64_t MaxReadSize = MAI->getMaxInstLength();
-          while (SegmentCurrAddr < SegmentEndAddr) {
-            OS << llvm::formatv("Addr: {0:x}, Inst: ", SegmentCurrAddr);
-            size_t ReadSize = (SegmentCurrAddr + MaxReadSize) < SegmentEndAddr
-                                  ? MaxReadSize
-                                  : SegmentEndAddr - SegmentCurrAddr;
-            llvm::MCInst Inst;
-            size_t InstSize{};
-            llvm::ArrayRef ReadBytes = {
-                reinterpret_cast<uint8_t *>(SegmentCurrAddr), ReadSize};
+      if ((PH->p_flags & llvm::ELF::PF_X)) {
+        OS << "\tSegment disassembly:\n";
+        /// Disassemble both the loaded segmet
+        uint64_t SegmentCurrAddr =
+            reinterpret_cast<uint64_t>(LCO.getLoadedRegion().data()) +
+            PH->p_vaddr;
+        uint64_t SegmentEndAddr = SegmentCurrAddr + PH->p_filesz;
+        uint64_t MaxReadSize = MAI->getMaxInstLength();
+        while (SegmentCurrAddr < SegmentEndAddr) {
+          OS << llvm::formatv("Addr: {0:x}, Inst: ", SegmentCurrAddr);
+          size_t ReadSize = (SegmentCurrAddr + MaxReadSize) < SegmentEndAddr
+                                ? MaxReadSize
+                                : SegmentEndAddr - SegmentCurrAddr;
+          llvm::MCInst Inst;
+          size_t InstSize{};
+          llvm::ArrayRef ReadBytes = {
+              reinterpret_cast<uint8_t *>(SegmentCurrAddr), ReadSize};
 
-            LUTHIER_CTX_EMIT_ON_ERROR(
-                Ctx,
-                LUTHIER_GENERIC_ERROR_CHECK(
-                    DisAsm->getInstruction(Inst, InstSize, ReadBytes,
-                                           SegmentCurrAddr, llvm::nulls()) ==
-                        llvm::MCDisassembler::Success,
-                    llvm::formatv(
-                        "Failed to disassemble instruction at address {0:x}",
-                        SegmentCurrAddr)));
-            IP->printInst(&Inst, SegmentCurrAddr, "", *STI, OS);
-            OS << "\n";
-            SegmentCurrAddr += InstSize;
-          }
-
-        } else {
+          LUTHIER_CTX_EMIT_ON_ERROR(
+              Ctx, LUTHIER_GENERIC_ERROR_CHECK(
+                       DisAsm->getInstruction(Inst, InstSize, ReadBytes,
+                                              SegmentCurrAddr, llvm::nulls()) ==
+                           llvm::MCDisassembler::Success,
+                       llvm::formatv(
+                           "Failed to disassemble instruction at address {0:x}",
+                           SegmentCurrAddr)));
+          IP->printInst(&Inst, SegmentCurrAddr, "", *STI, OS);
+          OS << "\n";
+          SegmentCurrAddr += InstSize;
         }
+
+      } else {
       }
     }
     CodeObjectIdx++;
