@@ -228,6 +228,18 @@ AMDGPUMockLoaderPrinter::run(llvm::Module &M,
       OS.indent(2) << "----------\n";
     }
 
+    OS << "- Kernels:\n";
+
+    llvm::Error Err = llvm::Error::success();
+    for (object::AMDGCNKernelDescSymbolRef KDSymbol :
+         LCO.getCodeObject().kernel_descriptors(Err)) {
+      LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
+      llvm::Expected<llvm::StringRef> KernelNameOrErr = KDSymbol.getName();
+      LUTHIER_CTX_EMIT_ON_ERROR(Ctx, KernelNameOrErr.takeError());
+      OS.indent(2) << "- " << *KernelNameOrErr << "\n";
+    }
+    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
+    OS << "----------\n";
     OS << "- Loaded Contents:\n";
     for (const auto &[PHIdx, PH] : llvm::enumerate(LCO.getLoadSegments())) {
       OS << "Segment #" << PHIdx << ":\n";

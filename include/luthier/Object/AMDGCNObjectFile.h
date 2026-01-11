@@ -195,12 +195,15 @@ public:
     content_iterator &operator++();                                            \
   }
 
-#define IMPLEMENT_AMDGCN_ITERATOR_INCREMENT_OPERATOR(IteratorName, SymbolType, \
-                                                     SymbolChecker)            \
+#define IMPLEMENT_AMDGCN_ITERATOR_INCREMENT_OPERATOR(                          \
+    IteratorName, SymbolType, SymbolChecker, SymbolIterEndFunc)                \
   inline IteratorName::content_iterator &IteratorName::operator++() {          \
     llvm::ErrorAsOutParameter EAO(this->Err);                                  \
-    auto EndSymbolIter = (*this)->getObject()->symbol_end();                   \
+    auto EndSymbolIter = (*this)->getObject()->SymbolIterEndFunc();            \
+    if (*this == EndSymbolIter)                                                \
+      return *this;                                                            \
                                                                                \
+    amdgcn_elf_symbol_iterator::operator++();                                  \
     while (*this != EndSymbolIter) {                                           \
       llvm::Expected<bool> IsSymbolKindOrErr = (*this)->SymbolChecker();       \
       if (auto Error = IsSymbolKindOrErr.takeError()) {                        \
@@ -403,14 +406,16 @@ public:
   }
 
 #define CREATE_AMDGCN_OBJECT_SYMBOL_ITERATOR_FUNCTION(                         \
-    IterName, IterType, SymbolCheckFunc, IterRangeType)                        \
+    IterName, SymbolBeginIterator, SymbolEndIterator, IterType,                \
+    SymbolCheckFunc, IterRangeType)                                            \
   IterType IterName##_begin(llvm::Error &Err) const {                          \
-    amdgcn_elf_symbol_iterator Out = symbol_begin();                           \
-    for (; Out != symbol_end(); ++Out) {                                       \
+    llvm::ErrorAsOutParameter EAO(Err);                                        \
+    amdgcn_elf_symbol_iterator Out = SymbolBeginIterator();                    \
+    for (; Out != SymbolEndIterator(); ++Out) {                                \
       llvm::Expected<bool> IsSymOrErr = Out->SymbolCheckFunc();                \
       if (auto Error = IsSymOrErr.takeError()) {                               \
         Err = std::move(Error);                                                \
-        Out = symbol_end();                                                    \
+        Out = SymbolEndIterator();                                             \
         break;                                                                 \
       }                                                                        \
       if (*IsSymOrErr)                                                         \
@@ -419,26 +424,29 @@ public:
     return IterType(Out, Err);                                                 \
   };                                                                           \
   IterType IterName##_end(llvm::Error &Err) const {                            \
-    return IterType(symbol_end(), Err);                                        \
+    return IterType(SymbolEndIterator(), Err);                                 \
   };                                                                           \
   IterRangeType IterName##s(llvm::Error &Err) const {                          \
     return llvm::make_range(IterName##_begin(Err), IterName##_end(Err));       \
   };
 
   CREATE_AMDGCN_OBJECT_SYMBOL_ITERATOR_FUNCTION(
-      variable, amdgcn_variable_symbol_iterator, isVariable,
-      amdgcn_variable_symbol_iterator_range);
+      variable, symbol_begin, symbol_end, amdgcn_variable_symbol_iterator,
+      isVariable, amdgcn_variable_symbol_iterator_range);
 
   CREATE_AMDGCN_OBJECT_SYMBOL_ITERATOR_FUNCTION(
-      kernel_descriptor, amdgcn_kernel_descriptor_iterator, isKernelDescriptor,
+      kernel_descriptor, dynamic_symbol_begin, dynamic_symbol_end,
+      amdgcn_kernel_descriptor_iterator, isKernelDescriptor,
       amdgcn_kernel_descriptor_iterator_range);
 
   CREATE_AMDGCN_OBJECT_SYMBOL_ITERATOR_FUNCTION(
-      kernel_function, amdgcn_device_function_iterator, isDeviceFunction,
-      amdgcn_device_function_iterator_range);
+      kernel_function, dynamic_symbol_begin, dynamic_symbol_end,
+      amdgcn_kernel_function_iterator, isKernelFunction,
+      amdgcn_kernel_function_iterator_range);
 
   CREATE_AMDGCN_OBJECT_SYMBOL_ITERATOR_FUNCTION(
-      device_function, amdgcn_device_function_iterator, isDeviceFunction,
+      device_function, symbol_begin, symbol_end,
+      amdgcn_device_function_iterator, isDeviceFunction,
       amdgcn_device_function_iterator_range);
 
 #undef CREATE_AMDGCN_OBJECT_SYMBOL_ITERATOR_FUNCTIONS
@@ -619,19 +627,21 @@ AMDGCNObjectFile::getMetadataDocument() const {
 
 IMPLEMENT_AMDGCN_ITERATOR_INCREMENT_OPERATOR(amdgcn_variable_symbol_iterator,
                                              AMDGCNVariableSymbolRef,
-                                             isVariable);
+                                             isVariable, symbol_end);
 
 IMPLEMENT_AMDGCN_ITERATOR_INCREMENT_OPERATOR(amdgcn_kernel_descriptor_iterator,
                                              AMDGCNKernelDescSymbolRef,
-                                             isKernelDescriptor);
+                                             isKernelDescriptor,
+                                             dynamic_symbol_end);
 
 IMPLEMENT_AMDGCN_ITERATOR_INCREMENT_OPERATOR(amdgcn_kernel_function_iterator,
                                              AMDGCNKernelFuncSymbolRef,
-                                             isKernelFunction);
+                                             isKernelFunction,
+                                             dynamic_symbol_end);
 
 IMPLEMENT_AMDGCN_ITERATOR_INCREMENT_OPERATOR(amdgcn_device_function_iterator,
                                              AMDGCNDeviceFuncSymbolRef,
-                                             isDeviceFunction);
+                                             isDeviceFunction, symbol_end);
 
 #undef IMPLEMENT_AMDGCN_ITERATOR_INCREMENT_OPERATOR
 
