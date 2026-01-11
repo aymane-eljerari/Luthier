@@ -18,7 +18,7 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/Tooling/InstructionTracesAnalysis.h"
 #include "AMDGPUTargetMachine.h"
-#include "luthier/Tooling/MachineFunctionEntryPoints.h"
+#include "luthier/Tooling/MachineFunctionEntryPoint.h"
 #include "luthier/Tooling/MemoryAllocationAccessor.h"
 #include "luthier/Tooling/PseudoOpcodeAnRegMapper.h"
 #include <llvm/CodeGen/MachineModuleInfo.h>
@@ -41,18 +41,18 @@ evaluateBranchOrCallIfDirect(const llvm::MCInst &Inst, uint64_t Addr) {
   return llvm::SignExtend64<16>(Imm) * 4 + Addr + 4;
 }
 
-llvm::Error disassembleTrace(uint64_t StartHostAddr, uint64_t AllocationSize,
-                             uint64_t StartDeviceAddr,
-                             llvm::MCDisassembler &Disassembler,
-                             size_t MaxReadSize, const llvm::MCInstrInfo &MII,
-                             InstructionTracesAnalysis::Trace &Instructions,
-                             uint64_t &LastInstructionAddr) {
+static llvm::Error
+disassembleTrace(uint64_t StartHostAddr, uint64_t AllocationSize,
+                 uint64_t StartDeviceAddr, llvm::MCDisassembler &Disassembler,
+                 size_t MaxReadSize, const llvm::MCInstrInfo &MII,
+                 InstructionTracesAnalysis::Trace &Instructions,
+                 uint64_t &LastInstructionAddr) {
   uint64_t CurrentDeviceAddress = StartDeviceAddr;
   uint64_t CurrentHostAddr = StartHostAddr;
   uint64_t SegmentHostEndAddr = StartHostAddr + AllocationSize;
   bool WasTraceEndEncountered{false};
 
-  while (WasTraceEndEncountered || CurrentHostAddr >= SegmentHostEndAddr) {
+  while (!WasTraceEndEncountered && CurrentHostAddr < SegmentHostEndAddr) {
     size_t ReadSize = (CurrentHostAddr + MaxReadSize) < SegmentHostEndAddr
                           ? MaxReadSize
                           : SegmentHostEndAddr - CurrentHostAddr;
@@ -106,32 +106,18 @@ InstructionTracesAnalysis::Result InstructionTracesAnalysis::run(
 
   const MemoryAllocationAccessor &SegAccessor = MAMRes->getAccessor();
 
-  const auto *EPRes =
-      TargetMFAM.getCachedResult<MachineFunctionEntryPoints>(TargetMF);
-
-  if (!EPRes) {
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx,
-        LUTHIER_MAKE_GENERIC_ERROR(
-            "Machine Function Entry Points analysis result is not available"));
-  }
-
-  auto EPIt = EPRes->find(TargetMF);
-
-  if (EPIt == EPRes->end()) {
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, LUTHIER_MAKE_GENERIC_ERROR(
-                 llvm::formatv("Failed to find the entry point associated with "
-                               "machine function {0}",
-                               TargetMF.getName())));
-  }
-
-  EntryPoint EP = EPIt->second;
+  const EntryPoint EP =
+      TargetMFAM.getResult<MachineFunctionEntryPoint>(TargetMF).getEntryPoint();
 
   /// Disassemble the instructions
 
   std::unique_ptr<llvm::MCDisassembler> DisAsm(
       TM.getTarget().createMCDisassembler(*TM.getMCSubtargetInfo(), MCCtx));
+
+  if (!DisAsm) {
+    LUTHIER_CTX_EMIT_ON_ERROR(
+        Ctx, LUTHIER_MAKE_GENERIC_ERROR("Failed to create an MC Disassembler"));
+  }
 
   size_t MaxInstSize = TM.getMCAsmInfo()->getMaxInstLength();
 

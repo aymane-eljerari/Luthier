@@ -6,13 +6,14 @@
 #include "luthier/Tooling/EntryPoint.h"
 #include "luthier/Tooling/InitialEntryPointAnalysis.h"
 #include "luthier/Tooling/InstructionTracesAnalysis.h"
-#include "luthier/Tooling/MachineFunctionEntryPoints.h"
+#include "luthier/Tooling/MachineFunctionEntryPoint.h"
 #include "luthier/Tooling/MemoryAllocationAccessor.h"
 #include "luthier/Tooling/MetadataParserAnalysis.h"
 #include "luthier/Tooling/PseudoOpcodeAnRegMapper.h"
 #include <SIMachineFunctionInfo.h>
 #include <SIRegisterInfo.h>
 #include <llvm/CodeGen/MachineFrameInfo.h>
+#include <llvm/CodeGen/MachineFunctionAnalysis.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
@@ -20,6 +21,7 @@
 #include <llvm/MC/MCDisassembler/MCDisassembler.h>
 #include <llvm/MC/MCInstPrinter.h>
 #include <llvm/MC/TargetRegistry.h>
+#include <luthier/Tooling/MachineFunctionEntryPoint.h>
 #include <unordered_set>
 
 #undef DEBUG_TYPE
@@ -41,7 +43,7 @@ processExplicitKernelArg(const amdgpu::hsamd::Kernel::Arg::Metadata &ArgMD,
     break;
   case amdgpu::hsamd::ValueKind::GlobalBuffer:
     // Convert the argument to a pointer
-    ParamType = llvm::PointerType::get(ParamType, AddressSpace);
+    ParamType = llvm::PointerType::get(Ctx, AddressSpace);
     break;
   default:
     llvm_unreachable("Not implemented");
@@ -386,15 +388,20 @@ parseKDKernelCode(const llvm::amdhsa::kernel_descriptor_t &KD,
   return llvm::Error::success();
 };
 
-static llvm::Expected<llvm::MachineFunction &>
-initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
-                             const MemoryAllocationAccessor &SegAccessor,
-                             const amdgpu::hsamd::MetadataParser &MDParser,
-                             llvm::Module &TargetModule,
-                             llvm::MachineModuleInfo &TargetMMI) {
+static llvm::Expected<llvm::MachineFunction &> initKernelEntryPointFunction(
+    const llvm::amdhsa::kernel_descriptor_t &KD,
+    const MemoryAllocationAccessor &SegAccessor,
+    const amdgpu::hsamd::MetadataParser &MDParser, llvm::Module &TargetModule,
+    const llvm::GCNTargetMachine &TM, llvm::FunctionAnalysisManager &FAM) {
   llvm::LLVMContext &LLVMContext = TargetModule.getContext();
+
+  /// Get the memory allocation associated with the kernel descriptor
   auto KDLoadAddr = reinterpret_cast<uint64_t>(&KD);
   auto SegmentOrErr = SegAccessor.getAllocationDescriptor(KDLoadAddr);
+  LUTHIER_RETURN_ON_ERROR(SegmentOrErr.takeError());
+
+  /// TODO: Manage when we don't have a code object associated with the
+  /// kernel descriptor or if metadata does not exist
 
   uint64_t KDLoadOffset =
       KDLoadAddr -
@@ -409,10 +416,12 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
       LUTHIER_RETURN_ON_ERROR(Err);
       llvm::Expected<uint64_t> CurrentKDLoadAddrOrErr = CurrentKD.getAddress();
       LUTHIER_RETURN_ON_ERROR(CurrentKDLoadAddrOrErr.takeError());
-      if (*CurrentKDLoadAddrOrErr == KDLoadAddr) {
+      if (*CurrentKDLoadAddrOrErr == KDLoadOffset) {
         return CurrentKD;
+        LUTHIER_RETURN_ON_ERROR(Err);
       }
     }
+    LUTHIER_RETURN_ON_ERROR(Err);
     return llvm::make_error<GenericLuthierError>(llvm::formatv(
         "Failed to get the KD associated with address {0:x}", KDLoadOffset));
   }();
@@ -481,8 +490,6 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
 
   /// Lift Rsrc1-Rsrc2; Rsrc3 is mostly automatically computed so we don't
   /// lift it
-  const auto &TM =
-      *reinterpret_cast<const llvm::GCNTargetMachine *>(&TargetMMI.getTarget());
   LUTHIER_RETURN_ON_ERROR(parseKDRsrc1(KDOnHost, TM, *F));
   LUTHIER_RETURN_ON_ERROR(parseKDRsrc2(KDOnHost, TM, *F));
 
@@ -495,7 +502,8 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
 
   // Populate the MFI ========================================================
 
-  auto &MF = TargetMMI.getOrCreateMachineFunction(*F);
+  llvm::MachineFunction &MF =
+      FAM.getResult<llvm::MachineFunctionAnalysis>(*F).getMF();
 
   /// Parse kernel code
   LUTHIER_RETURN_ON_ERROR(parseKDKernelCode(KDOnHost, TM, MF));
@@ -544,11 +552,11 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
 
 llvm::Expected<llvm::MachineFunction &> initLiftedDeviceFunctionEntry(
     uint64_t DeviceEntryPointAddr, const MemoryAllocationAccessor &SegAccessor,
-    llvm::Module &TargetModule, llvm::MachineModuleInfo &TargetMMI) {
+    llvm::Module &TargetModule, llvm::FunctionAnalysisManager &FAM) {
 
   llvm::LLVMContext &LLVMContext = TargetModule.getContext();
   auto SegmentOrErr = SegAccessor.getAllocationDescriptor(DeviceEntryPointAddr);
-
+  LUTHIER_RETURN_ON_ERROR(SegmentOrErr.takeError());
   uint64_t DevFuncLoadOffset =
       DeviceEntryPointAddr -
       reinterpret_cast<uint64_t>(SegmentOrErr->AllocationOnDevice.data());
@@ -594,7 +602,8 @@ llvm::Expected<llvm::MachineFunction &> initLiftedDeviceFunctionEntry(
       BB != nullptr,
       "Failed to create a dummy IR basic block during code lifting."));
   new llvm::UnreachableInst(LLVMContext, BB);
-  auto &MF = TargetMMI.getOrCreateMachineFunction(*F);
+  llvm::MachineFunction &MF =
+      FAM.getResult<llvm::MachineFunctionAnalysis>(*F).getMF();
 
   MF.setAlignment(llvm::Align(4));
   return MF;
@@ -896,6 +905,7 @@ llvm::Error populateMF(const InstructionTracesAnalysis::Result &MFTrace,
           MFTrace.getInitialEntryPoint().getEntryPointAddress()) {
         EntryInst = Builder.getInstr();
       }
+      CurrentInstrAddr += Inst.getSize();
     }
   }
   // Resolve the direct branch and target MIs/MBBs
@@ -953,7 +963,7 @@ llvm::Error populateMF(const InstructionTracesAnalysis::Result &MFTrace,
   Properties.set(llvm::MachineFunctionProperties::Property::NoVRegs);
   Properties.reset(llvm::MachineFunctionProperties::Property::IsSSA);
   Properties.set(llvm::MachineFunctionProperties::Property::NoPHIs);
-  Properties.set(llvm::MachineFunctionProperties::Property::TracksLiveness);
+  Properties.reset(llvm::MachineFunctionProperties::Property::TracksLiveness);
   Properties.set(llvm::MachineFunctionProperties::Property::Selected);
 
   LLVM_DEBUG(llvm::dbgs() << "Final form of the Machine function:\n";
@@ -978,13 +988,15 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
   const MemoryAllocationAccessor &SegAccessor =
       TargetMAM.getResult<MemoryAllocationAnalysis>(TargetModule).getAccessor();
 
-  auto &MFEntryPoints =
-      TargetMAM.getResult<MachineFunctionEntryPoints>(TargetModule);
-
-  auto &MFAM = TargetMAM
-                   .getResult<llvm::MachineFunctionAnalysisManagerModuleProxy>(
-                       TargetModule)
-                   .getManager();
+  llvm::MachineFunctionAnalysisManager &MFAM =
+      TargetMAM
+          .getResult<llvm::MachineFunctionAnalysisManagerModuleProxy>(
+              TargetModule)
+          .getManager();
+  llvm::FunctionAnalysisManager &FAM =
+      TargetMAM
+          .getResult<llvm::FunctionAnalysisManagerModuleProxy>(TargetModule)
+          .getManager();
 
   EntryPoint InitialEntryPoint =
       TargetMAM.getResult<InitialEntryPointAnalysis>(TargetModule)
@@ -1006,7 +1018,7 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
 
         llvm::Expected<llvm::MachineFunction &> MFOrErr =
             initKernelEntryPointFunction(*KDOnDevice, SegAccessor, MDParser,
-                                         TargetModule, TargetMMI);
+                                         TargetModule, TM, FAM);
         LUTHIER_CTX_EMIT_ON_ERROR(Ctx, MFOrErr.takeError());
 
         return *MFOrErr;
@@ -1014,13 +1026,14 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
         llvm::Expected<llvm::MachineFunction &> MFOrErr =
             initLiftedDeviceFunctionEntry(
                 CurrentEntryPoint.getEntryPointAddress(), SegAccessor,
-                TargetModule, TargetMMI);
+                TargetModule, FAM);
         LUTHIER_CTX_EMIT_ON_ERROR(Ctx, MFOrErr.takeError());
         return *MFOrErr;
       }
     }();
+    MFAM.getResult<MachineFunctionEntryPoint>(MF).setEntryPoint(
+        CurrentEntryPoint);
     /// Add the newly created MF's entry point
-    MFEntryPoints.insert(MF, CurrentEntryPoint);
     /// Ask for the trace of the instructions for this machine function
     auto &TraceResults = MFAM.getResult<InstructionTracesAnalysis>(MF);
 
@@ -1031,6 +1044,9 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     VisitedPointsOfEntry.insert(CurrentEntryPoint);
   }
 
-  return llvm::PreservedAnalyses::none();
+  llvm::PreservedAnalyses PA = llvm::PreservedAnalyses::none();
+  PA.preserve<llvm::MachineFunctionAnalysisManagerModuleProxy>();
+  PA.preserve<llvm::FunctionAnalysisManagerModuleProxy>();
+  return PA;
 }
 } // namespace luthier

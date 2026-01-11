@@ -101,8 +101,6 @@ static void printELFType(const llvm::object::ELF64LE::Phdr &Phdr,
 
 AMDGPUMockLoaderPrinter::AMDGPUMockLoaderPrinter(llvm::raw_ostream &OS)
     : OS(OS) {
-  /// Need to initialize the disassembler
-  LLVMInitializeAMDGPUDisassembler();
 }
 
 llvm::PreservedAnalyses

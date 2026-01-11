@@ -375,9 +375,12 @@ int main(int argc, char **argv) {
 
   // Initialize targets first, so that --version shows registered targets.
   InitializeAllTargets();
+  InitializeAllTargetInfos();
   InitializeAllTargetMCs();
-  InitializeAllAsmPrinters();
+  InitializeAllDisassemblers();
   InitializeAllAsmParsers();
+  InitializeAllAsmPrinters();
+  InitializeAllTargetMCAs();
 
   // Initialize codegen and IR passes used by llc so that the -print-after,
   // -print-before, and -stop-after options work.

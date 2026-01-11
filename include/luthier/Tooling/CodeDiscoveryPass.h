@@ -19,17 +19,12 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_CODE_DISCOVERY_PASS_H
 #define LUTHIER_TOOLING_CODE_DISCOVERY_PASS_H
-#include "luthier/Tooling/MachineFunctionEntryPoints.h"
+#include "luthier/Tooling/MachineFunctionEntryPoint.h"
 #include <llvm/IR/PassManager.h>
 
 namespace luthier {
 
-
-struct CodeDiscoveryPassOptions {
-
-
-};
-
+struct CodeDiscoveryPassOptions {};
 
 /// \brief Target module pass in charge of:
 /// - Discovering all statically reachable code and entry points from a starting

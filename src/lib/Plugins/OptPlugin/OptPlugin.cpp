@@ -28,6 +28,7 @@
 #include "luthier/Tooling/IntrinsicMIRLoweringPass.h"
 #include "luthier/Tooling/LRCallgraph.h"
 #include "luthier/Tooling/MMISlotIndexesAnalysis.h"
+#include "luthier/Tooling/MachineFunctionEntryPoint.h"
 #include "luthier/Tooling/MemoryAllocationAccessor.h"
 #include "luthier/Tooling/MetadataParserAnalysis.h"
 #include "luthier/Tooling/MockAMDGPULoader.h"
@@ -38,6 +39,7 @@
 #include "luthier/Tooling/SVStorageAndLoadLocations.h"
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Plugins/PassPlugin.h>
+#include <llvm/Support/TargetSelect.h>
 
 namespace luthier {
 
@@ -69,9 +71,9 @@ struct MockAMDGPULoaderInitialEntryPointParser
     }
     uint64_t LoadOffset;
     if (SymbolOrOffset.getAsInteger(0, LoadOffset)) {
-      Val.second = LoadOffset;
-    } else {
       Val.second = std::string(SymbolOrOffset);
+    } else {
+      Val.second = LoadOffset;
     }
 
     return false;
@@ -94,6 +96,13 @@ llvm::cl::opt<std::pair<uint64_t, std::variant<uint64_t, std::string>>, false,
 extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
 llvmGetPassPluginInfo() {
   luthier::Loader = std::make_unique<luthier::MockAMDGPULoader>();
+  LLVMInitializeAMDGPUTarget();
+  LLVMInitializeAMDGPUTargetInfo();
+  LLVMInitializeAMDGPUTargetMC();
+  LLVMInitializeAMDGPUDisassembler();
+  LLVMInitializeAMDGPUAsmParser();
+  LLVMInitializeAMDGPUAsmPrinter();
+  LLVMInitializeAMDGPUTargetMCA();
 
   const auto Callback = [](llvm::PassBuilder &PB) {
     /// Register Luthier module analysis passes
@@ -108,7 +117,6 @@ llvmGetPassPluginInfo() {
                   AM.getResult<luthier::MockAMDGPULoaderAnalysis>(M)
                       .getLoader();
               uint64_t CodeObjectIdx = 0;
-              /// Find the
               for (const auto &LCO : MockLoader.loaded_code_objects()) {
                 if (CodeObjectIdx == luthier::InitialEntryPoint.first) {
                   if (std::holds_alternative<uint64_t>(
@@ -195,7 +203,7 @@ llvmGetPassPluginInfo() {
           MFAM.registerPass(
               []() { return luthier::InstructionTracesAnalysis(); });
           MFAM.registerPass(
-              []() { return luthier::MachineFunctionEntryPoints(); });
+              []() { return luthier::MachineFunctionEntryPoint(); });
         });
 
     PB.registerPipelineParsingCallback(

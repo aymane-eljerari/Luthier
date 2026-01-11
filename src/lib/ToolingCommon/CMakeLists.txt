@@ -14,7 +14,7 @@ add_public_tablegen_target(LuthierRealToPseudoRegEnumMap)
 add_library(LuthierToolingCommon OBJECT
         AnnotatedMachineInstr.cpp
         CodeDiscoveryPass.cpp
-        MachineFunctionEntryPoints.cpp
+        MachineFunctionEntryPoint.cpp
         MachineToTraceInstrAnalysis.cpp
         InstructionTracesAnalysis.cpp
         MemoryAllocationAccessor.cpp
@@ -51,6 +51,8 @@ add_library(LuthierToolingCommon OBJECT
         PseudoOpcodeAndRegMapper.cpp
         AMDGPUMockLoaderPrinter.cpp
         MockLoaderMemoryAccessor.cpp
+        Metadata.cpp
+
 )
 
 add_dependencies(LuthierToolingCommon LuthierRealToPseudoOpcodeMap)

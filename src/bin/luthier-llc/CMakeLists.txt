@@ -2,6 +2,9 @@ set(LLVM_LINK_COMPONENTS
         AllTargetsAsmParsers
         AllTargetsCodeGens
         AllTargetsDescs
+        AllTargetsDisassemblers
+        AllTargetsMCAs
+        AMDGPUUtils
         AllTargetsInfos
         Analysis
         AsmPrinter
@@ -11,6 +14,8 @@ set(LLVM_LINK_COMPONENTS
         IRPrinter
         IRReader
         MC
+        MCA
+        MCDisassembler
         MIRParser
         Passes
         Plugins

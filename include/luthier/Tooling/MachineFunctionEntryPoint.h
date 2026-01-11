@@ -1,4 +1,4 @@
-//===-- MachineFunctionEntryPoints.h ------------------------------*-C++-*-===//
+//===-- MachineFunctionEntryPoint.h -------------------------------*-C++-*-===//
 // Copyright 2022-2025 @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,12 +14,12 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 /// \file
-/// Describes the \c MachineFunctionEntryPoints analysis which provides a
+/// Describes the \c MachineFunctionEntryPoint analysis which provides a
 /// mapping between the \c llvm::MachineFunction handles in a target machine
 /// module and their associated entry points.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_MACHINE_FUNCTION_ENTRY_POINTS_H
-#define LUTHIER_TOOLING_MACHINE_FUNCTION_ENTRY_POINTS_H
+#ifndef LUTHIER_TOOLING_MACHINE_FUNCTION_ENTRY_POINT_H
+#define LUTHIER_TOOLING_MACHINE_FUNCTION_ENTRY_POINT_H
 #include "luthier/Tooling/EntryPoint.h"
 #include <llvm/CodeGen/MachineFunction.h>
 #include <llvm/IR/PassManager.h>
@@ -27,23 +27,20 @@
 
 namespace luthier {
 
-/// \brief A target \c llvm::Module analysis which provides the
+/// \brief A target \c llvm::MachineFunction analysis which provides the
 /// \c llvm::MachineFunction corresponding to each entry point discovered
 /// during the lifting operation
-class MachineFunctionEntryPoints
-    : public llvm::AnalysisInfoMixin<MachineFunctionEntryPoints> {
-  friend AnalysisInfoMixin<MachineFunctionEntryPoints>;
+class MachineFunctionEntryPoint
+    : public llvm::AnalysisInfoMixin<MachineFunctionEntryPoint> {
+  friend AnalysisInfoMixin<MachineFunctionEntryPoint>;
 
   static llvm::AnalysisKey Key;
 
 public:
   class Result {
-    friend MachineFunctionEntryPoints;
+    friend MachineFunctionEntryPoint;
 
-    using FunctionToEntryPointMap =
-        llvm::SmallDenseMap<const llvm::MachineFunction *, EntryPoint, 4>;
-
-    FunctionToEntryPointMap MFToEntryPointsMap;
+    EntryPoint EP{};
 
     Result() = default;
 
@@ -53,47 +50,12 @@ public:
       return false;
     }
 
-    void insert(const llvm::MachineFunction &MF, EntryPoint EntryPoint) {
-      MFToEntryPointsMap.insert({&MF, EntryPoint});
-    }
+    void setEntryPoint(EntryPoint E) { this->EP = E; }
 
-    FunctionToEntryPointMap::const_iterator begin() const {
-      return MFToEntryPointsMap.begin();
-    }
-
-    FunctionToEntryPointMap::iterator begin() {
-      return MFToEntryPointsMap.begin();
-    }
-
-    FunctionToEntryPointMap::const_iterator end() const {
-      return MFToEntryPointsMap.end();
-    }
-
-    FunctionToEntryPointMap::iterator end() { return MFToEntryPointsMap.end(); }
-
-    unsigned size() const { return MFToEntryPointsMap.size(); }
-
-    bool empty() const { return MFToEntryPointsMap.empty(); }
-
-    bool contains(const llvm::MachineFunction &MF) const {
-      return MFToEntryPointsMap.contains(&MF);
-    }
-
-    FunctionToEntryPointMap::const_iterator
-    find(const llvm::MachineFunction &MF) const {
-      return MFToEntryPointsMap.find(&MF);
-    }
-
-    FunctionToEntryPointMap::iterator find(const llvm::MachineFunction &MF) {
-      return MFToEntryPointsMap.find(&MF);
-    }
-
-    EntryPoint operator[](const llvm::MachineFunction &MF) {
-      return MFToEntryPointsMap[&MF];
-    }
+    EntryPoint getEntryPoint() const { return EP; }
   };
 
-  MachineFunctionEntryPoints() = default;
+  MachineFunctionEntryPoint() = default;
 
   Result run(llvm::MachineFunction &, llvm::MachineFunctionAnalysisManager &) {
     return Result{};

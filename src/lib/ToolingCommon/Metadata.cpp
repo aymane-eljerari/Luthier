@@ -18,7 +18,7 @@
 /// Implements parsing of the HSA metadata, as well as the pass used
 /// to parse it inside the lifting procedure.
 //===----------------------------------------------------------------------===//
-#include "luthier/HSA/Metadata.h"
+#include "luthier/Tooling/Metadata.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include <llvm/IR/Module.h>
@@ -292,6 +292,7 @@ parseKernelMD(llvm::msgpack::MapDocNode &KernelMetaNode,
   if (ArgsMD != KernelMetaNode.end()) {
     LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         ArgsMD->second.isArray(), "Argument node is not an array"));
+    Out.Args.emplace();
     for (auto &ArgMD : ArgsMD->second.getArray()) {
       LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
           ArgMD.isMap(), "Argument metadata is not a map"));

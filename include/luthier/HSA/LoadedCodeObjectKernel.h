@@ -20,8 +20,8 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_HSA_LOADED_CODE_OBJECT_KERNEL_H
 #define LUTHIER_HSA_LOADED_CODE_OBJECT_KERNEL_H
+#include "luthier/Tooling/Metadata.h"
 #include "luthier/HSA/LoadedCodeObjectSymbol.h"
-#include "luthier/HSA/Metadata.h"
 
 namespace luthier::hsa {
 

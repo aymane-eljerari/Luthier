@@ -14,4 +14,7 @@ target_include_directories(LuthierOptPlugin PRIVATE
         "$<BUILD_INTERFACE:${LLVM_INCLUDE_DIRS}>"
         "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>")
 
-target_link_libraries(LuthierOptPlugin PRIVATE LuthierAMDGPU LLVMMCDisassembler LLVMAMDGPUDisassembler)
+target_link_libraries(LuthierOptPlugin PRIVATE LuthierAMDGPU LLVMCodeGenTypes LLVMMC LLVMMCA LLVMMCDisassembler
+        LLVMObject LLVMSupport LLVMTarget LLVMTargetParser LLVMTransformUtils LLVMBitReader LLVMAnalysis LLVMAsmPrinter
+        LLVMAMDGPUAsmParser LLVMAMDGPUDesc LLVMAMDGPUDisassembler LLVMAMDGPUInfo LLVMAMDGPUTargetMCA
+        LLVMAMDGPUUtils LLVMCore LLVMPasses LLVMCodeGen LLVMAMDGPUCodeGen)

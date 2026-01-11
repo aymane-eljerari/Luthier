@@ -140,4 +140,6 @@ llvm::Error assignInstrID(llvm::MachineInstr &MI) {
       return llvm::Error::success();
 }
 
+llvm::Error makeInstrTrace(llvm::MachineInstr &MI, uint64_t LoadAddress) {}
+
 } // namespace luthier

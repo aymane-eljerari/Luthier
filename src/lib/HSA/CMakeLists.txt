@@ -13,7 +13,6 @@ add_library(LuthierHSA OBJECT
         LoadedCodeObjectKernel.cpp
         LoadedCodeObjectSymbol.cpp
         LoadedCodeObjectVariable.cpp
-        Metadata.cpp
         PacketMonitor.cpp
 )
 

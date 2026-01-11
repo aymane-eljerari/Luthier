@@ -21,8 +21,7 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_INSTRUCTION_TRACES_ANALYSIS_H
 #define LUTHIER_TOOLING_INSTRUCTION_TRACES_ANALYSIS_H
-#include "MachineFunctionEntryPoints.h"
-
+#include "luthier/Tooling/EntryPoint.h"
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/ADT/MapVector.h>
 #include <llvm/CodeGen/MachineFunction.h>
