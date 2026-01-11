@@ -253,16 +253,17 @@ class MockAMDGPULoaderAnalysis
     : public llvm::AnalysisInfoMixin<MockAMDGPULoaderAnalysis> {
   friend llvm::AnalysisInfoMixin<MockAMDGPULoaderAnalysis>;
 
+  MockAMDGPULoader &Loader;
+
 public:
   static llvm::AnalysisKey Key;
 
   class Result {
     friend class MockAMDGPULoaderAnalysis;
 
-    std::unique_ptr<MockAMDGPULoader> Loader =
-        std::make_unique<MockAMDGPULoader>();
+    MockAMDGPULoader &Loader;
 
-    Result() = default;
+    Result(MockAMDGPULoader &Loader) : Loader(Loader) {}
 
   public:
     /// Never invalidate the loader
@@ -271,14 +272,17 @@ public:
       return false;
     }
 
-    const MockAMDGPULoader &getLoader() const { return *Loader; }
+    const MockAMDGPULoader &getLoader() const { return Loader; }
 
-    MockAMDGPULoader &getLoader() { return *Loader; }
+    MockAMDGPULoader &getLoader() { return Loader; }
   };
 
-  MockAMDGPULoaderAnalysis() = default;
+  explicit MockAMDGPULoaderAnalysis(MockAMDGPULoader &Loader)
+      : Loader(Loader) {};
 
-  Result run(llvm::Module &, llvm::ModuleAnalysisManager &) { return Result{}; }
+  Result run(llvm::Module &, llvm::ModuleAnalysisManager &) {
+    return Result{Loader};
+  }
 };
 
 } // namespace luthier

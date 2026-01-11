@@ -28,9 +28,11 @@
 #include "luthier/Tooling/IntrinsicMIRLoweringPass.h"
 #include "luthier/Tooling/LRCallgraph.h"
 #include "luthier/Tooling/MMISlotIndexesAnalysis.h"
+#include "luthier/Tooling/MemoryAllocationAccessor.h"
 #include "luthier/Tooling/MetadataParserAnalysis.h"
 #include "luthier/Tooling/MockAMDGPULoader.h"
 #include "luthier/Tooling/MockLoadAMDGPUCodeObjects.h"
+#include "luthier/Tooling/MockLoaderMemoryAccessor.h"
 #include "luthier/Tooling/PhysRegsNotInLiveInsAnalysis.h"
 #include "luthier/Tooling/PrePostAmbleEmitter.h"
 #include "luthier/Tooling/SVStorageAndLoadLocations.h"
@@ -91,6 +93,7 @@ llvm::cl::opt<std::pair<uint64_t, std::variant<uint64_t, std::string>>, false,
 
 extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
 llvmGetPassPluginInfo() {
+  luthier::Loader = std::make_unique<luthier::MockAMDGPULoader>();
 
   const auto Callback = [](llvm::PassBuilder &PB) {
     /// Register Luthier module analysis passes
@@ -166,6 +169,11 @@ llvmGetPassPluginInfo() {
               llvm_unreachable("Should have thrown an error by now");
             });
       });
+      MAM.registerPass([]() {
+        return luthier::MemoryAllocationAnalysis(
+            std::move(std::make_unique<luthier::MockLoaderMemoryAccessor>(
+                *luthier::Loader)));
+      });
       MAM.registerPass([]() { return luthier::CodeObjectManagerAnalysis(); });
       MAM.registerPass([]() { return luthier::AMDGPURegLivenessAnalysis(); });
       MAM.registerPass([]() { return luthier::LRCallGraphAnalysis(); });
@@ -175,7 +183,8 @@ llvmGetPassPluginInfo() {
       });
       MAM.registerPass(
           []() { return luthier::FunctionPreambleDescriptorAnalysis(); });
-      MAM.registerPass([]() { return luthier::MockAMDGPULoaderAnalysis(); });
+      MAM.registerPass(
+          []() { return luthier::MockAMDGPULoaderAnalysis(*luthier::Loader); });
       MAM.registerPass([&]() {
         return luthier::MetadataParserAnalysis(luthier::MetadataParser);
       });

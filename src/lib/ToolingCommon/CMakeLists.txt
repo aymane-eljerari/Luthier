@@ -50,6 +50,7 @@ add_library(LuthierToolingCommon OBJECT
         InitialEntryPointAnalysis.cpp
         PseudoOpcodeAndRegMapper.cpp
         AMDGPUMockLoaderPrinter.cpp
+        MockLoaderMemoryAccessor.cpp
 )
 
 add_dependencies(LuthierToolingCommon LuthierRealToPseudoOpcodeMap)
