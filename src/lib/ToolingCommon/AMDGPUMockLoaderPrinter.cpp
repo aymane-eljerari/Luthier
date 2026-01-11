@@ -236,7 +236,10 @@ AMDGPUMockLoaderPrinter::run(llvm::Module &M,
       LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
       llvm::Expected<llvm::StringRef> KernelNameOrErr = KDSymbol.getName();
       LUTHIER_CTX_EMIT_ON_ERROR(Ctx, KernelNameOrErr.takeError());
-      OS.indent(2) << "- " << *KernelNameOrErr << "\n";
+      llvm::Expected<uint64_t> AddrOrErr = KDSymbol.getAddress();
+      LUTHIER_CTX_EMIT_ON_ERROR(Ctx, AddrOrErr.takeError());
+      OS.indent(2) << llvm::formatv("- {0}, {1:x}\n", *KernelNameOrErr,
+                                    *AddrOrErr);
     }
     LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
     OS << "----------\n";
