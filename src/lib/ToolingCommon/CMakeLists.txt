@@ -52,6 +52,7 @@ add_library(LuthierToolingCommon OBJECT
         AMDGPUMockLoaderPrinter.cpp
         MockLoaderMemoryAccessor.cpp
         Metadata.cpp
+        NewPMAsmPrinter.cpp
 
 )
 

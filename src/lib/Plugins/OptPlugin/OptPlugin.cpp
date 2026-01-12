@@ -40,6 +40,7 @@
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Plugins/PassPlugin.h>
 #include <llvm/Support/TargetSelect.h>
+#include <luthier/Tooling/NewPMAsmPrinter.h>
 
 namespace luthier {
 
@@ -209,6 +210,11 @@ llvmGetPassPluginInfo() {
     PB.registerPipelineParsingCallback(
         [&](llvm::StringRef Name, llvm::ModulePassManager &MPM,
             llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
+          if (Name == "luthier-asm-printer") {
+            MPM.addPass(luthier::NewPMAsmPrinter(
+                llvm::CodeGenFileType::AssemblyFile, llvm::outs(), false));
+            return true;
+          }
           if (Name == "luthier-mock-load-amdgpu-code-objects") {
             MPM.addPass(
                 luthier::MockLoadAMDGPUCodeObjects(luthier::MockLoaderOptions));
