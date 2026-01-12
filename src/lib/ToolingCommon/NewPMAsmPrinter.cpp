@@ -48,7 +48,7 @@ struct TagObjFileMMI {
 };
 
 struct TagModule {
-  using type = const llvm::Module * llvm::MachineModuleInfo::*;
+  using type = const llvm::Module *llvm::MachineModuleInfo::*;
 
   friend type get(TagModule);
 };
