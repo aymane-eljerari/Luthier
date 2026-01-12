@@ -10,6 +10,7 @@
 #include "luthier/Tooling/MemoryAllocationAccessor.h"
 #include "luthier/Tooling/MetadataParserAnalysis.h"
 #include "luthier/Tooling/PseudoOpcodeAnRegMapper.h"
+#include <MCTargetDesc/AMDGPUMCExpr.h>
 #include <SIMachineFunctionInfo.h>
 #include <SIRegisterInfo.h>
 #include <llvm/CodeGen/MachineFrameInfo.h>
@@ -816,9 +817,27 @@ llvm::Error populateMF(const InstructionTracesAnalysis::Result &MFTrace,
               (void)Builder.addImm(Op.getImm());
             }
           }
+        } else if (Op.isExpr() && llvm::isa<llvm::AMDGPUMCExpr>(Op.getExpr())) {
+          const auto *TargetExpr = llvm::cast<llvm::AMDGPUMCExpr>(Op.getExpr());
 
-        } else
+          switch (TargetExpr->getKind()) {
+          case llvm::AMDGPUMCExpr::AGVK_Lit:
+          case llvm::AMDGPUMCExpr::AGVK_Lit64:
+            LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+                TargetExpr->getArgs().size() == 1 &&
+                    llvm::isa<llvm::MCConstantExpr>(TargetExpr->getSubExpr(0)),
+                "Literal expr operands should only have one constant sub "
+                "expression"));
+            (void)Builder.addImm(
+                llvm::cast<llvm::MCConstantExpr>(TargetExpr->getSubExpr(0))
+                    ->getValue());
+            break;
+          default:
+            llvm_unreachable("Unexpected expression type");
+          }
+        } else {
           llvm_unreachable("Unexpected operand type");
+        }
       }
       // Create a (fake) memory operand to keep the machine verifier happy
       // when encountering image instructions
@@ -963,7 +982,7 @@ llvm::Error populateMF(const InstructionTracesAnalysis::Result &MFTrace,
   Properties.set(llvm::MachineFunctionProperties::Property::NoVRegs);
   Properties.reset(llvm::MachineFunctionProperties::Property::IsSSA);
   Properties.set(llvm::MachineFunctionProperties::Property::NoPHIs);
-  Properties.reset(llvm::MachineFunctionProperties::Property::TracksLiveness);
+  Properties.set(llvm::MachineFunctionProperties::Property::TracksLiveness);
   Properties.set(llvm::MachineFunctionProperties::Property::Selected);
 
   LLVM_DEBUG(llvm::dbgs() << "Final form of the Machine function:\n";
