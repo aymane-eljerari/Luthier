@@ -1,7 +1,23 @@
-
+//===-- EntryPoint.h ---------------------------------------------*- C++-*-===//
+// Copyright 2022-2026 @ Northeastern University Computer Architecture Lab
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//===----------------------------------------------------------------------===//
+/// \file EntryPoint.h
+/// Describes the \c EntryPoint class.
+//===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_ENTRY_POINT_H
 #define LUTHIER_TOOLING_ENTRY_POINT_H
-#include <bits/refwrap.h>
 #include <cassert>
 #include <llvm/Support/AMDHSAKernelDescriptor.h>
 #include <variant>
@@ -15,15 +31,11 @@ namespace luthier {
 /// that's about to get launched, or a device address reached by the code
 /// via an indirect jump or call
 class EntryPoint {
-  using KernelRefWrapperType =
-      std::reference_wrapper<const llvm::amdhsa::kernel_descriptor_t>;
 
-  std::variant<KernelRefWrapperType, uint64_t> EP;
+  std::variant<const llvm::amdhsa::kernel_descriptor_t *, uint64_t> EP;
 
 public:
-  explicit EntryPoint(const llvm::amdhsa::kernel_descriptor_t &KD) : EP(KD) {};
-
-  explicit EntryPoint(const KernelRefWrapperType &K) : EP(K) {};
+  explicit EntryPoint(const llvm::amdhsa::kernel_descriptor_t &KD) : EP(&KD) {};
 
   explicit EntryPoint(uint64_t DeviceAddress) : EP(DeviceAddress) {};
 
@@ -31,8 +43,8 @@ public:
 
   /// \returns \c true if the entry point is a kernel, \c false otherwise
   [[nodiscard]] bool isKernel() const {
-    return std::holds_alternative<
-        std::reference_wrapper<const llvm::amdhsa::kernel_descriptor_t>>(EP);
+    return std::holds_alternative<const llvm::amdhsa::kernel_descriptor_t *>(
+        EP);
   }
 
   /// \returns \c true if the entry point is a device address, \c false
@@ -46,7 +58,7 @@ public:
   [[nodiscard]] const llvm::amdhsa::kernel_descriptor_t *
   getKernelDescriptor() const {
     if (isKernel()) {
-      return &std::get<KernelRefWrapperType>(EP).get();
+      return std::get<const llvm::amdhsa::kernel_descriptor_t *>(EP);
     }
     return nullptr;
   }
@@ -70,6 +82,8 @@ public:
                                                    : KDAddress - ByteOffset;
     }
   }
+
+  bool operator==(const EntryPoint &Other) const { return EP == Other.EP; }
 };
 
 } // namespace luthier
