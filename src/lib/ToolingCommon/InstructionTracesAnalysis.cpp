@@ -42,31 +42,35 @@ evaluateBranchOrCallIfDirect(const llvm::MCInst &Inst, uint64_t Addr) {
   return llvm::SignExtend64<16>(Imm) * 4 + Addr + 4;
 }
 
-static llvm::Error
-disassembleTrace(MemoryAllocationAccessor &SegAccessor,
-                 uint64_t StartDeviceAddr, llvm::MCDisassembler &Disassembler,
-                 size_t MaxReadSize, const llvm::MCInstrInfo &MII,
-                 InstructionTracesAnalysis::Trace &Instructions,
-                 uint64_t &LastInstructionAddr) {
-  /// Indicates whether a trace termintator instruction was encountered i.e.
-  /// a return instruction
+static llvm::Error disassembleTrace(const MemoryAllocationAccessor &SegAccessor,
+                                    uint64_t StartDeviceAddr,
+                                    llvm::MCDisassembler &Disassembler,
+                                    size_t MaxReadSize,
+                                    const llvm::MCInstrInfo &MII,
+                                    InstructionTraces::Trace &Instructions,
+                                    uint64_t &LastInstructionAddr) {
   bool WasTraceTermInstrEncountered{false};
   /// Indicates whether the last instruction disassembled is a basic block
   /// terminator
-  bool WasLastInstrTerminator{false};
   uint64_t CurrentDeviceAddress = StartDeviceAddr;
   while (!WasTraceTermInstrEncountered) {
-    MemoryAllocationAccessor::AllocationDescriptor AllocDesc;
+    std::optional<MemoryAllocationAccessor::AllocationDescriptor> AllocDesc;
 
     LUTHIER_RETURN_ON_ERROR(
         SegAccessor.getAllocationDescriptor(CurrentDeviceAddress)
             .moveInto(AllocDesc));
 
+    if (!AllocDesc.has_value()) {
+      return LUTHIER_MAKE_GENERIC_ERROR(
+          llvm::formatv("Address {0:x} has no allocation associated with it",
+                        CurrentDeviceAddress));
+    }
+
     uint64_t EntryPointHostAddr =
         CurrentDeviceAddress -
-        reinterpret_cast<uint64_t>(AllocDesc.AllocationOnDevice.data()) +
-        reinterpret_cast<uint64_t>(AllocDesc.AllocationOnHost.data());
-    size_t SegmentSize = AllocDesc.AllocationOnHost.size();
+        reinterpret_cast<uint64_t>(AllocDesc->AllocationOnDevice.data()) +
+        reinterpret_cast<uint64_t>(AllocDesc->AllocationOnHost.data());
+    size_t SegmentSize = AllocDesc->AllocationOnHost.size();
 
     uint64_t CurrentHostAddr = EntryPointHostAddr;
     uint64_t SegmentHostEndAddr = EntryPointHostAddr + SegmentSize;
@@ -96,7 +100,8 @@ disassembleTrace(MemoryAllocationAccessor &SegAccessor,
       if (PseudoOpcode == llvm::AMDGPU::S_SETPC_B64) {
         PseudoOpcode = llvm::AMDGPU::S_SETPC_B64_return;
       }
-      WasTraceTermInstrEncountered = MII.get(PseudoOpcode).isReturn();
+      WasTraceTermInstrEncountered =
+          MII.get(PseudoOpcode).isReturn() || MII.get(PseudoOpcode).isCall();
       Instructions.insert(
           {CurrentDeviceAddress,
            std::move(TraceInstr{Inst, CurrentDeviceAddress, InstSize})});
@@ -122,8 +127,6 @@ InstructionTraces::discoverTraces(EntryPoint EP,
 
   InstructionAddrSet UnvisitedTraceAddresses{InitialEntryPointAddr};
 
-  InstructionAddrSet VisitedTraceAddresses{};
-
   std::unique_ptr<llvm::MCDisassembler> DisAsm(
       TM.getTarget().createMCDisassembler(*TM.getMCSubtargetInfo(), MCCtx));
 
@@ -136,22 +139,18 @@ InstructionTraces::discoverTraces(EntryPoint EP,
     auto InstTrace = std::make_unique<Trace>();
     uint64_t TraceDeviceEndAddr{0};
 
-    LUTHIER_RETURN_ON_ERROR(disassembleTrace(CurrentDeviceAddr, MemAccessor,
+    LUTHIER_RETURN_ON_ERROR(disassembleTrace(MemAccessor, CurrentDeviceAddr,
                                              *DisAsm, MaxInstSize, MII,
                                              *InstTrace, TraceDeviceEndAddr));
 
-    /// Handle branch and call instructions
+    /// Handle direct branch instructions
     for (const auto &[InstAddr, TraceInst] : *InstTrace) {
       const auto &MCInst = TraceInst.getMCInst();
       llvm::MCInstrDesc PseudoOpcodeDesc =
           MII.get(getPseudoOpcodeFromReal(MCInst.getOpcode()));
       bool IsIndirectBranch = PseudoOpcodeDesc.isIndirectBranch();
-      bool IsDirectBranch = PseudoOpcodeDesc.isBranch() && !IsIndirectBranch;
-      bool IsCall = PseudoOpcodeDesc.isCall();
-      bool IsIndirectCall = IsCall && !MCInst.getOperand(0).isImm();
-      bool IsDirectCall = IsCall && !IsIndirectCall;
 
-      if (IsDirectBranch || IsDirectCall) {
+      if (PseudoOpcodeDesc.isBranch() && !IsIndirectBranch) {
         llvm::Expected<uint64_t> TargetOrErr =
             evaluateBranchOrCallIfDirect(MCInst, InstAddr);
         LUTHIER_RETURN_ON_ERROR(TargetOrErr.takeError());
@@ -166,19 +165,13 @@ InstructionTraces::discoverTraces(EntryPoint EP,
                 TraceInterval.second <= *TargetOrErr &&
                 Trace->contains(*TargetOrErr)) {
               HaveVisitedDirectBranchTarget = true;
+              break;
             }
           }
           if (!HaveVisitedDirectBranchTarget) {
             UnvisitedTraceAddresses.insert(*TargetOrErr);
           }
         }
-      }
-
-      if (IsIndirectBranch) {
-        Out->IndirectBranchAddresses.insert(InstAddr);
-      }
-      if (IsIndirectCall) {
-        Out->IndirectCallInstAddresses.insert(InstAddr);
       }
     };
 

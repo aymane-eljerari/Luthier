@@ -74,6 +74,7 @@ public:
 /// \brief The group of traces discovered after inspecting and discovering
 /// instructions starting from an \c EntryPoint
 class InstructionTraces {
+public:
   /// Represents a contiguous list of disassembled trace instructions
   /// We use a small map vector to make sure:
   /// - We map each trace instruction to its device address
@@ -91,6 +92,8 @@ class InstructionTraces {
 
   /// Holds a set of addresses
   using InstructionAddrSet = llvm::SmallDenseSet<uint64_t, 16>;
+
+private:
   /// Group of traces discovered from the entry point of the machine function
   TraceGroup Traces{};
 
