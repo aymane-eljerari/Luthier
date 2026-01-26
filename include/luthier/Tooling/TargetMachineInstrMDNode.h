@@ -1,4 +1,4 @@
-//===-- MachineInstrAnnotations.h --------------------------------*-C++-*-===//
+//===-- TargetMachineInstrMDNode.h --------------------------------*-C++-*-===//
 // Copyright 2025-2026 @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,21 +13,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file MachineInstrAnnotations.h
-/// Describes methods used to query and set annotations and metadata of
-/// machine instructions in Luthier's code generation process.
+/// \file TargetMachineInstrMDNode.h
+/// Describes the \c TargetMachineInstrMDNode used to parse and modify the
+/// PC sections metadata used by the target module machine instructions.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_MACHINE_INSTR_ANNOTATIONS_H
-#define LUTHIER_TOOLING_MACHINE_INSTR_ANNOTATIONS_H
-#include <SIInstrInfo.h>
-#include <llvm/IR/Constants.h>
-#include <luthier/Common/GenericLuthierError.h>
+#ifndef LUTHIER_TOOLING_TARGET_MACHINE_INSTR_MD_NODE_H
+#define LUTHIER_TOOLING_TARGET_MACHINE_INSTR_MD_NODE_H
+#include <llvm/IR/Metadata.h>
+#include <llvm/Support/Error.h>
+
+namespace llvm {
+class MachineInstr;
+}
 
 namespace luthier {
 
 class TargetMachineInstrMDNode : public llvm::MDTuple {
 
 public:
+  /// Initializes a \c TargetMachineInstrMDNode metadata node and assigns it
+  /// to the PC sections of \p MI
+  /// \pre MI must belong to a \c llvm::MachineFunction and a \c
+  /// llvm::MachineBasicBlock
+  /// \returns Expects the newly created \c TargetMachineInstrMDNode tracked
+  /// by \p MI
   static llvm::Expected<TargetMachineInstrMDNode &>
   initializeMDNode(llvm::MachineInstr &MI);
 
@@ -43,6 +52,21 @@ public:
   [[nodiscard]] bool isTraceInstr() const {
     return getTraceInstrAddress().has_value();
   }
+
+  llvm::Error setInjectedPayload(llvm::Function &InjectedPayload);
+
+  [[nodiscard]] llvm::Function *getInjectedPayloadIfExists() const;
+
+  void setCanRelaxDirectBranch(llvm::LLVMContext &Ctx, bool CanRelaxBranch);
+
+  [[nodiscard]] bool canRelaxDirectBranch() const;
+
+  void addIndirectBranchTarget(llvm::Function &F);
+
+  [[nodiscard]] llvm::SmallVector<llvm::Function *>
+  getIndirectBranchTargets() const;
+
+  void removeIndirectBranchTarget(llvm::Function &F);
 
   static bool classof(const Metadata *MD);
 };
