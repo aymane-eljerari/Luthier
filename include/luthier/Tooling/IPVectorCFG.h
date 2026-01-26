@@ -486,6 +486,33 @@ public:
   calculateIPVectorCFG(llvm::Module &M, llvm::ModuleAnalysisManager &MAM);
 };
 
+class IPVectorCFGAnalysis
+    : public llvm::AnalysisInfoMixin<IPVectorCFGAnalysis> {
+  friend llvm::AnalysisInfoMixin<IPVectorCFGAnalysis>;
+
+private:
+  static llvm::AnalysisKey Key;
+
+public:
+  class Result {
+    friend IPVectorCFGAnalysis;
+
+    std::unique_ptr<IPVectorCFG> IPCFG;
+
+    Result(std::unique_ptr<IPVectorCFG> IPCFG) : IPCFG(std::move(IPCFG)) {};
+
+  public:
+    bool invalidate(llvm::Module &M, const llvm::PreservedAnalyses &PA,
+                    llvm::ModuleAnalysisManager::Invalidator &Inv);
+
+    const IPVectorCFG &getVecCFG() const { return *IPCFG; }
+  };
+
+  IPVectorCFGAnalysis() = default;
+
+  Result run(llvm::Module &M, llvm::ModuleAnalysisManager &MAM);
+};
+
 } // namespace luthier
 
 #endif

@@ -341,45 +341,23 @@ IPVectorCFG::calculateIPVectorCFG(llvm::Module &M,
   return Out;
 }
 
-// void addLiveOutsNoPristines(llvm::LivePhysRegs &LPR, const VectorMBB &MBB) {
-//   // To get the live-outs we simply merge the live-ins of all successors.
-//   for (const VectorMBB *Succ : MBB.successors())
-//     addBlockLiveIns(LPR, *Succ);
-// }
-//
-// void addBlockLiveIns(llvm::LivePhysRegs &LPR, const VectorMBB &VecMBB) {
-//   for (const auto &LI : VecMBB.liveins()) {
-//     llvm::MCPhysReg Reg = LI.PhysReg;
-//     llvm::LaneBitmask Mask = LI.LaneMask;
-//     auto *TRI = VecMBB.getParent().getMF().getSubtarget().getRegisterInfo();
-//     llvm::MCSubRegIndexIterator S(Reg, TRI);
-//     assert(Mask.any() && "Invalid livein mask");
-//     if (Mask.all() || !S.isValid()) {
-//       LPR.addReg(Reg);
-//       continue;
-//     }
-//     for (; S.isValid(); ++S) {
-//       unsigned SI = S.getSubRegIndex();
-//       if ((Mask & TRI->getSubRegIndexLaneMask(SI)).any())
-//         LPR.addReg(S.getSubReg());
-//     }
-//   }
-// }
-//
-// void addLiveIns(VectorMBB &MBB, const llvm::LivePhysRegs &LiveRegs) {
-//   const auto &MF = MBB.getParent().getMF();
-//   const auto &MRI = MF.getRegInfo();
-//   const auto &TRI = *MRI.getTargetRegisterInfo();
-//   for (llvm::MCPhysReg Reg : LiveRegs) {
-//     if (MRI.isReserved(Reg))
-//       continue;
-//     // Skip the register if we are about to add one of its super registers.
-//     if (llvm::any_of(TRI.superregs(Reg), [&](llvm::MCPhysReg SReg) {
-//           return LiveRegs.contains(SReg) && !MRI.isReserved(SReg);
-//         }))
-//       continue;
-//     MBB.addLiveIn(Reg);
-//   }
-// }
+bool IPVectorCFGAnalysis::Result::invalidate(
+    llvm::Module &M, const llvm::PreservedAnalyses &PA,
+    llvm::ModuleAnalysisManager::Invalidator &Inv) {
+  auto PAC = PA.getChecker<IPVectorCFGAnalysis>();
+  return !PAC.preserved() &&
+         !PAC.preservedSet<llvm::AllAnalysesOn<
+             llvm::MachineFunctionAnalysisManagerModuleProxy>>() &&
+         !PAC.preservedSet<llvm::CFGAnalyses>();
+}
+
+IPVectorCFGAnalysis::Result
+IPVectorCFGAnalysis::run(llvm::Module &M, llvm::ModuleAnalysisManager &MAM) {
+  llvm::LLVMContext &Ctx = M.getContext();
+  llvm::Expected<std::unique_ptr<IPVectorCFG>> ResOrErr =
+      IPVectorCFG::calculateIPVectorCFG(M, MAM);
+  LUTHIER_CTX_EMIT_ON_ERROR(Ctx, ResOrErr.takeError());
+  return {std::move(*ResOrErr)};
+}
 
 } // namespace luthier
