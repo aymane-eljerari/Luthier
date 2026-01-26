@@ -50,8 +50,9 @@ enum TargetMachineInstrAnnotation : uint8_t {
   TraceAddr = 1,
   InjectedPayload = 2,
   CanRelaxDirectBranch = 3,
-  IndirectBranchTargets = 4,
-  LastMachineInstrAnnotation = IndirectBranchTargets
+  IndirectBranchAndCallTargets = 4,
+  AreIndirectBranchAndCallTargetsResolved = 5,
+  LastMachineInstrAnnotation = IndirectBranchAndCallTargets
 };
 
 /// \brief This struct statically maps the enums in \c
@@ -77,9 +78,15 @@ template <> struct MachineInstrAnnotationInfo<CanRelaxDirectBranch> {
       "luthier.machine_instr.can_relax_direct_branch";
 };
 
-template <> struct MachineInstrAnnotationInfo<IndirectBranchTargets> {
+template <> struct MachineInstrAnnotationInfo<IndirectBranchAndCallTargets> {
   static constexpr auto MDName =
-      "luthier.machine_instr.indirect_branch_targets";
+      "luthier.machine_instr.indirect_branch_and_call_targets";
+};
+
+template <>
+struct MachineInstrAnnotationInfo<AreIndirectBranchAndCallTargetsResolved> {
+  static constexpr auto MDName =
+      "luthier.machine_instr.are_indirect_branch_and_call_targets_resolved";
 };
 
 /// Modified version of the \c llvm::MDBuilder::createPCSections that will force
@@ -134,7 +141,7 @@ TargetMachineInstrMDNode::create(llvm::LLVMContext &Ctx) {
 }
 
 TargetMachineInstrMDNode *
-TargetMachineInstrMDNode::getInstrMDNodeIfExists(llvm::MachineInstr &MI) {
+TargetMachineInstrMDNode::getInstrMDNodeIfExists(const llvm::MachineInstr &MI) {
   return llvm::dyn_cast<TargetMachineInstrMDNode>(MI.getPCSections());
 }
 
@@ -147,7 +154,7 @@ getMDEntryIfExists(const TargetMachineInstrMDNode &MDNode) {
     return std::nullopt;
   } else {
     const llvm::MDOperand &IdxMD = IndexList.getOperand(Annotation);
-    if (auto *CI = llvm::mdconst::dyn_extract<llvm::ConstantInt>(IdxMD)) {
+    if (const auto *CI = llvm::mdconst::dyn_extract<llvm::ConstantInt>(IdxMD)) {
       size_t Idx = CI->getZExtValue();
       auto &Header = llvm::cast<llvm::MDString>(*MDNode.getOperand(Idx));
       auto &ConstantList =
@@ -281,15 +288,17 @@ bool TargetMachineInstrMDNode::canRelaxDirectBranch() const {
   return true;
 }
 
-void TargetMachineInstrMDNode::addIndirectBranchTarget(llvm::Function &F) {
+void TargetMachineInstrMDNode::addIndirectBranchOrCallTarget(
+    llvm::Function &F) {
   llvm::LLVMContext &Ctx = F.getContext();
   auto [StringHeader, AuxConstList] =
-      getOrCreateMDEntry<IndirectBranchTargets>(Ctx, *this);
+      getOrCreateMDEntry<IndirectBranchAndCallTargets>(Ctx, *this);
   llvm::MDBuilder MDB{Ctx};
   /// Loop over the indirect branch targets and see if we already have F in the
   /// list; If not, add it to the list
   for (const llvm::MDOperand &Op : AuxConstList.operands()) {
-    if (auto *FI = llvm::mdconst::extract<llvm::Function>(Op.get()); &F == FI) {
+    if (auto *FI = llvm::mdconst::dyn_extract<llvm::Function>(Op.get());
+        &F == FI) {
       return;
     }
   }
@@ -297,12 +306,12 @@ void TargetMachineInstrMDNode::addIndirectBranchTarget(llvm::Function &F) {
 }
 
 llvm::SmallVector<llvm::Function *>
-TargetMachineInstrMDNode::getIndirectBranchTargets() const {
-  auto EntryIfExists = getMDEntryIfExists<IndirectBranchTargets>(*this);
+TargetMachineInstrMDNode::getIndirectBranchAndCallTargets() const {
+  auto EntryIfExists = getMDEntryIfExists<IndirectBranchAndCallTargets>(*this);
   if (EntryIfExists.has_value()) {
     llvm::SmallVector<llvm::Function *> Out;
     for (const llvm::MDOperand &Op : EntryIfExists->second.operands()) {
-      if (auto *FI = llvm::mdconst::extract<llvm::Function>(Op.get())) {
+      if (auto *FI = llvm::mdconst::dyn_extract<llvm::Function>(Op.get())) {
         Out.push_back(FI);
       }
     }
@@ -313,7 +322,7 @@ TargetMachineInstrMDNode::getIndirectBranchTargets() const {
 
 void TargetMachineInstrMDNode::removeIndirectBranchTarget(llvm::Function &F) {
   llvm::LLVMContext &Ctx = F.getContext();
-  auto EntryIfExists = getMDEntryIfExists<IndirectBranchTargets>(*this);
+  auto EntryIfExists = getMDEntryIfExists<IndirectBranchAndCallTargets>(*this);
   if (EntryIfExists.has_value()) {
     for (auto [Idx, Op] : llvm::enumerate(
              llvm::make_early_inc_range(EntryIfExists->second.operands()))) {
@@ -326,6 +335,36 @@ void TargetMachineInstrMDNode::removeIndirectBranchTarget(llvm::Function &F) {
       }
     }
   }
+}
+
+void TargetMachineInstrMDNode::setIndirectBranchOrCallTargetsResolutionStatus(
+    llvm::LLVMContext &Ctx, bool Status) {
+  auto [StringHeader, AuxConstList] =
+      getOrCreateMDEntry<AreIndirectBranchAndCallTargetsResolved>(Ctx, *this);
+  llvm::MDBuilder MDB{Ctx};
+  llvm::ConstantAsMetadata *ResolveStatusMD =
+      MDB.createConstant(llvm::ConstantInt::getBool(Ctx, Status));
+  if (AuxConstList.getNumOperands() >= 1) {
+    llvm::cast<MutableMDTuple>(AuxConstList).setOperand(0, ResolveStatusMD);
+  } else {
+    AuxConstList.push_back(ResolveStatusMD);
+  }
+}
+
+bool TargetMachineInstrMDNode::getIndirectBranchOrCallTargetsResolutionStatus()
+    const {
+  auto TraceAddrHeaderAndEntry =
+      getMDEntryIfExists<AreIndirectBranchAndCallTargetsResolved>(*this);
+  if (!TraceAddrHeaderAndEntry.has_value())
+    return true;
+  if (auto &ListMD = TraceAddrHeaderAndEntry->second;
+      ListMD.getNumOperands() >= 1) {
+    if (auto *CB = llvm::mdconst::extract_or_null<llvm::ConstantInt>(
+            ListMD.getOperand(0))) {
+      return CB->getZExtValue();
+    }
+  }
+  return true;
 }
 
 bool TargetMachineInstrMDNode::classof(const Metadata *MD) {

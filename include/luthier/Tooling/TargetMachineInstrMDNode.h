@@ -43,7 +43,7 @@ public:
   static TargetMachineInstrMDNode &create(llvm::LLVMContext &Ctx);
 
   static TargetMachineInstrMDNode *
-  getInstrMDNodeIfExists(llvm::MachineInstr &MI);
+  getInstrMDNodeIfExists(const llvm::MachineInstr &MI);
 
   void setTraceInstrAddress(llvm::LLVMContext &Ctx, uint64_t Addr);
 
@@ -61,12 +61,17 @@ public:
 
   [[nodiscard]] bool canRelaxDirectBranch() const;
 
-  void addIndirectBranchTarget(llvm::Function &F);
+  void addIndirectBranchOrCallTarget(llvm::Function &F);
 
   [[nodiscard]] llvm::SmallVector<llvm::Function *>
-  getIndirectBranchTargets() const;
+  getIndirectBranchAndCallTargets() const;
 
   void removeIndirectBranchTarget(llvm::Function &F);
+
+  void setIndirectBranchOrCallTargetsResolutionStatus(llvm::LLVMContext &Ctx,
+                                                      bool Status);
+
+  bool getIndirectBranchOrCallTargetsResolutionStatus() const;
 
   static bool classof(const Metadata *MD);
 };
