@@ -1,5 +1,4 @@
-//===-- IPIPVectorRegLiveness.h -----------------------------------*- C++
-//-*-===//
+//===-- IPVectorRegLiveness.h ------------------------------------*- C++-*-===//
 // Copyright 2022-2026 @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file IPIPVectorRegLiveness.h
+/// \file IPVectorRegLiveness.h
 /// Describes the \c IPVectorRegLiveness and its corresponding analysis,
 /// which calculates the register live-in sets for each \c llvm::MachineInstr
 /// of all <tt>llvm::MachineFunction</tt>s inside a <tt>llvm::MachineModuleInfo.
@@ -36,6 +35,11 @@ private:
       VectorMBBLivenessMap{};
 
 public:
+  llvm::ArrayRef<llvm::MachineBasicBlock::RegisterMaskPair>
+  getVectorMBBLiveIns(const VectorMBB &VecMBB) const {
+    return VectorMBBLivenessMap.at(&VecMBB);
+  }
+
   IPVectorRegLiveness(llvm::Module &M, llvm::ModuleAnalysisManager &MAM);
 
   bool invalidate(llvm::Module &M, const llvm::PreservedAnalyses &PA,

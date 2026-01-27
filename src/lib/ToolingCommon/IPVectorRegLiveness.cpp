@@ -1,5 +1,4 @@
-//===-- IPVectorRegLiveness.cpp
-//---------------------------------------------===//
+//===-- IPVectorRegLiveness.cpp -------------------------------------------===//
 // Copyright 2022-2025 @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file VectorRegLiveness.cpp
-/// Implements the \c AMDGPURegisterLiveness class and its pass.
+/// \file IPVectorRegLiveness.cpp
+/// Implements the \c IPVectorRegLiveness class and its analysis pass.
 //===----------------------------------------------------------------------===//
 #include "luthier/Tooling/IPVectorRegLiveness.h"
 #include "luthier/Tooling/IPVectorCFG.h"

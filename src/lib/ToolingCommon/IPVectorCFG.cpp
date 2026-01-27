@@ -314,10 +314,14 @@ IPVectorCFG::calculateIPVectorCFG(llvm::Module &M,
     auto VectorCFGOrErr = VectorCFG::createVectorCFG(*Out, MF);
   }
 
-  /// Link the call and indirect jump instructions
+  /// Link the call and indirect jump instructions + sort the numbering of
+  /// all vector CFGs
+  unsigned CurrentVectorMBBIdx = 0;
   for (VectorCFG &VecCFG : *Out) {
-    for (auto &ScalarMBB : VecCFG) {
-      for (auto &VectorMBB : ScalarMBB) {
+    for (luthier::ScalarMBB &ScalarMBB : VecCFG) {
+      for (luthier::VectorMBB &VectorMBB : ScalarMBB) {
+        VectorMBB.setIndex(CurrentVectorMBBIdx);
+        CurrentVectorMBBIdx++;
         const llvm::MachineInstr &LastMI = VectorMBB.back();
         if (LastMI.isCall() || LastMI.isIndirectBranch()) {
           auto *MD = TargetMachineInstrMDNode::getInstrMDNodeIfExists(LastMI);
@@ -338,6 +342,7 @@ IPVectorCFG::calculateIPVectorCFG(llvm::Module &M,
       }
     }
   }
+  Out->NumVecMBBs = CurrentVectorMBBIdx;
   return Out;
 }
 

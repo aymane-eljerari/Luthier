@@ -18,13 +18,14 @@
 
 #ifndef LUTHIER_TOOLING_IP_REACHING_DEF_ANALYSIS_H
 #define LUTHIER_TOOLING_IP_REACHING_DEF_ANALYSIS_H
-
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/TinyPtrVector.h"
-#include "llvm/CodeGen/LoopTraversal.h"
-#include "llvm/CodeGen/MachineFunctionPass.h"
-#include "llvm/CodeGen/MachinePassManager.h"
+#include "IPLoopTraversal.h"
+#include "luthier/Tooling/IPVectorCFG.h"
+#include <llvm/ADT/DenseMap.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/TinyPtrVector.h>
+#include <llvm/CodeGen/LoopTraversal.h>
+#include <llvm/CodeGen/MachineFunctionPass.h>
+#include <llvm/CodeGen/MachinePassManager.h>
 
 namespace llvm {
 class MachineBasicBlock;
@@ -32,6 +33,7 @@ class MachineInstr;
 } // namespace llvm
 
 namespace luthier {
+class IPVectorRegLiveness;
 /// Thin wrapper around "int" used to store reaching definitions,
 /// using an encoding that makes it compatible with TinyPtrVector.
 /// The 0th LSB is forced zero (and will be used for pointer union tagging),
@@ -116,12 +118,9 @@ private:
 /// This class provides the reaching def analysis.
 class ReachingDefInfo {
 private:
-  llvm::MachineFunction *MF = nullptr;
-  const llvm::TargetRegisterInfo *TRI = nullptr;
-  const llvm::TargetInstrInfo *TII = nullptr;
-  llvm::LoopTraversal::TraversalOrder TraversedMBBOrder;
+  luthier::LoopTraversal::TraversalOrder TraversedMBBOrder;
+  const IPVectorCFG *IPVecCFG;
   unsigned NumRegUnits = 0;
-  unsigned NumStackObjects = 0;
   int ObjectIndexBegin = 0;
   /// Instruction that defined each register, relative to the beginning of the
   /// current basic block.  When a LiveRegsDefInfo is used to represent a
@@ -142,7 +141,7 @@ private:
 
   /// Maps instructions to their instruction Ids, relative to the beginning of
   /// their basic blocks.
-  llvm::DenseMap<llvm::MachineInstr *, int> InstIds;
+  llvm::DenseMap<const llvm::MachineInstr *, int> InstIds;
 
   MBBReachingDefsInfo MBBReachingDefs;
 
@@ -156,175 +155,186 @@ private:
   /// Default values are 'nothing happened a long time ago'.
   const int ReachingDefDefaultVal = -(1 << 21);
 
-  using InstSet = llvm::SmallPtrSetImpl<llvm::MachineInstr *>;
-  using BlockSet = llvm::SmallPtrSetImpl<llvm::MachineBasicBlock *>;
+  using InstSet = llvm::SmallPtrSetImpl<const llvm::MachineInstr *>;
+  using BlockSet = llvm::SmallPtrSetImpl<const llvm::MachineBasicBlock *>;
 
 public:
   ReachingDefInfo();
-  ReachingDefInfo(ReachingDefInfo &&);
+  ReachingDefInfo(ReachingDefInfo &&) noexcept;
   ~ReachingDefInfo();
   /// Handle invalidation explicitly.
-  bool invalidate(llvm::MachineFunction &F, const llvm::PreservedAnalyses &PA,
-                  llvm::MachineFunctionAnalysisManager::Invalidator &);
+  bool invalidate(llvm::Module &Module, const llvm::PreservedAnalyses &PA,
+                  llvm::ModuleAnalysisManager::Invalidator &);
 
-  void run(llvm::MachineFunction &mf);
+  void run(llvm::Module &TargetModule, llvm::ModuleAnalysisManager &TargetMAM);
+
   void print(llvm::raw_ostream &OS);
+
   void releaseMemory();
 
-  /// Re-run the analysis.
-  void reset();
-
   /// Initialize data structures.
-  void init();
+  void init(const IPVectorCFG &IPVecCFG,
+            const IPVectorRegLiveness &IPRegLiveness);
 
   /// Traverse the machine function, mapping definitions.
-  void traverse();
+  void traverse(const IPVectorCFG &IPVecCFG,
+                const IPVectorRegLiveness &IPRegLiveness);
 
   /// Provides the instruction id of the closest reaching def instruction of
   /// Reg that reaches MI, relative to the begining of MI's basic block.
   /// Note that Reg may represent a stack slot.
-  int getReachingDef(llvm::MachineInstr *MI, llvm::Register Reg) const;
+  int getReachingDef(const llvm::MachineInstr *MI, llvm::Register Reg) const;
 
   /// Return whether A and B use the same def of Reg.
-  bool hasSameReachingDef(llvm::MachineInstr *A, llvm::MachineInstr *B,
+  bool hasSameReachingDef(const llvm::MachineInstr *A,
+                          const llvm::MachineInstr *B,
                           llvm::Register Reg) const;
 
   /// Return whether the reaching def for MI also is live out of its parent
   /// block.
-  bool isReachingDefLiveOut(llvm::MachineInstr *MI, llvm::Register Reg) const;
+  bool isReachingDefLiveOut(const llvm::MachineInstr *MI,
+                            llvm::Register Reg) const;
 
   /// Return the local MI that produces the live out value for Reg, or
   /// nullptr for a non-live out or non-local def.
-  llvm::MachineInstr *getLocalLiveOutMIDef(llvm::MachineBasicBlock *MBB,
-                                           llvm::Register Reg) const;
+  const llvm::MachineInstr *
+  getLocalLiveOutMIDef(const llvm::MachineBasicBlock *MBB,
+                       llvm::Register Reg) const;
 
   /// If a single MachineInstr creates the reaching definition, then return it.
   /// Otherwise return null.
-  llvm::MachineInstr *getUniqueReachingMIDef(llvm::MachineInstr *MI,
-                                             llvm::Register Reg) const;
+  const llvm::MachineInstr *getUniqueReachingMIDef(const llvm::MachineInstr *MI,
+                                                   llvm::Register Reg) const;
 
   /// If a single MachineInstr creates the reaching definition, for MIs operand
   /// at Idx, then return it. Otherwise return null.
-  llvm::MachineInstr *getMIOperand(llvm::MachineInstr *MI, unsigned Idx) const;
+  const llvm::MachineInstr *getMIOperand(const llvm::MachineInstr *MI,
+                                         unsigned Idx) const;
 
   /// If a single MachineInstr creates the reaching definition, for MIs MO,
   /// then return it. Otherwise return null.
-  llvm::MachineInstr *getMIOperand(llvm::MachineInstr *MI,
-                                   llvm::MachineOperand &MO) const;
+  const llvm::MachineInstr *getMIOperand(const llvm::MachineInstr *MI,
+                                         const llvm::MachineOperand &MO) const;
 
   /// Provide whether the register has been defined in the same basic block as,
   /// and before, MI.
-  bool hasLocalDefBefore(llvm::MachineInstr *MI, llvm::Register Reg) const;
+  bool hasLocalDefBefore(const llvm::MachineInstr *MI,
+                         llvm::Register Reg) const;
 
   /// Return whether the given register is used after MI, whether it's a local
   /// use or a live out.
-  bool isRegUsedAfter(llvm::MachineInstr *MI, llvm::Register Reg) const;
+  bool isRegUsedAfter(const llvm::MachineInstr *MI, llvm::Register Reg) const;
 
   /// Return whether the given register is defined after MI.
-  bool isRegDefinedAfter(llvm::MachineInstr *MI, llvm::Register Reg) const;
+  bool isRegDefinedAfter(const llvm::MachineInstr *MI,
+                         llvm::Register Reg) const;
 
   /// Provides the clearance - the number of instructions since the closest
   /// reaching def instuction of Reg that reaches MI.
-  int getClearance(llvm::MachineInstr *MI, llvm::Register Reg) const;
+  int getClearance(const llvm::MachineInstr *MI, llvm::Register Reg) const;
 
   /// Provides the uses, in the same block as MI, of register that MI defines.
   /// This does not consider live-outs.
-  void getReachingLocalUses(llvm::MachineInstr *MI, llvm::Register Reg,
+  void getReachingLocalUses(const llvm::MachineInstr *MI, llvm::Register Reg,
                             InstSet &Uses) const;
 
   /// Search MBB for a definition of Reg and insert it into Defs. If no
   /// definition is found, recursively search the predecessor blocks for them.
-  void getLiveOuts(llvm::MachineBasicBlock *MBB, llvm::Register Reg,
+  void getLiveOuts(const llvm::MachineBasicBlock *MBB, llvm::Register Reg,
                    InstSet &Defs, BlockSet &VisitedBBs) const;
-  void getLiveOuts(llvm::MachineBasicBlock *MBB, llvm::Register Reg,
+  void getLiveOuts(const llvm::MachineBasicBlock *MBB, llvm::Register Reg,
                    InstSet &Defs) const;
 
   /// For the given block, collect the instructions that use the live-in
   /// value of the provided register. Return whether the value is still
   /// live on exit.
-  bool getLiveInUses(llvm::MachineBasicBlock *MBB, llvm::Register Reg,
+  bool getLiveInUses(const llvm::MachineBasicBlock *MBB, llvm::Register Reg,
                      InstSet &Uses) const;
 
   /// Collect the users of the value stored in Reg, which is defined
   /// by MI.
-  void getGlobalUses(llvm::MachineInstr *MI, llvm::Register Reg,
+  void getGlobalUses(const llvm::MachineInstr *MI, llvm::Register Reg,
                      InstSet &Uses) const;
 
   /// Collect all possible definitions of the value stored in Reg, which is
   /// used by MI.
-  void getGlobalReachingDefs(llvm::MachineInstr *MI, llvm::Register Reg,
+  void getGlobalReachingDefs(const llvm::MachineInstr *MI, llvm::Register Reg,
                              InstSet &Defs) const;
 
   /// Return whether From can be moved forwards to just before To.
-  bool isSafeToMoveForwards(llvm::MachineInstr *From,
-                            llvm::MachineInstr *To) const;
+  bool isSafeToMoveForwards(const llvm::MachineInstr *From,
+                            const llvm::MachineInstr *To) const;
 
   /// Return whether From can be moved backwards to just after To.
-  bool isSafeToMoveBackwards(llvm::MachineInstr *From,
-                             llvm::MachineInstr *To) const;
+  bool isSafeToMoveBackwards(const llvm::MachineInstr *From,
+                             const llvm::MachineInstr *To) const;
 
   /// Assuming MI is dead, recursively search the incoming operands which are
   /// killed by MI and collect those that would become dead.
-  void collectKilledOperands(llvm::MachineInstr *MI, InstSet &Dead) const;
+  void collectKilledOperands(const llvm::MachineInstr *MI, InstSet &Dead) const;
 
   /// Return whether removing this instruction will have no effect on the
   /// program, returning the redundant use-def chain.
-  bool isSafeToRemove(llvm::MachineInstr *MI, InstSet &ToRemove) const;
+  bool isSafeToRemove(const llvm::MachineInstr *MI, InstSet &ToRemove) const;
 
   /// Return whether removing this instruction will have no effect on the
   /// program, ignoring the possible effects on some instructions, returning
   /// the redundant use-def chain.
-  bool isSafeToRemove(llvm::MachineInstr *MI, InstSet &ToRemove,
+  bool isSafeToRemove(const llvm::MachineInstr *MI, InstSet &ToRemove,
                       InstSet &Ignore) const;
 
   /// Return whether a MachineInstr could be inserted at MI and safely define
   /// the given register without affecting the program.
-  bool isSafeToDefRegAt(llvm::MachineInstr *MI, llvm::Register Reg) const;
+  bool isSafeToDefRegAt(const llvm::MachineInstr *MI, llvm::Register Reg) const;
 
   /// Return whether a MachineInstr could be inserted at MI and safely define
   /// the given register without affecting the program, ignoring any effects
   /// on the provided instructions.
-  bool isSafeToDefRegAt(llvm::MachineInstr *MI, llvm::Register Reg,
+  bool isSafeToDefRegAt(const llvm::MachineInstr *MI, llvm::Register Reg,
                         InstSet &Ignore) const;
 
 private:
   /// Set up LiveRegs by merging predecessor live-out values.
-  void enterBasicBlock(llvm::MachineBasicBlock *MBB);
+  void enterBasicBlock(
+      const VectorMBB *MBB,
+      llvm::ArrayRef<llvm::MachineBasicBlock::RegisterMaskPair> LiveIns);
 
   /// Update live-out values.
-  void leaveBasicBlock(llvm::MachineBasicBlock *MBB);
+  void leaveBasicBlock(const VectorMBB *MBB);
 
   /// Process he given basic block.
-  void
-  processBasicBlock(const llvm::LoopTraversal::TraversedMBBInfo &TraversedMBB);
+  void processBasicBlock(
+      const LoopTraversal::TraversedMBBInfo &TraversedMBB,
+      llvm::ArrayRef<llvm::MachineBasicBlock::RegisterMaskPair> LiveIns);
 
   /// Process block that is part of a loop again.
-  void reprocessBasicBlock(llvm::MachineBasicBlock *MBB);
+  void reprocessBasicBlock(const VectorMBB *MBB);
 
   /// Update def-ages for registers defined by MI.
   /// Also break dependencies on partial defs and undef uses.
-  void processDefs(llvm::MachineInstr *);
+  void processDefs(const llvm::MachineInstr &MI, unsigned int VectorMBBIdx);
 
   /// Utility function for isSafeToMoveForwards/Backwards.
   template <typename Iterator>
-  bool isSafeToMove(llvm::MachineInstr *From, llvm::MachineInstr *To) const;
+  bool isSafeToMove(const llvm::MachineInstr *From,
+                    const llvm::MachineInstr *To) const;
 
   /// Return whether removing this instruction will have no effect on the
   /// program, ignoring the possible effects on some instructions, returning
   /// the redundant use-def chain.
-  bool isSafeToRemove(llvm::MachineInstr *MI, InstSet &Visited,
+  bool isSafeToRemove(const llvm::MachineInstr *MI, InstSet &Visited,
                       InstSet &ToRemove, InstSet &Ignore) const;
 
   /// Provides the MI, from the given block, corresponding to the Id or a
   /// nullptr if the id does not refer to the block.
-  llvm::MachineInstr *getInstFromId(llvm::MachineBasicBlock *MBB,
-                                    int InstId) const;
+  const llvm::MachineInstr *getInstFromId(const llvm::MachineBasicBlock *MBB,
+                                          int InstId) const;
 
   /// Provides the instruction of the closest reaching def instruction of
   /// Reg that reaches MI, relative to the begining of MI's basic block.
   /// Note that Reg may represent a stack slot.
-  llvm::MachineInstr *getReachingLocalMIDef(llvm::MachineInstr *MI,
-                                            llvm::Register Reg) const;
+  const llvm::MachineInstr *getReachingLocalMIDef(const llvm::MachineInstr *MI,
+                                                  llvm::Register Reg) const;
 };
 
 class ReachingDefAnalysis
@@ -335,8 +345,8 @@ class ReachingDefAnalysis
 public:
   using Result = ReachingDefInfo;
 
-  Result run(llvm::MachineFunction &MF,
-             llvm::MachineFunctionAnalysisManager &MFAM);
+  Result run(llvm::Module &TargetModule,
+             llvm::ModuleAnalysisManager &TargetMAM);
 };
 
 /// Printer pass for the \c ReachingDefInfo results.
@@ -351,23 +361,6 @@ public:
                               llvm::MachineFunctionAnalysisManager &MFAM);
 
   static bool isRequired() { return true; }
-};
-
-class ReachingDefInfoWrapperPass : public llvm::MachineFunctionPass {
-  ReachingDefInfo RDI;
-
-public:
-  static char ID;
-
-  ReachingDefInfoWrapperPass();
-
-  void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
-  llvm::MachineFunctionProperties getRequiredProperties() const override;
-  bool runOnMachineFunction(llvm::MachineFunction &F) override;
-  void releaseMemory() override { RDI.releaseMemory(); }
-
-  ReachingDefInfo &getRDI() { return RDI; }
-  const ReachingDefInfo &getRDI() const { return RDI; }
 };
 
 } // namespace luthier

@@ -98,15 +98,25 @@ public:
 
   [[nodiscard]] unsigned getIndex() const { return Idx; }
 
+  void setIndex(unsigned I) { Idx = I; }
+
   [[nodiscard]] llvm::StringRef getName() const;
 
   [[nodiscard]] auto predecessors() const {
     return llvm::make_range(Predecessors.begin(), Predecessors.end());
   }
 
+  auto preds_size() const { return Predecessors.size(); }
+
+  bool preds_empty() const { return Predecessors.empty(); }
+
   [[nodiscard]] auto successors() const {
     return llvm::make_range(Successors.begin(), Successors.end());
   }
+
+  auto succs_size() const { return Successors.size(); }
+
+  bool succs_empty() const { return Successors.empty(); }
 
   void addPredecessorBlock(VectorMBB &MBB) {
     Predecessors.insert(&MBB);
@@ -384,6 +394,8 @@ private:
   llvm::SmallDenseMap<const llvm::MachineFunction *, std::unique_ptr<VectorCFG>>
       VectorCFGs{};
 
+  unsigned NumVecMBBs{0};
+
   IPVectorCFG() = default;
 
 public:
@@ -478,6 +490,8 @@ public:
     return *VectorCFGs.at(&MF);
   }
 
+  unsigned getNumVecMBBs() const { return NumVecMBBs; }
+
   void print(llvm::raw_ostream &OS) const;
 
   LLVM_DUMP_METHOD void dump() const;
@@ -514,5 +528,54 @@ public:
 };
 
 } // namespace luthier
+
+namespace llvm {
+template <> struct GraphTraits<const luthier::VectorMBB *> {
+  using NodeRef = const luthier::VectorMBB *;
+  using ChildIteratorType =
+      SmallDenseSet<const luthier::VectorMBB *>::const_iterator;
+
+  static NodeRef getEntryNode(const luthier::VectorMBB *BB) { return BB; }
+
+  static ChildIteratorType child_begin(NodeRef N) {
+    return N->successors().begin();
+  }
+
+  static ChildIteratorType child_end(NodeRef N) {
+    return N->successors().end();
+  }
+
+  static unsigned getNumber(const luthier::VectorMBB *BB) {
+    return BB->getIndex();
+  }
+};
+
+static_assert(GraphHasNodeNumbers<const MachineBasicBlock *>,
+              "GraphTraits getNumber() not detected");
+
+template <> struct GraphTraits<Inverse<const luthier::VectorMBB *>> {
+  using NodeRef = const luthier::VectorMBB *;
+  using ChildIteratorType =
+      SmallDenseSet<const luthier::VectorMBB *>::const_iterator;
+
+  static NodeRef getEntryNode(Inverse<luthier::VectorMBB *> G) {
+    return G.Graph;
+  }
+
+  static ChildIteratorType child_begin(NodeRef N) {
+    return N->predecessors().begin();
+  }
+  static ChildIteratorType child_end(NodeRef N) {
+    return N->predecessors().end();
+  }
+
+  static unsigned getNumber(const luthier::VectorMBB *BB) {
+    return BB->getIndex();
+  }
+};
+
+static_assert(GraphHasNodeNumbers<Inverse<const luthier::VectorMBB *>>,
+              "GraphTraits getNumber() not detected");
+} // namespace llvm
 
 #endif
