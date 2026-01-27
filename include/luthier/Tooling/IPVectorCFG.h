@@ -22,6 +22,7 @@
 #include <llvm/ADT/Twine.h>
 #include <llvm/CodeGen/MachineBasicBlock.h>
 #include <llvm/CodeGen/MachineFunction.h>
+#include <llvm/Support/GenericDomTree.h>
 
 namespace llvm {
 
@@ -40,6 +41,29 @@ class VectorCFG;
 
 class ScalarMBB;
 
+class VectorMBB;
+
+class VectorMachineInstr {
+  VectorMBB &Parent;
+
+  const llvm::MachineInstr &MI;
+
+public:
+  VectorMachineInstr(const VectorMBB &Parent, const llvm::MachineInstr &MI)
+      : Parent(const_cast<VectorMBB &>(Parent)), MI(MI) {}
+
+  VectorMachineInstr(VectorMBB &Parent, const llvm::MachineInstr &MI)
+      : Parent(Parent), MI(MI) {}
+
+  const llvm::MachineInstr &operator*() const { return MI; }
+
+  const llvm::MachineInstr *operator->() const { return &MI; }
+
+  VectorMBB &getParent() { return Parent; }
+
+  [[nodiscard]] const VectorMBB &getParent() const { return Parent; }
+};
+
 /// \brief A basic block inside the inter-procedural vector control flow graph;
 /// Used primarily in flow analysis involving vector GPRs and instructions
 /// \details In addition to normal scalar control flow operations that end a
@@ -52,21 +76,21 @@ private:
   unsigned Idx;
 
   /// The scalar MBB this vector MBB belongs to
-  const ScalarMBB &Parent;
+  ScalarMBB &Parent;
 
   /// The range of instructions in the block
   llvm::iterator_range<llvm::MachineBasicBlock::const_instr_iterator>
       Instructions{{}, {}};
 
   /// Set of predecessor blocks
-  llvm::SmallDenseSet<const VectorMBB *> Predecessors{};
+  llvm::SmallDenseSet<VectorMBB *> Predecessors{};
 
   /// Set of successor blocks
-  llvm::SmallDenseSet<const VectorMBB *> Successors{};
+  llvm::SmallDenseSet<VectorMBB *> Successors{};
 
 public:
   /// \note Do not use; Use Scalar MBB to create VectorMBBs instead
-  VectorMBB(const ScalarMBB &Parent, unsigned Idx) : Idx(Idx), Parent(Parent) {}
+  VectorMBB(ScalarMBB &Parent, unsigned Idx) : Idx(Idx), Parent(Parent) {}
 
   /// Makes the MBB point to a new range of instructions in a single MBB
   void setInstRange(llvm::MachineBasicBlock::const_instr_iterator Begin,
@@ -80,29 +104,131 @@ public:
 
   [[nodiscard]] const ScalarMBB &getParent() const { return Parent; };
 
-  [[nodiscard]] llvm::MachineBasicBlock::const_instr_iterator begin() const {
-    return Instructions.begin();
+  [[nodiscard]] ScalarMBB &getParent() { return Parent; };
+
+  class iterator {
+    VectorMBB &Parent;
+    llvm::MachineBasicBlock::const_instr_iterator It;
+
+  public:
+    using difference_type = ptrdiff_t;
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = VectorMachineInstr;
+
+    iterator(VectorMBB &Parent,
+             llvm::MachineBasicBlock::const_instr_iterator It)
+        : Parent(Parent), It(It) {}
+
+    value_type operator*() const { return VectorMachineInstr{Parent, *It}; }
+
+    value_type operator->() const { return VectorMachineInstr{Parent, *It}; }
+
+    [[nodiscard]] decltype(It) getIterator() const { return It; }
+
+    iterator operator++() {
+      do {
+        ++It;
+      } while (It != Parent.end().getIterator() && It->isDebugInstr());
+      return *this;
+    }
+
+    iterator operator++(int) {
+      auto Copy = *this;
+      ++(*this);
+      return Copy;
+    }
+
+    bool operator==(const iterator &Other) const { return It == Other.It; }
+
+    bool operator!=(const iterator &Other) const { return !(*this == Other); }
+  };
+
+  class const_iterator {
+    VectorMBB &Parent;
+    llvm::MachineBasicBlock::const_instr_iterator It;
+
+  public:
+    using difference_type = ptrdiff_t;
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = const VectorMachineInstr;
+
+    const_iterator(VectorMBB &Parent,
+                   llvm::MachineBasicBlock::const_instr_iterator It)
+        : Parent(Parent), It(It) {}
+
+    explicit const_iterator(const VectorMachineInstr &MI)
+        : Parent(const_cast<VectorMBB &>(MI.getParent())),
+          It(MI->getIterator()) {};
+
+    value_type operator*() const { return VectorMachineInstr{Parent, *It}; }
+
+    value_type operator->() const { return VectorMachineInstr{Parent, *It}; }
+
+    decltype(It) getIterator() const { return It; }
+
+    const_iterator operator++() {
+      do {
+        ++It;
+      } while (It != Parent.end().getIterator() && It->isDebugInstr());
+
+      return *this;
+    }
+
+    const_iterator operator++(int) {
+      auto Copy = *this;
+      ++(*this);
+      return Copy;
+    }
+
+    bool operator==(const const_iterator &Other) const {
+      return It == Other.It;
+    }
+
+    bool operator!=(const const_iterator &Other) const {
+      return !(*this == Other);
+    }
+  };
+
+  [[nodiscard]] const_iterator begin() const {
+    return const_iterator{*const_cast<VectorMBB *>(this), Instructions.begin()};
   }
 
-  [[nodiscard]] const llvm::MachineInstr &front() const { return *begin(); }
+  [[nodiscard]] const VectorMachineInstr front() const { return *begin(); }
 
-  [[nodiscard]] llvm::MachineBasicBlock::const_instr_iterator end() const {
-    return Instructions.end();
+  [[nodiscard]] const_iterator end() const {
+    return const_iterator{*const_cast<VectorMBB *>(this), Instructions.end()};
   }
 
-  [[nodiscard]] const llvm::MachineInstr &back() const {
-    return *(--Instructions.end());
+  [[nodiscard]] const VectorMachineInstr back() const {
+    return *(
+        const_iterator{*const_cast<VectorMBB *>(this), --Instructions.end()});
   }
 
   [[nodiscard]] bool empty() const { return Instructions.empty(); }
 
-  [[nodiscard]] unsigned getIndex() const { return Idx; }
+  unsigned size() const {
+    return std::distance(Instructions.begin(), Instructions.end());
+  }
+
+  [[nodiscard]] unsigned getNumber() const { return Idx; }
 
   void setIndex(unsigned I) { Idx = I; }
 
   [[nodiscard]] llvm::StringRef getName() const;
 
+  auto preds_begin() { return Predecessors.begin(); }
+
+  auto preds_begin() const { return Predecessors.begin(); }
+
+  auto preds_end() const { return Predecessors.end(); }
+
+  auto preds_end() { return Predecessors.end(); }
+
   [[nodiscard]] auto predecessors() const {
+    return llvm::make_range(Predecessors.begin(), Predecessors.end());
+  }
+
+  [[nodiscard]] auto predecessors() {
     return llvm::make_range(Predecessors.begin(), Predecessors.end());
   }
 
@@ -110,7 +236,19 @@ public:
 
   bool preds_empty() const { return Predecessors.empty(); }
 
+  auto succs_begin() { return Successors.begin(); }
+
+  auto succs_begin() const { return Successors.begin(); }
+
+  auto succs_end() const { return Successors.end(); }
+
+  auto succs_end() { return Successors.end(); }
+
   [[nodiscard]] auto successors() const {
+    return llvm::make_range(Successors.begin(), Successors.end());
+  }
+
+  [[nodiscard]] auto successors() {
     return llvm::make_range(Successors.begin(), Successors.end());
   }
 
@@ -243,6 +381,8 @@ public:
 
   [[nodiscard]] const VectorCFG &getParent() const { return ParentCFG; }
 
+  [[nodiscard]] VectorCFG &getParent() { return ParentCFG; }
+
   [[nodiscard]] const llvm::MachineBasicBlock *getMBB() const {
     return ParentMBB;
   }
@@ -258,6 +398,10 @@ public:
   [[nodiscard]] const_iterator end() const {
     return const_iterator(VectorMBBs.end());
   }
+
+  [[nodiscard]] const VectorMBB &front() const { return *VectorMBBs.front(); }
+
+  [[nodiscard]] const VectorMBB &back() const { return *VectorMBBs.back(); }
 
   void addSuccessor(ScalarMBB &SMBB);
 
@@ -370,12 +514,24 @@ public:
     return const_iterator(ScalarMBBs.end());
   }
 
+  [[nodiscard]] const ScalarMBB &front() const { return *ScalarMBBs.front(); }
+
+  [[nodiscard]] ScalarMBB &front() { return *ScalarMBBs.front(); }
+
+  [[nodiscard]] const ScalarMBB &back() const { return *ScalarMBBs.back(); }
+
+  [[nodiscard]] ScalarMBB &back() { return *ScalarMBBs.back(); }
+
   [[nodiscard]] const ScalarMBB &
   getScalarMBB(const llvm::MachineBasicBlock &MBB) const {
     return *MBBToScalarMBBs.at(&MBB);
   }
 
   [[nodiscard]] const llvm::MachineFunction &getMF() const { return MF; }
+
+  [[nodiscard]] const IPVectorCFG &getParent() const { return ParentCFG; }
+
+  [[nodiscard]] IPVectorCFG &getParent() { return ParentCFG; }
 
   void print(llvm::raw_ostream &OS) const;
 
@@ -391,8 +547,10 @@ public:
 /// with the CFG of LLVM MIR for the AMD GPU backend
 class IPVectorCFG {
 private:
-  llvm::SmallDenseMap<const llvm::MachineFunction *, std::unique_ptr<VectorCFG>>
-      VectorCFGs{};
+  llvm::SmallVector<std::unique_ptr<VectorCFG>> VectorCFGs{};
+
+  llvm::SmallDenseMap<const llvm::MachineFunction *, VectorCFG *>
+      MFToVecCFGMap{};
 
   unsigned NumVecMBBs{0};
 
@@ -411,9 +569,9 @@ public:
 
     explicit iterator(const decltype(VectorCFGs)::iterator &It) : It(It) {}
 
-    reference operator*() const { return *It->second; }
+    reference operator*() const { return **It; }
 
-    pointer operator->() const { return It->second.get(); }
+    pointer operator->() const { return It->get(); }
 
     iterator operator++() {
       ++It;
@@ -437,16 +595,16 @@ public:
   public:
     using difference_type = ptrdiff_t;
     using iterator_category = std::forward_iterator_tag;
-    using value_type = VectorCFG;
+    using value_type = const VectorCFG;
     using reference = value_type &;
     using pointer = value_type *;
 
     explicit const_iterator(const decltype(VectorCFGs)::const_iterator &It)
         : It(It) {}
 
-    reference operator*() const { return *It->second; }
+    reference operator*() const { return **It; }
 
-    pointer operator->() const { return It->second.get(); }
+    pointer operator->() const { return It->get(); }
 
     const_iterator operator++() {
       ++It;
@@ -480,17 +638,23 @@ public:
     return const_iterator(VectorCFGs.end());
   }
 
+  [[nodiscard]] const VectorCFG &front() const { return *VectorCFGs.front(); }
+
+  [[nodiscard]] const VectorCFG &back() const { return *VectorCFGs.back(); }
+
+  [[nodiscard]] VectorCFG &back() { return *VectorCFGs.back(); }
+
   VectorCFG &operator[](const llvm::MachineFunction &MF) {
-    assert(VectorCFGs.contains(&MF) && "Entry is not in the map");
-    return *VectorCFGs[&MF];
+    assert(MFToVecCFGMap.contains(&MF) && "Entry is not in the map");
+    return *MFToVecCFGMap[&MF];
   }
 
   [[nodiscard]] const VectorCFG &at(const llvm::MachineFunction &MF) const {
-    assert(VectorCFGs.contains(&MF) && "Entry is not in the map");
-    return *VectorCFGs.at(&MF);
+    assert(MFToVecCFGMap.contains(&MF) && "Entry is not in the map");
+    return *MFToVecCFGMap.at(&MF);
   }
 
-  unsigned getNumVecMBBs() const { return NumVecMBBs; }
+  [[nodiscard]] unsigned getNumVecMBBs() const { return NumVecMBBs; }
 
   void print(llvm::raw_ostream &OS) const;
 
@@ -520,6 +684,8 @@ public:
                     llvm::ModuleAnalysisManager::Invalidator &Inv);
 
     const IPVectorCFG &getVecCFG() const { return *IPCFG; }
+
+    IPVectorCFG &getVecCFG() { return *IPCFG; }
   };
 
   IPVectorCFGAnalysis() = default;
@@ -527,13 +693,43 @@ public:
   Result run(llvm::Module &M, llvm::ModuleAnalysisManager &MAM);
 };
 
+class IPVectorCFGPrinterPass : public llvm::PassInfoMixin<IPVectorCFGAnalysis> {
+
+private:
+  llvm::raw_ostream &OS;
+
+public:
+  explicit IPVectorCFGPrinterPass(llvm::raw_ostream &OS) : OS(OS) {};
+
+  llvm::PreservedAnalyses run(llvm::Module &M,
+                              llvm::ModuleAnalysisManager &MAM);
+};
+
 } // namespace luthier
 
 namespace llvm {
+
+template <> struct GraphTraits<luthier::VectorMBB *> {
+  using NodeRef = luthier::VectorMBB *;
+  using ChildIteratorType = SmallDenseSet<luthier::VectorMBB *>::iterator;
+
+  static NodeRef getEntryNode(luthier::VectorMBB *BB) { return BB; }
+
+  static ChildIteratorType child_begin(NodeRef N) { return N->succs_begin(); }
+
+  static ChildIteratorType child_end(NodeRef N) {
+    return N->successors().end();
+  }
+
+  static unsigned getNumber(luthier::VectorMBB *BB) { return BB->getNumber(); }
+};
+
+static_assert(GraphHasNodeNumbers<luthier::VectorMBB *>,
+              "GraphTraits getNumber() not detected");
+
 template <> struct GraphTraits<const luthier::VectorMBB *> {
   using NodeRef = const luthier::VectorMBB *;
-  using ChildIteratorType =
-      SmallDenseSet<const luthier::VectorMBB *>::const_iterator;
+  using ChildIteratorType = SmallDenseSet<luthier::VectorMBB *>::const_iterator;
 
   static NodeRef getEntryNode(const luthier::VectorMBB *BB) { return BB; }
 
@@ -546,36 +742,134 @@ template <> struct GraphTraits<const luthier::VectorMBB *> {
   }
 
   static unsigned getNumber(const luthier::VectorMBB *BB) {
-    return BB->getIndex();
+    return BB->getNumber();
   }
 };
 
-static_assert(GraphHasNodeNumbers<const MachineBasicBlock *>,
+static_assert(GraphHasNodeNumbers<const luthier::VectorMBB *>,
               "GraphTraits getNumber() not detected");
 
-template <> struct GraphTraits<Inverse<const luthier::VectorMBB *>> {
-  using NodeRef = const luthier::VectorMBB *;
-  using ChildIteratorType =
-      SmallDenseSet<const luthier::VectorMBB *>::const_iterator;
+template <> struct GraphTraits<Inverse<luthier::VectorMBB *>> {
+  using NodeRef = luthier::VectorMBB *;
+  using ChildIteratorType = SmallDenseSet<luthier::VectorMBB *>::iterator;
 
   static NodeRef getEntryNode(Inverse<luthier::VectorMBB *> G) {
     return G.Graph;
   }
 
-  static ChildIteratorType child_begin(NodeRef N) {
-    return N->predecessors().begin();
-  }
-  static ChildIteratorType child_end(NodeRef N) {
-    return N->predecessors().end();
+  static ChildIteratorType child_begin(NodeRef N) { return N->preds_begin(); }
+  static ChildIteratorType child_end(NodeRef N) { return N->preds_end(); }
+
+  static unsigned getNumber(luthier::VectorMBB *BB) { return BB->getNumber(); }
+};
+
+template <> struct GraphTraits<Inverse<const luthier::VectorMBB *>> {
+  using NodeRef = const luthier::VectorMBB *;
+  using ChildIteratorType = SmallDenseSet<luthier::VectorMBB *>::const_iterator;
+
+  static NodeRef getEntryNode(Inverse<const luthier::VectorMBB *> G) {
+    return G.Graph;
   }
 
+  static ChildIteratorType child_begin(NodeRef N) { return N->preds_begin(); }
+  static ChildIteratorType child_end(NodeRef N) { return N->preds_end(); }
+
   static unsigned getNumber(const luthier::VectorMBB *BB) {
-    return BB->getIndex();
+    return BB->getNumber();
   }
 };
 
 static_assert(GraphHasNodeNumbers<Inverse<const luthier::VectorMBB *>>,
               "GraphTraits getNumber() not detected");
+
+template <> struct DomTreeNodeTraits<luthier::VectorMBB> {
+  using NodeType = luthier::VectorMBB;
+  using NodePtr = luthier::VectorMBB *;
+  using ParentPtr = luthier::IPVectorCFG *;
+  using ParentType = std::remove_pointer_t<ParentPtr>;
+
+  static luthier::VectorMBB *getEntryNode(ParentPtr Parent) {
+    return &*Parent->begin()->begin()->begin();
+  }
+
+  static ParentPtr getParent(NodePtr BB) {
+    return &BB->getParent().getParent().getParent();
+  }
+};
+
+template <> struct DomTreeNodeTraits<const luthier::VectorMBB> {
+  using NodeType = const luthier::VectorMBB;
+  using NodePtr = const luthier::VectorMBB *;
+  using ParentPtr = const luthier::IPVectorCFG *;
+  using ParentType = std::remove_pointer_t<ParentPtr>;
+
+  static const luthier::VectorMBB *getEntryNode(ParentPtr Parent) {
+    return &*Parent->begin()->begin()->begin();
+  }
+
+  static ParentPtr getParent(NodePtr BB) {
+    return &BB->getParent().getParent().getParent();
+  }
+};
+
+template <>
+struct GraphTraits<luthier::IPVectorCFG *>
+    : public GraphTraits<luthier::VectorMBB *> {
+  static NodeRef getEntryNode(luthier::IPVectorCFG *F) {
+    return &*F->begin()->begin()->begin();
+  }
+
+  // nodes_iterator/begin/end - Allow iteration over all nodes in the graph
+  using nodes_iterator = luthier::ScalarMBB::iterator;
+
+  static nodes_iterator nodes_begin(luthier::IPVectorCFG *F) {
+    return F->begin()->begin()->begin();
+  }
+
+  static nodes_iterator nodes_end(luthier::IPVectorCFG *F) {
+    return F->back().back().end();
+  }
+
+  static unsigned size(luthier::IPVectorCFG *F) { return F->getNumVecMBBs(); }
+
+  static unsigned getMaxNumber(luthier::IPVectorCFG *F) {
+    return F->getNumVecMBBs();
+  }
+  static unsigned getNumberEpoch(luthier::IPVectorCFG *F) {
+    return F->getNumVecMBBs();
+  }
+};
+
+template <>
+struct GraphTraits<const luthier::IPVectorCFG *>
+    : public GraphTraits<const luthier::VectorMBB *> {
+  static NodeRef getEntryNode(const luthier::IPVectorCFG *F) {
+    return &*F->begin()->begin()->begin();
+  }
+
+  // nodes_iterator/begin/end - Allow iteration over all nodes in the graph
+  using nodes_iterator = luthier::ScalarMBB::const_iterator;
+
+  static nodes_iterator nodes_begin(const luthier::IPVectorCFG *F) {
+    return F->begin()->begin()->begin();
+  }
+
+  static nodes_iterator nodes_end(const luthier::IPVectorCFG *F) {
+    return nodes_iterator(F->back().back().end());
+  }
+
+  static unsigned size(const luthier::IPVectorCFG *F) {
+    return F->getNumVecMBBs();
+  }
+
+  static unsigned getMaxNumber(const luthier::IPVectorCFG *F) {
+    return F->getNumVecMBBs();
+  }
+  static unsigned getNumberEpoch(const luthier::IPVectorCFG *F) {
+    return F->getNumVecMBBs();
+  }
+};
+
 } // namespace llvm
 
 #endif

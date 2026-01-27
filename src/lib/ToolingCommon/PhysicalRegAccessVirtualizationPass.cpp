@@ -239,8 +239,13 @@ bool PhysicalRegAccessVirtualizationPass::runOnMachineFunction(
   auto &IPIP =
       *IMAM.getCachedResult<InjectedPayloadAndInstPointAnalysis>(IModule);
 
+  /// TODO: Fix this to point to a target machine function instead!!!
   auto &RegLiveness =
-      TargetMAM.getResult<AMDGPURegLivenessAnalysis>(TargetModule);
+      TargetMAM
+          .getResult<llvm::MachineFunctionAnalysisManagerModuleProxy>(
+              TargetModule)
+          .getManager()
+          .getResult<VectorRegLivenessAnalysis>( MF);
 
   const auto &CG = TargetMAM.getResult<LRCallGraphAnalysis>(TargetModule);
 

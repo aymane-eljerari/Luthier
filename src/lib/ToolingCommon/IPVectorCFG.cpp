@@ -48,7 +48,7 @@ llvm::StringRef VectorMBB::getName() const {
   const llvm::MachineBasicBlock *MBB = getParent().getMBB();
 
   return llvm::formatv("{0}.{1}.{2}", MF.getName(),
-                       MBB ? MBB->getName() : "none", getIndex())
+                       MBB ? MBB->getName() : "none", getNumber())
       .str();
 }
 
@@ -68,7 +68,7 @@ void VectorMBB::print(llvm::raw_ostream &OS, unsigned int Indent) const {
   if (!this->empty()) {
     OS.indent(Indent) << "Instructions:\n";
     for (const auto &MI : *this) {
-      MI.print(OS.indent(Indent + 2), true, false, false, true, TII);
+      MI->print(OS.indent(Indent + 2), true, false, false, true, TII);
     }
   }
 
@@ -114,6 +114,8 @@ ScalarMBB::createScalarMBB(const llvm::MachineBasicBlock &ParentMBB,
             NextMI = std::ranges::next(MI, ParentMBB.instr_end());
        MI != ParentMBB.instr_end(); PrevMI = MI, ++MI,
             NextMI = std::ranges::next(NextMI, ParentMBB.instr_end())) {
+    if (MI->isDebugInstr())
+      continue;
     // Check if the MI is vector (i.e. not scalar nor lane access),
     // whether it writes to the exec mask, and whether the last MI
     // (if exists) was a scalar instruction
@@ -140,7 +142,8 @@ ScalarMBB::createScalarMBB(const llvm::MachineBasicBlock &ParentMBB,
       if (CurrentTakenBlock->empty())
         CurrentTakenBlock->setInstRange(MI, NextMI);
       else
-        CurrentTakenBlock->setInstRange(CurrentTakenBlock->begin(), MI);
+        CurrentTakenBlock->setInstRange(
+            CurrentTakenBlock->begin().getIterator(), MI);
     } else if (!IsVector && !IsFormerMIScalar) {
       // Otherwise, if we observe a scalar instruction, we have to do a "join"
       // operation: Create a new VectorMBB to replace the current taken block,
@@ -162,7 +165,8 @@ ScalarMBB::createScalarMBB(const llvm::MachineBasicBlock &ParentMBB,
     if (CurrentTakenBlock->empty())
       CurrentTakenBlock->setInstRange(MI, NextMI);
     else
-      CurrentTakenBlock->setInstRange(CurrentTakenBlock->begin(), NextMI);
+      CurrentTakenBlock->setInstRange(CurrentTakenBlock->begin().getIterator(),
+                                      NextMI);
 
     /// If the current MI is a call, create a new block and set it to the
     /// current taken block
@@ -221,22 +225,10 @@ void ScalarMBB::print(llvm::raw_ostream &OS, unsigned int Indent) const {
                     << (ParentMBB ? ParentMBB->getFullName()
                                   : getParent().getMF().getName())
                     << ":\n";
-  OS << "\n";
-  Entry.TakenBlock->print(OS, Indent + 2);
-  OS << "\n";
-  Entry.NotTakenBlock->print(OS, Indent + 2);
-  OS << "\n";
   for (const auto &MBB : VectorMBBs) {
-    if (MBB.get() == Entry.TakenBlock || MBB.get() == Entry.NotTakenBlock ||
-        MBB.get() == Exit.TakenBlock || MBB.get() == Exit.NotTakenBlock) {
-      continue;
-    }
     MBB->print(OS, Indent + 2);
     OS << "\n";
   }
-
-  Exit.TakenBlock->print(OS, Indent + 2);
-  Exit.NotTakenBlock->print(OS, Indent + 2);
 }
 
 llvm::Expected<std::unique_ptr<VectorCFG>>
@@ -307,11 +299,15 @@ IPVectorCFG::calculateIPVectorCFG(llvm::Module &M,
 
   auto Out = std::unique_ptr<IPVectorCFG>(new IPVectorCFG());
 
+  Out->VectorCFGs.reserve(M.size());
   /// Populate the CFG
   for (llvm::Function &F : M) {
     llvm::MachineFunction &MF =
         FAM.getResult<llvm::MachineFunctionAnalysis>(F).getMF();
     auto VectorCFGOrErr = VectorCFG::createVectorCFG(*Out, MF);
+    LUTHIER_RETURN_ON_ERROR(VectorCFGOrErr.takeError());
+    Out->MFToVecCFGMap.insert({&MF, VectorCFGOrErr->get()});
+    Out->VectorCFGs.emplace_back(std::move(*VectorCFGOrErr));
   }
 
   /// Link the call and indirect jump instructions + sort the numbering of
@@ -322,21 +318,24 @@ IPVectorCFG::calculateIPVectorCFG(llvm::Module &M,
       for (luthier::VectorMBB &VectorMBB : ScalarMBB) {
         VectorMBB.setIndex(CurrentVectorMBBIdx);
         CurrentVectorMBBIdx++;
-        const llvm::MachineInstr &LastMI = VectorMBB.back();
-        if (LastMI.isCall() || LastMI.isIndirectBranch()) {
-          auto *MD = TargetMachineInstrMDNode::getInstrMDNodeIfExists(LastMI);
-          if (!MD) {
-            return LUTHIER_MAKE_GENERIC_ERROR(
-                "Failed to get the metadata associated with a call or indirect "
-                "branch instruction");
-          }
-          llvm::SmallVector<llvm::Function *> Targets =
-              MD->getIndirectBranchAndCallTargets();
-          for (llvm::Function *Target : Targets) {
-            llvm::MachineFunction &TargetMF =
-                FAM.getResult<llvm::MachineFunctionAnalysis>(*Target).getMF();
-            auto &TargetBeginVecMBB = *(*Out)[TargetMF].begin()->begin();
-            VectorMBB.addSuccessorBlock(TargetBeginVecMBB);
+        if (!VectorMBB.empty()) {
+          const llvm::MachineInstr &LastMI = *VectorMBB.back();
+          if (LastMI.isCall() || LastMI.isIndirectBranch()) {
+            auto *MD = TargetMachineInstrMDNode::getInstrMDNodeIfExists(LastMI);
+            if (!MD) {
+              return LUTHIER_MAKE_GENERIC_ERROR(
+                  "Failed to get the metadata associated with a call or "
+                  "indirect "
+                  "branch instruction");
+            }
+            llvm::SmallVector<llvm::Function *> Targets =
+                MD->getIndirectBranchAndCallTargets();
+            for (llvm::Function *Target : Targets) {
+              llvm::MachineFunction &TargetMF =
+                  FAM.getResult<llvm::MachineFunctionAnalysis>(*Target).getMF();
+              auto &TargetBeginVecMBB = *(*Out)[TargetMF].begin()->begin();
+              VectorMBB.addSuccessorBlock(TargetBeginVecMBB);
+            }
           }
         }
       }
@@ -345,6 +344,8 @@ IPVectorCFG::calculateIPVectorCFG(llvm::Module &M,
   Out->NumVecMBBs = CurrentVectorMBBIdx;
   return Out;
 }
+
+llvm::AnalysisKey IPVectorCFGAnalysis::Key;
 
 bool IPVectorCFGAnalysis::Result::invalidate(
     llvm::Module &M, const llvm::PreservedAnalyses &PA,
@@ -363,6 +364,13 @@ IPVectorCFGAnalysis::run(llvm::Module &M, llvm::ModuleAnalysisManager &MAM) {
       IPVectorCFG::calculateIPVectorCFG(M, MAM);
   LUTHIER_CTX_EMIT_ON_ERROR(Ctx, ResOrErr.takeError());
   return {std::move(*ResOrErr)};
+}
+
+llvm::PreservedAnalyses
+IPVectorCFGPrinterPass::run(llvm::Module &M, llvm::ModuleAnalysisManager &MAM) {
+  auto &IPVecCFG = MAM.getResult<IPVectorCFGAnalysis>(M).getVecCFG();
+  IPVecCFG.print(OS);
+  return llvm::PreservedAnalyses::all();
 }
 
 } // namespace luthier
