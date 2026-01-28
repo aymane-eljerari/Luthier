@@ -71,9 +71,18 @@ public:
 /// mask or a call instruction will result in the termination of the vector
 /// basic block
 class VectorMBB {
+public:
+  enum ExecMaskValue { ZeroOrOne = 0, One = 1 };
+
 private:
-  /// Index of the vector MBB in the parent Scalar MBB
-  unsigned Idx;
+  /// Indicates the value of the execute mask inside this vector MBB
+  ExecMaskValue EMV;
+
+  /// Index of the vector MBB inside the IP vector CFG
+  unsigned GlobalIdx;
+
+  /// Index of the vector MBB inside its parent Scalar MBB
+  unsigned ScalarMBBIdx;
 
   /// The scalar MBB this vector MBB belongs to
   ScalarMBB &Parent;
@@ -90,7 +99,8 @@ private:
 
 public:
   /// \note Do not use; Use Scalar MBB to create VectorMBBs instead
-  VectorMBB(ScalarMBB &Parent, unsigned Idx) : Idx(Idx), Parent(Parent) {}
+  explicit VectorMBB(ScalarMBB &Parent, ExecMaskValue EMV)
+      : EMV(EMV), GlobalIdx(0), ScalarMBBIdx(0), Parent(Parent) {}
 
   /// Makes the MBB point to a new range of instructions in a single MBB
   void setInstRange(llvm::MachineBasicBlock::const_instr_iterator Begin,
@@ -164,7 +174,7 @@ public:
 
     value_type operator->() const { return VectorMachineInstr{Parent, *It}; }
 
-    decltype(It) getIterator() const { return It; }
+    [[nodiscard]] decltype(It) getIterator() const { return It; }
 
     const_iterator operator++() {
       do {
@@ -193,13 +203,13 @@ public:
     return const_iterator{*const_cast<VectorMBB *>(this), Instructions.begin()};
   }
 
-  [[nodiscard]] const VectorMachineInstr front() const { return *begin(); }
+  const VectorMachineInstr front() const { return *begin(); }
 
   [[nodiscard]] const_iterator end() const {
     return const_iterator{*const_cast<VectorMBB *>(this), Instructions.end()};
   }
 
-  [[nodiscard]] const VectorMachineInstr back() const {
+  const VectorMachineInstr back() const {
     return *(
         const_iterator{*const_cast<VectorMBB *>(this), --Instructions.end()});
   }
@@ -210,17 +220,21 @@ public:
     return std::distance(Instructions.begin(), Instructions.end());
   }
 
-  [[nodiscard]] unsigned getNumber() const { return Idx; }
+  [[nodiscard]] ExecMaskValue getExecMaskValue() const { return EMV; }
 
-  void setIndex(unsigned I) { Idx = I; }
+  [[nodiscard]] unsigned getGlobalNumber() const { return GlobalIdx; }
 
-  [[nodiscard]] llvm::StringRef getName() const;
+  [[nodiscard]] unsigned getLocalNumber() const { return ScalarMBBIdx; }
+
+  void setGlobalIndex(unsigned I) { GlobalIdx = I; }
+
+  [[nodiscard]] std::string getName() const;
 
   auto preds_begin() { return Predecessors.begin(); }
 
-  auto preds_begin() const { return Predecessors.begin(); }
+  [[nodiscard]] auto preds_begin() const { return Predecessors.begin(); }
 
-  auto preds_end() const { return Predecessors.end(); }
+  [[nodiscard]] auto preds_end() const { return Predecessors.end(); }
 
   auto preds_end() { return Predecessors.end(); }
 
@@ -232,15 +246,15 @@ public:
     return llvm::make_range(Predecessors.begin(), Predecessors.end());
   }
 
-  auto preds_size() const { return Predecessors.size(); }
+  [[nodiscard]] auto preds_size() const { return Predecessors.size(); }
 
-  bool preds_empty() const { return Predecessors.empty(); }
+  [[nodiscard]] bool preds_empty() const { return Predecessors.empty(); }
 
   auto succs_begin() { return Successors.begin(); }
 
-  auto succs_begin() const { return Successors.begin(); }
+  [[nodiscard]] auto succs_begin() const { return Successors.begin(); }
 
-  auto succs_end() const { return Successors.end(); }
+  [[nodiscard]] auto succs_end() const { return Successors.end(); }
 
   auto succs_end() { return Successors.end(); }
 
@@ -252,18 +266,28 @@ public:
     return llvm::make_range(Successors.begin(), Successors.end());
   }
 
-  auto succs_size() const { return Successors.size(); }
+  [[nodiscard]] auto succs_size() const { return Successors.size(); }
 
-  bool succs_empty() const { return Successors.empty(); }
+  [[nodiscard]] bool succs_empty() const { return Successors.empty(); }
 
   void addPredecessorBlock(VectorMBB &MBB) {
     Predecessors.insert(&MBB);
     MBB.Successors.insert(this);
   }
 
+  void removePredecessorBlock(VectorMBB &MBB) {
+    Predecessors.erase(&MBB);
+    MBB.Successors.erase(this);
+  }
+
   void addSuccessorBlock(VectorMBB &MBB) {
     Successors.insert(&MBB);
     MBB.Predecessors.insert(this);
+  }
+
+  void removeSuccessorBlock(VectorMBB &MBB) {
+    Successors.erase(&MBB);
+    MBB.Predecessors.erase(this);
   }
 
   void print(llvm::raw_ostream &OS, unsigned int Indent) const;
@@ -281,15 +305,6 @@ class ScalarMBB {
   const llvm::MachineBasicBlock *ParentMBB{nullptr};
 
   llvm::SmallVector<std::unique_ptr<VectorMBB>> VectorMBBs{};
-
-  struct ScalarEntryOrExitBlocks {
-    VectorMBB *TakenBlock{nullptr};
-    VectorMBB *NotTakenBlock{nullptr};
-  };
-
-  ScalarEntryOrExitBlocks Entry{};
-
-  ScalarEntryOrExitBlocks Exit{};
 
   ScalarMBB(const llvm::MachineBasicBlock &ParentMBB, VectorCFG &ParentCFG)
       : ParentCFG(ParentCFG), ParentMBB(&ParentMBB) {};
@@ -406,6 +421,38 @@ public:
   void addSuccessor(ScalarMBB &SMBB);
 
   void addPredecessor(ScalarMBB &SMBB);
+
+  void eliminateTrivialEmptyBlocks();
+
+  iterator findFirstTakenVectorMBB() {
+    return iterator(
+        llvm::find_if(VectorMBBs, [](std::unique_ptr<VectorMBB> &VMBB) {
+          return VMBB->getExecMaskValue() == VectorMBB::ExecMaskValue::One;
+        }));
+  }
+
+  [[nodiscard]] const_iterator findFirstTakenVectorMBB() const {
+    return const_iterator(
+        llvm::find_if(VectorMBBs, [](const std::unique_ptr<VectorMBB> &VMBB) {
+          return VMBB->getExecMaskValue() == VectorMBB::ExecMaskValue::One;
+        }));
+  }
+
+  iterator findFirstNonTakenVectorMBB() {
+    return iterator(
+        llvm::find_if(VectorMBBs, [](std::unique_ptr<VectorMBB> &VMBB) {
+          return VMBB->getExecMaskValue() ==
+                 VectorMBB::ExecMaskValue::ZeroOrOne;
+        }));
+  }
+
+  [[nodiscard]] const_iterator findFirstNonTakenVectorMBB() const {
+    return const_iterator(
+        llvm::find_if(VectorMBBs, [](const std::unique_ptr<VectorMBB> &VMBB) {
+          return VMBB->getExecMaskValue() ==
+                 VectorMBB::ExecMaskValue::ZeroOrOne;
+        }));
+  }
 
   void print(llvm::raw_ostream &OS, unsigned int Indent) const;
 };
@@ -721,7 +768,9 @@ template <> struct GraphTraits<luthier::VectorMBB *> {
     return N->successors().end();
   }
 
-  static unsigned getNumber(luthier::VectorMBB *BB) { return BB->getNumber(); }
+  static unsigned getNumber(luthier::VectorMBB *BB) {
+    return BB->getGlobalNumber();
+  }
 };
 
 static_assert(GraphHasNodeNumbers<luthier::VectorMBB *>,
@@ -742,7 +791,7 @@ template <> struct GraphTraits<const luthier::VectorMBB *> {
   }
 
   static unsigned getNumber(const luthier::VectorMBB *BB) {
-    return BB->getNumber();
+    return BB->getGlobalNumber();
   }
 };
 
@@ -760,7 +809,9 @@ template <> struct GraphTraits<Inverse<luthier::VectorMBB *>> {
   static ChildIteratorType child_begin(NodeRef N) { return N->preds_begin(); }
   static ChildIteratorType child_end(NodeRef N) { return N->preds_end(); }
 
-  static unsigned getNumber(luthier::VectorMBB *BB) { return BB->getNumber(); }
+  static unsigned getNumber(luthier::VectorMBB *BB) {
+    return BB->getGlobalNumber();
+  }
 };
 
 template <> struct GraphTraits<Inverse<const luthier::VectorMBB *>> {
@@ -775,7 +826,7 @@ template <> struct GraphTraits<Inverse<const luthier::VectorMBB *>> {
   static ChildIteratorType child_end(NodeRef N) { return N->preds_end(); }
 
   static unsigned getNumber(const luthier::VectorMBB *BB) {
-    return BB->getNumber();
+    return BB->getGlobalNumber();
   }
 };
 

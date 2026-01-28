@@ -41,14 +41,14 @@ void VectorMBB::setInstRange(
   Instructions = {Begin, End};
 }
 
-llvm::StringRef VectorMBB::getName() const {
-  std::string Name;
+std::string VectorMBB::getName() const {
   const ScalarMBB &SMBB = getParent();
   const llvm::MachineFunction &MF = SMBB.getParent().getMF();
   const llvm::MachineBasicBlock *MBB = getParent().getMBB();
 
-  return llvm::formatv("{0}.{1}.{2}", MF.getName(),
-                       MBB ? MBB->getName() : "none", getNumber())
+  return llvm::formatv("{0}.{1}",
+                       MBB ? MBB->getFullName() : MF.getName() + ".none",
+                       getGlobalNumber())
       .str();
 }
 
@@ -85,12 +85,15 @@ void VectorMBB::dump() const { print(llvm::dbgs(), 0); }
 llvm::Expected<std::unique_ptr<ScalarMBB>>
 ScalarMBB::createScalarMBB(const llvm::MachineBasicBlock &ParentMBB,
                            VectorCFG &ParentCFG) {
-  auto Out = std::unique_ptr<ScalarMBB>(new ScalarMBB(ParentMBB, ParentCFG));
-  unsigned NextVectorMBBIdx = 0;
+  auto Out = std::unique_ptr<ScalarMBB>(new (std::nothrow)
+                                            ScalarMBB(ParentMBB, ParentCFG));
+  if (!Out) {
+    return LUTHIER_MAKE_GENERIC_ERROR("Failed to create a scalar MBB");
+  }
 
-  auto VectorMBBAllocator = [&]() -> llvm::Expected<VectorMBB *> {
-    auto *VecMBB = new (std::nothrow) VectorMBB(*Out, NextVectorMBBIdx);
-    NextVectorMBBIdx++;
+  auto VectorMBBAllocator =
+      [&](VectorMBB::ExecMaskValue EMV) -> llvm::Expected<VectorMBB *> {
+    auto *VecMBB = new (std::nothrow) VectorMBB(*Out, EMV);
     if (!VecMBB) {
       return LUTHIER_MAKE_GENERIC_ERROR("Failed to create vector MBB");
     }
@@ -98,22 +101,34 @@ ScalarMBB::createScalarMBB(const llvm::MachineBasicBlock &ParentMBB,
     return VecMBB;
   };
 
-  LUTHIER_RETURN_ON_ERROR(VectorMBBAllocator().moveInto(Out->Entry.TakenBlock));
+  struct ScalarEntryOrExitBlocks {
+    VectorMBB *TakenBlock{nullptr};
+    VectorMBB *NotTakenBlock{nullptr};
+  };
+
+  ScalarEntryOrExitBlocks Entry{};
+
+  ScalarEntryOrExitBlocks Exit{};
+
   LUTHIER_RETURN_ON_ERROR(
-      VectorMBBAllocator().moveInto(Out->Entry.NotTakenBlock));
+      VectorMBBAllocator(VectorMBB::One).moveInto(Entry.TakenBlock));
+  LUTHIER_RETURN_ON_ERROR(
+      VectorMBBAllocator(VectorMBB::ZeroOrOne).moveInto(Entry.NotTakenBlock));
 
   auto *TRI = ParentCFG.getMF().getSubtarget().getRegisterInfo();
   // The currently taken block in the MBB
-  auto *CurrentTakenBlock = Out->Entry.TakenBlock;
+  auto *CurrentTakenBlock = Entry.TakenBlock;
   // Set of VectorMBBs that are waiting to be connected to the next non-taken
   // block or joined into the next block that starts with a scalar instruction
   llvm::SmallDenseSet<VectorMBB *> NotTakenBlocksWithHangingEdges{
-      Out->Entry.NotTakenBlock};
+      Entry.NotTakenBlock};
 
   for (auto MI = ParentMBB.instr_begin(), PrevMI = ParentMBB.instr_end(),
-            NextMI = std::ranges::next(MI, ParentMBB.instr_end());
+            NextMI = ++ParentMBB.instr_begin();
        MI != ParentMBB.instr_end(); PrevMI = MI, ++MI,
-            NextMI = std::ranges::next(NextMI, ParentMBB.instr_end())) {
+            NextMI = NextMI != ParentMBB.instr_end() ? ++NextMI
+                                                     : ParentMBB.instr_end()) {
+    // Ignore debug instructions
     if (MI->isDebugInstr())
       continue;
     // Check if the MI is vector (i.e. not scalar nor lane access),
@@ -133,7 +148,7 @@ ScalarMBB::createScalarMBB(const llvm::MachineBasicBlock &ParentMBB,
       // into the list of not-taken blocks that are yet to be connected
       VectorMBB *NewCurrentTakenBlock{nullptr};
       LUTHIER_RETURN_ON_ERROR(
-          VectorMBBAllocator().moveInto(NewCurrentTakenBlock));
+          VectorMBBAllocator(VectorMBB::One).moveInto(NewCurrentTakenBlock));
 
       NewCurrentTakenBlock->addPredecessorBlock(*CurrentTakenBlock);
       NotTakenBlocksWithHangingEdges.insert(CurrentTakenBlock);
@@ -151,8 +166,8 @@ ScalarMBB::createScalarMBB(const llvm::MachineBasicBlock &ParentMBB,
       // all not taken blocks with hanging edges the predecessor of the new
       // taken block, and then clear the not-taken set
       VectorMBB *NewCurrentTakenBlock{nullptr};
-      LUTHIER_RETURN_ON_ERROR(
-          VectorMBBAllocator().moveInto(NewCurrentTakenBlock));
+      LUTHIER_RETURN_ON_ERROR(VectorMBBAllocator(VectorMBB::ZeroOrOne)
+                                  .moveInto(NewCurrentTakenBlock));
 
       NewCurrentTakenBlock->addPredecessorBlock(*CurrentTakenBlock);
       for (auto NonTakenBlock : NotTakenBlocksWithHangingEdges) {
@@ -174,39 +189,44 @@ ScalarMBB::createScalarMBB(const llvm::MachineBasicBlock &ParentMBB,
     /// edges we have to worry about here
     /// We let the IPVectorCFG take care of linking the successors of this
     /// block according to the MI's metadata
-    if (MI->isCall()) {
-      LUTHIER_RETURN_ON_ERROR(VectorMBBAllocator().moveInto(CurrentTakenBlock));
-    }
+    // if (MI->isCall()) {
+    //   LUTHIER_RETURN_ON_ERROR(VectorMBBAllocator().moveInto(CurrentTakenBlock));
+    // }
   }
 
-  LUTHIER_RETURN_ON_ERROR(VectorMBBAllocator().moveInto(Out->Exit.TakenBlock));
   LUTHIER_RETURN_ON_ERROR(
-      VectorMBBAllocator().moveInto(Out->Exit.NotTakenBlock));
+      VectorMBBAllocator(VectorMBB::One).moveInto(Exit.TakenBlock));
+  LUTHIER_RETURN_ON_ERROR(
+      VectorMBBAllocator(VectorMBB::ZeroOrOne).moveInto(Exit.NotTakenBlock));
 
   // Connect the current taken block to the exit taken block of the current
   // MBB
-  CurrentTakenBlock->addSuccessorBlock(*Out->Exit.TakenBlock);
+  CurrentTakenBlock->addSuccessorBlock(*Exit.TakenBlock);
   // Connect all the non-taken blocks to the exit non-taken block of the
-  // current MBB
-  for (auto *NonTakenBlock : NotTakenBlocksWithHangingEdges) {
-    NonTakenBlock->addSuccessorBlock(*Out->Exit.NotTakenBlock);
+  // current MBB if there are any left; Otherwise, connect the current
+  // taken block to the exit not taken block because it must have ended with
+  // a join (scalar instruction)
+  if (!NotTakenBlocksWithHangingEdges.empty()) {
+    for (auto *NonTakenBlock : NotTakenBlocksWithHangingEdges) {
+      NonTakenBlock->addSuccessorBlock(*Exit.NotTakenBlock);
+    }
+  } else {
+    CurrentTakenBlock->addSuccessorBlock(*Exit.NotTakenBlock);
   }
-
   return std::move(Out);
 }
 
 llvm::Expected<std::unique_ptr<ScalarMBB>>
 ScalarMBB::createEntryScalarMBB(VectorCFG &ParentCFG) {
-  std::unique_ptr<ScalarMBB> Out{new ScalarMBB(ParentCFG)};
-  auto *VecMBB = new (std::nothrow) VectorMBB(*Out, 0);
+  std::unique_ptr<ScalarMBB> Out{new (std::nothrow) ScalarMBB(ParentCFG)};
+  if (!Out) {
+    return LUTHIER_MAKE_GENERIC_ERROR("Failed to create scalar MBB");
+  }
+  auto *VecMBB = new (std::nothrow) VectorMBB(*Out, VectorMBB::ZeroOrOne);
   if (!VecMBB) {
     return LUTHIER_MAKE_GENERIC_ERROR("Failed to create vector MBB");
   }
   Out->VectorMBBs.emplace_back(VecMBB);
-  Out->Entry.TakenBlock = VecMBB;
-  Out->Entry.NotTakenBlock = VecMBB;
-  Out->Exit.TakenBlock = VecMBB;
-  Out->Exit.NotTakenBlock = VecMBB;
   return std::move(Out);
 };
 
@@ -218,6 +238,11 @@ void ScalarMBB::addSuccessor(ScalarMBB &SMBB) {
 void ScalarMBB::addPredecessor(ScalarMBB &SMBB) {
   this->Entry.TakenBlock->addPredecessorBlock(*SMBB.Exit.TakenBlock);
   this->Entry.NotTakenBlock->addPredecessorBlock(*SMBB.Exit.NotTakenBlock);
+}
+
+void ScalarMBB::eliminateTrivialEmptyBlocks() {
+  if (Entry.TakenBlock->empty()) {
+  }
 }
 
 void ScalarMBB::print(llvm::raw_ostream &OS, unsigned int Indent) const {
@@ -267,6 +292,8 @@ VectorCFG::createVectorCFG(IPVectorCFG &ParentCFG,
 }
 
 void VectorCFG::print(llvm::raw_ostream &OS) const {
+  MF.print(OS);
+  OS << "=======";
   OS << "# Vector CFG for Machine Function " << MF.getName() << ":\n";
   OS << "\n";
   for (const auto &SMBB : *this) {
@@ -316,7 +343,7 @@ IPVectorCFG::calculateIPVectorCFG(llvm::Module &M,
   for (VectorCFG &VecCFG : *Out) {
     for (luthier::ScalarMBB &ScalarMBB : VecCFG) {
       for (luthier::VectorMBB &VectorMBB : ScalarMBB) {
-        VectorMBB.setIndex(CurrentVectorMBBIdx);
+        VectorMBB.setGlobalIndex(CurrentVectorMBBIdx);
         CurrentVectorMBBIdx++;
         if (!VectorMBB.empty()) {
           const llvm::MachineInstr &LastMI = *VectorMBB.back();
@@ -337,6 +364,7 @@ IPVectorCFG::calculateIPVectorCFG(llvm::Module &M,
               VectorMBB.addSuccessorBlock(TargetBeginVecMBB);
             }
           }
+        } else {
         }
       }
     }
