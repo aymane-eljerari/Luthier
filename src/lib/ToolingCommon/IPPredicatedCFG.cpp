@@ -22,6 +22,7 @@
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/LLVM/streams.h"
 #include "luthier/Tooling/EntryPoint.h"
+#include "luthier/Tooling/FunctionAnnotations.h"
 #include "luthier/Tooling/InitialEntryPointAnalysis.h"
 #include "luthier/Tooling/PredicatedMachineFunction.h"
 #include "luthier/Tooling/TargetMachineInstrMDNode.h"
@@ -32,7 +33,6 @@
 #include <llvm/CodeGen/MachineFunction.h>
 #include <llvm/CodeGen/MachineFunctionAnalysis.h>
 #include <llvm/Support/FormatVariadic.h>
-#include <luthier/Tooling/FunctionAnnotations.h>
 
 namespace luthier {
 
@@ -45,22 +45,6 @@ void IPPredicatedCFG::print(llvm::raw_ostream &OS) const {
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
 void IPPredicatedCFG::dump() const { return print(llvm::dbgs()); }
 #endif
-
-IPPredicatedCFG::iterator IPPredicatedCFG::getEntry() {
-  return iterator(
-      llvm::find_if(PredMFs, [&](std::unique_ptr<PredMFBuilder> &PredMF) {
-        return PredMF->getPredMF().getMF().getFunction().hasFnAttribute(
-            EntryPointAddrAttr);
-      }));
-}
-
-IPPredicatedCFG::const_iterator IPPredicatedCFG::getEntry() const {
-  return const_iterator(
-      llvm::find_if(PredMFs, [&](const std::unique_ptr<PredMFBuilder> &PredMF) {
-        return PredMF->getPredMF().getMF().getFunction().hasFnAttribute(
-            EntryPointAddrAttr);
-      }));
-}
 
 PredicatedMachineBasicBlock &
 IPPredicatedCFG::getPredMBB(const llvm::MachineInstr &MI) {
@@ -88,15 +72,28 @@ IPPredicatedCFG::getIPPredCFG(llvm::Module &M,
 
   auto Out = std::unique_ptr<IPPredicatedCFG>(new IPPredicatedCFG());
 
+  llvm::MachineFunction *EntryMF{nullptr};
+
   Out->PredMFs.reserve(M.size());
   /// Populate the CFG
   for (llvm::Function &F : M) {
     llvm::MachineFunction &MF =
         FAM.getResult<llvm::MachineFunctionAnalysis>(F).getMF();
+    if (F.hasFnAttribute(EntryPointAddrAttr)) {
+      if (EntryMF) {
+        return LUTHIER_MAKE_GENERIC_ERROR(
+            llvm::formatv("Functions {0} and {1} are both "
+                          "designated as initial entry points",
+                          F.getName(), EntryMF->getName()));
+      }
+      EntryMF = &MF;
+    }
     auto &PredMF =
         *Out->PredMFs.emplace_back(PredMFBuilder::createPredMF(*Out, MF));
     Out->MFToPredMF.insert({std::ref(MF), std::ref(PredMF)});
   }
+
+  Out->EntryMF = EntryMF;
 
   /// Link the call and indirect jump instructions + sort the numbering of
   /// all vector CFGs

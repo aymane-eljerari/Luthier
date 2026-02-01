@@ -54,6 +54,8 @@ private:
 
   unsigned NumVecMBBs{0};
 
+  llvm::MachineFunction *EntryMF;
+
   IPPredicatedCFG() = default;
 
 public:
@@ -175,9 +177,14 @@ public:
 
   LLVM_DUMP_METHOD void dump() const;
 
-  iterator getEntry();
+  llvm::MachineFunction &getEntry() {
+    assert(EntryMF && "Entry function must be set");
+    return *EntryMF;
+  }
 
-  [[nodiscard]] const_iterator getEntry() const;
+  [[nodiscard]] const llvm::MachineFunction &getEntry() const {
+    return const_cast<IPPredicatedCFG *>(this)->getEntry();
+  }
 
   PredicatedMachineBasicBlock &getPredMBB(const llvm::MachineInstr &MI);
 
