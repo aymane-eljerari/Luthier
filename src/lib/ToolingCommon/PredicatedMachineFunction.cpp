@@ -23,7 +23,6 @@
 namespace luthier {
 
 void PredicatedMachineFunction::print(llvm::raw_ostream &OS) const {
-  OS << "=======";
   OS << "# Predicated Machine Function " << MF.getName() << ":\n";
   OS << "\n";
   for (const auto &SMBB : *this) {

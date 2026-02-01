@@ -71,7 +71,7 @@ private:
   llvm::iterator_range<llvm::MachineBasicBlock::instr_iterator> Instructions{
       {}, {}};
 
-  llvm::SmallPtrSet<const llvm::MachineInstr *, 32> MIs{};
+  llvm::SmallPtrSet<const llvm::MachineInstr *, 32> MIsSet{};
 
   /// Set of predecessor blocks
   PredSuccSetType Predecessors{};
@@ -97,128 +97,31 @@ public:
 
   [[nodiscard]] LinearMachineBasicBlock &getParent() { return Parent; }
 
-  class iterator {
-    PredicatedMachineBasicBlock &Parent;
-    llvm::MachineBasicBlock::instr_iterator It;
-
-  public:
-    using difference_type = ptrdiff_t;
-    using iterator_category = std::bidirectional_iterator_tag;
-    using value_type = llvm::MachineInstr;
-    using reference = value_type &;
-    using pointer = value_type *;
-
-    iterator(PredicatedMachineBasicBlock &Parent,
-             llvm::MachineBasicBlock::instr_iterator It)
-        : Parent(Parent), It(It) {}
-
-    reference operator*() const { return {*It}; }
-
-    pointer operator->() const { return &*It; }
-
-    [[nodiscard]] decltype(It) getMachineInstrIterator() const { return It; }
-
-    iterator operator++() {
-      ++It;
-      return *this;
-    }
-
-    iterator operator++(int) {
-      auto Copy = *this;
-      ++(*this);
-      return Copy;
-    }
-
-    iterator operator--() {
-      --It;
-      return *this;
-    }
-
-    iterator operator--(int) {
-      auto Copy = *this;
-      --(*this);
-      return Copy;
-    }
-
-    bool operator==(const iterator &Other) const { return It == Other.It; }
-
-    bool operator!=(const iterator &Other) const { return !(*this == Other); }
-  };
-
-  class const_iterator {
-    const PredicatedMachineBasicBlock &Parent;
-    llvm::MachineBasicBlock::const_instr_iterator It;
-
-  public:
-    using difference_type = ptrdiff_t;
-    using iterator_category = std::bidirectional_iterator_tag;
-    using value_type = const llvm::MachineInstr;
-    using reference = value_type &;
-    using pointer = value_type *;
-
-    const_iterator(const PredicatedMachineBasicBlock &Parent,
-                   llvm::MachineBasicBlock::const_instr_iterator It)
-        : Parent(Parent), It(It) {}
-
-    reference operator*() const { return *It; }
-
-    pointer operator->() const { return &*It; }
-
-    [[nodiscard]] decltype(It) getIterator() const { return It; }
-
-    const_iterator operator++() {
-      ++It;
-      return *this;
-    }
-
-    const_iterator operator++(int) {
-      auto Copy = *this;
-      ++(*this);
-      return Copy;
-    }
-
-    const_iterator operator--() {
-      --It;
-      return *this;
-    }
-
-    const_iterator operator--(int) {
-      auto Copy = *this;
-      --(*this);
-      return Copy;
-    }
-
-    bool operator==(const const_iterator &Other) const {
-      return It == Other.It;
-    }
-
-    bool operator!=(const const_iterator &Other) const {
-      return !(*this == Other);
-    }
-  };
+  using iterator = llvm::MachineBasicBlock::instr_iterator;
+  using const_iterator = llvm::MachineBasicBlock::const_instr_iterator;
 
   using reverse_iterator = std::reverse_iterator<iterator>;
 
   using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
-  iterator begin() { return {*this, Instructions.begin()}; }
+  iterator begin() { return Instructions.begin(); }
 
   [[nodiscard]] const_iterator begin() const {
-    return const_iterator{*this, Instructions.begin()};
+    return Instructions.begin();
   }
 
   [[nodiscard]] bool contains(const llvm::MachineInstr &MI) const {
-    return MIs.contains(&MI);
+    return MIsSet.contains(&MI);
   }
 
   llvm::MachineInstr &front() { return *begin(); }
 
   [[nodiscard]] const llvm::MachineInstr &front() const { return *begin(); }
 
-  [[nodiscard]] iterator end() { return iterator{*this, Instructions.end()}; }
+  [[nodiscard]] iterator end() { return Instructions.end(); }
 
   [[nodiscard]] const_iterator end() const {
-    return const_iterator{*this, Instructions.end()};
+    return Instructions.end();
   }
 
   reverse_iterator rbegin() { return std::make_reverse_iterator(end()); }
@@ -234,7 +137,7 @@ public:
   }
 
   [[nodiscard]] const llvm::MachineInstr &back() const {
-    return *(const_iterator{*this, --Instructions.end()});
+    return *(--Instructions.end());
   }
 
   [[nodiscard]] bool empty() const { return Instructions.empty(); }

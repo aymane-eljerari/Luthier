@@ -192,7 +192,7 @@ PredMBBBuilder::BreakDownToPredicatedMBBs(LinearMachineBasicBlock &Parent,
   /// MI set to allow for fast lookup of their block
   for (std::unique_ptr<PredMBBBuilder> &PredMBB : Out) {
     for (const llvm::MachineInstr &MI : PredMBB->getPredMBB()) {
-      PredMBB->Out.MIs.insert(&MI);
+      PredMBB->Out.MIsSet.insert(&MI);
     }
   }
   return std::move(Out);
