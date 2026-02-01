@@ -26,7 +26,7 @@ namespace luthier {
 
 void LinearMachineBasicBlock::print(llvm::raw_ostream &OS,
                                     unsigned int Indent) const {
-  OS.indent(Indent) << "Scalar MBB "
+  OS.indent(Indent) << "Linear MBB "
                     << (ParentMBB ? ParentMBB->getFullName()
                                   : getParent().getMF().getName())
                     << ":\n";

@@ -42,7 +42,7 @@ void PredicatedMachineBasicBlock::print(llvm::raw_ostream &OS,
                                         unsigned int Indent) const {
   const auto &ST = getParent().getParent().getMF().getSubtarget();
   const auto TII = ST.getInstrInfo();
-  OS.indent(Indent) << "Vector MBB " << getName() << "\n";
+  OS.indent(Indent) << "Predicated MBB " << getName() << "\n";
 
   OS.indent(Indent) << "Predecessors: [";
   llvm::interleave(
