@@ -50,6 +50,9 @@ public:
     One = 1
   };
 
+  using PredSuccSetType =
+      llvm::SmallDenseSet<std::reference_wrapper<PredMBBBuilder>>;
+
 private:
   /// Indicates the value of the execute mask inside this vector MBB
   PredicateValue EMV;
@@ -68,11 +71,13 @@ private:
   llvm::iterator_range<llvm::MachineBasicBlock::instr_iterator> Instructions{
       {}, {}};
 
+  llvm::SmallPtrSet<const llvm::MachineInstr *, 32> MIs{};
+
   /// Set of predecessor blocks
-  llvm::SmallDenseSet<std::reference_wrapper<PredMBBBuilder>> Predecessors{};
+  PredSuccSetType Predecessors{};
 
   /// Set of successor blocks
-  llvm::SmallDenseSet<std::reference_wrapper<PredMBBBuilder>> Successors{};
+  PredSuccSetType Successors{};
 
   PredicatedMachineBasicBlock(LinearMachineBasicBlock &Parent,
                               PredicateValue EMV)
@@ -202,6 +207,10 @@ public:
     return const_iterator{*this, Instructions.begin()};
   }
 
+  [[nodiscard]] bool contains(const llvm::MachineInstr &MI) const {
+    return MIs.contains(&MI);
+  }
+
   llvm::MachineInstr &front() { return *begin(); }
 
   [[nodiscard]] const llvm::MachineInstr &front() const { return *begin(); }
@@ -243,7 +252,7 @@ public:
   [[nodiscard]] std::string getName() const;
 
   class pred_succ_iterator {
-    decltype(Successors)::iterator It;
+    PredSuccSetType::iterator It;
 
   public:
     using difference_type = ptrdiff_t;
@@ -252,8 +261,7 @@ public:
     using reference = value_type &;
     using pointer = value_type *;
 
-    explicit pred_succ_iterator(const decltype(Successors)::iterator &It)
-        : It(It) {}
+    explicit pred_succ_iterator(const PredSuccSetType::iterator &It) : It(It) {}
 
     reference operator*() const;
 
@@ -280,7 +288,7 @@ public:
   };
 
   class const_pred_succ_iterator {
-    decltype(Successors)::const_iterator It;
+    PredSuccSetType::const_iterator It;
 
   public:
     using difference_type = ptrdiff_t;
@@ -289,8 +297,7 @@ public:
     using reference = value_type &;
     using pointer = value_type *;
 
-    explicit const_pred_succ_iterator(
-        const decltype(Successors)::const_iterator &It)
+    explicit const_pred_succ_iterator(const PredSuccSetType::const_iterator &It)
         : It(It) {}
 
     reference operator*() const;
@@ -319,43 +326,53 @@ public:
     }
   };
 
-  auto preds_begin() { return Predecessors.begin(); }
+  PredSuccSetType::iterator preds_begin() { return Predecessors.begin(); }
 
-  [[nodiscard]] auto preds_begin() const { return Predecessors.begin(); }
+  [[nodiscard]] PredSuccSetType::const_iterator preds_begin() const {
+    return Predecessors.begin();
+  }
 
-  [[nodiscard]] auto preds_end() const { return Predecessors.end(); }
+  PredSuccSetType::iterator preds_end() { return Predecessors.end(); }
 
-  auto preds_end() { return Predecessors.end(); }
+  [[nodiscard]] PredSuccSetType::const_iterator preds_end() const {
+    return Predecessors.end();
+  }
 
-  [[nodiscard]] auto predecessors() const {
+  [[nodiscard]] llvm::iterator_range<PredSuccSetType::const_iterator>
+  predecessors() const {
     return llvm::make_range(Predecessors.begin(), Predecessors.end());
   }
 
-  [[nodiscard]] auto predecessors() {
+  [[nodiscard]] llvm::iterator_range<PredSuccSetType::iterator> predecessors() {
     return llvm::make_range(Predecessors.begin(), Predecessors.end());
   }
 
-  [[nodiscard]] auto preds_size() const { return Predecessors.size(); }
+  [[nodiscard]] unsigned preds_size() const { return Predecessors.size(); }
 
   [[nodiscard]] bool preds_empty() const { return Predecessors.empty(); }
 
-  auto succs_begin() { return Successors.begin(); }
+  PredSuccSetType::iterator succs_begin() { return Successors.begin(); }
 
-  [[nodiscard]] auto succs_begin() const { return Successors.begin(); }
+  [[nodiscard]] PredSuccSetType::const_iterator succs_begin() const {
+    return Successors.begin();
+  }
 
-  [[nodiscard]] auto succs_end() const { return Successors.end(); }
+  [[nodiscard]] PredSuccSetType::const_iterator succs_end() const {
+    return Successors.end();
+  }
 
-  auto succs_end() { return Successors.end(); }
+  PredSuccSetType::iterator succs_end() { return Successors.end(); }
 
-  [[nodiscard]] auto successors() const {
+  [[nodiscard]] llvm::iterator_range<PredSuccSetType::const_iterator>
+  successors() const {
     return llvm::make_range(Successors.begin(), Successors.end());
   }
 
-  [[nodiscard]] auto successors() {
+  [[nodiscard]] llvm::iterator_range<PredSuccSetType::iterator> successors() {
     return llvm::make_range(Successors.begin(), Successors.end());
   }
 
-  [[nodiscard]] auto succs_size() const { return Successors.size(); }
+  [[nodiscard]] unsigned succs_size() const { return Successors.size(); }
 
   [[nodiscard]] bool succs_empty() const { return Successors.empty(); }
 

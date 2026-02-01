@@ -20,7 +20,6 @@
 #include "luthier/Tooling/IPPredicatedCFG.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
-#include "luthier/LLVM/CodeGenHelpers.h"
 #include "luthier/LLVM/streams.h"
 #include "luthier/Tooling/EntryPoint.h"
 #include "luthier/Tooling/InitialEntryPointAnalysis.h"
@@ -63,6 +62,23 @@ IPPredicatedCFG::const_iterator IPPredicatedCFG::getEntry() const {
       }));
 }
 
+PredicatedMachineBasicBlock &
+IPPredicatedCFG::getPredMBB(const llvm::MachineInstr &MI) {
+  const llvm::MachineBasicBlock *MBB = MI.getParent();
+  assert(MBB && "MI doesn't have a parent MBB");
+  const llvm::MachineFunction *MF = MBB->getParent();
+  assert(MF && "MI doesn't have a parent MF");
+  assert(contains(*MF) && "Queried an MF that's not in the IP Predicated CFG");
+  PredicatedMachineFunction &PredMF = this->operator[](*MF);
+  LinearMachineBasicBlock &PredMBB = PredMF.getScalarMBB(*MBB);
+  auto It = llvm::find_if(PredMBB, [&](const PredicatedMachineBasicBlock &P) {
+    return P.contains(MI);
+  });
+  assert(It != PredMBB.end() && "Failed to find the instruction's PredMBB even "
+                                "though its MBB and LinearMBB were found");
+  return *It;
+}
+
 llvm::Expected<std::unique_ptr<IPPredicatedCFG>>
 IPPredicatedCFG::getIPPredCFG(llvm::Module &M,
                               llvm::ModuleAnalysisManager &MAM) {
@@ -84,14 +100,11 @@ IPPredicatedCFG::getIPPredCFG(llvm::Module &M,
 
   /// Link the call and indirect jump instructions + sort the numbering of
   /// all vector CFGs
-  unsigned CurrentGlobalPredMBBIdx = 0;
   for (std::unique_ptr<PredMFBuilder> &PredMF : Out->PredMFs) {
     const llvm::MachineFunction &MF = PredMF->getPredMF().getMF();
     bool IsEntry = MF.getFunction().hasFnAttribute(InitialEntryPointAttr);
     for (std::unique_ptr<LinearMBBBuilder> &LinearMBB : *PredMF) {
       for (std::unique_ptr<PredMBBBuilder> &PredMBBBuilder : *LinearMBB) {
-        PredMBBBuilder->setGlobalIndex(CurrentGlobalPredMBBIdx);
-        CurrentGlobalPredMBBIdx++;
         if (auto &PredMBB = PredMBBBuilder->getPredMBB(); !PredMBB.empty()) {
           const llvm::MachineInstr &LastMI = PredMBB.back();
           if (LastMI.isCall() ||
@@ -117,10 +130,7 @@ IPPredicatedCFG::getIPPredCFG(llvm::Module &M,
       }
     }
   }
-
-  Out->dump();
-
-  CurrentGlobalPredMBBIdx = 0;
+  unsigned CurrentGlobalPredMBBIdx = 0;
   for (std::unique_ptr<PredMFBuilder> &PredMF : Out->PredMFs) {
     for (std::unique_ptr<LinearMBBBuilder> &LinearMBB : *PredMF) {
       LinearMBB->pruneTrivialBlocks();
@@ -145,8 +155,7 @@ bool IPPredCFGAnalysis::Result::invalidate(
     llvm::ModuleAnalysisManager::Invalidator &Inv) {
   auto PAC = PA.getChecker<IPPredCFGAnalysis>();
   return !PAC.preserved() &&
-         !PAC.preservedSet<llvm::AllAnalysesOn<
-             llvm::MachineFunctionAnalysisManagerModuleProxy>>() &&
+         !PAC.preservedSet<llvm::AllAnalysesOn<llvm::MachineFunction>>() &&
          !PAC.preservedSet<llvm::CFGAnalyses>();
 }
 

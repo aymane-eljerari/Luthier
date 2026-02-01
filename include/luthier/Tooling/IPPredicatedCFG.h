@@ -154,6 +154,10 @@ public:
     return PredMFs.back()->getPredMF();
   }
 
+  [[nodiscard]] bool contains(const llvm::MachineFunction &MF) const {
+    return MFToPredMF.contains(MF);
+  }
+
   PredicatedMachineFunction &operator[](const llvm::MachineFunction &MF) {
     assert(MFToPredMF.contains(MF) && "Entry is not in the map");
     return MFToPredMF.at(MF).get().getPredMF();
@@ -175,6 +179,13 @@ public:
 
   [[nodiscard]] const_iterator getEntry() const;
 
+  PredicatedMachineBasicBlock &getPredMBB(const llvm::MachineInstr &MI);
+
+  [[nodiscard]] const PredicatedMachineBasicBlock &
+  getPredMBB(const llvm::MachineInstr &MI) const {
+    return const_cast<IPPredicatedCFG *>(this)->getPredMBB(MI);
+  }
+
   /// get entry block
   /// Iterate over all predicated mbbs
 
@@ -192,18 +203,20 @@ public:
   class Result {
     friend IPPredCFGAnalysis;
 
-    std::unique_ptr<IPPredicatedCFG> IPCFG;
+    std::unique_ptr<IPPredicatedCFG> IPPredCFG;
 
     explicit Result(std::unique_ptr<IPPredicatedCFG> IPCFG)
-        : IPCFG(std::move(IPCFG)) {};
+        : IPPredCFG(std::move(IPCFG)) {};
 
   public:
     bool invalidate(llvm::Module &M, const llvm::PreservedAnalyses &PA,
                     llvm::ModuleAnalysisManager::Invalidator &Inv);
 
-    const IPPredicatedCFG &getVecCFG() const { return *IPCFG; }
+    [[nodiscard]] const IPPredicatedCFG &getVecCFG() const {
+      return *IPPredCFG;
+    }
 
-    IPPredicatedCFG &getVecCFG() { return *IPCFG; }
+    IPPredicatedCFG &getVecCFG() { return *IPPredCFG; }
   };
 
   IPPredCFGAnalysis() = default;

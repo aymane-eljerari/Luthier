@@ -187,6 +187,14 @@ PredMBBBuilder::BreakDownToPredicatedMBBs(LinearMachineBasicBlock &Parent,
   } else {
     CurrentBlock.get().addSuccessorBlock(ExitScalarBlock);
   }
+
+  /// Now that all predicated blocks are created, populate their internal
+  /// MI set to allow for fast lookup of their block
+  for (std::unique_ptr<PredMBBBuilder> &PredMBB : Out) {
+    for (const llvm::MachineInstr &MI : PredMBB->getPredMBB()) {
+      PredMBB->Out.MIs.insert(&MI);
+    }
+  }
   return std::move(Out);
 }
 

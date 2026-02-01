@@ -207,6 +207,10 @@ public:
     return MBBToLinearMBBs.at(MBB).get().getLinearMBB();
   }
 
+  LinearMachineBasicBlock &getScalarMBB(const llvm::MachineBasicBlock &MBB) {
+    return MBBToLinearMBBs.at(MBB).get().getLinearMBB();
+  }
+
   [[nodiscard]] const llvm::MachineFunction &getMF() const { return MF; }
 
   [[nodiscard]] const IPPredicatedCFG &getParent() const { return ParentCFG; }
