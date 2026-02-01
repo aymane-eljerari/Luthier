@@ -54,14 +54,15 @@ static llvm::Error disassembleTrace(const MemoryAllocationAccessor &SegAccessor,
   /// Indicates whether the last instruction disassembled is a basic block
   /// terminator
   uint64_t CurrentDeviceAddress = StartDeviceAddr;
+
   while (!WasTraceTermInstrEncountered) {
-    std::optional<MemoryAllocationAccessor::AllocationDescriptor> AllocDesc;
+    MemoryAllocationAccessor::AllocationDescriptor AllocDesc;
 
     LUTHIER_RETURN_ON_ERROR(
         SegAccessor.getAllocationDescriptor(CurrentDeviceAddress)
             .moveInto(AllocDesc));
 
-    if (!AllocDesc.has_value()) {
+    if (AllocDesc.empty()) {
       return LUTHIER_MAKE_GENERIC_ERROR(
           llvm::formatv("Address {0:x} has no allocation associated with it",
                         CurrentDeviceAddress));
@@ -69,9 +70,9 @@ static llvm::Error disassembleTrace(const MemoryAllocationAccessor &SegAccessor,
 
     uint64_t EntryPointHostAddr =
         CurrentDeviceAddress -
-        reinterpret_cast<uint64_t>(AllocDesc->getDeviceAllocation().data()) +
-        reinterpret_cast<uint64_t>(AllocDesc->getDeviceAllocation().data());
-    size_t SegmentSize = AllocDesc->getSize();
+        reinterpret_cast<uint64_t>(AllocDesc.getDeviceAllocation().data()) +
+        reinterpret_cast<uint64_t>(AllocDesc.getDeviceAllocation().data());
+    size_t SegmentSize = AllocDesc.getSize();
 
     uint64_t CurrentHostAddr = EntryPointHostAddr;
     uint64_t SegmentHostEndAddr = EntryPointHostAddr + SegmentSize;

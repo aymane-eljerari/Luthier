@@ -24,9 +24,11 @@
 
 namespace luthier {
 
-class PredicatedCFG;
+class PredicatedMachineFunction;
 
 class LinearMBBBuilder;
+
+class PredMBBBuilder;
 
 /// \brief a wrapper around a group of <tt>VectorMBB</tt>s inside a single
 /// \c llvm::MachineBasicBlock for easier construction of the \c VectorCFG
@@ -34,18 +36,18 @@ class LinearMachineBasicBlock {
   friend LinearMBBBuilder;
 
   /// The CFG this scalar MBB belongs to
-  PredicatedCFG &ParentCFG;
+  PredicatedMachineFunction &ParentCFG;
   /// The MIR MBB this scalar block wraps around; If \c nullptr then this
   /// is an entry/exit block of the \c IPVectorCFG
   llvm::MachineBasicBlock *ParentMBB{nullptr};
 
-  llvm::SmallVector<PredMBBBuilder, 6> PredMBBs{};
+  llvm::SmallVector<std::unique_ptr<PredMBBBuilder>, 6> PredMBBs{};
 
   LinearMachineBasicBlock(llvm::MachineBasicBlock &ParentMBB,
-                          PredicatedCFG &ParentCFG)
+                          PredicatedMachineFunction &ParentCFG)
       : ParentCFG(ParentCFG), ParentMBB(&ParentMBB) {};
 
-  explicit LinearMachineBasicBlock(PredicatedCFG &ParentCFG)
+  explicit LinearMachineBasicBlock(PredicatedMachineFunction &ParentCFG)
       : ParentCFG(ParentCFG) {};
 
 public:
@@ -56,20 +58,22 @@ public:
   LinearMachineBasicBlock &operator=(const LinearMachineBasicBlock &) = delete;
 
   class iterator {
-    decltype(PredMBBs)::iterator It;
+    decltype(PredMBBs)::iterator It{};
 
   public:
     using difference_type = ptrdiff_t;
-    using iterator_category = std::forward_iterator_tag;
+    using iterator_category = std::bidirectional_iterator_tag;
     using value_type = PredicatedMachineBasicBlock;
     using reference = value_type &;
     using pointer = value_type *;
 
-    explicit iterator(const decltype(PredMBBs)::iterator &It) : It(It) {}
+    explicit iterator(const decltype(PredMBBs)::iterator It) : It(It) {}
 
-    reference operator*() const { return **It; }
+    iterator() = default;
 
-    pointer operator->() const { return It->operator->(); }
+    reference operator*() const { return (*It)->getPredMBB(); }
+
+    pointer operator->() const { return &(*It)->getPredMBB(); }
 
     iterator operator++() {
       ++It;
@@ -82,13 +86,24 @@ public:
       return Copy;
     }
 
+    iterator operator--() {
+      --It;
+      return *this;
+    }
+
+    iterator operator--(int) {
+      auto Copy = *this;
+      --(*this);
+      return Copy;
+    }
+
     bool operator==(const iterator &Other) const { return It == Other.It; }
 
     bool operator!=(const iterator &Other) const { return !(*this == Other); }
   };
 
   class const_iterator {
-    decltype(PredMBBs)::const_iterator It;
+    decltype(PredMBBs)::const_iterator It{};
 
   public:
     using difference_type = ptrdiff_t;
@@ -100,9 +115,11 @@ public:
     explicit const_iterator(const decltype(PredMBBs)::const_iterator &It)
         : It(It) {}
 
-    reference operator*() const { return **It; }
+    const_iterator() = default;
 
-    pointer operator->() const { return It->operator->(); }
+    reference operator*() const { return (*It)->getPredMBB(); }
+
+    pointer operator->() const { return &(*It)->getPredMBB(); }
 
     const_iterator operator++() {
       ++It;
@@ -110,6 +127,17 @@ public:
     }
 
     const_iterator operator++(int) {
+      auto Copy = *this;
+      ++(*this);
+      return Copy;
+    }
+
+    const_iterator operator--() {
+      ++It;
+      return *this;
+    }
+
+    const_iterator operator--(int) {
       auto Copy = *this;
       ++(*this);
       return Copy;
@@ -124,13 +152,17 @@ public:
     }
   };
 
-  [[nodiscard]] const PredicatedCFG &getParent() const { return ParentCFG; }
+  [[nodiscard]] const PredicatedMachineFunction &getParent() const {
+    return ParentCFG;
+  }
 
-  [[nodiscard]] PredicatedCFG &getParent() { return ParentCFG; }
+  [[nodiscard]] PredicatedMachineFunction &getParent() { return ParentCFG; }
 
   [[nodiscard]] const llvm::MachineBasicBlock *getMBB() const {
     return ParentMBB;
   }
+
+  [[nodiscard]] llvm::MachineBasicBlock *getMBB() { return ParentMBB; }
 
   iterator begin() { return iterator(PredMBBs.begin()); }
 
@@ -144,73 +176,115 @@ public:
     return const_iterator(PredMBBs.end());
   }
 
+  using reverse_iterator = std::reverse_iterator<iterator>;
+  using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+
+  reverse_iterator rbegin() {
+    return reverse_iterator(iterator(PredMBBs.end()));
+  }
+
+  [[nodiscard]] const_reverse_iterator rbegin() const {
+    return const_reverse_iterator(const_iterator(PredMBBs.end()));
+  }
+
+  reverse_iterator rend() {
+    return reverse_iterator(iterator(PredMBBs.begin()));
+  }
+
+  [[nodiscard]] const_reverse_iterator rend() const {
+    return const_reverse_iterator(const_iterator(PredMBBs.begin()));
+  }
+
+  [[nodiscard]] unsigned size() const { return PredMBBs.size(); }
+
+  [[nodiscard]] bool empty() const { return PredMBBs.empty(); }
+
   [[nodiscard]] const PredicatedMachineBasicBlock &front() const {
-    return *PredMBBs.front();
+    return PredMBBs.front()->getPredMBB();
   }
 
   [[nodiscard]] const PredicatedMachineBasicBlock &back() const {
-    return *PredMBBs.back();
+    return PredMBBs.back()->getPredMBB();
   }
 
   void print(llvm::raw_ostream &OS, unsigned int Indent) const;
+
+  LLVM_DUMP_METHOD void dump() const;
 };
 
 class LinearMBBBuilder {
+  LinearMachineBasicBlock Out;
 
-  std::unique_ptr<LinearMachineBasicBlock> Out;
   PredMBBBuilder *EntryPredOneBlock{nullptr};
   PredMBBBuilder *EntryPredZeroOrOneBlock{nullptr};
   PredMBBBuilder *ExitPredOneBlock{nullptr};
   PredMBBBuilder *ExitPredZeroOrOneBlock{nullptr};
 
-  explicit LinearMBBBuilder(PredicatedCFG &ParentCFG)
-      : Out(new LinearMachineBasicBlock(ParentCFG)) {};
+  explicit LinearMBBBuilder(PredicatedMachineFunction &ParentCFG)
+      : Out(ParentCFG) {};
+
+  explicit LinearMBBBuilder(llvm::MachineBasicBlock &MBB,
+                            PredicatedMachineFunction &ParentCFG)
+      : Out(MBB, ParentCFG) {};
 
 public:
   LinearMBBBuilder(const LinearMBBBuilder &Other) = delete;
 
-  LinearMBBBuilder(LinearMBBBuilder &&Other) noexcept
-      : Out(std::move(Other.Out)), EntryPredOneBlock(Other.EntryPredOneBlock),
-        EntryPredZeroOrOneBlock(Other.EntryPredZeroOrOneBlock),
-        ExitPredOneBlock(Other.ExitPredOneBlock),
-        ExitPredZeroOrOneBlock(Other.ExitPredZeroOrOneBlock) {}
-
   LinearMBBBuilder &operator=(const LinearMBBBuilder &Other) = delete;
 
-  LinearMBBBuilder &operator=(LinearMBBBuilder &&Other) noexcept {
-    if (this == &Other)
-      return *this;
-    Out = std::move(Other.Out);
-    EntryPredOneBlock = Other.EntryPredOneBlock;
-    EntryPredZeroOrOneBlock = Other.EntryPredZeroOrOneBlock;
-    ExitPredOneBlock = Other.ExitPredOneBlock;
-    ExitPredZeroOrOneBlock = Other.ExitPredZeroOrOneBlock;
-    return *this;
+  LinearMachineBasicBlock &getLinearMBB() { return Out; }
+
+  [[nodiscard]] const LinearMachineBasicBlock &getLinearMBB() const {
+    return Out;
   }
 
-  const LinearMachineBasicBlock &operator*() const { return *Out; }
+  static std::unique_ptr<LinearMBBBuilder>
+  createLinearMBB(llvm::MachineBasicBlock &ParentMBB,
+                  PredicatedMachineFunction &ParentCFG);
 
-  const LinearMachineBasicBlock *operator->() const { return Out.get(); }
-
-  LinearMachineBasicBlock &operator*() { return *Out; }
-
-  LinearMachineBasicBlock *operator->() { return Out.get(); }
-
-  static LinearMBBBuilder createScalarMBB(llvm::MachineBasicBlock &ParentMBB,
-                                          PredicatedCFG &ParentCFG);
-
-  static LinearMBBBuilder createEntryScalarMBB(PredicatedCFG &ParentCFG);
+  static std::unique_ptr<LinearMBBBuilder>
+  createEntryLinearMBB(PredicatedMachineFunction &ParentCFG);
 
   [[nodiscard]] bool hasFinalizedLinking() const {
     return !EntryPredOneBlock || !EntryPredZeroOrOneBlock ||
            !ExitPredOneBlock || !ExitPredZeroOrOneBlock;
   }
 
+  using iterator = decltype(Out.PredMBBs)::iterator;
+  using const_iterator = decltype(Out.PredMBBs)::const_iterator;
+
+  iterator begin() { return Out.PredMBBs.begin(); }
+
+  [[nodiscard]] const_iterator begin() const { return Out.PredMBBs.begin(); }
+
+  iterator end() { return Out.PredMBBs.end(); }
+
+  [[nodiscard]] const_iterator end() const { return Out.PredMBBs.end(); }
+
+  using reverse_iterator = decltype(Out.PredMBBs)::reverse_iterator;
+  using const_reverse_iterator = decltype(Out.PredMBBs)::const_reverse_iterator;
+
+  reverse_iterator rbegin() { return Out.PredMBBs.rbegin(); }
+
+  [[nodiscard]] const_reverse_iterator rbegin() const {
+    return Out.PredMBBs.rbegin();
+  }
+
+  reverse_iterator rend() { return Out.PredMBBs.rend(); }
+
+  [[nodiscard]] const_reverse_iterator rend() const {
+    return Out.PredMBBs.rend();
+  }
+
+  [[nodiscard]] unsigned size() const { return Out.PredMBBs.size(); }
+
+  [[nodiscard]] bool empty() const { return Out.PredMBBs.empty(); }
+
   void addSuccessor(LinearMBBBuilder &LMBB);
 
   void addPredecessor(LinearMBBBuilder &LMBB);
 
-  void finalizeLinking();
+  void pruneTrivialBlocks();
 };
 
 } // namespace luthier

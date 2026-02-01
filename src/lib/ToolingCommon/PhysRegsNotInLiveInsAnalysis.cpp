@@ -23,7 +23,7 @@
 #include "luthier/Tooling/VectorRegLiveness.h"
 #include "luthier/Tooling/IModuleIRGeneratorPass.h"
 #include "luthier/Tooling/WrapperAnalysisPasses.h"
-#include "luthier/consts.h"
+
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
 #include <llvm/Support/FormatVariadic.h>
 

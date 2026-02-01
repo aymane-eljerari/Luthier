@@ -1,10 +1,9 @@
-
 #include "luthier/Tooling/PredicatedMachineBasicBlock.h"
-#include "luthier/Common/ErrorCheck.h"
 #include "luthier/LLVM/CodeGenHelpers.h"
 #include "luthier/Tooling/IPPredicatedCFG.h"
 #include "luthier/Tooling/LinearMachineBasicBlock.h"
 #include "luthier/Tooling/PredicatedMachineFunction.h"
+#include <SIInstrInfo.h>
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
 #include <llvm/Support/FormatVariadic.h>
 
@@ -31,8 +30,8 @@ void PredicatedMachineBasicBlock::print(llvm::raw_ostream &OS,
   OS.indent(Indent) << "Predecessors: [";
   llvm::interleave(
       Predecessors.begin(), Predecessors.end(),
-      [&](const PredicatedMachineBasicBlock *MBB) {
-        OS << "MBB " << MBB->getName();
+      [&](const PredMBBBuilder *MBB) {
+        OS << "MBB " << MBB->getPredMBB().getName();
       },
       [&]() { OS << ", "; });
   OS << "]\n";
@@ -47,8 +46,8 @@ void PredicatedMachineBasicBlock::print(llvm::raw_ostream &OS,
   OS.indent(Indent) << "Successors: [";
   llvm::interleave(
       Successors.begin(), Successors.end(),
-      [&](const PredicatedMachineBasicBlock *MBB) {
-        OS << "MBB " << MBB->getName();
+      [&](const PredMBBBuilder *MBB) {
+        OS << "MBB " << MBB->getPredMBB().getName();
       },
       [&]() { OS << ", "; });
   OS << "]\n";
@@ -56,7 +55,7 @@ void PredicatedMachineBasicBlock::print(llvm::raw_ostream &OS,
 
 void PredicatedMachineBasicBlock::dump() const { print(llvm::dbgs(), 0); }
 
-llvm::SmallVector<PredMBBBuilder, 6>
+llvm::SmallVector<std::unique_ptr<PredMBBBuilder>, 6>
 PredMBBBuilder::BreakDownToPredicatedMBBs(LinearMachineBasicBlock &Parent,
                                           llvm::MachineBasicBlock &MBB) {
   llvm::MachineFunction *MF = MBB.getParent();
@@ -64,21 +63,22 @@ PredMBBBuilder::BreakDownToPredicatedMBBs(LinearMachineBasicBlock &Parent,
 
   const llvm::TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
 
-  llvm::SmallVector<PredMBBBuilder, 6> Out;
+  llvm::SmallVector<std::unique_ptr<PredMBBBuilder>, 6> Out;
 
   auto PredMBBAllocator =
       [&](PredicatedMachineBasicBlock::PredicateValue EMV) -> PredMBBBuilder & {
-    Out.emplace_back(Parent, EMV);
-    return Out.back();
+    Out.emplace_back(std::make_unique<PredMBBBuilder>(Parent, EMV));
+    return *Out.back();
   };
 
   // The current block being processed in the MBB
-  PredMBBBuilder *CurrentBlock =
-      &PredMBBAllocator(PredicatedMachineBasicBlock::One);
+  std::reference_wrapper<PredMBBBuilder> CurrentBlock =
+      PredMBBAllocator(PredicatedMachineBasicBlock::One);
   // Set of VectorMBBs that are waiting to be connected to the next non-taken
   // block or joined into the next block that starts with a scalar instruction
-  llvm::SmallDenseSet<PredMBBBuilder *> BlocksWithHangingEdges{
-      &PredMBBAllocator(PredicatedMachineBasicBlock::ZeroOrOne)};
+  llvm::SmallDenseSet<std::reference_wrapper<PredMBBBuilder>>
+      BlocksWithHangingEdges{
+          PredMBBAllocator(PredicatedMachineBasicBlock::ZeroOrOne)};
 
   for (auto MI = MBB.instr_begin(), PrevMI = MBB.instr_end(),
             NextMI = ++MBB.instr_begin();
@@ -106,37 +106,37 @@ PredMBBBuilder::BreakDownToPredicatedMBBs(LinearMachineBasicBlock &Parent,
       PredMBBBuilder &NewCurrentBlock =
           PredMBBAllocator(PredicatedMachineBasicBlock::One);
 
-      NewCurrentBlock.addPredecessorBlock(*CurrentBlock);
+      NewCurrentBlock.addPredecessorBlock(CurrentBlock);
       BlocksWithHangingEdges.insert(CurrentBlock);
-      CurrentBlock = &NewCurrentBlock;
+      CurrentBlock = NewCurrentBlock;
 
-      if ((*CurrentBlock)->empty())
-        CurrentBlock->Out->Instructions = {MI, NextMI};
+      if (CurrentBlock.get().getPredMBB().empty())
+        CurrentBlock.get().Out.Instructions = {MI, NextMI};
       else
-        CurrentBlock->Out->Instructions = {
-            CurrentBlock->Out->Instructions.begin(), MI};
+        CurrentBlock.get().Out.Instructions = {
+            CurrentBlock.get().Out.Instructions.begin(), MI};
     } else if (!IsVector && !IsFormerMIScalar) {
       // Otherwise, if we observe a scalar instruction, we have to do a "join"
       // operation: Create a new VectorMBB to replace the current taken block,
       // and make it the successor of the current taken block. Also make
       // all not taken blocks with hanging edges the predecessor of the new
       // taken block, and then clear the not-taken set
-      PredMBBBuilder *NewCurrentBlock =
-          &PredMBBAllocator(PredicatedMachineBasicBlock::ZeroOrOne);
+      PredMBBBuilder &NewCurrentBlock =
+          PredMBBAllocator(PredicatedMachineBasicBlock::ZeroOrOne);
 
-      NewCurrentBlock->addPredecessorBlock(*CurrentBlock);
+      NewCurrentBlock.addPredecessorBlock(CurrentBlock);
       for (auto Block : BlocksWithHangingEdges) {
-        Block->addSuccessorBlock(*NewCurrentBlock);
+        Block.get().addSuccessorBlock(NewCurrentBlock);
       }
       BlocksWithHangingEdges.clear();
       CurrentBlock = NewCurrentBlock;
     }
     // Add the current instruction to the current taken block
-    if ((*CurrentBlock)->empty())
-      CurrentBlock->Out->Instructions = {MI, NextMI};
+    if (CurrentBlock.get().getPredMBB().empty())
+      CurrentBlock.get().Out.Instructions = {MI, NextMI};
     else
-      CurrentBlock->Out->Instructions = {
-          CurrentBlock->Out->Instructions.begin(), NextMI};
+      CurrentBlock.get().Out.Instructions = {
+          CurrentBlock.get().Out.Instructions.begin(), NextMI};
 
     /// If the current MI is a call, create a new block and set it to the
     /// current taken block
@@ -144,9 +144,11 @@ PredMBBBuilder::BreakDownToPredicatedMBBs(LinearMachineBasicBlock &Parent,
     /// edges we have to worry about here
     /// We let the IPVectorCFG take care of linking the successors of this
     /// block according to the MI's metadata
-    // if (MI->isCall()) {
-    //   LUTHIER_RETURN_ON_ERROR(VectorMBBAllocator().moveInto(CurrentTakenBlock));
-    // }
+    if (MI->isCall() && NextMI != MBB.instr_end()) {
+      CurrentBlock = PredMBBAllocator(
+          isVector(*NextMI) ? PredicatedMachineBasicBlock::One
+                            : PredicatedMachineBasicBlock::ZeroOrOne);
+    }
   }
 
   PredMBBBuilder &ExitVectorBlock =
@@ -156,32 +158,36 @@ PredMBBBuilder::BreakDownToPredicatedMBBs(LinearMachineBasicBlock &Parent,
 
   // Connect the current taken block to the exit taken block of the current
   // MBB
-  CurrentBlock->addSuccessorBlock(ExitVectorBlock);
+  CurrentBlock.get().addSuccessorBlock(ExitVectorBlock);
   // Connect all the non-taken blocks to the exit non-taken block of the
   // current MBB if there are any left; Otherwise, connect the current
   // taken block to the exit not taken block because it must have ended with
   // a join (scalar instruction)
   if (!BlocksWithHangingEdges.empty()) {
-    for (auto *Block : BlocksWithHangingEdges) {
-      Block->addSuccessorBlock(ExitScalarBlock);
+    for (auto Block : BlocksWithHangingEdges) {
+      Block.get().addSuccessorBlock(ExitScalarBlock);
     }
   } else {
-    CurrentBlock->addSuccessorBlock(ExitScalarBlock);
+    CurrentBlock.get().addSuccessorBlock(ExitScalarBlock);
   }
   return std::move(Out);
 }
 
 bool PredMBBBuilder::unlinkIfTrivialEmptyBlock() {
-  if ((*this)->empty() && !(*this)->succs_empty() && !(*this)->preds_empty()) {
-    for (PredMBBBuilder *Succ : llvm::make_early_inc_range(Out->Successors)) {
-      for (PredMBBBuilder *Pred :
-           llvm::make_early_inc_range(Out->Predecessors)) {
+  if (getPredMBB().empty() &&
+      (!getPredMBB().preds_empty() || getPredMBB().succs_size() == 1)) {
+    for (PredMBBBuilder *Succ : Out.Successors) {
+      for (PredMBBBuilder *Pred : Out.Predecessors) {
         assert(Succ && "successor block is nullptr");
         assert(Pred && "predecessor block is nullptr");
         Succ->addPredecessorBlock(*Pred);
-        Succ->removePredecessorBlock(*this);
-        Pred->removeSuccessorBlock(*this);
       }
+    }
+    for (PredMBBBuilder *Succ : Out.Successors) {
+      removeSuccessorBlock(*Succ);
+    }
+    for (PredMBBBuilder *Pred : Out.Predecessors) {
+      removePredecessorBlock(*Pred);
     }
     return true;
   }

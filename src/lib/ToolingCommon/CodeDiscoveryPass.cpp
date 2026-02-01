@@ -4,7 +4,7 @@
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Tooling/EntryPoint.h"
 #include "luthier/Tooling/FunctionAnnotations.h"
-#include "luthier/Tooling/IPVectorRegLiveness.h"
+// #include "luthier/Tooling/IPVectorRegLiveness.h"
 #include "luthier/Tooling/InitialEntryPointAnalysis.h"
 #include "luthier/Tooling/InstructionTracesAnalysis.h"
 #include "luthier/Tooling/MachineFunctionEntryPoint.h"
@@ -1095,6 +1095,10 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     }();
     /// Set the function's entry point as an attribute
     setFunctionEntryPoint(MF.getFunction(), CurrentEntryPoint);
+    if (CurrentEntryPoint == InitialEntryPoint) {
+      MF.getFunction().addFnAttr(InitialEntryPointAttr);
+    }
+
     /// Add the newly created MF's entry point
     /// Ask for the trace of the instructions for this machine function
     auto &TraceResults = MFAM.getResult<InstructionTracesAnalysis>(MF);
@@ -1127,8 +1131,6 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
 
     /// Re-calculate IP-liveness and IP-reaching definitions
     // (void)TargetMAM.getResult<IndirectBranchResolverAnalysis>(TargetModule);
-
-
 
     UnvisitedPointsOfEntry.erase(CurrentEntryPoint);
     VisitedPointsOfEntry.insert(CurrentEntryPoint);

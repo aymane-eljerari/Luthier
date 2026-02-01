@@ -28,7 +28,7 @@ add_library(LuthierToolingCommon OBJECT
         #        InjectedPayloadPEIPass.cpp
         #        PrePostAmbleEmitter.cpp
         #        StateValueArraySpecs.cpp
-        IPVectorCFG.cpp
+        IPPredicatedCFG.cpp
         #        StateValueArrayStorage.cpp
         #        IModuleIRGeneratorPass.cpp
         #        RunIRPassesOnIModulePass.cpp
@@ -58,6 +58,9 @@ add_library(LuthierToolingCommon OBJECT
         #        IPLoopTraversal.cpp
         #        IPRegScavenger.cpp
                 IndirectBranchResolverAnalysis.cpp
+        PredicatedMachineBasicBlock.cpp
+        LinearMachineBasicBlock.cpp
+        PredicatedMachineFunction.cpp
 
 )
 

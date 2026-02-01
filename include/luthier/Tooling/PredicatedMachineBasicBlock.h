@@ -21,7 +21,6 @@
 #ifndef LUTHIER_TOOLING_PREDICATED_MACHINE_BASIC_BLOCK_H
 #define LUTHIER_TOOLING_PREDICATED_MACHINE_BASIC_BLOCK_H
 #include <llvm/ADT/DenseSet.h>
-#include <llvm/ADT/Twine.h>
 #include <llvm/CodeGen/MachineBasicBlock.h>
 #include <llvm/CodeGen/MachineFunction.h>
 #include <llvm/Support/GenericDomTree.h>
@@ -365,26 +364,16 @@ public:
 
 /// \brief Class used to construct \c PredicatedMachineBasicBlock instances
 class PredMBBBuilder {
-  std::unique_ptr<PredicatedMachineBasicBlock> Out;
+  PredicatedMachineBasicBlock Out;
 
 public:
   explicit PredMBBBuilder(LinearMachineBasicBlock &Parent,
                           PredicatedMachineBasicBlock::PredicateValue EMV)
-      : Out(std::unique_ptr<PredicatedMachineBasicBlock>(
-            new PredicatedMachineBasicBlock(Parent, EMV))) {};
+      : Out(Parent, EMV) {};
 
   PredMBBBuilder(const PredMBBBuilder &Other) = delete;
 
-  PredMBBBuilder(PredMBBBuilder &&Other) noexcept : Out(std::move(Other.Out)) {}
-
   PredMBBBuilder &operator=(const PredMBBBuilder &Other) = delete;
-
-  PredMBBBuilder &operator=(PredMBBBuilder &&Other) noexcept {
-    if (this == &Other)
-      return *this;
-    Out = std::move(Other.Out);
-    return *this;
-  }
 
   /// Breaks down the \p MBB into a list of linked predicated machine basic
   /// block builders (i.e., their predecessors and successors are initialized)
@@ -394,179 +383,186 @@ public:
   /// then be used to link the incoming and outgoing edges of other broken down
   /// \c llvm::MachineBasicBlocks together.
   /// \pre \p MBB must be attached to a \c llvm::MachineFunction
-  static llvm::SmallVector<PredMBBBuilder, 6>
+  static llvm::SmallVector<std::unique_ptr<PredMBBBuilder>, 6>
   BreakDownToPredicatedMBBs(LinearMachineBasicBlock &Parent,
                             llvm::MachineBasicBlock &MBB);
 
   void addPredecessorBlock(PredMBBBuilder &MBB) {
-    Out->Predecessors.insert(&MBB);
-    MBB.Out->Successors.insert(this);
+    Out.Predecessors.insert(&MBB);
+    MBB.Out.Successors.insert(this);
   }
 
   void removePredecessorBlock(PredMBBBuilder &MBB) {
-    Out->Predecessors.erase(&MBB);
-    MBB.Out->Successors.erase(this);
+    Out.Predecessors.erase(&MBB);
+    MBB.Out.Successors.erase(this);
   }
 
   void addSuccessorBlock(PredMBBBuilder &MBB) {
-    Out->Successors.insert(&MBB);
-    MBB.Out->Predecessors.insert(this);
+    Out.Successors.insert(&MBB);
+    MBB.Out.Predecessors.insert(this);
   }
 
   void removeSuccessorBlock(PredMBBBuilder &MBB) {
-    Out->Successors.erase(&MBB);
-    MBB.Out->Predecessors.erase(this);
+    Out.Successors.erase(&MBB);
+    MBB.Out.Predecessors.erase(this);
   }
 
   bool unlinkIfTrivialEmptyBlock();
 
-  void setGlobalIndex(unsigned int Idx) { Out->GlobalIdx = Idx; };
+  void setGlobalIndex(unsigned int Idx) { Out.GlobalIdx = Idx; };
 
-  void setScalarIndex(unsigned int Idx) { Out->LinearMBBIdx = Idx; }
+  void setScalarIndex(unsigned int Idx) { Out.LinearMBBIdx = Idx; }
 
-  const PredicatedMachineBasicBlock &operator*() const { return *Out; }
+  PredicatedMachineBasicBlock &getPredMBB() { return Out; }
 
-  const PredicatedMachineBasicBlock *operator->() const { return Out.get(); }
-
-  PredicatedMachineBasicBlock &operator*() { return *Out; }
-
-  PredicatedMachineBasicBlock *operator->() { return Out.get(); }
+  const PredicatedMachineBasicBlock &getPredMBB() const { return Out; }
 };
 
 inline PredicatedMachineBasicBlock::pred_succ_iterator::reference
 PredicatedMachineBasicBlock::pred_succ_iterator::operator*() const {
-  return (*It)->operator*();
+  return (*It)->getPredMBB();
 }
 
 inline PredicatedMachineBasicBlock::pred_succ_iterator::pointer
 PredicatedMachineBasicBlock::pred_succ_iterator::operator->() const {
-  return (*It)->operator->();
+  return &(*It)->getPredMBB();
 }
 
 } // namespace luthier
 
-namespace llvm {
-template <> struct GraphTraits<luthier::PredicatedMachineBasicBlock *> {
-  using NodeRef = luthier::PredicatedMachineBasicBlock *;
-  using ChildIteratorType =
-      SmallDenseSet<luthier::PredicatedMachineBasicBlock *>::iterator;
-
-  static NodeRef getEntryNode(luthier::PredicatedMachineBasicBlock *BB) {
-    return BB;
-  }
-
-  static ChildIteratorType child_begin(NodeRef N) { return N->succs_begin(); }
-
-  static ChildIteratorType child_end(NodeRef N) {
-    return N->successors().end();
-  }
-
-  static unsigned getNumber(luthier::PredicatedMachineBasicBlock *BB) {
-    return BB->getGlobalNumber();
-  }
-};
-
-static_assert(GraphHasNodeNumbers<luthier::PredicatedMachineBasicBlock *>,
-              "GraphTraits getNumber() not detected");
-
-template <> struct GraphTraits<const luthier::PredicatedMachineBasicBlock *> {
-  using NodeRef = const luthier::PredicatedMachineBasicBlock *;
-  using ChildIteratorType =
-      SmallDenseSet<luthier::PredicatedMachineBasicBlock *>::const_iterator;
-
-  static NodeRef getEntryNode(const luthier::PredicatedMachineBasicBlock *BB) {
-    return BB;
-  }
-
-  static ChildIteratorType child_begin(NodeRef N) {
-    return N->successors().begin();
-  }
-
-  static ChildIteratorType child_end(NodeRef N) {
-    return N->successors().end();
-  }
-
-  static unsigned getNumber(const luthier::PredicatedMachineBasicBlock *BB) {
-    return BB->getGlobalNumber();
-  }
-};
-
-static_assert(GraphHasNodeNumbers<const luthier::PredicatedMachineBasicBlock *>,
-              "GraphTraits getNumber() not detected");
-
-template <>
-struct GraphTraits<Inverse<luthier::PredicatedMachineBasicBlock *>> {
-  using NodeRef = luthier::PredicatedMachineBasicBlock *;
-  using ChildIteratorType =
-      SmallDenseSet<luthier::PredicatedMachineBasicBlock *>::iterator;
-
-  static NodeRef
-  getEntryNode(Inverse<luthier::PredicatedMachineBasicBlock *> G) {
-    return G.Graph;
-  }
-
-  static ChildIteratorType child_begin(NodeRef N) { return N->preds_begin(); }
-  static ChildIteratorType child_end(NodeRef N) { return N->preds_end(); }
-
-  static unsigned getNumber(luthier::PredicatedMachineBasicBlock *BB) {
-    return BB->getGlobalNumber();
-  }
-};
-
-template <>
-struct GraphTraits<Inverse<const luthier::PredicatedMachineBasicBlock *>> {
-  using NodeRef = const luthier::PredicatedMachineBasicBlock *;
-  using ChildIteratorType =
-      SmallDenseSet<luthier::PredicatedMachineBasicBlock *>::const_iterator;
-
-  static NodeRef
-  getEntryNode(Inverse<const luthier::PredicatedMachineBasicBlock *> G) {
-    return G.Graph;
-  }
-
-  static ChildIteratorType child_begin(NodeRef N) { return N->preds_begin(); }
-  static ChildIteratorType child_end(NodeRef N) { return N->preds_end(); }
-
-  static unsigned getNumber(const luthier::PredicatedMachineBasicBlock *BB) {
-    return BB->getGlobalNumber();
-  }
-};
-
-static_assert(
-    GraphHasNodeNumbers<Inverse<const luthier::PredicatedMachineBasicBlock *>>,
-    "GraphTraits getNumber() not detected");
-
-template <> struct DomTreeNodeTraits<luthier::PredicatedMachineBasicBlock> {
-  using NodeType = luthier::PredicatedMachineBasicBlock;
-  using NodePtr = luthier::PredicatedMachineBasicBlock *;
-  using ParentPtr = luthier::IPPredicatedCFG *;
-  using ParentType = std::remove_pointer_t<ParentPtr>;
-
-  static luthier::PredicatedMachineBasicBlock *getEntryNode(ParentPtr Parent) {
-    return &*Parent->begin()->begin()->begin();
-  }
-
-  static ParentPtr getParent(NodePtr BB) {
-    return &BB->getParent().getParent().getParent();
-  }
-};
-
-template <>
-struct DomTreeNodeTraits<const luthier::PredicatedMachineBasicBlock> {
-  using NodeType = const luthier::PredicatedMachineBasicBlock;
-  using NodePtr = const luthier::PredicatedMachineBasicBlock *;
-  using ParentPtr = const luthier::IPPredicatedCFG *;
-  using ParentType = std::remove_pointer_t<ParentPtr>;
-
-  static const luthier::PredicatedMachineBasicBlock *
-  getEntryNode(ParentPtr Parent) {
-    return &*Parent->begin()->begin()->begin();
-  }
-
-  static ParentPtr getParent(NodePtr BB) {
-    return &BB->getParent().getParent().getParent();
-  }
-};
-} // namespace llvm
+// namespace llvm {
+// template <> struct GraphTraits<luthier::PredicatedMachineBasicBlock *> {
+//   using NodeRef = luthier::PredicatedMachineBasicBlock *;
+//   using ChildIteratorType = SmallDenseSet<luthier::PredMBBBuilder
+//   *>::iterator;
+//
+//   static NodeRef getEntryNode(luthier::PredicatedMachineBasicBlock *BB) {
+//     return BB;
+//   }
+//
+//   static ChildIteratorType child_begin(NodeRef N) { return N->succs_begin();
+//   }
+//
+//   static ChildIteratorType child_end(NodeRef N) {
+//     return N->successors().end();
+//   }
+//
+//   static unsigned getNumber(luthier::PredicatedMachineBasicBlock *BB) {
+//     return BB->getGlobalNumber();
+//   }
+// };
+//
+// static_assert(GraphHasNodeNumbers<luthier::PredicatedMachineBasicBlock *>,
+//               "GraphTraits getNumber() not detected");
+//
+// template <> struct GraphTraits<const luthier::PredicatedMachineBasicBlock *>
+// {
+//   using NodeRef = const luthier::PredicatedMachineBasicBlock *;
+//   using ChildIteratorType =
+//       SmallDenseSet<luthier::PredMBBBuilder *>::const_iterator;
+//
+//   static NodeRef getEntryNode(const luthier::PredicatedMachineBasicBlock *BB)
+//   {
+//     return BB;
+//   }
+//
+//   static ChildIteratorType child_begin(NodeRef N) {
+//     return N->successors().begin();
+//   }
+//
+//   static ChildIteratorType child_end(NodeRef N) {
+//     return N->successors().end();
+//   }
+//
+//   static unsigned getNumber(const luthier::PredicatedMachineBasicBlock *BB) {
+//     return BB->getGlobalNumber();
+//   }
+// };
+//
+// static_assert(GraphHasNodeNumbers<const luthier::PredicatedMachineBasicBlock
+// *>,
+//               "GraphTraits getNumber() not detected");
+//
+// template <>
+// struct GraphTraits<Inverse<luthier::PredicatedMachineBasicBlock *>> {
+//   using NodeRef = luthier::PredicatedMachineBasicBlock *;
+//   using ChildIteratorType = SmallDenseSet<luthier::PredMBBBuilder
+//   *>::iterator;
+//
+//   static NodeRef
+//   getEntryNode(Inverse<luthier::PredicatedMachineBasicBlock *> G) {
+//     return G.Graph;
+//   }
+//
+//   static ChildIteratorType child_begin(NodeRef N) { return N->preds_begin();
+//   } static ChildIteratorType child_end(NodeRef N) { return N->preds_end(); }
+//
+//   static unsigned getNumber(luthier::PredicatedMachineBasicBlock *BB) {
+//     return BB->getGlobalNumber();
+//   }
+// };
+//
+// template <>
+// struct GraphTraits<Inverse<const luthier::PredicatedMachineBasicBlock *>> {
+//   using NodeRef = const luthier::PredicatedMachineBasicBlock *;
+//   using ChildIteratorType =
+//       SmallDenseSet<luthier::PredMBBBuilder *>::const_iterator;
+//
+//   static NodeRef
+//   getEntryNode(Inverse<const luthier::PredicatedMachineBasicBlock *> G) {
+//     return G.Graph;
+//   }
+//
+//   static ChildIteratorType child_begin(NodeRef N) { return N->preds_begin();
+//   } static ChildIteratorType child_end(NodeRef N) { return N->preds_end(); }
+//
+//   static unsigned getNumber(const luthier::PredicatedMachineBasicBlock *BB) {
+//     return BB->getGlobalNumber();
+//   }
+// };
+//
+// static_assert(
+//     GraphHasNodeNumbers<Inverse<const luthier::PredicatedMachineBasicBlock
+//     *>>, "GraphTraits getNumber() not detected");
+//
+// template <> struct DomTreeNodeTraits<luthier::PredicatedMachineBasicBlock> {
+//   using NodeType = luthier::PredicatedMachineBasicBlock;
+//   using NodePtr = luthier::PredicatedMachineBasicBlock *;
+//   using ParentPtr = luthier::IPPredicatedCFG *;
+//   using ParentType = std::remove_pointer_t<ParentPtr>;
+//
+//   static luthier::PredicatedMachineBasicBlock *getEntryNode(ParentPtr Parent)
+//   {
+//     auto MFPredIt = Parent->getEntry();
+//     return MFPredIt != Parent->end() && !MFPredIt->empty()
+//                ? &*MFPredIt->begin()->begin()
+//                : nullptr;
+//   }
+//
+//   static ParentPtr getParent(NodePtr BB) {
+//     return &BB->getParent().getParent().getParent();
+//   }
+// };
+//
+// template <>
+// struct DomTreeNodeTraits<const luthier::PredicatedMachineBasicBlock> {
+//   using NodeType = const luthier::PredicatedMachineBasicBlock;
+//   using NodePtr = const luthier::PredicatedMachineBasicBlock *;
+//   using ParentPtr = const luthier::IPPredicatedCFG *;
+//   using ParentType = std::remove_pointer_t<ParentPtr>;
+//
+//   static const luthier::PredicatedMachineBasicBlock *
+//   getEntryNode(ParentPtr Parent) {
+//     auto MFPredIt = Parent->getEntry();
+//     return MFPredIt != Parent->end() && !MFPredIt->empty()
+//                ? &*MFPredIt->begin()->begin()
+//                : nullptr;
+//   }
+//
+//   static ParentPtr getParent(NodePtr BB) {
+//     return &BB->getParent().getParent().getParent();
+//   }
+// };
+// // } // namespace llvm
 
 #endif

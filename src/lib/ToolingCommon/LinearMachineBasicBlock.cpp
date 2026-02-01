@@ -18,6 +18,8 @@
 /// Defines the \c LinearMachineBasicBlock class.
 //===----------------------------------------------------------------------===//
 #include "luthier/Tooling/LinearMachineBasicBlock.h"
+#include "luthier/Common/GenericLuthierError.h"
+#include "luthier/Tooling/IPPredicatedCFG.h"
 #include "luthier/Tooling/PredicatedMachineFunction.h"
 
 namespace luthier {
@@ -29,40 +31,45 @@ void LinearMachineBasicBlock::print(llvm::raw_ostream &OS,
                                   : getParent().getMF().getName())
                     << ":\n";
   for (const auto &MBB : PredMBBs) {
-    MBB->print(OS, Indent + 2);
+    MBB->getPredMBB().print(OS, Indent + 2);
     OS << "\n";
   }
 }
 
-LinearMBBBuilder
-LinearMBBBuilder::createScalarMBB(llvm::MachineBasicBlock &ParentMBB,
-                                  PredicatedCFG &ParentCFG) {
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+void LinearMachineBasicBlock::dump() const { print(llvm::dbgs(), 0); }
+#endif
+std::unique_ptr<LinearMBBBuilder>
+LinearMBBBuilder::createLinearMBB(llvm::MachineBasicBlock &ParentMBB,
+                                  PredicatedMachineFunction &ParentCFG) {
 
-  LinearMBBBuilder Out{ParentCFG};
+  std::unique_ptr<LinearMBBBuilder> Out(
+      new LinearMBBBuilder{ParentMBB, ParentCFG});
 
-  Out->PredMBBs = PredMBBBuilder::BreakDownToPredicatedMBBs(*Out, ParentMBB);
-  assert(Out->PredMBBs.size() >= 4 &&
+  Out->getLinearMBB().PredMBBs =
+      PredMBBBuilder::BreakDownToPredicatedMBBs(Out->getLinearMBB(), ParentMBB);
+  assert(Out->getLinearMBB().size() >= 4 &&
          "No linking blocks are present in the returned vector MBBs");
 
-  Out.EntryPredOneBlock = &Out->PredMBBs[0];
-  Out.EntryPredZeroOrOneBlock = &Out->PredMBBs[1];
-  Out.ExitPredZeroOrOneBlock = &Out->PredMBBs.back();
-  Out.ExitPredOneBlock = &Out->PredMBBs.end()[-2];
+  Out->EntryPredOneBlock = Out->getLinearMBB().PredMBBs[0].get();
+  Out->EntryPredZeroOrOneBlock = Out->getLinearMBB().PredMBBs[1].get();
+  Out->ExitPredZeroOrOneBlock = Out->getLinearMBB().PredMBBs.back().get();
+  Out->ExitPredOneBlock = Out->getLinearMBB().PredMBBs.end()[-2].get();
 
   return Out;
 }
 
-LinearMBBBuilder
-LinearMBBBuilder::createEntryScalarMBB(PredicatedCFG &ParentCFG) {
-  LinearMBBBuilder Out{ParentCFG};
-  Out.Out->PredMBBs.emplace_back(
-      PredMBBBuilder(*Out, PredicatedMachineBasicBlock::ZeroOrOne));
-  Out.EntryPredOneBlock = Out.Out->PredMBBs.begin();
-  Out.EntryPredZeroOrOneBlock = Out.Out->PredMBBs.begin();
-  Out.ExitPredOneBlock = Out.Out->PredMBBs.begin();
-  Out.ExitPredZeroOrOneBlock = Out.Out->PredMBBs.begin();
+std::unique_ptr<LinearMBBBuilder>
+LinearMBBBuilder::createEntryLinearMBB(PredicatedMachineFunction &ParentCFG) {
+  std::unique_ptr<LinearMBBBuilder> Out{new LinearMBBBuilder(ParentCFG)};
+  Out->Out.PredMBBs.emplace_back(std::make_unique<PredMBBBuilder>(
+      Out->getLinearMBB(), PredicatedMachineBasicBlock::ZeroOrOne));
+  Out->EntryPredOneBlock = &**Out->Out.PredMBBs.begin();
+  Out->EntryPredZeroOrOneBlock = &**Out->Out.PredMBBs.begin();
+  Out->ExitPredOneBlock = &**Out->Out.PredMBBs.begin();
+  Out->ExitPredZeroOrOneBlock = &**Out->Out.PredMBBs.begin();
 
-  return Out;
+  return std::move(Out);
 };
 
 void LinearMBBBuilder::addSuccessor(LinearMBBBuilder &LMBB) {
@@ -72,7 +79,8 @@ void LinearMBBBuilder::addSuccessor(LinearMBBBuilder &LMBB) {
   assert(LMBB.EntryPredZeroOrOneBlock && "block has finalized linking");
 
   this->ExitPredOneBlock->addSuccessorBlock(*LMBB.EntryPredOneBlock);
-  this->ExitPredZeroOrOneBlock->addSuccessorBlock(*LMBB.ExitPredZeroOrOneBlock);
+  this->ExitPredZeroOrOneBlock->addSuccessorBlock(
+      *LMBB.EntryPredZeroOrOneBlock);
 }
 
 void LinearMBBBuilder::addPredecessor(LinearMBBBuilder &LMBB) {
@@ -87,15 +95,15 @@ void LinearMBBBuilder::addPredecessor(LinearMBBBuilder &LMBB) {
       *LMBB.ExitPredZeroOrOneBlock);
 }
 
-void LinearMBBBuilder::finalizeLinking() {
+void LinearMBBBuilder::pruneTrivialBlocks() {
   if (hasFinalizedLinking())
     return;
-
-  for (auto PredMBB = Out->PredMBBs.begin(); PredMBB != Out->PredMBBs.end();) {
-    if (PredMBB->unlinkIfTrivialEmptyBlock()) {
-      Out->PredMBBs.erase(PredMBB);
-    } else
+  for (auto PredMBB = Out.PredMBBs.begin(); PredMBB != Out.PredMBBs.end();) {
+    if ((*PredMBB)->unlinkIfTrivialEmptyBlock()) {
+      Out.PredMBBs.erase(PredMBB);
+    } else {
       PredMBB++;
+    }
   }
 
   EntryPredOneBlock = nullptr;

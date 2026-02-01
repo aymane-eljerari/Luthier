@@ -37,11 +37,11 @@
 // #include "luthier/Tooling/PrePostAmbleEmitter.h"
 // #include "luthier/Tooling/IPVectorRegLiveness.h"
 // #include "luthier/Tooling/SVStorageAndLoadLocations.h"
+#include "luthier/Tooling/IPPredicatedCFG.h"
 #include "luthier/Tooling/NewPMAsmPrinter.h"
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Plugins/PassPlugin.h>
 #include <llvm/Support/TargetSelect.h>
-#include <luthier/Tooling/IPVectorCFG.h>
 // #include <luthier/Tooling/IPReachingDefAnalysis.h>
 // #include <luthier/Tooling/IndirectBranchResolverAnalysis.h>
 
@@ -202,9 +202,8 @@ llvmGetPassPluginInfo() {
       // MAM.registerPass([]() { return luthier::IPVectorRegLivenessAnalysis();
       // }); MAM.registerPass(
       //     []() { return luthier::IndirectBranchResolverAnalysis(); });
-      MAM.registerPass([]() { return luthier::IPVectorCFGAnalysis(); });
+      MAM.registerPass([]() { return luthier::IPPredCFGAnalysis(); });
       // MAM.registerPass([]() { return luthier::ReachingDefAnalysis(); });
-
     });
     /// Register Luthier machine function analysis passes
     PB.registerAnalysisRegistrationCallback(
@@ -237,7 +236,7 @@ llvmGetPassPluginInfo() {
             return true;
           }
           if (Name == "luthier-ip-vector-cfg-printer") {
-            MPM.addPass(luthier::IPVectorCFGPrinterPass(llvm::outs()));
+            MPM.addPass(luthier::IPPredCFGPrinter(llvm::outs()));
             return true;
           }
           // if (Name == "luthier-apply-instrumentation") {

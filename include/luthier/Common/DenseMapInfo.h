@@ -22,7 +22,9 @@
 #include <llvm/ADT/DenseMapInfo.h>
 
 /// Info for storing reference wrappers in an LLVM Map
-template <typename T> struct ::llvm::DenseMapInfo<std::reference_wrapper<T>> {
+
+namespace llvm {
+template <typename T> struct DenseMapInfo<std::reference_wrapper<T>> {
 
   static constexpr std::reference_wrapper<T> getEmptyKey() {
     return std::reference_wrapper<T>(*DenseMapInfo<T *>::getEmptyKey());
@@ -41,5 +43,7 @@ template <typename T> struct ::llvm::DenseMapInfo<std::reference_wrapper<T>> {
     return &LHS.get() == &RHS.get();
   }
 };
+
+} // namespace llvm
 
 #endif

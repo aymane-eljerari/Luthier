@@ -22,7 +22,7 @@
 #include "luthier/Tooling/PhysRegsNotInLiveInsAnalysis.h"
 #include "luthier/Tooling/StateValueArraySpecs.h"
 #include "luthier/Tooling/WrapperAnalysisPasses.h"
-#include "luthier/consts.h"
+
 #include <GCNSubtarget.h>
 #include <SIRegisterInfo.h>
 #include <llvm/Analysis/CallGraph.h>
