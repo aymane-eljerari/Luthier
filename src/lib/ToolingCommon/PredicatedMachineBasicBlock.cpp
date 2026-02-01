@@ -1,3 +1,21 @@
+//===-- PredicatedMachineBasicBlock.cpp -----------------------------------===//
+// Copyright 2026 @ Northeastern University Computer Architecture Lab
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//===----------------------------------------------------------------------===//
+/// \file PredicatedMachineBasicBlock.cpp
+/// Implements the \c PredicatedMachineBasicBlock class and its builder.
+//===----------------------------------------------------------------------===//
 #include "luthier/Tooling/PredicatedMachineBasicBlock.h"
 #include "luthier/LLVM/CodeGenHelpers.h"
 #include "luthier/Tooling/IPPredicatedCFG.h"
@@ -24,14 +42,13 @@ void PredicatedMachineBasicBlock::print(llvm::raw_ostream &OS,
                                         unsigned int Indent) const {
   const auto &ST = getParent().getParent().getMF().getSubtarget();
   const auto TII = ST.getInstrInfo();
-  const auto TRI = ST.getRegisterInfo();
   OS.indent(Indent) << "Vector MBB " << getName() << "\n";
 
   OS.indent(Indent) << "Predecessors: [";
   llvm::interleave(
       Predecessors.begin(), Predecessors.end(),
-      [&](const PredMBBBuilder *MBB) {
-        OS << "MBB " << MBB->getPredMBB().getName();
+      [&](const PredMBBBuilder &MBB) {
+        OS << "MBB " << MBB.getPredMBB().getName();
       },
       [&]() { OS << ", "; });
   OS << "]\n";
@@ -46,8 +63,8 @@ void PredicatedMachineBasicBlock::print(llvm::raw_ostream &OS,
   OS.indent(Indent) << "Successors: [";
   llvm::interleave(
       Successors.begin(), Successors.end(),
-      [&](const PredMBBBuilder *MBB) {
-        OS << "MBB " << MBB->getPredMBB().getName();
+      [&](const PredMBBBuilder &MBB) {
+        OS << "MBB " << MBB.getPredMBB().getName();
       },
       [&]() { OS << ", "; });
   OS << "]\n";
@@ -176,18 +193,16 @@ PredMBBBuilder::BreakDownToPredicatedMBBs(LinearMachineBasicBlock &Parent,
 bool PredMBBBuilder::unlinkIfTrivialEmptyBlock() {
   if (getPredMBB().empty() &&
       (!getPredMBB().preds_empty() || getPredMBB().succs_size() == 1)) {
-    for (PredMBBBuilder *Succ : Out.Successors) {
-      for (PredMBBBuilder *Pred : Out.Predecessors) {
-        assert(Succ && "successor block is nullptr");
-        assert(Pred && "predecessor block is nullptr");
-        Succ->addPredecessorBlock(*Pred);
+    for (auto &Succ : Out.Successors) {
+      for (auto &Pred : Out.Predecessors) {
+        Succ.get().addPredecessorBlock(Pred);
       }
     }
-    for (PredMBBBuilder *Succ : Out.Successors) {
-      removeSuccessorBlock(*Succ);
+    for (auto &Succ : Out.Successors) {
+      removeSuccessorBlock(Succ);
     }
-    for (PredMBBBuilder *Pred : Out.Predecessors) {
-      removePredecessorBlock(*Pred);
+    for (auto &Pred : Out.Predecessors) {
+      removePredecessorBlock(Pred);
     }
     return true;
   }

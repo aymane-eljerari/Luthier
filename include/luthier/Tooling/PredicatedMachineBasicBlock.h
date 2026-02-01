@@ -17,9 +17,9 @@
 /// \file PredicatedMachineBasicBlock.h
 /// Defines the \c PredicatedMachineBasicBlock class.
 //===----------------------------------------------------------------------===//
-
 #ifndef LUTHIER_TOOLING_PREDICATED_MACHINE_BASIC_BLOCK_H
 #define LUTHIER_TOOLING_PREDICATED_MACHINE_BASIC_BLOCK_H
+#include "luthier/Common/DenseMapInfo.h"
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/CodeGen/MachineBasicBlock.h>
 #include <llvm/CodeGen/MachineFunction.h>
@@ -69,10 +69,10 @@ private:
       {}, {}};
 
   /// Set of predecessor blocks
-  llvm::SmallDenseSet<PredMBBBuilder *> Predecessors{};
+  llvm::SmallDenseSet<std::reference_wrapper<PredMBBBuilder>> Predecessors{};
 
   /// Set of successor blocks
-  llvm::SmallDenseSet<PredMBBBuilder *> Successors{};
+  llvm::SmallDenseSet<std::reference_wrapper<PredMBBBuilder>> Successors{};
 
   PredicatedMachineBasicBlock(LinearMachineBasicBlock &Parent,
                               PredicateValue EMV)
@@ -252,7 +252,8 @@ public:
     using reference = value_type &;
     using pointer = value_type *;
 
-    explicit pred_succ_iterator(decltype(Successors)::iterator It) : It(It) {}
+    explicit pred_succ_iterator(const decltype(Successors)::iterator &It)
+        : It(It) {}
 
     reference operator*() const;
 
@@ -288,7 +289,8 @@ public:
     using reference = value_type &;
     using pointer = value_type *;
 
-    explicit const_pred_succ_iterator(decltype(Successors)::const_iterator It)
+    explicit const_pred_succ_iterator(
+        const decltype(Successors)::const_iterator &It)
         : It(It) {}
 
     reference operator*() const;
@@ -388,23 +390,23 @@ public:
                             llvm::MachineBasicBlock &MBB);
 
   void addPredecessorBlock(PredMBBBuilder &MBB) {
-    Out.Predecessors.insert(&MBB);
-    MBB.Out.Successors.insert(this);
+    Out.Predecessors.insert(MBB);
+    MBB.Out.Successors.insert(*this);
   }
 
   void removePredecessorBlock(PredMBBBuilder &MBB) {
-    Out.Predecessors.erase(&MBB);
-    MBB.Out.Successors.erase(this);
+    Out.Predecessors.erase(MBB);
+    MBB.Out.Successors.erase(*this);
   }
 
   void addSuccessorBlock(PredMBBBuilder &MBB) {
-    Out.Successors.insert(&MBB);
-    MBB.Out.Predecessors.insert(this);
+    Out.Successors.insert(MBB);
+    MBB.Out.Predecessors.insert(*this);
   }
 
   void removeSuccessorBlock(PredMBBBuilder &MBB) {
-    Out.Successors.erase(&MBB);
-    MBB.Out.Predecessors.erase(this);
+    Out.Successors.erase(MBB);
+    MBB.Out.Predecessors.erase(*this);
   }
 
   bool unlinkIfTrivialEmptyBlock();
@@ -415,17 +417,19 @@ public:
 
   PredicatedMachineBasicBlock &getPredMBB() { return Out; }
 
-  const PredicatedMachineBasicBlock &getPredMBB() const { return Out; }
+  [[nodiscard]] const PredicatedMachineBasicBlock &getPredMBB() const {
+    return Out;
+  }
 };
 
 inline PredicatedMachineBasicBlock::pred_succ_iterator::reference
 PredicatedMachineBasicBlock::pred_succ_iterator::operator*() const {
-  return (*It)->getPredMBB();
+  return It->get().getPredMBB();
 }
 
 inline PredicatedMachineBasicBlock::pred_succ_iterator::pointer
 PredicatedMachineBasicBlock::pred_succ_iterator::operator->() const {
-  return &(*It)->getPredMBB();
+  return &It->get().getPredMBB();
 }
 
 } // namespace luthier

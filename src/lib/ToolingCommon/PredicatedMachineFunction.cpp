@@ -25,13 +25,13 @@ namespace luthier {
 void PredicatedMachineFunction::print(llvm::raw_ostream &OS) const {
   MF.print(OS);
   OS << "=======";
-  OS << "# Vector CFG for Machine Function " << MF.getName() << ":\n";
+  OS << "# Predicated Machine Function " << MF.getName() << ":\n";
   OS << "\n";
   for (const auto &SMBB : *this) {
     SMBB.print(OS, 2);
   }
   OS << "\n";
-  OS << "\n# End Vector CFG for Machine Function " << MF.getName() << ".\n\n";
+  OS << "\n# End Predicated Machine Function " << MF.getName() << ".\n\n";
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
