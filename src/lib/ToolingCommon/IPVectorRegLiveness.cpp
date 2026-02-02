@@ -55,6 +55,20 @@ static void sortUniqueLiveIns(
   LiveIns.erase(Out, LiveIns.end());
 }
 
+void IPVectorRegLiveness::addBlockLiveOuts(
+    const PredicatedMachineBasicBlock &MBB,
+    llvm::LiveRegUnits &LiveUnits) const {
+  for (const auto &LO : getPredMBBLiveOuts(MBB))
+    LiveUnits.addRegMasked(LO.PhysReg, LO.LaneMask);
+}
+
+void IPVectorRegLiveness::addBlockLiveIns(
+    const PredicatedMachineBasicBlock &MBB,
+    llvm::LiveRegUnits &LiveUnits) const {
+  for (const auto &LI : getPredMBBLiveIns(MBB))
+    LiveUnits.addRegMasked(LI.PhysReg, LI.LaneMask);
+}
+
 void IPVectorRegLiveness::addBlockLiveIns(
     llvm::LivePhysRegs &LPR, const PredicatedMachineBasicBlock &PredMBB) const {
   for (const auto &LI : PredMBBLivenessMap.at(PredMBB)) {
@@ -161,6 +175,27 @@ void IPVectorRegLiveness::recomputePredMBBLiveIns(
   }
 }
 
+bool IPVectorRegLiveness::isLiveIn(const PredicatedMachineBasicBlock &PredMBB,
+                                   llvm::MCRegister Reg,
+                                   llvm::LaneBitmask LaneMask) const {
+  auto LiveIns = getPredMBBLiveIns(PredMBB);
+  auto I = llvm::find_if(
+      LiveIns, [Reg](const llvm::MachineBasicBlock::RegisterMaskPair &LI) {
+        return LI.PhysReg == Reg;
+      });
+  return I != LiveIns.end() && (I->LaneMask & LaneMask).any();
+}
+
+void IPVectorRegLiveness::addLiveIns(const PredicatedMachineBasicBlock &PredMBB,
+                                     llvm::LiveRegUnits &LRU) const {
+  addBlockLiveIns(PredMBB, LRU);
+}
+
+void IPVectorRegLiveness::addLiveOuts(
+    const PredicatedMachineBasicBlock &PredMBB, llvm::LiveRegUnits &LRU) const {
+  addBlockLiveOuts(PredMBB, LRU);
+}
+
 std::vector<llvm::MachineBasicBlock::RegisterMaskPair>
 IPVectorRegLiveness::getPredMBBLiveOuts(
     const PredicatedMachineBasicBlock &PredMBB) const {
@@ -172,7 +207,7 @@ IPVectorRegLiveness::getPredMBBLiveOuts(
                 .getSubtarget()
                 .getRegisterInfo());
   addLiveOutsNoPristines(LPR, PredMBB);
-  addLiveIns(LiveOuts, PredMBB, LPR);
+  luthier::addLiveIns(LiveOuts, PredMBB, LPR);
   return LiveOuts;
 }
 

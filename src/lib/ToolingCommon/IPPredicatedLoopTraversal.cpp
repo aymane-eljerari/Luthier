@@ -1,17 +1,29 @@
-//===- LoopTraversal.cpp - Optimal basic block traversal order --*- C++ -*-===//
+//===-- IPPredicatedLoopTraversal.cpp -------------------------------------===//
+// Copyright 2026 @ Northeastern University Computer Architecture Lab
 //
-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
-// See https://llvm.org/LICENSE.txt for license information.
-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //===----------------------------------------------------------------------===//
-#include "luthier/Tooling/IPLoopTraversal.h"
+/// \file IPPredicatedLoopTraversal.cpp
+/// Implements the \c IPPredicatedLoopTraversal class.
+//===----------------------------------------------------------------------===//
+#include "luthier/Tooling/IPPredicatedLoopTraversal.h"
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/CodeGen/MachineFunction.h>
 
 namespace luthier {
 
-bool LoopTraversal::isBlockDone(const PredicatedMachineBasicBlock *MBB) {
+bool IPPredicatedLoopTraversal::isBlockDone(
+    const PredicatedMachineBasicBlock *MBB) {
   unsigned MBBNumber = MBB->getGlobalNumber();
   assert(MBBNumber < MBBInfos.size() && "Unexpected basic block number.");
   return MBBInfos[MBBNumber].PrimaryCompleted &&
@@ -20,18 +32,22 @@ bool LoopTraversal::isBlockDone(const PredicatedMachineBasicBlock *MBB) {
          MBBInfos[MBBNumber].IncomingProcessed == MBB->preds_size();
 }
 
-LoopTraversal::TraversalOrder
-LoopTraversal::traverse(const IPPredicatedCFG &MF) {
+IPPredicatedLoopTraversal::IPTraversalOrder
+IPPredicatedLoopTraversal::traverse(const IPPredicatedCFG &IPPredCFG) {
   // Initialize the MMBInfos
-  MBBInfos.assign(MF.getNumVecMBBs(), MBBInfo());
+  MBBInfos.assign(IPPredCFG.getNumVecMBBs(), PredicatedMBBInfo());
 
-  const PredicatedMachineBasicBlock *Entry = &*MF.begin()->begin()->begin();
+  const PredicatedMachineFunction &EntryPredMF = IPPredCFG.getEntry();
+
+  const PredicatedMachineBasicBlock *Entry =
+      EntryPredMF.empty() ? nullptr : &*EntryPredMF.begin()->begin();
+  assert(Entry && "Entry block is nullptr");
   llvm::ReversePostOrderTraversal<
       const luthier::PredicatedMachineBasicBlock *,
       llvm::GraphTraits<const PredicatedMachineBasicBlock *>>
       RPOT(Entry);
   llvm::SmallVector<const PredicatedMachineBasicBlock *, 4> Workqueue;
-  llvm::SmallVector<TraversedMBBInfo, 4> MBBTraversalOrder;
+  llvm::SmallVector<TraversedPredMBBInfo, 4> MBBTraversalOrder;
   for (const luthier::PredicatedMachineBasicBlock *MBB : RPOT) {
     // N.B: IncomingProcessed and IncomingCompleted were already updated while
     // processing this block's predecessors.
@@ -44,7 +60,8 @@ LoopTraversal::traverse(const IPPredicatedCFG &MF) {
     while (!Workqueue.empty()) {
       const PredicatedMachineBasicBlock *ActiveMBB = Workqueue.pop_back_val();
       bool Done = isBlockDone(ActiveMBB);
-      MBBTraversalOrder.push_back(TraversedMBBInfo(ActiveMBB, Primary, Done));
+      MBBTraversalOrder.push_back(
+          TraversedPredMBBInfo(ActiveMBB, Primary, Done));
       for (const PredicatedMachineBasicBlock &Succ : ActiveMBB->successors()) {
         unsigned SuccNumber = Succ.getGlobalNumber();
         assert(SuccNumber < MBBInfos.size() &&
@@ -54,8 +71,8 @@ LoopTraversal::traverse(const IPPredicatedCFG &MF) {
             MBBInfos[SuccNumber].IncomingProcessed++;
           if (Done)
             MBBInfos[SuccNumber].IncomingCompleted++;
-          if (isBlockDone(Succ))
-            Workqueue.push_back(Succ);
+          if (isBlockDone(&Succ))
+            Workqueue.push_back(&Succ);
         }
       }
       Primary = false;
@@ -67,7 +84,7 @@ LoopTraversal::traverse(const IPPredicatedCFG &MF) {
   // above.
   for (const PredicatedMachineBasicBlock *MBB : RPOT) {
     if (!isBlockDone(MBB))
-      MBBTraversalOrder.push_back(TraversedMBBInfo(MBB, false, true));
+      MBBTraversalOrder.push_back(TraversedPredMBBInfo(MBB, false, true));
     // Don't update successors here. We'll get to them anyway through this
     // loop.
   }

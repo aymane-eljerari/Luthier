@@ -283,6 +283,22 @@ public:
 
   [[nodiscard]] bool succs_empty() const { return Successors.empty(); }
 
+  iterator getFirstNonDebugInstr(bool SkipPseudoOp = true);
+
+  [[nodiscard]] const_iterator
+  getFirstNonDebugInstr(bool SkipPseudoOp = true) const {
+    return const_cast<PredicatedMachineBasicBlock *>(this)
+        ->getFirstNonDebugInstr(SkipPseudoOp);
+  }
+
+  iterator getLastNonDebugInstr(bool SkipPseudoOp = true);
+
+  [[nodiscard]] const_iterator
+  getLastNonDebugInstr(bool SkipPseudoOp = true) const {
+    return const_cast<PredicatedMachineBasicBlock *>(this)
+        ->getLastNonDebugInstr(SkipPseudoOp);
+  }
+
   void print(llvm::raw_ostream &OS, unsigned int Indent) const;
 
   LLVM_DUMP_METHOD void dump() const;

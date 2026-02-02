@@ -54,7 +54,7 @@ add_library(LuthierToolingCommon OBJECT
         NewPMAsmPrinter.cpp
         FunctionAnnotations.cpp
         IPReachingRefAnalysis.cpp
-        IPLoopTraversal.cpp
+        IPPredicatedLoopTraversal.cpp
         #        IPRegScavenger.cpp
         IndirectBranchResolverAnalysis.cpp
         PredicatedMachineBasicBlock.cpp

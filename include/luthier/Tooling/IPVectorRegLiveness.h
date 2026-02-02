@@ -34,6 +34,13 @@ private:
                  std::vector<llvm::MachineBasicBlock::RegisterMaskPair>>
       PredMBBLivenessMap{};
 
+  /// Add live-out registers of basic block \p MBB to \p LiveUnits.
+  void addBlockLiveOuts(const PredicatedMachineBasicBlock &MBB,
+                        llvm::LiveRegUnits &LiveUnits) const;
+
+  void addBlockLiveIns(const PredicatedMachineBasicBlock &MBB,
+                       llvm::LiveRegUnits &LiveUnits) const;
+
   void addBlockLiveIns(llvm::LivePhysRegs &LPR,
                        const PredicatedMachineBasicBlock &PredMBB) const;
 
@@ -58,6 +65,16 @@ public:
            "Failed to find the predicated MBB in the liveness map");
     return PredMBBLivenessMap.at(PredMBB);
   }
+
+  bool isLiveIn(const PredicatedMachineBasicBlock &PredMBB,
+                llvm::MCRegister Reg,
+                llvm::LaneBitmask LaneMask = llvm::LaneBitmask::getAll()) const;
+
+  void addLiveIns(const PredicatedMachineBasicBlock &PredMBB,
+                  llvm::LiveRegUnits &LRU) const;
+
+  void addLiveOuts(const PredicatedMachineBasicBlock &PredMBB,
+                   llvm::LiveRegUnits &LRU) const;
 
   [[nodiscard]] std::vector<llvm::MachineBasicBlock::RegisterMaskPair>
   getPredMBBLiveOuts(const PredicatedMachineBasicBlock &PredMBB) const;
