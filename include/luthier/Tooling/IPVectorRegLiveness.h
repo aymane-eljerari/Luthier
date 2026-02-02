@@ -51,10 +51,6 @@ private:
 
   bool recomputeLiveIns(const PredicatedMachineBasicBlock &PredMBB);
 
-  std::vector<llvm::MachineBasicBlock::RegisterMaskPair> computeAndAddLiveIns(
-      llvm::LivePhysRegs &LiveRegs, const PredicatedMachineBasicBlock &MBB,
-      std::vector<llvm::MachineBasicBlock::RegisterMaskPair> &PerVecMBBLiveIns);
-
 public:
   llvm::ArrayRef<llvm::MachineBasicBlock::RegisterMaskPair>
   getPredMBBLiveIns(const PredicatedMachineBasicBlock &PredMBB) const {
