@@ -175,8 +175,7 @@ public:
             const IPVectorRegLiveness &IPRegLiveness);
 
   /// Traverse the machine function, mapping definitions.
-  void traverse(const IPPredicatedCFG &IPPredCFG,
-                const IPVectorRegLiveness &IPRegLiveness);
+  void traverse();
 
   /// Provides the instruction id of the closest reaching def instruction of
   /// Reg that reaches MI, relative to the begining of MI's basic block.
@@ -293,17 +292,14 @@ public:
 
 private:
   /// Set up LiveRegs by merging predecessor live-out values.
-  void enterBasicBlock(
-      const PredicatedMachineBasicBlock &MBB,
-      llvm::ArrayRef<llvm::MachineBasicBlock::RegisterMaskPair> LiveIns);
+  void enterBasicBlock(const PredicatedMachineBasicBlock &MBB);
 
   /// Update live-out values.
   void leaveBasicBlock(const PredicatedMachineBasicBlock &MBB);
 
   /// Process he given basic block.
   void processBasicBlock(
-      const IPPredicatedLoopTraversal::TraversedPredMBBInfo &TraversedMBB,
-      llvm::ArrayRef<llvm::MachineBasicBlock::RegisterMaskPair> LiveIns);
+      const IPPredicatedLoopTraversal::TraversedPredMBBInfo &TraversedMBB);
 
   /// Process block that is part of a loop again.
   void reprocessBasicBlock(const PredicatedMachineBasicBlock &MBB);

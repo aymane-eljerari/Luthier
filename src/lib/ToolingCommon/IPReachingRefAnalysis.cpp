@@ -88,9 +88,7 @@ static bool isFIDef(const llvm::MachineInstr &MI, int FrameIndex,
   return false;
 }
 
-void ReachingDefInfo::enterBasicBlock(
-    const PredicatedMachineBasicBlock &MBB,
-    llvm::ArrayRef<llvm::MachineBasicBlock::RegisterMaskPair> LiveIns) {
+void ReachingDefInfo::enterBasicBlock(const PredicatedMachineBasicBlock &MBB) {
   unsigned MBBNumber = MBB.getGlobalNumber();
   assert(MBBNumber < MBBReachingDefs.numBlockIDs() &&
          "Unexpected basic block number.");
@@ -108,7 +106,7 @@ void ReachingDefInfo::enterBasicBlock(
   if (MBB.preds_empty()) {
     const llvm::TargetRegisterInfo *TRI =
         MBB.getParent().getParent().getMF().getSubtarget().getRegisterInfo();
-    for (const auto &LI : LiveIns) {
+    for (const auto &LI : this->IPRegLiveness->getPredMBBLiveIns(MBB)) {
       for (llvm::MCRegUnit Unit : TRI->regunits(LI.PhysReg)) {
         // Treat function live-ins as if they were defined just before the first
         // instruction.  Usually, function arguments are set up immediately
@@ -119,15 +117,16 @@ void ReachingDefInfo::enterBasicBlock(
         }
       }
     }
-    // LLVM_DEBUG(llvm::dbgs() << printMBBReference(*MBB) << ": entry\n");
+    LLVM_DEBUG(llvm::dbgs()
+               << "Pred MBB " << MBB.getGlobalNumber() << ": entry\n");
     return;
   }
 
   // Try to coalesce live-out registers from predecessors.
-  for (const PredicatedMachineBasicBlock &pred : MBB.predecessors()) {
-    assert(unsigned(pred.getGlobalNumber()) < MBBOutRegsInfos.size() &&
+  for (const PredicatedMachineBasicBlock &Pred : MBB.predecessors()) {
+    assert(Pred.getGlobalNumber() < MBBOutRegsInfos.size() &&
            "Should have pre-allocated MBBInfos for all MBBs");
-    const LiveRegsDefInfo &Incoming = MBBOutRegsInfos[pred.getGlobalNumber()];
+    const LiveRegsDefInfo &Incoming = MBBOutRegsInfos[Pred.getGlobalNumber()];
     // Incoming is null if this is a backedge from a BB
     // we haven't processed yet
     if (Incoming.empty())
@@ -209,14 +208,14 @@ void ReachingDefInfo::reprocessBasicBlock(
 
   // Count number of non-debug instructions for end of block adjustment.
   auto NonDbgInsts = llvm::instructionsWithoutDebug(MBB.begin(), MBB.end());
-  int NumInsts = std::distance(NonDbgInsts.begin(), NonDbgInsts.end());
+  unsigned int NumInsts = std::distance(NonDbgInsts.begin(), NonDbgInsts.end());
 
   // When reprocessing a block, the only thing we need to do is check whether
   // there is now a more recent incoming reaching definition from a predecessor.
-  for (const PredicatedMachineBasicBlock &pred : MBB.predecessors()) {
-    assert(unsigned(pred.getGlobalNumber()) < MBBOutRegsInfos.size() &&
+  for (const PredicatedMachineBasicBlock &Pred : MBB.predecessors()) {
+    assert(Pred.getGlobalNumber() < MBBOutRegsInfos.size() &&
            "Should have pre-allocated MBBInfos for all MBBs");
-    const LiveRegsDefInfo &Incoming = MBBOutRegsInfos[pred.getGlobalNumber()];
+    const LiveRegsDefInfo &Incoming = MBBOutRegsInfos[Pred.getGlobalNumber()];
     // Incoming may be empty for dead predecessors.
     if (Incoming.empty())
       continue;
@@ -250,20 +249,18 @@ void ReachingDefInfo::reprocessBasicBlock(
 }
 
 void ReachingDefInfo::processBasicBlock(
-    const IPPredicatedLoopTraversal::TraversedPredMBBInfo &TraversedMBB,
-    llvm::ArrayRef<llvm::MachineBasicBlock::RegisterMaskPair> LiveIns) {
+    const IPPredicatedLoopTraversal::TraversedPredMBBInfo &TraversedMBB) {
   const PredicatedMachineBasicBlock *MBB = TraversedMBB.MBB;
-  // LLVM_DEBUG(llvm::dbgs() << printMBBReference(*MBB)
-  //                         << (!TraversedMBB.IsDone ? ": incomplete\n"
-  //                                                  : ": all preds known\n"));
+  LLVM_DEBUG(llvm::dbgs() << "MBB " << MBB->getGlobalNumber()
+                          << (!TraversedMBB.IsDone ? ": incomplete\n"
+                                                   : ": all preds known\n"));
 
   if (!TraversedMBB.PrimaryPass) {
     // Reprocess MBB that is part of a loop.
     reprocessBasicBlock(*MBB);
     return;
   }
-
-  enterBasicBlock(*MBB, LiveIns);
+  enterBasicBlock(*MBB);
   for (const llvm::MachineInstr &MI :
        llvm::instructionsWithoutDebug(MBB->begin(), MBB->end()))
     processDefs(MI, MBB->getGlobalNumber());
@@ -279,17 +276,28 @@ void ReachingDefInfo::run(llvm::Module &TargetModule,
   const IPVectorRegLiveness &IPRegLiveness =
       TargetMAM.getResult<IPVectorRegLivenessAnalysis>(TargetModule);
   init(IPPredCFG, IPRegLiveness);
-
-  traverse(IPPredCFG, IPRegLiveness);
+  traverse();
 }
 
 void ReachingDefInfo::print(llvm::raw_ostream &OS) {
+
+  llvm::DenseMap<std::reference_wrapper<const llvm::MachineInstr>, int>
+      InstToNumMap{};
+  int Num = 0;
+  for (const PredicatedMachineFunction &VecCFG : *IPVecCFG) {
+    for (const llvm::MachineBasicBlock &MBB : VecCFG.getMF()) {
+      for (const llvm::MachineInstr &MI : MBB) {
+        InstToNumMap[MI] = Num;
+        Num++;
+      }
+    }
+  }
+
   for (const auto &VecCFG : *IPVecCFG) {
     const llvm::MachineFunction &MF = VecCFG.getMF();
     const llvm::TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
     OS << "IP Vector RDA results for " << MF.getName() << "\n";
-    int Num = 0;
-    llvm::DenseMap<const llvm::MachineInstr *, int> InstToNumMap;
+
     llvm::SmallPtrSet<const llvm::MachineInstr *, 2> Defs;
     for (const llvm::MachineBasicBlock &MBB : MF) {
       for (const llvm::MachineInstr &MI : MBB) {
@@ -311,16 +319,14 @@ void ReachingDefInfo::print(llvm::raw_ostream &OS) {
           MO.print(OS, TRI);
           llvm::SmallVector<int, 0> Nums;
           for (const llvm::MachineInstr *Def : Defs)
-            Nums.push_back(InstToNumMap[Def]);
+            Nums.push_back(InstToNumMap[*Def]);
           llvm::sort(Nums);
           OS << ":{ ";
-          for (int Num : Nums)
-            OS << Num << " ";
+          for (const int N : Nums)
+            OS << N << " ";
           OS << "}\n";
         }
-        OS << Num << ": " << MI << "\n";
-        InstToNumMap[&MI] = Num;
-        ++Num;
+        OS << InstToNumMap[MI] << ": " << MI << "\n";
       }
     }
   }
@@ -352,16 +358,14 @@ void ReachingDefInfo::init(const IPPredicatedCFG &IPPredCFG,
   TraversedMBBOrder = Traversal.traverse(IPPredCFG);
 }
 
-void ReachingDefInfo::traverse(const IPPredicatedCFG &IPPredCFG,
-                               const IPVectorRegLiveness &IPRegLiveness) {
+void ReachingDefInfo::traverse() {
   // Traverse the basic blocks.
   for (IPPredicatedLoopTraversal::TraversedPredMBBInfo TraversedMBB :
        TraversedMBBOrder)
-    processBasicBlock(TraversedMBB,
-                      IPRegLiveness.getPredMBBLiveIns(*TraversedMBB.MBB));
+    processBasicBlock(TraversedMBB);
 #ifndef NDEBUG
   // Make sure reaching defs are sorted and unique.
-  for (unsigned MBBNumber = 0, NumBlockIDs = IPPredCFG.getNumVecMBBs();
+  for (unsigned MBBNumber = 0, NumBlockIDs = IPVecCFG->getNumVecMBBs();
        MBBNumber != NumBlockIDs; ++MBBNumber) {
     for (unsigned Unit = 0; Unit != NumRegUnits; ++Unit) {
       int LastDef = ReachingDefDefaultVal;
@@ -541,11 +545,24 @@ void ReachingDefInfo::getGlobalUses(const llvm::MachineInstr &MI,
 void ReachingDefInfo::getGlobalReachingDefs(const llvm::MachineInstr &MI,
                                             llvm::Register Reg,
                                             InstSet &Defs) const {
+  LLVM_DEBUG(
+      llvm::dbgs()
+      << "Starting to find global reaching defs for reg "
+      << llvm::printReg(
+             Reg, MI.getParent()->getParent()->getSubtarget().getRegisterInfo())
+      << " in instruction " << MI << ".\n");
   if (auto *Def = getUniqueReachingMIDef(MI, Reg)) {
+    LLVM_DEBUG(llvm::dbgs() << "Found def at :" << MI << "\n";);
     Defs.insert(Def);
     return;
   }
-
+  LLVM_DEBUG(
+      llvm::dbgs()
+          << "Didn't find any defs for reg "
+          << llvm::printReg(
+                 Reg,
+                 MI.getParent()->getParent()->getSubtarget().getRegisterInfo())
+          << ". Searching in preds.\n";);
   for (auto &MBB : IPVecCFG->getPredMBB(MI).predecessors())
     getLiveOuts(MBB, Reg, Defs);
 }
@@ -561,20 +578,35 @@ void ReachingDefInfo::getLiveOuts(const PredicatedMachineBasicBlock &MBB,
                                   BlockSet &VisitedBBs) const {
   const llvm::TargetRegisterInfo *TRI =
       MBB.getParent().getParent().getMF().getSubtarget().getRegisterInfo();
-  if (VisitedBBs.count(&MBB))
+  LLVM_DEBUG(llvm::dbgs() << "Looking at MBB: " << MBB.getName()
+                          << " to find definition of "
+                          << llvm::printReg(Reg, TRI) << ".\n";);
+
+  if (VisitedBBs.count(&MBB)) {
+    LLVM_DEBUG(llvm::dbgs() << "Already visited\n";);
     return;
+  }
 
   VisitedBBs.insert(&MBB);
   llvm::LiveRegUnits LR(*TRI);
   IPRegLiveness->addLiveOuts(MBB, LR);
-  if (Reg.isPhysical() && LR.available(Reg))
+  if (Reg.isPhysical() && LR.available(Reg)) {
+    LLVM_DEBUG(llvm::dbgs()
+                   << "Reg is available and not defined in this MBB\n";);
     return;
+  }
 
-  if (auto *Def = getLocalLiveOutMIDef(MBB, Reg))
+  if (auto *Def = getLocalLiveOutMIDef(MBB, Reg)) {
+    LLVM_DEBUG(llvm::dbgs() << "Found def at " << *Def << "\n";);
     Defs.insert(Def);
-  else
-    for (auto &Pred : MBB.predecessors())
+  } else {
+    LLVM_DEBUG(
+        llvm::dbgs()
+            << "Didn't find anything in the current block; searching preds\n";);
+    for (auto &Pred : MBB.predecessors()) {
       getLiveOuts(Pred, Reg, Defs, VisitedBBs);
+    }
+  }
 }
 
 const llvm::MachineInstr *
