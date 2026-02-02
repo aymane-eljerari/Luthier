@@ -15,11 +15,10 @@
 //===----------------------------------------------------------------------===//
 /// \file IPReachingRefAnalysis.h
 //===----------------------------------------------------------------------===//
-
 #ifndef LUTHIER_TOOLING_IP_REACHING_DEF_ANALYSIS_H
 #define LUTHIER_TOOLING_IP_REACHING_DEF_ANALYSIS_H
-#include "IPLoopTraversal.h"
-#include "luthier/Tooling/IPVectorCFG.h"
+#include "luthier/Tooling/IPLoopTraversal.h"
+#include "luthier/Tooling/IPPredicatedCFG.h"
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/TinyPtrVector.h>
@@ -118,7 +117,7 @@ private:
 class ReachingDefInfo {
 private:
   luthier::LoopTraversal::TraversalOrder TraversedMBBOrder;
-  const IPVectorCFG *IPVecCFG;
+  const IPPredicatedCFG *IPVecCFG;
   unsigned NumRegUnits = 0;
   int ObjectIndexBegin = 0;
   /// Instruction that defined each register, relative to the beginning of the

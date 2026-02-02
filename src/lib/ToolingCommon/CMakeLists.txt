@@ -53,8 +53,8 @@ add_library(LuthierToolingCommon OBJECT
         Metadata.cpp
         NewPMAsmPrinter.cpp
         FunctionAnnotations.cpp
-        #        IPReachingRefAnalysis.cpp
-        #        IPLoopTraversal.cpp
+        IPReachingRefAnalysis.cpp
+        IPLoopTraversal.cpp
         #        IPRegScavenger.cpp
         IndirectBranchResolverAnalysis.cpp
         PredicatedMachineBasicBlock.cpp

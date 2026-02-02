@@ -5,8 +5,9 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-
+#include "luthier/Tooling/IPLoopTraversal.h"
 #include "luthier/Tooling/IPReachingDefAnalysis.h"
+#include "luthier/Tooling/IPVectorRegLiveness.h"
 #include "llvm/ADT/SetOperations.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/CodeGen/LiveRegUnits.h"
@@ -15,9 +16,6 @@
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/Support/Debug.h"
-
-#include <luthier/Tooling/IPLoopTraversal.h>
-#include <luthier/Tooling/IPVectorRegLiveness.h>
 
 #define DEBUG_TYPE "reaching-defs-analysis"
 
@@ -37,7 +35,7 @@ ReachingDefPrinterPass::run(llvm::MachineFunction &MF,
                             llvm::MachineFunctionAnalysisManager &MFAM) {
   llvm::MFPropsModifier _(*this, MF);
 
-  auto &RDI = MFAM.getResult<ReachingDefAnalysis>(MF);
+  auto &RDI = MFAM.getResult<IPReachingDefAnalysis>(MF);
   OS << "Reaching definitions for for machine function: " << MF.getName()
      << '\n';
   RDI.print(OS);

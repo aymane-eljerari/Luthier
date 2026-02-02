@@ -17,7 +17,7 @@
 
 #ifndef LUTHIER_TOOLING_IP_LOOP_TRAVERSAL_H
 #define LUTHIER_TOOLING_IP_LOOP_TRAVERSAL_H
-#include "luthier/Tooling/IPVectorCFG.h"
+#include "luthier/Tooling/IPPredicatedCFG.h"
 #include <llvm/ADT/SmallVector.h>
 
 namespace llvm {
@@ -87,7 +87,7 @@ private:
 public:
   struct TraversedMBBInfo {
     /// The basic block.
-    const VectorMBB *MBB = nullptr;
+    const PredicatedMachineBasicBlock *MBB = nullptr;
 
     /// True if this is the first time we process the basic block.
     bool PrimaryPass = true;
@@ -95,8 +95,8 @@ public:
     /// True if the block that is ready for its final round of processing.
     bool IsDone = true;
 
-    TraversedMBBInfo(const VectorMBB *BB = nullptr, bool Primary = true,
-                     bool Done = true)
+    TraversedMBBInfo(const PredicatedMachineBasicBlock *BB = nullptr,
+                     bool Primary = true, bool Done = true)
         : MBB(BB), PrimaryPass(Primary), IsDone(Done) {}
   };
   LoopTraversal() = default;
@@ -104,11 +104,11 @@ public:
   /// Identifies basic blocks that are part of loops and should to be
   ///  visited twice and returns efficient traversal order for all the blocks.
   typedef llvm::SmallVector<TraversedMBBInfo, 4> TraversalOrder;
-  TraversalOrder traverse(const IPVectorCFG &IPVecCFG);
+  TraversalOrder traverse(const IPPredicatedCFG &IPVecCFG);
 
 private:
   /// \return \c true if the block is ready for its final round of processing.
-  bool isBlockDone(const VectorMBB *MBB);
+  bool isBlockDone(const PredicatedMachineBasicBlock *MBB);
 };
 
 } // namespace luthier

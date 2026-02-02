@@ -368,139 +368,106 @@ PredicatedMachineBasicBlock::const_pred_succ_iterator::operator->() const {
 
 } // namespace luthier
 
-// namespace llvm {
-// template <> struct GraphTraits<luthier::PredicatedMachineBasicBlock *> {
-//   using NodeRef = luthier::PredicatedMachineBasicBlock *;
-//   using ChildIteratorType = SmallDenseSet<luthier::PredMBBBuilder
-//   *>::iterator;
-//
-//   static NodeRef getEntryNode(luthier::PredicatedMachineBasicBlock *BB) {
-//     return BB;
-//   }
-//
-//   static ChildIteratorType child_begin(NodeRef N) { return N->succs_begin();
-//   }
-//
-//   static ChildIteratorType child_end(NodeRef N) {
-//     return N->successors().end();
-//   }
-//
-//   static unsigned getNumber(luthier::PredicatedMachineBasicBlock *BB) {
-//     return BB->getGlobalNumber();
-//   }
-// };
-//
-// static_assert(GraphHasNodeNumbers<luthier::PredicatedMachineBasicBlock *>,
-//               "GraphTraits getNumber() not detected");
-//
-// template <> struct GraphTraits<const luthier::PredicatedMachineBasicBlock *>
-// {
-//   using NodeRef = const luthier::PredicatedMachineBasicBlock *;
-//   using ChildIteratorType =
-//       SmallDenseSet<luthier::PredMBBBuilder *>::const_iterator;
-//
-//   static NodeRef getEntryNode(const luthier::PredicatedMachineBasicBlock *BB)
-//   {
-//     return BB;
-//   }
-//
-//   static ChildIteratorType child_begin(NodeRef N) {
-//     return N->successors().begin();
-//   }
-//
-//   static ChildIteratorType child_end(NodeRef N) {
-//     return N->successors().end();
-//   }
-//
-//   static unsigned getNumber(const luthier::PredicatedMachineBasicBlock *BB) {
-//     return BB->getGlobalNumber();
-//   }
-// };
-//
-// static_assert(GraphHasNodeNumbers<const luthier::PredicatedMachineBasicBlock
-// *>,
-//               "GraphTraits getNumber() not detected");
-//
-// template <>
-// struct GraphTraits<Inverse<luthier::PredicatedMachineBasicBlock *>> {
-//   using NodeRef = luthier::PredicatedMachineBasicBlock *;
-//   using ChildIteratorType = SmallDenseSet<luthier::PredMBBBuilder
-//   *>::iterator;
-//
-//   static NodeRef
-//   getEntryNode(Inverse<luthier::PredicatedMachineBasicBlock *> G) {
-//     return G.Graph;
-//   }
-//
-//   static ChildIteratorType child_begin(NodeRef N) { return N->preds_begin();
-//   } static ChildIteratorType child_end(NodeRef N) { return N->preds_end(); }
-//
-//   static unsigned getNumber(luthier::PredicatedMachineBasicBlock *BB) {
-//     return BB->getGlobalNumber();
-//   }
-// };
-//
-// template <>
-// struct GraphTraits<Inverse<const luthier::PredicatedMachineBasicBlock *>> {
-//   using NodeRef = const luthier::PredicatedMachineBasicBlock *;
-//   using ChildIteratorType =
-//       SmallDenseSet<luthier::PredMBBBuilder *>::const_iterator;
-//
-//   static NodeRef
-//   getEntryNode(Inverse<const luthier::PredicatedMachineBasicBlock *> G) {
-//     return G.Graph;
-//   }
-//
-//   static ChildIteratorType child_begin(NodeRef N) { return N->preds_begin();
-//   } static ChildIteratorType child_end(NodeRef N) { return N->preds_end(); }
-//
-//   static unsigned getNumber(const luthier::PredicatedMachineBasicBlock *BB) {
-//     return BB->getGlobalNumber();
-//   }
-// };
-//
-// static_assert(
-//     GraphHasNodeNumbers<Inverse<const luthier::PredicatedMachineBasicBlock
-//     *>>, "GraphTraits getNumber() not detected");
-//
-// template <> struct DomTreeNodeTraits<luthier::PredicatedMachineBasicBlock> {
-//   using NodeType = luthier::PredicatedMachineBasicBlock;
-//   using NodePtr = luthier::PredicatedMachineBasicBlock *;
-//   using ParentPtr = luthier::IPPredicatedCFG *;
-//   using ParentType = std::remove_pointer_t<ParentPtr>;
-//
-//   static luthier::PredicatedMachineBasicBlock *getEntryNode(ParentPtr Parent)
-//   {
-//     auto MFPredIt = Parent->getEntry();
-//     return MFPredIt != Parent->end() && !MFPredIt->empty()
-//                ? &*MFPredIt->begin()->begin()
-//                : nullptr;
-//   }
-//
-//   static ParentPtr getParent(NodePtr BB) {
-//     return &BB->getParent().getParent().getParent();
-//   }
-// };
-//
-// template <>
-// struct DomTreeNodeTraits<const luthier::PredicatedMachineBasicBlock> {
-//   using NodeType = const luthier::PredicatedMachineBasicBlock;
-//   using NodePtr = const luthier::PredicatedMachineBasicBlock *;
-//   using ParentPtr = const luthier::IPPredicatedCFG *;
-//   using ParentType = std::remove_pointer_t<ParentPtr>;
-//
-//   static const luthier::PredicatedMachineBasicBlock *
-//   getEntryNode(ParentPtr Parent) {
-//     auto MFPredIt = Parent->getEntry();
-//     return MFPredIt != Parent->end() && !MFPredIt->empty()
-//                ? &*MFPredIt->begin()->begin()
-//                : nullptr;
-//   }
-//
-//   static ParentPtr getParent(NodePtr BB) {
-//     return &BB->getParent().getParent().getParent();
-//   }
-// };
-// // } // namespace llvm
+namespace llvm {
+template <> struct GraphTraits<luthier::PredicatedMachineBasicBlock *> {
+  using NodeRef = luthier::PredicatedMachineBasicBlock *;
+  using ChildIteratorType = llvm::pointer_iterator<
+      luthier::PredicatedMachineBasicBlock::pred_succ_iterator>;
+
+  static NodeRef getEntryNode(luthier::PredicatedMachineBasicBlock *BB) {
+    return BB;
+  }
+
+  static ChildIteratorType child_begin(NodeRef N) {
+    return ChildIteratorType(N->succs_begin());
+  }
+
+  static ChildIteratorType child_end(NodeRef N) {
+    return ChildIteratorType(N->succs_end());
+  }
+
+  static unsigned getNumber(luthier::PredicatedMachineBasicBlock *BB) {
+    return BB->getGlobalNumber();
+  }
+};
+
+static_assert(GraphHasNodeNumbers<luthier::PredicatedMachineBasicBlock *>,
+              "GraphTraits getNumber() not detected");
+
+template <> struct GraphTraits<const luthier::PredicatedMachineBasicBlock *> {
+  using NodeRef = const luthier::PredicatedMachineBasicBlock *;
+  using ChildIteratorType = llvm::pointer_iterator<
+      luthier::PredicatedMachineBasicBlock::const_pred_succ_iterator>;
+
+  static NodeRef getEntryNode(const luthier::PredicatedMachineBasicBlock *BB) {
+    return BB;
+  }
+
+  static ChildIteratorType child_begin(NodeRef N) {
+    return ChildIteratorType(N->succs_begin());
+  }
+
+  static ChildIteratorType child_end(NodeRef N) {
+    return ChildIteratorType(N->succs_end());
+  }
+
+  static unsigned getNumber(const luthier::PredicatedMachineBasicBlock *BB) {
+    return BB->getGlobalNumber();
+  }
+};
+
+static_assert(GraphHasNodeNumbers<const luthier::PredicatedMachineBasicBlock *>,
+              "GraphTraits getNumber() not detected");
+
+template <>
+struct GraphTraits<Inverse<luthier::PredicatedMachineBasicBlock *>> {
+  using NodeRef = luthier::PredicatedMachineBasicBlock *;
+  using ChildIteratorType = llvm::pointer_iterator<
+      luthier::PredicatedMachineBasicBlock::pred_succ_iterator>;
+
+  static NodeRef
+  getEntryNode(Inverse<luthier::PredicatedMachineBasicBlock *> G) {
+    return G.Graph;
+  }
+
+  static ChildIteratorType child_begin(NodeRef N) {
+    return ChildIteratorType(N->preds_begin());
+  }
+  static ChildIteratorType child_end(NodeRef N) {
+    return ChildIteratorType(N->preds_end());
+  }
+
+  static unsigned getNumber(luthier::PredicatedMachineBasicBlock *BB) {
+    return BB->getGlobalNumber();
+  }
+};
+
+template <>
+struct GraphTraits<Inverse<const luthier::PredicatedMachineBasicBlock *>> {
+  using NodeRef = const luthier::PredicatedMachineBasicBlock *;
+  using ChildIteratorType = llvm::pointer_iterator<
+      luthier::PredicatedMachineBasicBlock::const_pred_succ_iterator>;
+
+  static NodeRef
+  getEntryNode(Inverse<const luthier::PredicatedMachineBasicBlock *> G) {
+    return G.Graph;
+  }
+
+  static ChildIteratorType child_begin(NodeRef N) {
+    return ChildIteratorType(N->preds_begin());
+  }
+  static ChildIteratorType child_end(NodeRef N) {
+    return ChildIteratorType(N->preds_end());
+  }
+
+  static unsigned getNumber(const luthier::PredicatedMachineBasicBlock *BB) {
+    return BB->getGlobalNumber();
+  }
+};
+
+static_assert(
+    GraphHasNodeNumbers<Inverse<const luthier::PredicatedMachineBasicBlock *>>,
+    "GraphTraits getNumber() not detected");
+} // namespace llvm
 
 #endif
