@@ -20,7 +20,7 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_IP_VECTOR_REG_LIVENESS_H
 #define LUTHIER_TOOLING_IP_VECTOR_REG_LIVENESS_H
-#include "luthier/Tooling/IPVectorCFG.h"
+#include "luthier/Tooling/IPPredicatedCFG.h"
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/CodeGen/LivePhysRegs.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
@@ -30,15 +30,41 @@ namespace luthier {
 
 class IPVectorRegLiveness {
 private:
-  llvm::DenseMap<const PredicatedMachineBasicBlock *,
+  llvm::DenseMap<std::reference_wrapper<const PredicatedMachineBasicBlock>,
                  std::vector<llvm::MachineBasicBlock::RegisterMaskPair>>
-      VectorMBBLivenessMap{};
+      PredMBBLivenessMap{};
+
+  void addBlockLiveIns(llvm::LivePhysRegs &LPR,
+                       const PredicatedMachineBasicBlock &PredMBB) const;
+
+  void addLiveOutsNoPristines(llvm::LivePhysRegs &LPR,
+                              const PredicatedMachineBasicBlock &MBB) const;
+
+  void computeLiveIns(llvm::LivePhysRegs &LiveRegs,
+                      const PredicatedMachineBasicBlock &MBB);
+
+  std::vector<llvm::MachineBasicBlock::RegisterMaskPair>
+  computeAndAddLiveIns(llvm::LivePhysRegs &LiveRegs,
+                       const PredicatedMachineBasicBlock &MBB);
+
+  void recomputePredMBBLiveIns(const IPPredicatedCFG &IPPredCFG);
+
+  bool recomputeLiveIns(const PredicatedMachineBasicBlock &PredMBB);
+
+  std::vector<llvm::MachineBasicBlock::RegisterMaskPair> computeAndAddLiveIns(
+      llvm::LivePhysRegs &LiveRegs, const PredicatedMachineBasicBlock &MBB,
+      std::vector<llvm::MachineBasicBlock::RegisterMaskPair> &PerVecMBBLiveIns);
 
 public:
   llvm::ArrayRef<llvm::MachineBasicBlock::RegisterMaskPair>
-  getVectorMBBLiveIns(const PredicatedMachineBasicBlock &VecMBB) const {
-    return VectorMBBLivenessMap.at(&VecMBB);
+  getPredMBBLiveIns(const PredicatedMachineBasicBlock &PredMBB) const {
+    assert(PredMBBLivenessMap.contains(PredMBB) &&
+           "Failed to find the predicated MBB in the liveness map");
+    return PredMBBLivenessMap.at(PredMBB);
   }
+
+  [[nodiscard]] std::vector<llvm::MachineBasicBlock::RegisterMaskPair>
+  getPredMBBLiveOuts(const PredicatedMachineBasicBlock &PredMBB) const;
 
   IPVectorRegLiveness(llvm::Module &M, llvm::ModuleAnalysisManager &MAM);
 
@@ -60,6 +86,20 @@ public:
   IPVectorRegLivenessAnalysis() = default;
 
   Result run(llvm::Module &M, llvm::ModuleAnalysisManager &MAM);
+};
+
+/// \brief Used to print and test the liveness analysis
+class IPVectorRegLivenessPrinter
+    : public llvm::PassInfoMixin<IPVectorRegLivenessPrinter> {
+
+private:
+  llvm::raw_ostream &OS;
+
+public:
+  explicit IPVectorRegLivenessPrinter(llvm::raw_ostream &OS) : OS(OS) {};
+
+  llvm::PreservedAnalyses run(llvm::Module &M,
+                              llvm::ModuleAnalysisManager &MAM);
 };
 
 } // namespace luthier

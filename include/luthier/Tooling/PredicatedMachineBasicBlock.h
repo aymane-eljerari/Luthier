@@ -106,9 +106,7 @@ public:
 
   iterator begin() { return Instructions.begin(); }
 
-  [[nodiscard]] const_iterator begin() const {
-    return Instructions.begin();
-  }
+  [[nodiscard]] const_iterator begin() const { return Instructions.begin(); }
 
   [[nodiscard]] bool contains(const llvm::MachineInstr &MI) const {
     return MIsSet.contains(&MI);
@@ -120,9 +118,7 @@ public:
 
   [[nodiscard]] iterator end() { return Instructions.end(); }
 
-  [[nodiscard]] const_iterator end() const {
-    return Instructions.end();
-  }
+  [[nodiscard]] const_iterator end() const { return Instructions.end(); }
 
   reverse_iterator rbegin() { return std::make_reverse_iterator(end()); }
 
@@ -229,24 +225,28 @@ public:
     }
   };
 
-  PredSuccSetType::iterator preds_begin() { return Predecessors.begin(); }
-
-  [[nodiscard]] PredSuccSetType::const_iterator preds_begin() const {
-    return Predecessors.begin();
+  pred_succ_iterator preds_begin() {
+    return pred_succ_iterator(Predecessors.begin());
   }
 
-  PredSuccSetType::iterator preds_end() { return Predecessors.end(); }
-
-  [[nodiscard]] PredSuccSetType::const_iterator preds_end() const {
-    return Predecessors.end();
+  [[nodiscard]] const_pred_succ_iterator preds_begin() const {
+    return const_pred_succ_iterator(Predecessors.begin());
   }
 
-  [[nodiscard]] llvm::iterator_range<PredSuccSetType::const_iterator>
+  pred_succ_iterator preds_end() {
+    return pred_succ_iterator(Predecessors.end());
+  }
+
+  [[nodiscard]] const_pred_succ_iterator preds_end() const {
+    return const_pred_succ_iterator(Predecessors.end());
+  }
+
+  [[nodiscard]] llvm::iterator_range<const_pred_succ_iterator>
   predecessors() const {
     return llvm::make_range(Predecessors.begin(), Predecessors.end());
   }
 
-  [[nodiscard]] llvm::iterator_range<PredSuccSetType::iterator> predecessors() {
+  [[nodiscard]] llvm::iterator_range<pred_succ_iterator> predecessors() {
     return llvm::make_range(Predecessors.begin(), Predecessors.end());
   }
 
@@ -254,24 +254,28 @@ public:
 
   [[nodiscard]] bool preds_empty() const { return Predecessors.empty(); }
 
-  PredSuccSetType::iterator succs_begin() { return Successors.begin(); }
-
-  [[nodiscard]] PredSuccSetType::const_iterator succs_begin() const {
-    return Successors.begin();
+  pred_succ_iterator succs_begin() {
+    return pred_succ_iterator(Successors.begin());
   }
 
-  [[nodiscard]] PredSuccSetType::const_iterator succs_end() const {
-    return Successors.end();
+  [[nodiscard]] const_pred_succ_iterator succs_begin() const {
+    return const_pred_succ_iterator(Successors.begin());
   }
 
-  PredSuccSetType::iterator succs_end() { return Successors.end(); }
+  [[nodiscard]] const_pred_succ_iterator succs_end() const {
+    return const_pred_succ_iterator(Successors.end());
+  }
 
-  [[nodiscard]] llvm::iterator_range<PredSuccSetType::const_iterator>
+  pred_succ_iterator succs_end() {
+    return pred_succ_iterator(Successors.end());
+  }
+
+  [[nodiscard]] llvm::iterator_range<const_pred_succ_iterator>
   successors() const {
     return llvm::make_range(Successors.begin(), Successors.end());
   }
 
-  [[nodiscard]] llvm::iterator_range<PredSuccSetType::iterator> successors() {
+  [[nodiscard]] llvm::iterator_range<pred_succ_iterator> successors() {
     return llvm::make_range(Successors.begin(), Successors.end());
   }
 
@@ -349,6 +353,16 @@ PredicatedMachineBasicBlock::pred_succ_iterator::operator*() const {
 
 inline PredicatedMachineBasicBlock::pred_succ_iterator::pointer
 PredicatedMachineBasicBlock::pred_succ_iterator::operator->() const {
+  return &It->get().getPredMBB();
+}
+
+inline PredicatedMachineBasicBlock::const_pred_succ_iterator::reference
+PredicatedMachineBasicBlock::const_pred_succ_iterator::operator*() const {
+  return It->get().getPredMBB();
+}
+
+inline PredicatedMachineBasicBlock::const_pred_succ_iterator::pointer
+PredicatedMachineBasicBlock::const_pred_succ_iterator::operator->() const {
   return &It->get().getPredMBB();
 }
 

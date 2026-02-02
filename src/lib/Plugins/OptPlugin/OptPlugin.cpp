@@ -35,7 +35,7 @@
 #include "luthier/Tooling/MockLoaderMemoryAccessor.h"
 // #include "luthier/Tooling/PhysRegsNotInLiveInsAnalysis.h"
 // #include "luthier/Tooling/PrePostAmbleEmitter.h"
-// #include "luthier/Tooling/IPVectorRegLiveness.h"
+#include "luthier/Tooling/IPVectorRegLiveness.h"
 // #include "luthier/Tooling/SVStorageAndLoadLocations.h"
 #include "luthier/Tooling/IPPredicatedCFG.h"
 #include "luthier/Tooling/NewPMAsmPrinter.h"
@@ -199,9 +199,9 @@ llvmGetPassPluginInfo() {
       MAM.registerPass([&]() {
         return luthier::MetadataParserAnalysis(luthier::MetadataParser);
       });
-      // MAM.registerPass([]() { return luthier::IPVectorRegLivenessAnalysis();
-      // }); MAM.registerPass(
-      //     []() { return luthier::IndirectBranchResolverAnalysis(); });
+      MAM.registerPass([]() { return luthier::IPVectorRegLivenessAnalysis(); });
+      // MAM.registerPass(
+      // []() { return luthier::IndirectBranchResolverAnalysis(); });
       MAM.registerPass([]() { return luthier::IPPredCFGAnalysis(); });
       // MAM.registerPass([]() { return luthier::ReachingDefAnalysis(); });
     });
@@ -237,6 +237,10 @@ llvmGetPassPluginInfo() {
           }
           if (Name == "luthier-ip-vector-cfg-printer") {
             MPM.addPass(luthier::IPPredCFGPrinter(llvm::outs()));
+            return true;
+          }
+          if (Name == "luthier-ip-vector-reg-liveness-printer") {
+            MPM.addPass(luthier::IPVectorRegLivenessPrinter(llvm::outs()));
             return true;
           }
           // if (Name == "luthier-apply-instrumentation") {
