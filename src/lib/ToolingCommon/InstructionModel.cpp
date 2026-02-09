@@ -11,6 +11,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/Error.h>
+#include <luthier/Tooling/TargetMachineInstrMDNode.h>
 
 namespace luthier {
 
@@ -88,8 +89,8 @@ void MCRegisterValueMap::setValue(llvm::MCRegister Reg, llvm::Value &Val) {
     }
   } else if (RegSize == 32 || RegSize == 1) {
     RegValMap.emplace_or_assign(
-        Reg, Builder.CreateBitCast(Val, RegSize == 32 ? Builder.getInt32Ty()
-                                                      : Builder.getInt1Ty()));
+        Reg, Builder.CreateBitCast(&Val, RegSize == 32 ? Builder.getInt32Ty()
+                                                       : Builder.getInt1Ty()));
   } else {
     auto SuperReg = Info.get32BitRegister(Reg);
     auto SubIdx = Info.getSubRegIndex(SuperReg, Reg);
@@ -114,18 +115,44 @@ void MCRegisterValueMap::setValue(llvm::MCRegister Reg, llvm::Value &Val) {
   }
 }
 
-llvm::Value &raiseMachineInstr(const llvm::MachineInstr &MI,
-                               MCRegisterValueMap &RegisterValueMap) {
+llvm::Expected<llvm::Value &>
+raiseMachineInstr(const llvm::MachineInstr &MI,
+                  MCRegisterValueMap &RegisterValueMap) {
+  llvm::LLVMContext &Ctx = RegisterValueMap.getContext();
+  llvm::IRBuilder Builder{Ctx};
+  llvm::Value *Out{nullptr};
   switch (MI.getOpcode()) {
   case llvm::AMDGPU::S_GETPC_B64:
-
+    auto *InstMD = TargetMachineInstrMDNode::getInstrMDNodeIfExists(MI);
+    if (!InstMD)
+      return LUTHIER_MAKE_GENERIC_ERROR(
+          "GETPC instruction doesn't have a metadata to obtain its address");
+    std::optional<uint64_t> TraceAddrIfPresent = InstMD->getTraceInstrAddress();
+    if (!TraceAddrIfPresent.has_value()) {
+      return LUTHIER_MAKE_GENERIC_ERROR(
+          "GETPC instruction doesn't have a trace address");
+    }
+    Out = llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(Ctx),
+                                 *TraceAddrIfPresent + 4);
+    RegisterValueMap.setValue(MI.getOperand(0).getReg(), *Out);
     break;
-  case llvm::AMDGPU::S_ADD_B32:
-    break;
-  case llvm::AMDGPU::S_ADDC_B32:
+  case llvm::AMDGPU::S_ADD_I32:
+    const llvm::MachineOperand &Op1 = MI.getOperand(1);
+    const llvm::MachineOperand &Op2 = MI.getOperand(2);
+    llvm::Value *Op1Val = Op1.isImm() ? Builder.getInt32(Op1.getImm())
+                                      : RegisterValueMap.getValue(Op1.getReg());
+    llvm::Value *Op2Val = Op2.isImm() ? Builder.getInt32(Op2.getImm())
+                                      : RegisterValueMap.getValue(Op2.getReg());
+    if (!Op1Val) {
+      return LUTHIER_MAKE_GENERIC_ERROR("Failed to create the first operand");
+    }
+    if (!Op2Val) {
+      return LUTHIER_MAKE_GENERIC_ERROR("Failed to create the second operand");
+    }
+    Out = Builder.CreateAdd(Op1Val, Op2Val);
+    RegisterValueMap.setValue(MI.getOperand(0).getReg(), *Out);
     break;
   default:
-    llvm_unreachable("Unmodeled instruction");
   }
 }
 } // namespace luthier
