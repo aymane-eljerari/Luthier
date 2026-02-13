@@ -79,7 +79,10 @@ enum ScalarValueArgument : uint16_t {
   /// Size of a work-item's private segment
   WORK_ITEM_PRIVATE_SEGMENT_SIZE = 7,
   /// 64-bit address of the instrumentation routine's argument buffer
-  USER_ARG_PTR = 8
+  USER_ARG_PTR = 8,
+  /// 32-bit offset of the instrumentation implicit argument buffer from the
+  /// \c USER_ARG_PTR
+  IMPLICIT_ARG_OFFSET = 9
 };
 
 /// \brief Holds the result of the IR processing stage of an intrinsic IR call
