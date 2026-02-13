@@ -52,6 +52,8 @@ class MachineInstrBuilder;
 
 namespace luthier {
 
+constexpr auto IntrinsicExtraInfoHeader = "luthier.intrinsic.extra_info";
+
 /// \brief A set of scalar value arguments Luthier's intrinsic lowering
 /// mechanism can ensure access to
 /// \details These values are only available to the kernel as "arguments"
@@ -89,10 +91,8 @@ enum ScalarValueArgument : uint16_t {
 /// instruction, including how all non-constant values used/defined by a Luthier
 /// intrinsic use (i.e. its output and input arguments) must be lowered to
 /// registers
-/// This
 struct IntrinsicIRLoweringInfo {
-public:
-  /// \brief Contains information about the non-constantn values used/defined by
+  /// \brief Contains information about the non-constant values used/defined by
   /// a \c llvm::CallInst to a Luthier Intrinsic, and its inline assembly
   /// constraint (e.g. 'v' for VGPR, 's' for SGPR, 'a' for AGPR)
   /// \details This struct is used to keep track of how an LLVM IR non-constant
@@ -119,10 +119,9 @@ private:
   /// How the argument values (if present) must be lowered to a
   /// \c llvm::Register
   llvm::SmallVector<ValueLoweringInfo, 4> Args{};
-  /// A list of <tt>llvm::Value</tt>s passed as extra information to the MIR
+  /// A list of <tt>llvm::Constant</tt>s passed as extra information to the MIR
   /// lowering stage
-  llvm::SmallVector<std::reference_wrapper<const llvm::Value>>
-      ExtraInfoValues{};
+  llvm::SmallVector<llvm::Constant *> ExtraInfoValues{};
 
 public:
   /// Sets the inline asm constraint to \p Constraint for the given
@@ -147,13 +146,12 @@ public:
   llvm::ArrayRef<ValueLoweringInfo> getArgsInfo() const { return Args; }
 
   /// Adds \p Val as an extra value to be passed to the MIR lowering stage
-  void addExtraLoweringValue(const llvm::Value &Val) {
-    ExtraInfoValues.emplace_back(Val);
+  void addExtraLoweringValue(llvm::Constant &Val) {
+    ExtraInfoValues.emplace_back(&Val);
   }
 
-  /// \returns The list of all extra lowering values
-  llvm::ArrayRef<std::reference_wrapper<const llvm::Value>>
-  getExtraLoweringValues() const {
+  /// \returns The list of all extra lowering constants
+  llvm::ArrayRef<llvm::Constant *> getExtraLoweringValues() const {
     return ExtraInfoValues;
   }
 };
@@ -171,7 +169,7 @@ typedef std::function<llvm::Expected<IntrinsicIRLoweringInfo>(
 
 /// \brief describes a function type used for each intrinsic to generate
 /// <tt>llvm::MachineInstr</tt>s in place of its IR calls
-/// \details The MIR processor takes in the \c IntrinsicIRLoweringInfo generated
+/// \details The MIR processor takes in the extra constant info generated
 /// by its \c IntrinsicIRProcessorFunc as well as the lowered registers and
 /// their inline assembly flags for its used/defined values. Convenience Lambdas
 /// for creating instructions at the place of emission, creating virtual
@@ -180,8 +178,9 @@ typedef std::function<llvm::Expected<IntrinsicIRLoweringInfo>(
 /// the original kernel that need to be overwritten and their new virtual
 /// register values can also be returned by the intrinsic MIR processor
 typedef std::function<llvm::Error(
-    const llvm::MachineFunction &, const IntrinsicIRLoweringInfo &,
+    const llvm::MachineFunction &,
     llvm::ArrayRef<std::pair<llvm::InlineAsm::Flag, llvm::Register>>,
+    llvm::ArrayRef<llvm::Constant *>,
     const std::function<llvm::MachineInstrBuilder(int)> &,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)> &,
     const std::function<llvm::Register(ScalarValueArgument)> &,
