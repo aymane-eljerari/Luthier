@@ -1,5 +1,5 @@
 //===-- StateValueArraySpecs.h ----------------------------------*- C++ -*-===//
-// Copyright 2022-2025 @ Northeastern University Computer Architecture Lab
+// Copyright 2022-2026 @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,45 +14,39 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 ///
-/// \file
-/// This file provides functions used to query specifications of the state
-/// value array (e.g. frame spill slots, where the kernel arguments are
-/// stored, etc).
+/// \file StateValueArraySpecs.h
+/// Defines the \c StateValueArraySpecs class used to set up and read named
+/// metadata used in a \c llvm::Module to express the specifications of the
+/// state value array used across all functions.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_STATE_VALUE_ARRAY_SPECS_H
 #define LUTHIER_TOOLING_STATE_VALUE_ARRAY_SPECS_H
 #include "luthier/Intrinsic/IntrinsicProcessor.h"
-#include <llvm/Support/Error.h>
 
-namespace luthier::stateValueArray {
+namespace llvm {
+class GCNSubtarget;
+}
 
-/// \return \c true if \p Reg belongs to a spill slot on the state value array,
-/// \c false otherwise
-bool isFrameSpillSlot(llvm::MCRegister Reg);
+namespace luthier {
 
-llvm::iterator_range<
-    llvm::SmallDenseMap<llvm::MCRegister, unsigned short, 8>::const_iterator>
-getFrameSpillSlots();
+class StateValueArraySpecs {
+  llvm::DenseMap<llvm::Register, uint8_t> FrameSpillLanes{};
 
-/// \param Reg SGPRs that clobber the frame of an AMD GPU device function with
-/// the C-calling convention, i.e. s0, s1, s2, s3, s32, s33, FS_LO, and FS_HI
-/// \return the lane ID in the state value array where the SGPR is spilled, or
-/// 255 if the register doesn't get clobbered by a device function's stack frame
-unsigned short getFrameSpillSlotLaneId(llvm::MCRegister Reg);
+  llvm::DenseMap<llvm::Register, uint8_t> InstrumentationFrameLanes{};
 
-unsigned short
-getInstrumentationStackFrameLaneIdStoreSlot(llvm::MCRegister Reg);
+  llvm::DenseMap<ScalarValueArgument, uint8_t> ScalarArguments{};
 
-llvm::iterator_range<
-    llvm::SmallDenseMap<llvm::MCRegister, unsigned short, 8>::const_iterator>
-getFrameStoreSlots();
+  StateValueArraySpecs() = default;
 
-llvm::Expected<unsigned short>
-getKernelArgumentLaneIdStoreSlotBeginForWave64(KernelArgumentType Arg);
+public:
+  static std::unique_ptr<StateValueArraySpecs>
+  getSVASpecs(const llvm::Module &M, const llvm::GCNSubtarget &STI);
 
-llvm::Expected<unsigned short>
-getKernelArgumentStoreSlotSizeForWave64(KernelArgumentType Arg);
+  static std::unique_ptr<StateValueArraySpecs> setModuleSVASpec(
+      llvm::Module &M, const llvm::GCNSubtarget &STI,
+      const llvm::SmallDenseSet<ScalarValueArgument> &RequestedSVArgs);
+};
 
-} // namespace luthier::stateValueArray
+} // namespace luthier
 
 #endif

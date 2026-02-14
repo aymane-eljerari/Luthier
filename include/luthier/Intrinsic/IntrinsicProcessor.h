@@ -52,17 +52,19 @@ class MachineInstrBuilder;
 
 namespace luthier {
 
-constexpr auto IntrinsicExtraInfoHeader = "luthier.intrinsic.extra_info";
+/// The header of the intrinsics's extra info in the PC sections of an
+/// instruction
+static constexpr auto IntrinsicExtraInfoHeader = "luthier.intrinsic.extra_info";
 
 /// \brief A set of scalar value arguments Luthier's intrinsic lowering
 /// mechanism can ensure access to
 /// \details These values are only available to the kernel as "arguments"
-/// as they come preloaded in SGPRs on the kernel's start. These values can be
-/// overwritten the moment they are unused by the original kernel; Which is why
-/// to ensure access to these values in instrumentation routines, Luthier must
-/// emit a prologue on top of the kernel's original code to save these values in
-/// the state value array VGPR to preserve them
-enum ScalarValueArgument : uint16_t {
+/// as they come preloaded in SGPRs on the kernel's start. These values can
+/// be overwritten the moment they are unused by the original kernel; Which
+/// is why to ensure access to these values in instrumentation routines,
+/// Luthier must emit a prologue on top of the kernel's original code to
+/// save these values in the state value array VGPR to preserve them
+enum ScalarValueArgument : uint8_t {
   /// Wavefront's private segment buffer; Only applies to targets with
   /// absolute flat scratch or offset flat scratch
   WAVEFRONT_PRIVATE_SEGMENT_BUFFER = 0,
@@ -84,7 +86,63 @@ enum ScalarValueArgument : uint16_t {
   USER_ARG_PTR = 8,
   /// 32-bit offset of the instrumentation implicit argument buffer from the
   /// \c USER_ARG_PTR
-  IMPLICIT_ARG_OFFSET = 9
+  IMPLICIT_ARG_OFFSET = 9,
+  /// Marks the last defined scalar value argument
+  SCALAR_VALUE_ARGUMENT_LAST = IMPLICIT_ARG_OFFSET
+};
+
+template <ScalarValueArgument SA> struct ScalarValueArgumentInfo;
+
+template <> struct ScalarValueArgumentInfo<WAVEFRONT_PRIVATE_SEGMENT_BUFFER> {
+  static constexpr uint8_t NumLanes = 4;
+  static constexpr auto NamedMD =
+      "luthier.sva.wavefront_private_segment_buffer";
+};
+
+template <> struct ScalarValueArgumentInfo<KERNEL_ARG_PTR> {
+  static constexpr uint8_t NumLanes = 2;
+  static constexpr auto NamedMD = "luthier.sva.kernel_arg_ptr";
+};
+
+template <> struct ScalarValueArgumentInfo<DISPATCH_ID> {
+  static constexpr uint8_t NumLanes = 2;
+  static constexpr auto NamedMD = "luthier.sva.dispatch_id";
+};
+
+template <> struct ScalarValueArgumentInfo<FLAT_SCRATCH> {
+  static constexpr uint8_t NumLanes = 2;
+  static constexpr auto NamedMD = "luthier.sva.flat_scratch";
+};
+
+template <> struct ScalarValueArgumentInfo<PRIVATE_SEGMENT_WAVE_BYTE_OFFSET> {
+  static constexpr uint8_t NumLanes = 1;
+  static constexpr auto NamedMD =
+      "luthier.sva.private_segment_wave_byte_offset";
+};
+
+template <> struct ScalarValueArgumentInfo<QUEUE_PTR> {
+  static constexpr uint8_t NumLanes = 2;
+  static constexpr auto NamedMD = "luthier.sva.queue_ptr";
+};
+
+template <> struct ScalarValueArgumentInfo<DISPATCH_PTR> {
+  static constexpr uint8_t NumLanes = 1;
+  static constexpr auto NamedMD = "luthier.sva.dispatch_ptr";
+};
+
+template <> struct ScalarValueArgumentInfo<WORK_ITEM_PRIVATE_SEGMENT_SIZE> {
+  static constexpr uint8_t NumLanes = 1;
+  static constexpr auto NamedMD = "luthier.sva.workitem_private_segment_size";
+};
+
+template <> struct ScalarValueArgumentInfo<USER_ARG_PTR> {
+  static constexpr uint8_t NumLanes = 2;
+  static constexpr auto NamedMD = "luthier.sva.user_arg_ptr";
+};
+
+template <> struct ScalarValueArgumentInfo<IMPLICIT_ARG_OFFSET> {
+  static constexpr uint8_t NumLanes = 1;
+  static constexpr auto NamedMD = "luthier.sva.implicit_arg_offset";
 };
 
 /// \brief Holds the result of the IR processing stage of an intrinsic IR call
