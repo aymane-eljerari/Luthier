@@ -22,6 +22,33 @@
 
 namespace luthier {
 
+unsigned StateValueArraySpecs::getArgumentLaneSize(ScalarValueArgument SA) {
+  switch (SA) {
+  case WAVEFRONT_PRIVATE_SEGMENT_BUFFER:
+    return ScalarValueArgumentInfo<WAVEFRONT_PRIVATE_SEGMENT_BUFFER>::NumLanes;
+  case KERNEL_ARG_PTR:
+    return ScalarValueArgumentInfo<KERNEL_ARG_PTR>::NumLanes;
+  case DISPATCH_ID:
+    return ScalarValueArgumentInfo<DISPATCH_ID>::NumLanes;
+  case FLAT_SCRATCH:
+    return ScalarValueArgumentInfo<FLAT_SCRATCH>::NumLanes;
+  case PRIVATE_SEGMENT_WAVE_BYTE_OFFSET:
+    return ScalarValueArgumentInfo<PRIVATE_SEGMENT_WAVE_BYTE_OFFSET>::NumLanes;
+  case DISPATCH_PTR:
+    return ScalarValueArgumentInfo<DISPATCH_PTR>::NumLanes;
+  case QUEUE_PTR:
+    return ScalarValueArgumentInfo<QUEUE_PTR>::NumLanes;
+  case WORK_ITEM_PRIVATE_SEGMENT_SIZE:
+    return ScalarValueArgumentInfo<WORK_ITEM_PRIVATE_SEGMENT_SIZE>::NumLanes;
+  case USER_ARG_PTR:
+    return ScalarValueArgumentInfo<USER_ARG_PTR>::NumLanes;
+  case IMPLICIT_ARG_OFFSET:
+    return ScalarValueArgumentInfo<IMPLICIT_ARG_OFFSET>::NumLanes;
+  default:
+    llvm_unreachable("Invalid scalar value argument");
+  }
+}
+
 std::unique_ptr<StateValueArraySpecs>
 StateValueArraySpecs::getSVASpecs(const llvm::Module &M,
                                   const llvm::GCNSubtarget &STI) {
