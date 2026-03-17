@@ -13,7 +13,12 @@ class LoadHIPFATBinaryInfoPass
 
 public:
   LoadHIPFATBinaryInfoPass() = default;
-
+  struct __HipFatBinaryWrapper{
+    unsigned int magic;
+    unsigned int version;
+    void* binary;
+    void* dummy1;
+  }
   llvm::PreservedAnalyses run(llvm::Module &M, llvm::ModuleAnalysisManager &MAM);
 
   static bool isRequired() { return true; }
