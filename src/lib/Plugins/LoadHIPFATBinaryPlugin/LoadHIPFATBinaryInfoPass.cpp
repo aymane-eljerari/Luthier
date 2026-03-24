@@ -1,10 +1,12 @@
 #include "LoadHIPFATBinaryInfoPass.hpp"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
+#include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Plugins/PassPlugin.h>
+#include <llvm/Support/FormatVariadic.h>
 
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "luthier-load-hip-fat-binary-info-pass"
@@ -31,7 +33,7 @@ getAnnotatedValues(const llvm::Module &M,
           cast<llvm::GlobalVariable>(CS->getOperand(1)->stripPointerCasts());
       llvm::StringRef Content;
       llvm::getConstantStringInfo(GV, Content);
-      if (Content.start_with("luthier.loader.hip")) {
+      if (Content.starts_with("luthier.loader.hip")) {
         NameToVar[Content] = Var;
       }
     }
@@ -41,17 +43,19 @@ getAnnotatedValues(const llvm::Module &M,
 
 static llvm::Error replacePlaceholderVariable(
     llvm::StringRef name, llvm::StructType *Type, uint64_t Size,
-    llvm::ArrayRef<llvm::Constant *> TempArr, llvm::Module *M,
-    llvm::StringMap<llvm::Constant *> &NameToVar) {
+    llvm::ArrayRef<llvm::Constant *> TempArr, llvm::Module &M,
+    llvm::StringMap<llvm::GlobalVariable *> &NameToVar) {
   llvm::Constant *Array =
       llvm::ConstantArray::get(llvm::ArrayType::get(Type, Size), TempArr);
   // Replace old variable with the array
-  auto *NewTable =
-      new llvm::GlobalVariable(*M, Array->getType(), true,
-                               llvm::GlobalValue::ExternalLinkage, Array, "");
+  auto *NewTable = new llvm::GlobalVariable(
+      M, Array->getType(), true, llvm::GlobalValue::ExternalLinkage, Array, "");
   auto *OldVar = NameToVar[name];
-
-  NewTable->takeNameFrom(OldVar);
+  if (OldVar == nullptr) {
+    return llvm::make_error<llvm::StringError>(
+        llvm::formatv("Variable {0} is not in the NameToVar map", name),llvm::inconvertibleErrorCode());
+  }
+  NewTable->takeName(OldVar);
   OldVar->replaceAllUsesWith(
       llvm::ConstantExpr::getBitCast(NewTable, OldVar->getType()));
 
@@ -67,7 +71,7 @@ static llvm::Error deleteFunction(llvm::Function *Fun) {
 
 static llvm::Error deleteAllUses(llvm::Function *Fun) {
   for (auto *User : Fun->users()) {
-    if (llvm::Instruction *Inst = llvm::dyn_cast<Instruction>(User)) {
+    if (llvm::Instruction *Inst = llvm::dyn_cast<llvm::Instruction>(User)) {
       // If the call returns a value, we must "defuse" it first
       if (!Inst->use_empty()) {
         Inst->replaceAllUsesWith(llvm::UndefValue::get(Inst->getType()));
@@ -90,12 +94,10 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
     return llvm::PreservedAnalyses::all();
   llvm::LLVMContext &C = M.getContext();
   llvm::StringMap<llvm::GlobalVariable *> NameToVar{};
-  if (auto Err = getAnnotatedVars(M, NameToVar))
+  if (auto Err = getAnnotatedValues(M, NameToVar))
     llvm::reportFatalInternalError(std::move(Err));
 
   // Start by processing __hipRegisterFatBinary
-  // TODO: Is name always unmangled??? also are there any guarantees about 1
-  // function call per FATBIN???
   llvm::Function *RFB = M.getFunction("__hipRegisterFatBinary");
   llvm::Function *RUFB = M.getFunction("__hipUnregisterFatBinary");
   llvm::Function *RFUN = M.getFunction("__hipRegisterFunction");
@@ -119,17 +121,19 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
         }
       }
     }
-    llvm::StructType *FatbinTy =
+    llvm::StructType *FatBinTy =
         llvm::StructType::getTypeByName(C, "HipFatBinaryWrapper");
-    if (!FatbinTy)
-      FatbinTy = llvm::StructType::create(
+    if (!FatBinTy)
+      FatBinTy = llvm::StructType::create(
           "HipFatBinaryWrapper", llvm::Type::getInt32Ty(C),
           llvm::Type::getInt32Ty(C), llvm::PointerType::getUnqual(C),
           llvm::PointerType::getUnqual(C));
     // Replace nullptr variable with actual value
-    replacePlaceholderVariable("luthier.loader.hip_fat_binaries_ptr", FatBinTy,
-                               HipFatBinariesSize, FatBinWrappers, M,
-                               NameToVar);
+    if (auto Err = replacePlaceholderVariable(
+            "luthier.loader.hip_fat_binaries_ptr", FatBinTy, HipFatBinariesSize,
+            FatBinWrappers, M, NameToVar)) {
+      llvm::reportFatalInternalError(std::move(Err));
+    }
     NameToVar["luthier.loader.hip_fat_binaries_size"]->setInitializer(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), HipFatBinariesSize));
   }
@@ -161,9 +165,11 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
         }
       }
     }
-    replacePlaceholderVariable("luthier.loader.hip_functions_ptr", FunInfoTy,
-                               FunctionHandlesSize, FunctionHandles, M,
-                               NameToVar);
+    if (auto Err = replacePlaceholderVariable(
+            "luthier.loader.hip_functions_ptr", FunInfoTy, FunctionHandlesSize,
+            FunctionHandles, M, NameToVar)) {
+       llvm::reportFatalInternalError(std::move(Err));
+    }
     NameToVar["luthier.loader.hip_functions_size"]->setInitializer(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), FunctionHandlesSize));
   }
@@ -196,12 +202,14 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
         llvm::Constant *ManagedVarStruct = llvm::ConstantStruct::get(
             ManagedVarTy,
             {ConstPtr, ConstInitValue, ConstName, ConstSize, ConstAlign});
-        FunctionHandles.push_back(ManagedVarStruct);
+        ManagedVars.push_back(ManagedVarStruct);
       }
     }
-    replacePlaceholderVariable("luthier.loader.hip_managed_vars_ptr",
-                               ManagedVarTy, ManagedVarSize, ManagedVars, M,
-                               NameToVar);
+    if (auto Err = replacePlaceholderVariable(
+            "luthier.loader.hip_managed_vars_ptr", ManagedVarTy, ManagedVarSize,
+            ManagedVars, M, NameToVar)) {
+       llvm::reportFatalInternalError(std::move(Err));
+    }
     NameToVar["luthier.loader.hip_managed_vars_size"]->setInitializer(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), ManagedVarSize));
   }
@@ -224,14 +232,17 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
         DeviceVarsSize++;
         // Are they constant???
         auto *Ptr = llvm::dyn_cast<llvm::Constant>(HostHandle);
-        auto *Name = llvm::dyn_cast<llvm::Constant>(Name);
+        auto *ConstName = llvm::dyn_cast<llvm::Constant>(Name);
         llvm::Constant *FunInfoStruct =
-            llvm::ConstantStruct::get(VarInfoTy, {Ptr, Name});
+            llvm::ConstantStruct::get(VarInfoTy, {Ptr, ConstName});
         DeviceVars.push_back(FunInfoStruct);
       }
     }
-    replacePlaceholderVariable("luthier.loader.hip_device_vars_ptr", VarInfoTy,
-                               DeviceVarsSize, DeviceVars, M, NameToVar);
+    if (auto Err = replacePlaceholderVariable(
+            "luthier.loader.hip_device_vars_ptr", VarInfoTy, DeviceVarsSize,
+            DeviceVars, M, NameToVar)) {
+       llvm::reportFatalInternalError(std::move(Err));
+    }
     NameToVar["luthier.loader.hip_device_vars_size"]->setInitializer(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), DeviceVarsSize));
   }
@@ -254,15 +265,17 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
         TexturesSize++;
         // Are they constant???
         auto *Ptr = llvm::dyn_cast<llvm::Constant>(HostHandle);
-        auto *Name = llvm::dyn_cast<llvm::Constant>(Name);
+        auto *ConstName = llvm::dyn_cast<llvm::Constant>(Name);
         llvm::Constant *FunInfoStruct =
-            llvm::ConstantStruct::get(TextureInfoTy, {Ptr, Name});
+            llvm::ConstantStruct::get(TextureInfoTy, {Ptr, ConstName});
         Textures.push_back(FunInfoStruct);
       }
     }
-    replacePlaceholderVariable("luthier.loader.hip_texture_vars_ptr",
-                               TextureInfoTy, TexturesSize, Textures, M,
-                               NameToVar);
+    if (auto Err = replacePlaceholderVariable(
+            "luthier.loader.hip_texture_vars_ptr", TextureInfoTy, TexturesSize,
+            Textures, M, NameToVar)) {
+       llvm::reportFatalInternalError(std::move(Err));
+    }
     NameToVar["luthier.loader.hip_texture_vars_size"]->setInitializer(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), TexturesSize));
   }
@@ -285,83 +298,86 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
         SurfacesSize++;
         // Are they constant???
         auto *Ptr = llvm::dyn_cast<llvm::Constant>(HostHandle);
-        auto *Name = llvm::dyn_cast<llvm::Constant>(Name);
+        auto *ConstName = llvm::dyn_cast<llvm::Constant>(Name);
         llvm::Constant *FunInfoStruct =
-            llvm::ConstantStruct::get(SurfaceInfoTy, {Ptr, Name});
+            llvm::ConstantStruct::get(SurfaceInfoTy, {Ptr, ConstName});
         Surfaces.push_back(FunInfoStruct);
       }
     }
-    replacePlaceholderVariable("luthier.loader.hip_surface_vars_ptr",
-                               SurfaceInfoTy, SurfacesSize, Surfaces, M,
-                               NameToVar);
+    if (auto Err = replacePlaceholderVariable(
+            "luthier.loader.hip_surface_vars_ptr", SurfaceInfoTy, SurfacesSize,
+            Surfaces, M, NameToVar)) {
+       llvm::reportFatalInternalError(std::move(Err));
+    }
     NameToVar["luthier.loader.hip_surface_vars_size"]->setInitializer(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), SurfacesSize));
   }
-
-  // Delete all functions that call __hipRegisterFatBinary and then delete
-  // __hipRegisterFatBinary as well
+  // FIXME: Guard this so nothing happns if all are null
+  //  Delete all functions that call __hipRegisterFatBinary and then delete
+  //  __hipRegisterFatBinary as well
   for (auto *user : RFB->users()) {
     if (auto *CallInst = llvm::dyn_cast<llvm::CallInst>(user)) {
       auto *Fun = CallInst->getParent()->getParent();
-      if (auto *Err = deleteFunction(Fun)) {
+      if (auto Err = deleteFunction(Fun)) {
         llvm::reportFatalInternalError(std::move(Err));
       }
     }
   }
-  if (auto *Err = deleteFunction(RFB)) {
+  if (auto Err = deleteFunction(RFB)) {
     llvm::reportFatalInternalError(std::move(Err));
   }
   for (auto *user : RUFB->users()) {
     if (auto *CallInst = llvm::dyn_cast<llvm::CallInst>(user)) {
       auto *Fun = CallInst->getParent()->getParent();
-      if (auto *Err = deleteFunction(Fun)) {
+      if (auto Err = deleteFunction(Fun)) {
         llvm::reportFatalInternalError(std::move(Err));
       }
     }
   }
-  if (auto *Err = deleteFunction(RUFB)) {
+  if (auto Err = deleteFunction(RUFB)) {
     llvm::reportFatalInternalError(std::move(Err));
   }
 
-  if (auto *Err = deleteFunction(RFUN)) {
+  if (auto Err = deleteFunction(RFUN)) {
     llvm::reportFatalInternalError(std::move(Err));
   }
 
-  if (auto *Err = deleteFunction(RMV)) {
+  if (auto Err = deleteFunction(RMV)) {
     llvm::reportFatalInternalError(std::move(Err));
   }
 
-  if (auto *Err = deleteFunction(RDV)) {
+  if (auto Err = deleteFunction(RDV)) {
     llvm::reportFatalInternalError(std::move(Err));
   }
 
-  if (auto *Err = deleteFunction(RTX)) {
+  if (auto Err = deleteFunction(RTX)) {
     llvm::reportFatalInternalError(std::move(Err));
   }
 
-  if (auto *Err = deleteFunction(RSF)) {
+  if (auto Err = deleteFunction(RSF)) {
     llvm::reportFatalInternalError(std::move(Err));
   }
 
-  if (auto *Err = deleteAllUses(RFUN)) {
+  if (auto Err = deleteAllUses(RFUN)) {
     llvm::reportFatalInternalError(std::move(Err));
   }
 
-  if (auto *Err = deleteAllUses(RMV)) {
+  if (auto Err = deleteAllUses(RMV)) {
     llvm::reportFatalInternalError(std::move(Err));
   }
 
-  if (auto *Err = deleteAllUses(RDV)) {
+  if (auto Err = deleteAllUses(RDV)) {
     llvm::reportFatalInternalError(std::move(Err));
   }
 
-  if (auto *Err = deleteAllUses(RTX)) {
+  if (auto Err = deleteAllUses(RTX)) {
     llvm::reportFatalInternalError(std::move(Err));
   }
 
-  if (auto *Err = deleteAllUses(RSF)) {
+  if (auto Err = deleteAllUses(RSF)) {
     llvm::reportFatalInternalError(std::move(Err));
   }
+  return llvm::PreservedAnalyses::none();
 }
 
 } // namespace luthier
@@ -370,10 +386,7 @@ llvm::PassPluginLibraryInfo getLuthierHIPFATBinaryPluginInfo() {
   const auto Callback = [](llvm::PassBuilder &PB) {
     PB.registerPipelineStartEPCallback(
         [](llvm::ModulePassManager &MPM, llvm::OptimizationLevel Opt
-#if LLVM_VERSION_MAJOR >= 20
-           ,
-           llvm::ThinOrFullLTOPhase
-#endif
+
         ) { MPM.addPass(luthier::LoadHIPFATBinaryInfoPass()); });
   };
 
