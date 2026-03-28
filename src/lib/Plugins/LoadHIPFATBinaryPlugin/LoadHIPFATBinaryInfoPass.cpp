@@ -1,4 +1,7 @@
 #include "LoadHIPFATBinaryInfoPass.hpp"
+
+#include "luthier/Common/ErrorCheck.h"
+
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Analysis/ValueTracking.h>
@@ -46,36 +49,8 @@ static llvm::Error replacePlaceholderVariable(
     llvm::ArrayRef<llvm::Constant *> TempArr, llvm::Module &M,
     llvm::StringMap<llvm::GlobalVariable *> &NameToVar) {
   llvm::ArrayType *ArrayTy = llvm::ArrayType::get(Type, Size);
-  llvm::Type *ExpectedTy = ArrayTy->getElementType();
-
-  llvm::errs() << "--- Checking Array Construction for: " << name << " ---\n";
-  llvm::errs() << "Expected Element Type: ";
-  ExpectedTy->print(llvm::errs());
-  llvm::errs() << "\n\n";
-
-  for (size_t i = 0; i < TempArr.size(); ++i) {
-    llvm::Constant *C = TempArr[i];
-    llvm::Type *ActualTy = C->getType();
-
-    if (ActualTy != ExpectedTy) {
-      llvm::errs() << "!!! MISMATCH AT INDEX " << i << " !!!\n";
-      llvm::errs() << "  Actual Type:   ";
-      ActualTy->print(llvm::errs());
-      llvm::errs() << "\n";
-
-      // Useful for GlobalVariables: shows the name of the mismatched variable
-      llvm::errs() << "  Value:         ";
-      C->printAsOperand(llvm::errs(), false);
-      llvm::errs() << "\n";
-    } else {
-      llvm::errs() << "  Index " << i << ": OK (";
-      ActualTy->print(llvm::errs());
-      llvm::errs() << ")\n";
-    }
-  }
-  llvm::errs() << "-----------------------------------------------\n";
   llvm::Constant *Array =
-      llvm::ConstantArray::get(llvm::ArrayType::get(Type, Size), TempArr);
+      llvm::ConstantArray::get(ArrayTy, TempArr);
   // Replace old variable with the array
   auto *NewTable = new llvm::GlobalVariable(
       M, Array->getType(), true, llvm::GlobalValue::ExternalLinkage, Array, "");
@@ -117,6 +92,67 @@ static llvm::Error replacePlaceholderVariable(
   return llvm::Error::success();
 }
 
+// We first search for the module ctor class and then we rebuild the array
+// without it We need to delete the module_ctor from there because otherwise
+// program crashes
+static llvm::Error deleteModuleCtor(llvm::Module &M) {
+  llvm::GlobalVariable *OldCtors = M.getGlobalVariable("llvm.global_ctors");
+
+  if (!OldCtors)
+    return llvm::Error::success();
+
+  if (!OldCtors->hasInitializer())
+    return llvm::make_error<llvm::StringError>("Missing initializer",
+                                               llvm::inconvertibleErrorCode());
+
+  auto *CtorArray =
+      llvm::dyn_cast<llvm::ConstantArray>(OldCtors->getInitializer());
+  if (!CtorArray)
+    return llvm::make_error<llvm::StringError>("Not a ConstantArray",
+                                               llvm::inconvertibleErrorCode());
+
+  llvm::SmallVector<llvm::Constant *, 4> RemainingCtors;
+  bool Found = false;
+
+  for (auto &Op : CtorArray->operands()) {
+    auto *CS = llvm::dyn_cast<llvm::ConstantStruct>(Op);
+    if (!CS || CS->getNumOperands() < 2)
+      continue;
+
+    auto *F =
+        llvm::dyn_cast<llvm::Function>(CS->getOperand(1)->stripPointerCasts());
+    if (F && F->getName().contains("__hip_module_ctor")) {
+      Found = true;
+    } else {
+      RemainingCtors.push_back(CS);
+    }
+  }
+
+  if (Found) {
+    llvm::ArrayType *NewATy = llvm::ArrayType::get(
+        CtorArray->getType()->getElementType(), RemainingCtors.size());
+    llvm::Constant *NewInit = llvm::ConstantArray::get(NewATy, RemainingCtors);
+
+    llvm::GlobalVariable *NewCtors = new llvm::GlobalVariable(
+        M, NewATy, OldCtors->isConstant(), OldCtors->getLinkage(), NewInit, "",
+        nullptr, OldCtors->getThreadLocalMode(), OldCtors->getAddressSpace(),
+        OldCtors->isExternallyInitialized());
+
+    NewCtors->copyAttributesFrom(OldCtors);
+
+    if (OldCtors->getType() != NewCtors->getType()) {
+      llvm::Constant *BitCast =
+          llvm::ConstantExpr::getBitCast(NewCtors, OldCtors->getType());
+      OldCtors->replaceAllUsesWith(BitCast);
+    } else {
+      OldCtors->replaceAllUsesWith(NewCtors);
+    }
+
+    OldCtors->eraseFromParent();
+    NewCtors->setName("llvm.global_ctors");
+  }
+  return llvm::Error::success();
+}
 
 static llvm::Error deleteFunction(llvm::Function *Fun) {
   Fun->dropAllReferences();
@@ -149,9 +185,21 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
     return llvm::PreservedAnalyses::all();
   llvm::LLVMContext &C = M.getContext();
   llvm::StringMap<llvm::GlobalVariable *> NameToVar{};
-  if (auto Err = getAnnotatedValues(M, NameToVar))
-    llvm::reportFatalInternalError(std::move(Err));
+  LUTHIER_REPORT_FATAL_ON_ERROR(getAnnotatedValues(M, NameToVar));
+  auto AnnotationGV = M.getGlobalVariable("llvm.global.annotations");
+  if (AnnotationGV) {
+    AnnotationGV->dropAllReferences();
+    AnnotationGV->eraseFromParent();
+  }
 
+  // Remove the llvm.used and llvm.compiler.use variable list
+  for (const auto &VarName : {"llvm.compiler.used", "llvm.used"}) {
+    auto LLVMUsedVar = M.getGlobalVariable(VarName);
+    if (LLVMUsedVar != nullptr) {
+      LLVMUsedVar->dropAllReferences();
+      LLVMUsedVar->eraseFromParent();
+    }
+  }
   // Start by processing __hipRegisterFatBinary
   llvm::Function *RFB = M.getFunction("__hipRegisterFatBinary");
   llvm::Function *RUFB = M.getFunction("__hipUnregisterFatBinary");
@@ -177,11 +225,9 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
       }
     }
     // Replace nullptr variable with actual value
-    if (auto Err = replacePlaceholderVariable(
-            "luthier.loader.hip_fat_binaries_ptr", llvm::PointerType::getUnqual(C), HipFatBinariesSize,
-            FatBinWrappers, M, NameToVar)) {
-      llvm::reportFatalInternalError(std::move(Err));
-    }
+    LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
+        "luthier.loader.hip_fat_binaries_ptr", llvm::PointerType::getUnqual(C),
+        HipFatBinariesSize, FatBinWrappers, M, NameToVar));
     NameToVar["luthier.loader.hip_fat_binaries_size"]->setInitializer(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), HipFatBinariesSize));
   }
@@ -213,13 +259,12 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
         }
       }
     }
-    if (auto Err = replacePlaceholderVariable(
-            "luthier.loader.hip_functions_ptr", FunInfoTy, FunctionHandlesSize,
-            FunctionHandles, M, NameToVar)) {
-      llvm::reportFatalInternalError(std::move(Err));
-    }
+    LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
+        "luthier.loader.hip_functions_ptr", FunInfoTy, FunctionHandlesSize,
+        FunctionHandles, M, NameToVar));
     NameToVar["luthier.loader.hip_functions_size"]->setInitializer(
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), FunctionHandlesSize));
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(C),
+        FunctionHandlesSize));
   }
 
   if (RMV) {
@@ -253,11 +298,9 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
         ManagedVars.push_back(ManagedVarStruct);
       }
     }
-    if (auto Err = replacePlaceholderVariable(
-            "luthier.loader.hip_managed_vars_ptr", ManagedVarTy, ManagedVarSize,
-            ManagedVars, M, NameToVar)) {
-      llvm::reportFatalInternalError(std::move(Err));
-    }
+    LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
+        "luthier.loader.hip_managed_vars_ptr", ManagedVarTy, ManagedVarSize,
+        ManagedVars, M, NameToVar));
     NameToVar["luthier.loader.hip_managed_vars_size"]->setInitializer(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), ManagedVarSize));
   }
@@ -286,11 +329,9 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
         DeviceVars.push_back(FunInfoStruct);
       }
     }
-    if (auto Err = replacePlaceholderVariable(
-            "luthier.loader.hip_device_vars_ptr", VarInfoTy, DeviceVarsSize,
-            DeviceVars, M, NameToVar)) {
-      llvm::reportFatalInternalError(std::move(Err));
-    }
+    LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
+        "luthier.loader.hip_device_vars_ptr", VarInfoTy, DeviceVarsSize,
+        DeviceVars, M, NameToVar));
     NameToVar["luthier.loader.hip_device_vars_size"]->setInitializer(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), DeviceVarsSize));
   }
@@ -319,11 +360,9 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
         Textures.push_back(FunInfoStruct);
       }
     }
-    if (auto Err = replacePlaceholderVariable(
-            "luthier.loader.hip_texture_vars_ptr", TextureInfoTy, TexturesSize,
-            Textures, M, NameToVar)) {
-      llvm::reportFatalInternalError(std::move(Err));
-    }
+    LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
+        "luthier.loader.hip_texture_vars_ptr", TextureInfoTy, TexturesSize,
+        Textures, M, NameToVar));
     NameToVar["luthier.loader.hip_texture_vars_size"]->setInitializer(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), TexturesSize));
   }
@@ -352,79 +391,47 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
         Surfaces.push_back(FunInfoStruct);
       }
     }
-    if (auto Err = replacePlaceholderVariable(
-            "luthier.loader.hip_surface_vars_ptr", SurfaceInfoTy, SurfacesSize,
-            Surfaces, M, NameToVar)) {
-      llvm::reportFatalInternalError(std::move(Err));
-    }
+    LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
+        "luthier.loader.hip_surface_vars_ptr", SurfaceInfoTy, SurfacesSize,
+        Surfaces, M, NameToVar));
     NameToVar["luthier.loader.hip_surface_vars_size"]->setInitializer(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), SurfacesSize));
   }
+  // Make sure we remove the hip module Ctor from  llvm.global_ctors, not doing
+  // so results in an error
+  LUTHIER_REPORT_FATAL_ON_ERROR(deleteModuleCtor(M));
+  LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(M.getFunction("__hip_module_ctor")));
+  LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(M.getFunction("__hip_register_globals")));
   // FIXME: Guard this so nothing happns if all are null
   //  Delete all functions that call __hipRegisterFatBinary and then delete
   //  __hipRegisterFatBinary as well
   for (auto *user : RFB->users()) {
     if (auto *CallInst = llvm::dyn_cast<llvm::CallInst>(user)) {
       auto *Fun = CallInst->getParent()->getParent();
-      if (auto Err = deleteFunction(Fun)) {
-        llvm::reportFatalInternalError(std::move(Err));
-      }
+      LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(Fun));
     }
   }
-  if (auto Err = deleteFunction(RFB)) {
-    llvm::reportFatalInternalError(std::move(Err));
-  }
+  LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RFB));
   for (auto *user : RUFB->users()) {
     if (auto *CallInst = llvm::dyn_cast<llvm::CallInst>(user)) {
       auto *Fun = CallInst->getParent()->getParent();
-      if (auto Err = deleteFunction(Fun)) {
-        llvm::reportFatalInternalError(std::move(Err));
-      }
+      LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(Fun));
     }
   }
-  if (auto Err = deleteFunction(RUFB)) {
-    llvm::reportFatalInternalError(std::move(Err));
-  }
+  LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RUFB));
 
-  if (auto Err = deleteFunction(RFUN)) {
-    llvm::reportFatalInternalError(std::move(Err));
-  }
+  if (RMV) LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RMV));
+  if (RDV) LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RDV));
+  if (RTX) LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RTX));
+  if (RSF) LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RSF));
+  if (RFUN) LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RFUN));
 
-  if (auto Err = deleteFunction(RMV)) {
-    llvm::reportFatalInternalError(std::move(Err));
-  }
-
-  if (auto Err = deleteFunction(RDV)) {
-    llvm::reportFatalInternalError(std::move(Err));
-  }
-
-  if (auto Err = deleteFunction(RTX)) {
-    llvm::reportFatalInternalError(std::move(Err));
-  }
-
-  if (auto Err = deleteFunction(RSF)) {
-    llvm::reportFatalInternalError(std::move(Err));
-  }
-
-  if (auto Err = deleteAllUses(RFUN)) {
-    llvm::reportFatalInternalError(std::move(Err));
-  }
-
-  if (auto Err = deleteAllUses(RMV)) {
-    llvm::reportFatalInternalError(std::move(Err));
-  }
-
-  if (auto Err = deleteAllUses(RDV)) {
-    llvm::reportFatalInternalError(std::move(Err));
-  }
-
-  if (auto Err = deleteAllUses(RTX)) {
-    llvm::reportFatalInternalError(std::move(Err));
-  }
-
-  if (auto Err = deleteAllUses(RSF)) {
-    llvm::reportFatalInternalError(std::move(Err));
-  }
+// 3. Now that they have ZERO users, safely erase them from the Module
+  if (RMV) LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RMV));
+  if (RDV) LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RDV));
+  if (RTX) LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RTX));
+  if (RSF) LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RSF));
+  if (RFUN) LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RFUN));
   return llvm::PreservedAnalyses::none();
 }
 
