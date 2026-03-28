@@ -1,7 +1,5 @@
 #include "LoadHIPFATBinaryInfoPass.hpp"
-
 #include "luthier/Common/ErrorCheck.h"
-
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Analysis/ValueTracking.h>
@@ -49,8 +47,7 @@ static llvm::Error replacePlaceholderVariable(
     llvm::ArrayRef<llvm::Constant *> TempArr, llvm::Module &M,
     llvm::StringMap<llvm::GlobalVariable *> &NameToVar) {
   llvm::ArrayType *ArrayTy = llvm::ArrayType::get(Type, Size);
-  llvm::Constant *Array =
-      llvm::ConstantArray::get(ArrayTy, TempArr);
+  llvm::Constant *Array = llvm::ConstantArray::get(ArrayTy, TempArr);
   // Replace old variable with the array
   auto *NewTable = new llvm::GlobalVariable(
       M, Array->getType(), true, llvm::GlobalValue::ExternalLinkage, Array, "");
@@ -129,27 +126,32 @@ static llvm::Error deleteModuleCtor(llvm::Module &M) {
   }
 
   if (Found) {
-    llvm::ArrayType *NewATy = llvm::ArrayType::get(
-        CtorArray->getType()->getElementType(), RemainingCtors.size());
-    llvm::Constant *NewInit = llvm::ConstantArray::get(NewATy, RemainingCtors);
-
-    llvm::GlobalVariable *NewCtors = new llvm::GlobalVariable(
-        M, NewATy, OldCtors->isConstant(), OldCtors->getLinkage(), NewInit, "",
-        nullptr, OldCtors->getThreadLocalMode(), OldCtors->getAddressSpace(),
-        OldCtors->isExternallyInitialized());
-
-    NewCtors->copyAttributesFrom(OldCtors);
-
-    if (OldCtors->getType() != NewCtors->getType()) {
-      llvm::Constant *BitCast =
-          llvm::ConstantExpr::getBitCast(NewCtors, OldCtors->getType());
-      OldCtors->replaceAllUsesWith(BitCast);
+    if (RemainingCtors.empty()) {
+      OldCtors->eraseFromParent();
     } else {
-      OldCtors->replaceAllUsesWith(NewCtors);
-    }
 
-    OldCtors->eraseFromParent();
-    NewCtors->setName("llvm.global_ctors");
+      llvm::ArrayType *NewATy = llvm::ArrayType::get(
+          CtorArray->getType()->getElementType(), RemainingCtors.size());
+      llvm::Constant *NewInit =
+          llvm::ConstantArray::get(NewATy, RemainingCtors);
+
+      llvm::GlobalVariable *NewCtors = new llvm::GlobalVariable(
+          M, NewATy, OldCtors->isConstant(), OldCtors->getLinkage(), NewInit,
+          "", nullptr, OldCtors->getThreadLocalMode(),
+          OldCtors->getAddressSpace(), OldCtors->isExternallyInitialized());
+
+      NewCtors->copyAttributesFrom(OldCtors);
+
+      if (OldCtors->getType() != NewCtors->getType()) {
+        llvm::Constant *BitCast =
+            llvm::ConstantExpr::getBitCast(NewCtors, OldCtors->getType());
+        OldCtors->replaceAllUsesWith(BitCast);
+      } else {
+        OldCtors->replaceAllUsesWith(NewCtors);
+      }
+      OldCtors->eraseFromParent();
+      NewCtors->setName("llvm.global_ctors");
+    }
   }
   return llvm::Error::success();
 }
@@ -186,6 +188,8 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
   llvm::LLVMContext &C = M.getContext();
   llvm::StringMap<llvm::GlobalVariable *> NameToVar{};
   LUTHIER_REPORT_FATAL_ON_ERROR(getAnnotatedValues(M, NameToVar));
+
+  // FIXME: We may need to keep the global annotations
   auto AnnotationGV = M.getGlobalVariable("llvm.global.annotations");
   if (AnnotationGV) {
     AnnotationGV->dropAllReferences();
@@ -263,8 +267,7 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
         "luthier.loader.hip_functions_ptr", FunInfoTy, FunctionHandlesSize,
         FunctionHandles, M, NameToVar));
     NameToVar["luthier.loader.hip_functions_size"]->setInitializer(
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(C),
-        FunctionHandlesSize));
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), FunctionHandlesSize));
   }
 
   if (RMV) {
@@ -400,8 +403,10 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
   // Make sure we remove the hip module Ctor from  llvm.global_ctors, not doing
   // so results in an error
   LUTHIER_REPORT_FATAL_ON_ERROR(deleteModuleCtor(M));
-  LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(M.getFunction("__hip_module_ctor")));
-  LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(M.getFunction("__hip_register_globals")));
+  LUTHIER_REPORT_FATAL_ON_ERROR(
+      deleteFunction(M.getFunction("__hip_module_ctor")));
+  LUTHIER_REPORT_FATAL_ON_ERROR(
+      deleteFunction(M.getFunction("__hip_register_globals")));
   // FIXME: Guard this so nothing happns if all are null
   //  Delete all functions that call __hipRegisterFatBinary and then delete
   //  __hipRegisterFatBinary as well
@@ -420,18 +425,28 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
   }
   LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RUFB));
 
-  if (RMV) LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RMV));
-  if (RDV) LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RDV));
-  if (RTX) LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RTX));
-  if (RSF) LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RSF));
-  if (RFUN) LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RFUN));
+  if (RMV)
+    LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RMV));
+  if (RDV)
+    LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RDV));
+  if (RTX)
+    LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RTX));
+  if (RSF)
+    LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RSF));
+  if (RFUN)
+    LUTHIER_REPORT_FATAL_ON_ERROR(deleteAllUses(RFUN));
 
-// 3. Now that they have ZERO users, safely erase them from the Module
-  if (RMV) LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RMV));
-  if (RDV) LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RDV));
-  if (RTX) LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RTX));
-  if (RSF) LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RSF));
-  if (RFUN) LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RFUN));
+  // 3. Now that they have ZERO users, safely erase them from the Module
+  if (RMV)
+    LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RMV));
+  if (RDV)
+    LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RDV));
+  if (RTX)
+    LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RTX));
+  if (RSF)
+    LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RSF));
+  if (RFUN)
+    LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RFUN));
   return llvm::PreservedAnalyses::none();
 }
 
