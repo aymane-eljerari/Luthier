@@ -19,7 +19,7 @@
 /// Executable Loader instead of using HIP for it, whcih has proven to be
 /// unreliable
 //===----------------------------------------------------------------------===//
-#include "LoadHIPFATBinaryInfoPass.hpp"
+#include "LoadHIPFATBinaryInfoPass.h"
 #include "luthier/Common/ErrorCheck.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
@@ -34,10 +34,10 @@
 #define DEBUG_TYPE "luthier-load-hip-fat-binary-info-pass"
 
 namespace luthier {
-/// @brief Fills out a StringMap with all annotated variables, we do this so we
+/// \brief Fills out a StringMap with all annotated variables, we do this so we
 /// can access them later without needing to search again.
-/// @param M Module of the IR
-/// @param NameToVar StringMap which we will fill out
+/// \param M Module of the IR
+/// \param NameToVar StringMap which we will fill out
 static llvm::Error
 getAnnotatedValues(const llvm::Module &M,
                    llvm::StringMap<llvm::GlobalVariable *> &NameToVar) {
@@ -64,15 +64,15 @@ getAnnotatedValues(const llvm::Module &M,
   }
   return llvm::Error::success();
 }
-/// @brief Replaces the null annotated variable with actual data, setInitializer
+/// \brief Replaces the null annotated variable with actual data, setInitializer
 /// doesn't work because constants can't change their type, as a workaround we
 /// reconstruct the variable with the correct type and delete the old one
-/// @param name Name of the annotated variable we are replacing
-/// @param Type The type of the struct the variable array will hold
-/// @param Size The size of the array
-/// @param TempArr The array holding the structs
-/// @param M IR Module
-/// @param NameToVar StringMap containing all annotated variables
+/// \param name Name of the annotated variable we are replacing
+/// \param Type The type of the struct the variable array will hold
+/// \param Size The size of the array
+/// \param TempArr The array holding the structs
+/// \param M IR Module
+/// \param NameToVar StringMap containing all annotated variables
 static llvm::Error replacePlaceholderVariable(
     llvm::StringRef name, llvm::StructType *Type, uint64_t Size,
     llvm::ArrayRef<llvm::Constant *> TempArr, llvm::Module &M,
@@ -98,7 +98,7 @@ static llvm::Error replacePlaceholderVariable(
   return llvm::Error::success();
 }
 
-/// @brief Same function as the other one, but this is specifically for the fat
+/// \brief Same function as the other one, but this is specifically for the fat
 /// bin wrapper, since it is not stored in a struct we store an array of opaque
 /// pointers to the hip fat binaries
 static llvm::Error replacePlaceholderVariable(
@@ -124,7 +124,7 @@ static llvm::Error replacePlaceholderVariable(
   return llvm::Error::success();
 }
 
-/// @brief Removed __hip_module_ctor function from the llvm.global_ctors array.
+/// \brief Removed __hip_module_ctor function from the llvm.global_ctors array.
 /// This array is constant so we have to reconstruct it exactly as it was but
 /// without the __hip_module_ctor, so we can delete it after
 static llvm::Error deleteModuleCtor(llvm::Module &M) {
@@ -197,13 +197,13 @@ static llvm::Error deleteModuleCtor(llvm::Module &M) {
   }
   return llvm::Error::success();
 }
-/// @brief Deletes a function, this assumes there are no uses
+/// \brief Deletes a function, this assumes there are no uses
 static llvm::Error deleteFunction(llvm::Function *Fun) {
   Fun->dropAllReferences();
   Fun->eraseFromParent();
   return llvm::Error::success();
 }
-/// @brief Deletes all uses of a function, so we can safely delete it after
+/// \brief Deletes all uses of a function, so we can safely delete it after
 static llvm::Error deleteAllUses(llvm::Function *Fun) {
   for (auto *User : Fun->users()) {
     if (llvm::Instruction *Inst = llvm::dyn_cast<llvm::Instruction>(User)) {
@@ -219,7 +219,7 @@ static llvm::Error deleteAllUses(llvm::Function *Fun) {
   }
   return llvm::Error::success();
 }
-/// @brief This pass first finds all instances of __hip_register functions and
+/// \brief This pass first finds all instances of __hip_register functions and
 /// fills out the annotated variables that will hold all the information the
 /// Tool Executable Loader needs to register them with hip. After that it
 /// deletes all functions that called __hipRegisterFatBinary and all
@@ -228,6 +228,7 @@ llvm::PreservedAnalyses
 LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
                               llvm::ModuleAnalysisManager &MAM) {
   llvm::Triple T(M.getTargetTriple());
+  bool Changed = false;
   // Only operate on host
   if (T.getArch() == llvm::Triple::ArchType::amdgcn)
     return llvm::PreservedAnalyses::all();
@@ -262,30 +263,30 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
   llvm::Function *RDV = M.getFunction("__hipRegisterVar");
   llvm::Function *RTX = M.getFunction("__hipRegisterTexture");
   llvm::Function *RSF = M.getFunction("__hipRegisterSurface");
-
-  if (RFB) {
-    /// There should only be one hip binary, but we generalize to assume there
-    /// could be more than one
-    llvm::SmallVector<llvm::Constant *, 4> FatBinWrappers{};
-    unsigned long long HipFatBinariesSize{};
-    for (llvm::User *U : RFB->users()) {
-      if (auto *CB = llvm::dyn_cast<llvm::CallBase>(U)) {
-        llvm::Value *FatBinWrapper = CB->getArgOperand(0);
-        // We store the hip fat binaries in a small vector.
-        if (llvm::GlobalVariable::classof(FatBinWrapper)) {
-          HipFatBinariesSize++;
-          auto *GV = llvm::dyn_cast<llvm::GlobalVariable>(FatBinWrapper);
-          FatBinWrappers.push_back(GV);
-        }
+  /// If there is no __hipRegisterFatBinary function, there is no point looking at the others
+  if(!RFB){ return llvm::PreservedAnalyses::all() }
+  /// There should only be one hip binary, but we generalize to assume there
+  /// could be more than one
+  llvm::SmallVector<llvm::Constant *, 4> FatBinWrappers{};
+  unsigned long long HipFatBinariesSize{};
+  for (llvm::User *U : RFB->users()) {
+    if (auto *CB = llvm::dyn_cast<llvm::CallBase>(U)) {
+      llvm::Value *FatBinWrapper = CB->getArgOperand(0);
+      // We store the hip fat binaries in a small vector.
+      if (llvm::GlobalVariable::classof(FatBinWrapper)) {
+        HipFatBinariesSize++;
+        auto *GV = llvm::dyn_cast<llvm::GlobalVariable>(FatBinWrapper);
+        FatBinWrappers.push_back(GV);
       }
     }
-    // Replace nullptr variable with actual value
-    LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
-        "luthier.loader.hip_fat_binaries_ptr", llvm::PointerType::getUnqual(C),
-        HipFatBinariesSize, FatBinWrappers, M, NameToVar));
-    NameToVar["luthier.loader.hip_fat_binaries_size"]->setInitializer(
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), HipFatBinariesSize));
   }
+  // Replace nullptr variable with actual value
+  LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
+      "luthier.loader.hip_fat_binaries_ptr", llvm::PointerType::getUnqual(C),
+      HipFatBinariesSize, FatBinWrappers, M, NameToVar));
+  NameToVar["luthier.loader.hip_fat_binaries_size"]->setInitializer(
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), HipFatBinariesSize));
+
 
   if (RFUN) {
     /// Small vector holding the ConstantStructs we will use to construct the

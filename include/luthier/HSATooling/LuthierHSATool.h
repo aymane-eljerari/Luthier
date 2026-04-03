@@ -17,6 +17,7 @@
 /// registering a static tool with the Tool Executable Loader
 //===----------------------------------------------------------------------===//
 #include "luthier/HSATooling/ToolExecutableLoader.h"
+#include "luthier/Tooling/FunctionAnnotations.h"
 /// This Macro needs to be called in the static tool, with the name of the class
 /// inhereting from LuthierHSATool. Variables are marked as used so compiler
 /// doesn't delete them, since this info will be filled out by the
@@ -38,23 +39,20 @@
   __attribute__((used)) unsigned long long TOOLNAME::HipTextureVarsSize{0};    \
   __attribute__((used)) TOOLNAME::HipSurfaceInfo *TOOLNAME::HipSurfaceVars{    \
       nullptr};                                                                \
-  __attribute__((used)) unsigned long long TOOLNAME::HipSurfaceVarsSize{0};    \
-  inline LuthierHSATool::~LuthierHSATool() {}
+  __attribute__((used)) unsigned long long TOOLNAME::HipSurfaceVarsSize{0};
 
 namespace luthier {
-/// @brief Base class for all static HSA tools. This class provides the
+/// \brief Base class for all static HSA tools. This class provides the
 /// necessary structs that have to be filled by LoadHIPFATBinaryInfo plugin so
 /// the static tool registers with the Tool Executable Loader. Variables are
 /// annotated to avoid name demangling, and should not be changed by the tool,
 /// as their contents will be changed by the plugin. This is an abstract class
 /// because it is not useful if not inhereted from by a static tool
-class LuthierHSATool {
+template <typename StaticTool> class LuthierHSATool {
 public:
-  LuthierHSATool(ToolExecutableLoader *TEL) : TEL(TEL) {}
-  // Delete default constructor, A tool inhereting from this has no reason to
-  // exist without a TEL
-  LuthierHSATool() = delete;
-  virtual ~LuthierHSATool() = 0;
+  explicit LuthierHSATool(ToolExecutableLoader &TEL) : TEL(TEL) {}
+  explicit LuthierHSATool() { TEL = ToolExecutableLoader::instance(); };
+  virtual ~LuthierHSATool() = default;
   struct HipFunctionInfo {
     void *HostHandle{nullptr};
     const char *DeviceName{nullptr};
@@ -84,50 +82,51 @@ public:
   };
 
 private:
-  /// @brief Tool Executable Loader, used to register and load HIP code objects
-  ToolExecutableLoader *TEL;
-  /// @brief Annotated variables that will hold the information we need to
+  /// \brief Tool Executable Loader, used to register and load HIP code objects
+  ToolExecutableLoader &TEL;
+  /// \brief Annotated variables that will hold the information we need to
   /// register everything
-  static __attribute__((
-      annotate("luthier.loader.hip_fat_binaries_ptr"))) void **HipFatBinaries;
 
-  static __attribute__((
-      annotate("luthier.loader.hip_fat_binaries_size"))) unsigned long long
-      HipFatBinariesSize;
+  static LUTHIER_ANNOTATE_VARIABLE(HipFatBinariesPtrAttr) void **HipFatBinaries;
 
-  static __attribute__((annotate("luthier.loader.hip_functions_ptr")))
-  HipFunctionInfo *HipFunctions;
+  static LUTHIER_ANNOTATE_VARIABLE(
+      HipFatBinariesSizeAttr) unsigned long long HipFatBinariesSize;
 
-  static __attribute__((
-      annotate("luthier.loader.hip_functions_size"))) unsigned long long
-      HipFunctionsSize;
+  static LUTHIER_ANNOTATE_VARIABLE(HipFunctionsPtrAttr)
+      HipFunctionInfo *HipFunctions;
 
-  static __attribute__((annotate("luthier.loader.hip_device_vars_ptr")))
-  HipDeviceVarInfo *HipDeviceVars;
+  static LUTHIER_ANNOTATE_VARIABLE(
+      HipFunctionsSizeAttr) unsigned long long HipFunctionsSize;
 
-  static __attribute__((
-      annotate("luthier.loader.hip_device_vars_size"))) unsigned long long
-      HipDeviceVarsSize;
+  static LUTHIER_ANNOTATE_VARIABLE(HipDeviceVarsPtrAttr)
+      HipDeviceVarInfo *HipDeviceVars;
 
-  static __attribute__((annotate("luthier.loader.hip_managed_vars_ptr")))
-  HipManagedVarInfo *HipManagedVars;
+  static LUTHIER_ANNOTATE_VARIABLE(
+      HipDeviceVarsSizeAttr) unsigned long long HipDeviceVarsSize;
 
-  static __attribute__((
-      annotate("luthier.loader.hip_managed_vars_size"))) unsigned long long
-      HipManagedVarsSize;
+  static LUTHIER_ANNOTATE_VARIABLE(HipManagedVarsPtrAttr)
+      HipManagedVarInfo *HipManagedVars;
 
-  static __attribute__((annotate("luthier.loader.hip_texture_vars_ptr")))
-  HipTextureInfo *HipTextureVars;
+  static LUTHIER_ANNOTATE_VARIABLE(
+      HipManagedVarsSizeAttr) unsigned long long HipManagedVarsSize;
 
-  static __attribute__((
-      annotate("luthier.loader.hip_texture_vars_size"))) unsigned long long
-      HipTextureVarsSize;
+  static LUTHIER_ANNOTATE_VARIABLE(HipTextureVarsPtrAttr)
+      HipTextureInfo *HipTextureVars;
 
-  static __attribute__((annotate("luthier.loader.hip_surface_vars_ptr")))
-  HipSurfaceInfo *HipSurfaceVars;
+  static LUTHIER_ANNOTATE_VARIABLE(
+      HipTextureVarsSizeAttr) unsigned long long HipTextureVarsSize;
 
-  static __attribute__((
-      annotate("luthier.loader.hip_surface_vars_size"))) unsigned long long
-      HipSurfaceVarsSize;
+  static LUTHIER_ANNOTATE_VARIABLE(HipSurfaceVarsPtrAttr)
+      HipSurfaceInfo *HipSurfaceVars;
+
+  static LUTHIER_ANNOTATE_VARIABLE(
+      HipSurfaceVarsSizeAttr) unsigned long long HipSurfaceVarsSize;
 };
+
+#ifdef __clang__
+// Template definition of the Instance pointer to suppress clang warnings
+// regarding translation units
+template <typename T> T *luthier::LuthierHSATool<T>::Instance{nullptr};
+#endif
+
 } // namespace luthier
