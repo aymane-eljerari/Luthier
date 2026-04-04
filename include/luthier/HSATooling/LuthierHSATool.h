@@ -50,8 +50,8 @@ namespace luthier {
 /// because it is not useful if not inhereted from by a static tool
 template <typename StaticTool> class LuthierHSATool {
 public:
-  explicit LuthierHSATool(ToolExecutableLoader &TEL) : TEL(TEL) {}
-  explicit LuthierHSATool() { TEL = ToolExecutableLoader::instance(); };
+  LuthierHSATool() : TEL(ToolExecutableLoader::instance()) {}
+  explicit LuthierHSATool(ToolExecutableLoader& Loader) : TEL(Loader) {}
   virtual ~LuthierHSATool() = default;
   struct HipFunctionInfo {
     void *HostHandle{nullptr};
@@ -68,7 +68,7 @@ public:
     void *InitValue{nullptr};
     const char *Name{nullptr};
     unsigned long long Size{0};
-    unsigned align{0};
+    unsigned Align{0};
   };
 
   struct HipTextureInfo {
@@ -84,9 +84,9 @@ public:
 private:
   /// \brief Tool Executable Loader, used to register and load HIP code objects
   ToolExecutableLoader &TEL;
+
   /// \brief Annotated variables that will hold the information we need to
   /// register everything
-
   static LUTHIER_ANNOTATE_VARIABLE(HipFatBinariesPtrAttr) void **HipFatBinaries;
 
   static LUTHIER_ANNOTATE_VARIABLE(

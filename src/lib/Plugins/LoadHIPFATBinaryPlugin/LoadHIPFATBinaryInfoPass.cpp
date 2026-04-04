@@ -67,6 +67,8 @@ getAnnotatedValues(const llvm::Module &M,
 /// \brief Replaces the null annotated variable with actual data, setInitializer
 /// doesn't work because constants can't change their type, as a workaround we
 /// reconstruct the variable with the correct type and delete the old one
+/// \note We keep annotations and do not delete them, they hold a pointer to the
+/// array, so a GEP is needed to access the struct
 /// \param name Name of the annotated variable we are replacing
 /// \param Type The type of the struct the variable array will hold
 /// \param Size The size of the array
@@ -74,7 +76,7 @@ getAnnotatedValues(const llvm::Module &M,
 /// \param M IR Module
 /// \param NameToVar StringMap containing all annotated variables
 static llvm::Error replacePlaceholderVariable(
-    llvm::StringRef name, llvm::StructType *Type, uint64_t Size,
+    llvm::StringRef Name, llvm::StructType *Type, uint64_t Size,
     llvm::ArrayRef<llvm::Constant *> TempArr, llvm::Module &M,
     llvm::StringMap<llvm::GlobalVariable *> &NameToVar) {
   llvm::ArrayType *ArrayTy = llvm::ArrayType::get(Type, Size);
@@ -82,11 +84,11 @@ static llvm::Error replacePlaceholderVariable(
   /// Replace old variable with the array
   auto *NewTable = new llvm::GlobalVariable(
       M, Array->getType(), true, llvm::GlobalValue::ExternalLinkage, Array, "");
-  auto *OldVar = NameToVar[name];
+  auto *OldVar = NameToVar[Name];
   /// If OldVar is not in the table, then something is wrong
   if (OldVar == nullptr) {
     return llvm::make_error<llvm::StringError>(
-        llvm::formatv("Variable {0} is not in the NameToVar map", name),
+        llvm::formatv("Variable {0} is not in the NameToVar map", Name),
         llvm::inconvertibleErrorCode());
   }
   NewTable->takeName(OldVar);
@@ -102,7 +104,7 @@ static llvm::Error replacePlaceholderVariable(
 /// bin wrapper, since it is not stored in a struct we store an array of opaque
 /// pointers to the hip fat binaries
 static llvm::Error replacePlaceholderVariable(
-    llvm::StringRef name, llvm::PointerType *Type, uint64_t Size,
+    llvm::StringRef Name, llvm::PointerType *Type, uint64_t Size,
     llvm::ArrayRef<llvm::Constant *> TempArr, llvm::Module &M,
     llvm::StringMap<llvm::GlobalVariable *> &NameToVar) {
   llvm::Constant *Array =
@@ -110,10 +112,10 @@ static llvm::Error replacePlaceholderVariable(
   /// Replace old variable with the array
   auto *NewTable = new llvm::GlobalVariable(
       M, Array->getType(), true, llvm::GlobalValue::ExternalLinkage, Array, "");
-  auto *OldVar = NameToVar[name];
+  auto *OldVar = NameToVar[Name];
   if (OldVar == nullptr) {
     return llvm::make_error<llvm::StringError>(
-        llvm::formatv("Variable {0} is not in the NameToVar map", name),
+        llvm::formatv("Variable {0} is not in the NameToVar map", Name),
         llvm::inconvertibleErrorCode());
   }
   NewTable->takeName(OldVar);
@@ -130,10 +132,10 @@ static llvm::Error replacePlaceholderVariable(
 static llvm::Error deleteModuleCtor(llvm::Module &M) {
   llvm::GlobalVariable *OldCtors = M.getGlobalVariable("llvm.global_ctors");
   /// If there are no global constructors there is nothing we should do
-  /// FIXME: Should we throw an errohere? Because I don't see any way this is
-  /// null
   if (!OldCtors)
-    return llvm::Error::success();
+    return llvm::make_error<llvm::StringError>(
+        "llvm.global_ctors is not present in this file",
+        llvm::inconvertibleErrorCode());
 
   if (!OldCtors->hasInitializer())
     return llvm::make_error<llvm::StringError>("Missing initializer",
@@ -177,7 +179,7 @@ static llvm::Error deleteModuleCtor(llvm::Module &M) {
       llvm::Constant *NewInit =
           llvm::ConstantArray::get(NewATy, RemainingCtors);
 
-      llvm::GlobalVariable *NewCtors = new llvm::GlobalVariable(
+      auto *NewCtors = new llvm::GlobalVariable(
           M, NewATy, OldCtors->isConstant(), OldCtors->getLinkage(), NewInit,
           "", nullptr, OldCtors->getThreadLocalMode(),
           OldCtors->getAddressSpace(), OldCtors->isExternallyInitialized());
@@ -206,7 +208,7 @@ static llvm::Error deleteFunction(llvm::Function *Fun) {
 /// \brief Deletes all uses of a function, so we can safely delete it after
 static llvm::Error deleteAllUses(llvm::Function *Fun) {
   for (auto *User : Fun->users()) {
-    if (llvm::Instruction *Inst = llvm::dyn_cast<llvm::Instruction>(User)) {
+    if (auto *Inst = llvm::dyn_cast<llvm::Instruction>(User)) {
       // If the call returns a value, we must "defuse" it first
       if (!Inst->use_empty()) {
         Inst->replaceAllUsesWith(llvm::UndefValue::get(Inst->getType()));
@@ -236,13 +238,6 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
   llvm::StringMap<llvm::GlobalVariable *> NameToVar{};
   LUTHIER_REPORT_FATAL_ON_ERROR(getAnnotatedValues(M, NameToVar));
 
-  /// FIXME: We may need to keep the global annotations
-  auto AnnotationGV = M.getGlobalVariable("llvm.global.annotations");
-  if (AnnotationGV) {
-    AnnotationGV->dropAllReferences();
-    AnnotationGV->eraseFromParent();
-  }
-
   // Remove the llvm.used and llvm.compiler.use variable list
   /// FIXME: Is this necessary?
   for (const auto &VarName : {"llvm.compiler.used", "llvm.used"}) {
@@ -263,8 +258,11 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
   llvm::Function *RDV = M.getFunction("__hipRegisterVar");
   llvm::Function *RTX = M.getFunction("__hipRegisterTexture");
   llvm::Function *RSF = M.getFunction("__hipRegisterSurface");
-  /// If there is no __hipRegisterFatBinary function, there is no point looking at the others
-  if(!RFB){ return llvm::PreservedAnalyses::all() }
+  /// If there is no __hipRegisterFatBinary function, there is no point looking
+  /// at the others
+  if (!RFB) {
+    return llvm::PreservedAnalyses::all();
+  }
   /// There should only be one hip binary, but we generalize to assume there
   /// could be more than one
   llvm::SmallVector<llvm::Constant *, 4> FatBinWrappers{};
@@ -286,7 +284,6 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
       HipFatBinariesSize, FatBinWrappers, M, NameToVar));
   NameToVar["luthier.loader.hip_fat_binaries_size"]->setInitializer(
       llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), HipFatBinariesSize));
-
 
   if (RFUN) {
     /// Small vector holding the ConstantStructs we will use to construct the
@@ -456,15 +453,15 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
   ///  Delete all functions that call __hipRegisterFatBinary and then delete
   /// __hipRegisterFatBinary as well, we do the same for
   /// __hipUnregisterFatBinary as well below
-  for (auto *user : RFB->users()) {
-    if (auto *CallInst = llvm::dyn_cast<llvm::CallInst>(user)) {
+  for (auto *User : RFB->users()) {
+    if (auto *CallInst = llvm::dyn_cast<llvm::CallInst>(User)) {
       auto *Fun = CallInst->getParent()->getParent();
       LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(Fun));
     }
   }
   LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(RFB));
-  for (auto *user : RUFB->users()) {
-    if (auto *CallInst = llvm::dyn_cast<llvm::CallInst>(user)) {
+  for (auto *User : RUFB->users()) {
+    if (auto *CallInst = llvm::dyn_cast<llvm::CallInst>(User)) {
       auto *Fun = CallInst->getParent()->getParent();
       LUTHIER_REPORT_FATAL_ON_ERROR(deleteFunction(Fun));
     }

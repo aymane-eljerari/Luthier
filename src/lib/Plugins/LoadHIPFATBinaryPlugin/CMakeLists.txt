@@ -3,7 +3,7 @@ if (${LLVM_LUTHIERHIPFATBINARYPLUGIN_LINK_INTO_TOOLS})
 endif ()
 
 add_llvm_pass_plugin(LuthierHIPFATBinaryPlugin
-        LoadHIPFATBinaryInfoPass.hpp
+        LoadHIPFATBinaryInfoPass.h
         LoadHIPFATBinaryInfoPass.cpp)
 
 target_include_directories(LuthierHIPFATBinaryPlugin PRIVATE
