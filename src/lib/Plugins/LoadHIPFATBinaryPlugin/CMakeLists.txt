@@ -3,9 +3,10 @@ if (${LLVM_LUTHIERHIPFATBINARYPLUGIN_LINK_INTO_TOOLS})
 endif ()
 
 add_llvm_pass_plugin(LuthierHIPFATBinaryPlugin
-        LoadHIPFATBinaryInfoPass.h
-        LoadHIPFATBinaryInfoPass.cpp)
+        LoadHIPFATBinaryInfoPlugin.cpp)
 
 target_include_directories(LuthierHIPFATBinaryPlugin PRIVATE
         "$<BUILD_INTERFACE:${LLVM_INCLUDE_DIRS}>"
         "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>")
+
+target_link_libraries(LuthierHIPFATBinaryPlugin PRIVATE LuthierToolingCommon)

@@ -19,7 +19,7 @@
 /// Executable Loader instead of using HIP for it, whcih has proven to be
 /// unreliable
 //===----------------------------------------------------------------------===//
-#include "LoadHIPFATBinaryInfoPass.h"
+#include "luthier/Tooling/LoadHIPFATBinaryInfoPass.h"
 #include "luthier/Common/ErrorCheck.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
@@ -494,31 +494,3 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
 }
 
 } // namespace luthier
-
-llvm::PassPluginLibraryInfo getLuthierHIPFATBinaryPluginInfo() {
-  return {LLVM_PLUGIN_API_VERSION, DEBUG_TYPE, LLVM_VERSION_STRING,
-          [](llvm::PassBuilder &PB) {
-            PB.registerPipelineStartEPCallback(
-                [](llvm::ModulePassManager &MPM, llvm::OptimizationLevel Opt) {
-                  MPM.addPass(luthier::LoadHIPFATBinaryInfoPass());
-                });
-            /// We register a Pipeline Parsing Callback so we can invoke opt on
-            /// this pass
-            PB.registerPipelineParsingCallback(
-                [](llvm::StringRef Name, llvm::ModulePassManager &MPM,
-                   llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
-                  if (Name == DEBUG_TYPE) {
-                    MPM.addPass(luthier::LoadHIPFATBinaryInfoPass());
-                    return true;
-                  }
-                  return false;
-                });
-          }};
-}
-
-#ifndef LLVM_LUTHIERHIPFATBINARYPLUGIN_LINK_INTO_TOOLS
-extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
-llvmGetPassPluginInfo() {
-  return getLuthierHIPFATBinaryPluginInfo();
-}
-#endif
