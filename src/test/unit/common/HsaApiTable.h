@@ -1,28 +1,38 @@
-#ifndef LUTHIER_TEST_DIRECT_HSA_API_TABLE_H
-#define LUTHIER_TEST_DIRECT_HSA_API_TABLE_H
-
-#include "luthier/HSA/ApiTable.h"
+//===-- HsaApiTable.h -------------------------------------------*- C++ -*-===//
+// Copyright @ Northeastern University Computer Architecture Lab
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//===----------------------------------------------------------------------===//
+///
+/// \file
+/// Defines functions used to build HSA API tables for use in unit tests
+/// requiring AMD GPU functionality.
+//===----------------------------------------------------------------------===//
+#ifndef LUTHIER_TEST_HSA_API_TABLE_H
+#define LUTHIER_TEST_HSA_API_TABLE_H
 #include <hsa/hsa.h>
 #include <hsa/hsa_api_trace.h>
-#include <hsa/hsa_ext_amd.h>
 
 namespace luthier::test {
 
-/// Build a CoreApiTable populated with direct function pointers to the real
-/// HSA runtime.  This allows the Luthier HSA wrapper functions (which expect
-/// an ApiTableContainer<CoreApiTable>) to be used from a standalone test
-/// binary without rocprofiler's API table interception mechanism.
-inline ::CoreApiTable buildDirectCoreApiTable() {
+/// Build a CoreApiTable populated with "normal" Core HSA API function pointers
+inline ::CoreApiTable buildCoreApiTable() {
   ::CoreApiTable T{};
 
   // Version — must match what the runtime expects.
   T.version.major_id = HSA_API_TABLE_MAJOR_VERSION;
   T.version.minor_id = sizeof(::CoreApiTable);
   T.version.step_id = 0;
-
-  // Populate every function pointer with the real HSA symbol.
-  // Only the functions that are actually used by the Luthier wrappers and
-  // the fuzzer need to be non-null; the rest can stay nullptr.
 
   // --- System ---
   T.hsa_init_fn = &hsa_init;
@@ -47,8 +57,7 @@ inline ::CoreApiTable buildDirectCoreApiTable() {
   T.hsa_queue_load_read_index_relaxed_fn = &hsa_queue_load_read_index_relaxed;
   T.hsa_queue_load_write_index_scacquire_fn =
       &hsa_queue_load_write_index_scacquire;
-  T.hsa_queue_load_write_index_relaxed_fn =
-      &hsa_queue_load_write_index_relaxed;
+  T.hsa_queue_load_write_index_relaxed_fn = &hsa_queue_load_write_index_relaxed;
   T.hsa_queue_store_write_index_relaxed_fn =
       &hsa_queue_store_write_index_relaxed;
   T.hsa_queue_store_write_index_screlease_fn =
@@ -60,8 +69,7 @@ inline ::CoreApiTable buildDirectCoreApiTable() {
   T.hsa_queue_add_write_index_relaxed_fn = &hsa_queue_add_write_index_relaxed;
   T.hsa_queue_add_write_index_screlease_fn =
       &hsa_queue_add_write_index_screlease;
-  T.hsa_queue_store_read_index_relaxed_fn =
-      &hsa_queue_store_read_index_relaxed;
+  T.hsa_queue_store_read_index_relaxed_fn = &hsa_queue_store_read_index_relaxed;
   T.hsa_queue_store_read_index_screlease_fn =
       &hsa_queue_store_read_index_screlease;
   T.hsa_queue_cas_write_index_scacq_screl_fn =
