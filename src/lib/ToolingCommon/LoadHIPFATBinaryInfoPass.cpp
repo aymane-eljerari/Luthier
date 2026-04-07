@@ -238,15 +238,6 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
   llvm::StringMap<llvm::GlobalVariable *> NameToVar{};
   LUTHIER_REPORT_FATAL_ON_ERROR(getAnnotatedValues(M, NameToVar));
 
-  // Remove the llvm.used and llvm.compiler.use variable list
-  /// FIXME: Is this necessary?
-  for (const auto &VarName : {"llvm.compiler.used", "llvm.used"}) {
-    auto LLVMUsedVar = M.getGlobalVariable(VarName);
-    if (LLVMUsedVar != nullptr) {
-      LLVMUsedVar->dropAllReferences();
-      LLVMUsedVar->eraseFromParent();
-    }
-  }
   /// We get all the functions we need to process, for each one we loop over the
   /// uses finding the call instances, and for each one we construct a struct
   /// holding all the information necessary to register the hip object with hip
