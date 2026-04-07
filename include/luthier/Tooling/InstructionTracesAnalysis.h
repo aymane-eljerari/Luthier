@@ -251,6 +251,11 @@ public:
 
   InstructionTracesAnalysis() = default;
 
+  static llvm::Expected<uint64_t>
+  evaluateDirectBranchOrCall(const llvm::MCInst &Inst, uint64_t Addr);
+
+  static uint64_t evaluateDirectBranchOrCall(int64_t Imm, uint64_t Addr);
+
   Result run(llvm::MachineFunction &TargetMF,
              llvm::MachineFunctionAnalysisManager &TargetMFAM);
 };

@@ -1,3 +1,16 @@
+# Add target to generate real to pseudo opcode and register map and functions to query them
+set(LuthierRealToPseudoOpcodeMap_TABLEGEN_EXE luthier-tblgen)
+set(LLVM_TARGET_DEFINITIONS "${LUTHIER_LLVM_SRC_DIR}/llvm/lib/Target/AMDGPU/AMDGPU.td")
+tablegen(LuthierRealToPseudoOpcodeMap LuthierRealToPseudoOpcodeMap.hpp -gen-si-real-to-pseudo-opcode-map EXTRA_INCLUDES
+        "${LUTHIER_LLVM_SRC_DIR}/llvm/lib/Target/AMDGPU/;${LUTHIER_LLVM_SRC_DIR}/llvm/include/")
+add_public_tablegen_target(LuthierRealToPseudoOpcodeMap)
+
+set(LuthierRealToPseudoRegEnumMap_TABLEGEN_EXE luthier-tblgen)
+set(LLVM_TARGET_DEFINITIONS "${LUTHIER_LLVM_SRC_DIR}/llvm/lib/Target/AMDGPU/AMDGPU.td")
+tablegen(LuthierRealToPseudoRegEnumMap LuthierRealToPseudoRegEnumMap.hpp -gen-si-real-to-pseudo-reg-map EXTRA_INCLUDES
+        "${LUTHIER_LLVM_SRC_DIR}/llvm/lib/Target/AMDGPU/;${LUTHIER_LLVM_SRC_DIR}/llvm/include/")
+add_public_tablegen_target(LuthierRealToPseudoRegEnumMap)
+
 # Tablegen target for generating IR translation of MIR pseudo instructions
 set(LuthierSIInstrSemanticsGen_TABLEGEN_EXE luthier-tblgen)
 set(LLVM_TARGET_DEFINITIONS "${CMAKE_SOURCE_DIR}/include/luthier/InstSemantics/InstSISemantics.td")
@@ -7,6 +20,7 @@ tablegen(LuthierSIInstrSemanticsGen SIInstrSemantics.inc -gen-si-instr-semantics
 add_public_tablegen_target(LuthierSIInstrSemanticsGen)
 
 add_library(LuthierToolingCommon OBJECT
+        PseudoOpcodeAndRegMapper.cpp
         TargetMachineInstrMDNode.cpp
         CodeDiscoveryPass.cpp
         MachineFunctionEntryPoint.cpp
@@ -55,8 +69,9 @@ add_library(LuthierToolingCommon OBJECT
 
 )
 
-#add_dependencies(LuthierToolingCommon LuthierRealToPseudoOpcodeMap)
-#add_dependencies(LuthierToolingCommon LuthierRealToPseudoRegEnumMap)
+add_dependencies(LuthierToolingCommon LuthierRealToPseudoOpcodeMap)
+add_dependencies(LuthierToolingCommon LuthierRealToPseudoRegEnumMap)
+add_dependencies(LuthierToolingCommon LuthierSIInstrSemanticsGen)
 
 target_compile_definitions(LuthierToolingCommon PRIVATE AMD_INTERNAL_BUILD ${LLVM_DEFINITIONS})
 

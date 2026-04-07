@@ -17,10 +17,10 @@
 /// Implements the \c InstructionTracesAnalysis class.
 //===----------------------------------------------------------------------===//
 #include "luthier/Tooling/InstructionTracesAnalysis.h"
-#include "luthier/InstSemantics/PseudoOpcodeAnRegMapper.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/Tooling/EntryPoint.h"
 #include "luthier/Tooling/MemoryAllocationAccessor.h"
+#include "luthier/Tooling/PseudoOpcodeAndRegMapper.h"
 #include <AMDGPUTargetMachine.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/IR/LLVMContext.h>
@@ -34,12 +34,20 @@ namespace luthier {
 
 llvm::AnalysisKey InstructionTracesAnalysis::Key;
 
-static llvm::Expected<uint64_t>
-evaluateBranchOrCallIfDirect(const llvm::MCInst &Inst, uint64_t Addr) {
+llvm::Expected<uint64_t>
+InstructionTracesAnalysis::evaluateDirectBranchOrCall(const llvm::MCInst &Inst,
+                                                      uint64_t Addr) {
+  const llvm::MCOperand &BrOrCallTargetOp = Inst.getOperand(
+      Inst.getOpcode() == llvm::AMDGPU::S_CBRANCH_I_FORK ? 1 : 0);
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-      Inst.getOperand(0).isImm(), "Direct branch's first op is not immediate"));
+      BrOrCallTargetOp.isImm(),
+      "Direct branch or call's target operand is not immediate"));
   int64_t Imm = Inst.getOperand(0).getImm();
-  // Our branches take a simm16.
+  return llvm::SignExtend64<16>(Imm) * 4 + Addr + 4;
+}
+
+uint64_t InstructionTracesAnalysis::evaluateDirectBranchOrCall(int64_t Imm,
+                                                               uint64_t Addr) {
   return llvm::SignExtend64<16>(Imm) * 4 + Addr + 4;
 }
 
@@ -50,11 +58,24 @@ static llvm::Error disassembleTrace(const MemoryAllocationAccessor &SegAccessor,
                                     const llvm::MCInstrInfo &MII,
                                     InstructionTraces::Trace &Instructions,
                                     uint64_t &LastInstructionAddr) {
+  /// Indicates whether the last disassembled instruction was a trace terminator
   bool WasTraceTermInstrEncountered{false};
-  /// Indicates whether the last instruction disassembled is a basic block
-  /// terminator
+
+  /// Start adding instructions to the trace
   uint64_t CurrentDeviceAddress = StartDeviceAddr;
 
+  /// This nested while loop will start disassemble instructions from the
+  /// trace's start address. It will only terminate if:
+  /// - An instruction ending the trace was encountered, i.e return
+  /// instructions (S_ENGPGM), call instructions (short and long), unconditional
+  /// and/or indirect branches
+  /// - The end of the current allocation descriptor is reached, and the next
+  /// adjacent address does not have a memory allocation descriptor (i.e. there
+  /// is no memory allocation after the end of the already disassembled memory
+  /// allocation)
+  /// Note that a trace might not have any instructions associated with it if
+  /// it is determinted that its starting address does not belong to a memory
+  /// allocation
   while (!WasTraceTermInstrEncountered) {
     MemoryAllocationAccessor::AllocationDescriptor AllocDesc;
 
@@ -63,9 +84,7 @@ static llvm::Error disassembleTrace(const MemoryAllocationAccessor &SegAccessor,
             .moveInto(AllocDesc));
 
     if (AllocDesc.empty()) {
-      return LUTHIER_MAKE_GENERIC_ERROR(
-          llvm::formatv("Address {0:x} has no allocation associated with it",
-                        CurrentDeviceAddress));
+      break;
     }
 
     uint64_t EntryPointHostAddr =
@@ -95,15 +114,14 @@ static llvm::Error disassembleTrace(const MemoryAllocationAccessor &SegAccessor,
               llvm::MCDisassembler::Success,
           llvm::formatv("Failed to disassemble instruction at address {0:x}",
                         CurrentDeviceAddress)));
-      /// Check if the current instruction is a return instruction; Since
-      /// the S_SETPC_B64 itself is not a return instruction, we convert it
-      /// to the return variant
+
       uint16_t PseudoOpcode = getPseudoOpcodeFromReal(Inst.getOpcode());
-      if (PseudoOpcode == llvm::AMDGPU::S_SETPC_B64) {
-        PseudoOpcode = llvm::AMDGPU::S_SETPC_B64_return;
-      }
+      llvm::MCInstrDesc PseudoOpcodeDesc = MII.get(PseudoOpcode);
       WasTraceTermInstrEncountered =
-          MII.get(PseudoOpcode).isReturn() || MII.get(PseudoOpcode).isCall();
+          PseudoOpcodeDesc.isReturn() || PseudoOpcodeDesc.isCall() ||
+          PseudoOpcodeDesc.isIndirectBranch() ||
+          PseudoOpcodeDesc.isUnconditionalBranch() ||
+          PseudoOpcode == llvm::AMDGPU::S_CBRANCH_G_FORK;
       Instructions.insert(
           {CurrentDeviceAddress,
            std::move(TraceInstr{Inst, CurrentDeviceAddress, InstSize})});
@@ -145,16 +163,22 @@ InstructionTraces::discoverTraces(EntryPoint EP,
                                              *DisAsm, MaxInstSize, MII,
                                              *InstTrace, TraceDeviceEndAddr));
 
-    /// Handle direct branch instructions
+    /// Handle direct branch and call instructions' targets, check if we have
+    /// any targets not covered by current discovered traces
     for (const auto &[InstAddr, TraceInst] : *InstTrace) {
       const auto &MCInst = TraceInst.getMCInst();
-      llvm::MCInstrDesc PseudoOpcodeDesc =
-          MII.get(getPseudoOpcodeFromReal(MCInst.getOpcode()));
-      bool IsIndirectBranch = PseudoOpcodeDesc.isIndirectBranch();
+      uint16_t Opcode = MCInst.getOpcode();
+      const llvm::MCInstrDesc &PseudoOpcodeDesc =
+          MII.get(getPseudoOpcodeFromReal(Opcode));
 
-      if (PseudoOpcodeDesc.isBranch() && !IsIndirectBranch) {
+      bool IsDirectBranch =
+          PseudoOpcodeDesc.isBranch() && !PseudoOpcodeDesc.isIndirectBranch() ||
+          Opcode == llvm::AMDGPU::S_CBRANCH_I_FORK;
+
+      if (IsDirectBranch) {
         llvm::Expected<uint64_t> TargetOrErr =
-            evaluateBranchOrCallIfDirect(MCInst, InstAddr);
+            InstructionTracesAnalysis::evaluateDirectBranchOrCall(MCInst,
+                                                                  InstAddr);
         LUTHIER_RETURN_ON_ERROR(TargetOrErr.takeError());
         Out->DirectBranchTargets.insert(*TargetOrErr);
         /// Find if we have already have the target of this branch in the
@@ -177,9 +201,10 @@ InstructionTraces::discoverTraces(EntryPoint EP,
       }
     };
 
-    /// Put the discovered trace in the map
-    Out->Traces.insert({std::make_pair(CurrentDeviceAddr, TraceDeviceEndAddr),
-                        std::move(InstTrace)});
+    /// Put the discovered trace in the map if it's not empty
+    if (!InstTrace->empty())
+      Out->Traces.insert({std::make_pair(CurrentDeviceAddr, TraceDeviceEndAddr),
+                          std::move(InstTrace)});
 
     /// Remove the current entry point from the unvisited set
     UnvisitedTraceAddresses.erase(CurrentDeviceAddr);
@@ -188,7 +213,7 @@ InstructionTraces::discoverTraces(EntryPoint EP,
 }
 
 bool InstructionTracesAnalysis::Result::invalidate(
-    llvm::MachineFunction &MF, const llvm::PreservedAnalyses &PA,
+    llvm::MachineFunction &, const llvm::PreservedAnalyses &PA,
     llvm::MachineFunctionAnalysisManager::Invalidator &) {
   // Unless it is invalidated explicitly, it should remain preserved.
   auto PAC = PA.getChecker<InstructionTracesAnalysis>();
@@ -198,6 +223,8 @@ bool InstructionTracesAnalysis::Result::invalidate(
 InstructionTracesAnalysis::Result InstructionTracesAnalysis::run(
     llvm::MachineFunction &TargetMF,
     llvm::MachineFunctionAnalysisManager &TargetMFAM) {
+  /// We skip any functions that don't have an entry point associated with
+  /// them (i.e. functions added manually by Luthier or the tool)
   if (std::optional<EntryPoint> EP =
           getFunctionEntryPoint(TargetMF.getFunction());
       EP.has_value()) {

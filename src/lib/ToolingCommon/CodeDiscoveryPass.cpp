@@ -4,12 +4,11 @@
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Tooling/EntryPoint.h"
 #include "luthier/Tooling/FunctionAnnotations.h"
-// #include "luthier/Tooling/IPVectorRegLiveness.h"
-#include "../../../include/luthier/InstSemantics/PseudoOpcodeAnRegMapper.h"
 #include "luthier/Tooling/InitialEntryPointAnalysis.h"
 #include "luthier/Tooling/InstructionTracesAnalysis.h"
 #include "luthier/Tooling/MemoryAllocationAccessor.h"
 #include "luthier/Tooling/MetadataParserAnalysis.h"
+#include "luthier/Tooling/PseudoOpcodeAndRegMapper.h"
 #include "luthier/Tooling/TargetMachineInstrMDNode.h"
 #include <MCTargetDesc/AMDGPUMCExpr.h>
 #include <SIMachineFunctionInfo.h>
@@ -35,78 +34,6 @@
 #define DEBUG_TYPE "luthier-code-discovery"
 
 namespace luthier {
-
-static inline llvm::Type *
-processExplicitKernelArg(const amdgpu::hsamd::Kernel::Arg::Metadata &ArgMD,
-                         llvm::LLVMContext &Ctx) {
-  llvm::Type *ParamType = llvm::Type::getIntNTy(Ctx, ArgMD.Size * 8);
-  // Used when the argument kind is global buffer or dynamic shared pointer
-  unsigned int AddressSpace = ArgMD.AddressSpace.has_value()
-                                  ? *ArgMD.AddressSpace
-                                  : llvm::AMDGPUAS::GLOBAL_ADDRESS;
-  switch (ArgMD.ValKind) {
-  case amdgpu::hsamd::ValueKind::ByValue:
-    break;
-  case amdgpu::hsamd::ValueKind::GlobalBuffer:
-    // Convert the argument to a pointer
-    ParamType = llvm::PointerType::get(Ctx, AddressSpace);
-    break;
-  default:
-    llvm_unreachable("Not implemented");
-  }
-  return ParamType;
-}
-
-static inline void
-processHiddenKernelArg(const amdgpu::hsamd::Kernel::Arg::Metadata &ArgMD,
-                       llvm::Function &F, llvm::SIMachineFunctionInfo &MFI,
-                       const llvm::SIRegisterInfo &TRI) {
-  switch (ArgMD.ValKind) {
-  case amdgpu::hsamd::ValueKind::HiddenGlobalOffsetX:
-  case amdgpu::hsamd::ValueKind::HiddenGlobalOffsetY:
-  case amdgpu::hsamd::ValueKind::HiddenGlobalOffsetZ:
-  case amdgpu::hsamd::ValueKind::HiddenBlockCountX:
-  case amdgpu::hsamd::ValueKind::HiddenBlockCountY:
-  case amdgpu::hsamd::ValueKind::HiddenBlockCountZ:
-  case amdgpu::hsamd::ValueKind::HiddenRemainderX:
-  case amdgpu::hsamd::ValueKind::HiddenRemainderY:
-  case amdgpu::hsamd::ValueKind::HiddenRemainderZ:
-  case amdgpu::hsamd::ValueKind::HiddenNone:
-  case amdgpu::hsamd::ValueKind::HiddenGroupSizeX:
-  case amdgpu::hsamd::ValueKind::HiddenGroupSizeY:
-  case amdgpu::hsamd::ValueKind::HiddenGroupSizeZ:
-  case amdgpu::hsamd::ValueKind::HiddenGridDims:
-  case amdgpu::hsamd::ValueKind::HiddenPrivateBase:
-  case amdgpu::hsamd::ValueKind::HiddenSharedBase:
-    break;
-  case amdgpu::hsamd::ValueKind::HiddenPrintfBuffer:
-    F.getParent()->getOrInsertNamedMetadata("llvm.printf.fmts");
-    break;
-  case amdgpu::hsamd::ValueKind::HiddenHostcallBuffer:
-    F.removeFnAttr("amdgpu-no-hostcall-ptr");
-    break;
-  case amdgpu::hsamd::ValueKind::HiddenDefaultQueue:
-    F.removeFnAttr("amdgpu-no-default-queue");
-    break;
-  case amdgpu::hsamd::ValueKind::HiddenCompletionAction:
-    F.removeFnAttr("amdgpu-no-completion-action");
-    break;
-  case amdgpu::hsamd::ValueKind::HiddenMultiGridSyncArg:
-    F.removeFnAttr("amdgpu-no-multigrid-sync-arg");
-    break;
-  case amdgpu::hsamd::ValueKind::HiddenHeapV1:
-    F.removeFnAttr("amdgpu-no-heap-ptr");
-    break;
-  case amdgpu::hsamd::ValueKind::HiddenDynamicLDSSize:
-    MFI.setUsesDynamicLDS(true);
-    break;
-  case amdgpu::hsamd::ValueKind::HiddenQueuePtr:
-    MFI.addQueuePtr(TRI);
-    break;
-  default:
-    return;
-  }
-}
 
 static inline llvm::Error
 parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
@@ -400,7 +327,6 @@ static llvm::Expected<std::pair<llvm::MachineFunction &,
                                 std::optional<object::AMDGCNElfSymbolRef>>>
 initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
                              const MemoryAllocationAccessor &SegAccessor,
-                             const amdgpu::hsamd::MetadataParser &MDParser,
                              llvm::Module &TargetModule,
                              const llvm::GCNTargetMachine &TM,
                              llvm::FunctionAnalysisManager &FAM) {
@@ -517,7 +443,7 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
   auto &ST = TM.getSubtarget<llvm::GCNSubtarget>(*F);
 
   /// Set pre-loaded kernel argument field for targets that support it
-  if (ST.kernargPreload()) {
+  if (ST.hasKernargPreload()) {
     /// TODO: It seems the AMDGPU backend doesn't support the offset field of
     /// kernarg_preload for now. Fix it once it is added to LLVM upstream
     MFI->getUserSGPRInfo().allocKernargPreloadSGPRs(KDOnHost.kernarg_preload);
@@ -636,7 +562,7 @@ convertAndAddMCOperandsToMI(llvm::ArrayRef<llvm::MCOperand> MCOperands,
       LLVM_DEBUG(llvm::dbgs() << "Converting MC register operand.\n");
       unsigned RegNum = RealToPseudoRegisterMapTable(MCOp.getReg());
       const bool IsDef = MCOpIdx < MCID.getNumDefs();
-      auto Flags = llvm::RegState::NoFlags;
+      auto Flags = 0x0;
       const llvm::MCOperandInfo &OpInfo = MCID.operands().begin()[MCOpIdx];
       if (IsDef && !OpInfo.isOptionalDef()) {
         Flags |= llvm::RegState::Define;
@@ -769,8 +695,9 @@ convertAndAddMCOperandsToMI(llvm::ArrayRef<llvm::MCOperand> MCOperands,
   return llvm::Error::success();
 }
 
-static llvm::Error populateMF(const InstructionTraces &MFTrace,
-                              llvm::MachineFunction &MF) {
+static llvm::Error
+populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
+           llvm::SmallVector<llvm::MachineInstr *> &UnresolvedReturnInsts) {
   llvm::LLVMContext &Ctx = MF.getFunction().getContext();
   llvm::MachineBasicBlock *CurrentMBB = MF.CreateMachineBasicBlock();
 
@@ -888,18 +815,16 @@ static llvm::Error populateMF(const InstructionTraces &MFTrace,
         if (IsDirectBranch) {
           LLVM_DEBUG(llvm::dbgs() << "The terminator is a direct branch.\n");
           uint64_t BranchTarget;
-          if (MIA->evaluateBranch(MCInst, Inst.getLoadedDeviceAddress(), 4,
-                                  BranchTarget)) {
-            LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
-                           "Address was resolved to {0:x}\n", BranchTarget));
-            if (!UnresolvedBranchMIs.contains(BranchTarget)) {
-              UnresolvedBranchMIs.insert({BranchTarget, {Builder.getInstr()}});
-            } else {
-              UnresolvedBranchMIs[BranchTarget].push_back(Builder.getInstr());
-            }
+          LUTHIER_RETURN_ON_ERROR(
+              InstructionTracesAnalysis::evaluateDirectBranchOrCall(
+                  MCInst, Inst.getLoadedDeviceAddress())
+                  .moveInto(BranchTarget));
+          LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
+                         "Address was resolved to {0:x}\n", BranchTarget));
+          if (!UnresolvedBranchMIs.contains(BranchTarget)) {
+            UnresolvedBranchMIs.insert({BranchTarget, {Builder.getInstr()}});
           } else {
-            LLVM_DEBUG(llvm::dbgs()
-                       << "Error resolving the target address of the branch\n");
+            UnresolvedBranchMIs[BranchTarget].push_back(Builder.getInstr());
           }
         }
         // if this is the last instruction in the trace group, no need for
@@ -926,7 +851,6 @@ static llvm::Error populateMF(const InstructionTraces &MFTrace,
         bool IsFormerMIVector = shouldImplicitReadExec(*PrevMI);
         bool CurrentMIWritesExecMask =
             Builder->modifiesRegister(llvm::AMDGPU::EXEC, TRI);
-        /// TODO: WQM instructions
         bool ShouldSplitCurrentMBB =
             CurrentMIWritesExecMask || IsCurrentMIVector ^ IsFormerMIVector;
         if (ShouldSplitCurrentMBB) {
@@ -937,6 +861,12 @@ static llvm::Error populateMF(const InstructionTraces &MFTrace,
                         "***************************\n");
         }
       }
+      /// Indirect branch and all call targets require further processing so
+      /// we return them to the code discovery pass
+      if (Builder->isIndirectBranch() || Builder->isCall()) {
+        UnresolvedReturnInsts.push_back(Builder.getInstr());
+      }
+
       CurrentInstrAddr += Inst.getSize();
     }
   }
@@ -1041,18 +971,17 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
 
   while (!UnvisitedPointsOfEntry.empty()) {
     EntryPoint CurrentEntryPoint = *UnvisitedPointsOfEntry.begin();
+    if (VisitedPointsOfEntry.contains(CurrentEntryPoint))
+      continue;
 
     auto [MF, FuncSymRef] =
         [&]() -> std::pair<llvm::MachineFunction &,
                            std::optional<object::AMDGCNElfSymbolRef>> {
       /// Initialize the function handle associated with the entry point
       if (const auto *KDOnDevice = CurrentEntryPoint.getKernelDescriptor()) {
-        const auto &MDParser =
-            TargetMAM.getResult<MetadataParserAnalysis>(TargetModule)
-                .getParser();
 
         auto MFOrAndSymOrErr = initKernelEntryPointFunction(
-            *KDOnDevice, SegAccessor, MDParser, TargetModule, TM, FAM);
+            *KDOnDevice, SegAccessor, TargetModule, TM, FAM);
         LUTHIER_CTX_EMIT_ON_ERROR(Ctx, MFOrAndSymOrErr.takeError());
 
         return *MFOrAndSymOrErr;
@@ -1079,9 +1008,11 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
           LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
               "Failed to get trace results for function {0}", MF.getName())));
     }
+    llvm::SmallVector<llvm::MachineInstr *> UnresolvedTraceTermInstructions{};
     /// Populate the current machine function using the trace info we just
     /// obtained
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, populateMF(*TraceResults.getTraces(), MF));
+    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, populateMF(*TraceResults.getTraces(), MF,
+                                              UnresolvedTraceTermInstructions));
 
     /// Invalidate all module-level analysis not related to Functions and
     /// Machine Functions proxies because we just added a new machine function
@@ -1091,17 +1022,42 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     PA.preserve<llvm::FunctionAnalysisManagerModuleProxy>();
     TargetMAM.invalidate(TargetModule, PA);
 
-    /// Check if there are call instruction in return blocks of the
-    /// machine function; If so, check if there is a function symbol associated
-    /// with it. If so, see if the size of the function indicates there is more
-    /// code after each call instruction, and add them to the list of
-    /// entry points to be visited
+    llvm::SmallDenseSet<llvm::MachineInstr *> UnresolvedShortCallInsts{};
 
-    /// Form the Predicated CFG for the current Machine Function and
-    /// raise the discovered code to LLVM IR
+    /// TODO: IR translation and indirect branch/call analysis goes here
 
-    /// Re-calculate IP-liveness and IP-reaching definitions
-    // (void)TargetMAM.getResult<IndirectBranchResolverAnalysis>(TargetModule);
+    /// Go over all unresolved trace terminator instructions and process them
+    /// accordingly
+    for (llvm::MachineInstr *TraceTermMI : UnresolvedTraceTermInstructions) {
+      /// If a terminator is a call, then it is likely that the instruction
+      /// after the call is reachable. Add it to the list of unvisited entry
+      /// points
+      if (TraceTermMI->isCall()) {
+        TargetMachineInstrMDNode *TraceTermMD =
+            TargetMachineInstrMDNode::getInstrMDNodeIfExists(*TraceTermMI);
+        assert(TraceTermMD &&
+               "The terminator instruction's MD has not been initialized");
+        std::optional<uint64_t> TraceTermAddr =
+            TraceTermMD->getTraceInstrAddress();
+        assert(TraceTermAddr.has_value() &&
+               "The terminator instruction doesn't have an address");
+        UnvisitedPointsOfEntry.insert(EntryPoint{*TraceTermAddr + 4});
+
+        if (TraceTermMI->getOpcode() == llvm::AMDGPU::S_CALL_B64) {
+          uint64_t CallTarget =
+              InstructionTracesAnalysis::evaluateDirectBranchOrCall(
+                  TraceTermMI->getOperand(1).getImm(), *TraceTermAddr);
+          UnvisitedPointsOfEntry.insert(EntryPoint{CallTarget});
+          UnresolvedShortCallInsts.insert(TraceTermMI);
+        } else {
+          TargetModule.addModuleFlag(llvm::Module::Warning,
+                                     "luthier.cg.not_recovered", false);
+        }
+      } else if (TraceTermMI->isIndirectBranch()) {
+        TargetModule.addModuleFlag(llvm::Module::Warning,
+                                   "luthier.cg.not_recovered", false);
+      }
+    }
 
     UnvisitedPointsOfEntry.erase(CurrentEntryPoint);
     VisitedPointsOfEntry.insert(CurrentEntryPoint);
