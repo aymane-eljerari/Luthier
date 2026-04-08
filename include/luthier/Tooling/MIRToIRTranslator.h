@@ -92,7 +92,13 @@ namespace luthier {
 /// basic blocks or instructions
 class MBBOperandTracker {
 
-  using MCRegValueMap = llvm::DenseMap<llvm::MCRegister, llvm::Value *>;
+  /// We keep track of the same register's value per type; For example, if the
+  /// translation requires a register value of i32 to be cast to a f32,
+  /// we cache both values. This way, when a later instruction requests the
+  /// f32 version, we don't emit a redundant cast instruction
+  using ValueTypeMap = llvm::DenseMap<llvm::Type *, llvm::Value *>;
+
+  using MCRegValueMap = llvm::DenseMap<llvm::MCRegister, ValueTypeMap>;
 
   using BBValueMap =
       llvm::DenseMap<std::reference_wrapper<const llvm::MachineBasicBlock>,
@@ -102,6 +108,42 @@ class MBBOperandTracker {
 
   BBValueMap VM{};
 
+public:
+  explicit MBBOperandTracker(const llvm::MachineFunction &MF);
+
+  const llvm::SIInstrInfo &getTII() const {
+    return *MF.getSubtarget<llvm::GCNSubtarget>().getInstrInfo();
+  }
+
+  const llvm::SIRegisterInfo &getTRI() const {
+    return *MF.getSubtarget<llvm::GCNSubtarget>().getRegisterInfo();
+  }
+
+  llvm::Value &getOperandAsValue(const llvm::MachineOperand &Op,
+                                 llvm::Type *RegType = nullptr);
+
+  /// Seed the value of \p Reg in \p MBB without invalidating overlaps.
+  /// Used to initialize pre-loaded kernel entry registers before any
+  /// instructions are raised.
+  void seedRegValue(const llvm::MachineBasicBlock &MBB, llvm::MCRegister Reg,
+                    llvm::Value *Val) {
+    getMap(MBB)[Reg][Val->getType()] = Val;
+  }
+
+  llvm::Value &getRegisterOperand(const llvm::MachineInstr &MI,
+                                  llvm::MCRegister Reg,
+                                  llvm::Type *RegType = nullptr);
+
+  llvm::Value &getRegisterOperand(const llvm::MachineBasicBlock &MBB,
+                                  llvm::MCRegister Reg,
+                                  llvm::Type *RegType = nullptr);
+
+  void setRegOperandValue(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
+                          llvm::Value *Val);
+
+  void setRegOperandValue(const llvm::MachineOperand &Op, llvm::Value *Val);
+
+private:
   MCRegValueMap &getMap(const llvm::MachineBasicBlock &MBB) {
     auto It = VM.find(MBB);
     assert(It != VM.end() && "No value map for MBB");
@@ -122,63 +164,35 @@ class MBBOperandTracker {
   /// Search \p Map for a stored super-register that fully contains \p Reg.
   /// If found, bitcast to vector and extractelement the requested sub-reg.
   llvm::Value *tryExtractFromSuperReg(MCRegValueMap &Map, llvm::MCRegister Reg,
-                                      llvm::IRBuilder<> &Builder);
+                                      llvm::Type *RegType,
+                                      llvm::IRBuilderBase &Builder);
 
   /// Try to compose \p Reg from stored sub-register entries in \p Map.
   /// Builds a vector via insertelement for each sub-reg, then bitcasts to
   /// the target integer type.
   llvm::Value *tryComposeFromSubRegs(MCRegValueMap &Map, llvm::MCRegister Reg,
-                                     llvm::IRBuilder<> &Builder);
+                                     llvm::IRBuilderBase &Builder,
+                                     llvm::Type *RegType = nullptr);
 
   llvm::Value *tryComposeFromOverlappingRegs(const llvm::MachineBasicBlock &MBB,
                                              MCRegValueMap &Map,
                                              llvm::MCRegister Reg,
-                                             llvm::IRBuilder<> &Builder);
-
-  /// If \p Reg is not a VGPR (i.e. SGPR, SCC, etc.) and \p V is an
-  /// Instruction, attach \c !amdgpu.uniform metadata to mark it as uniform.
-  void annotateUniformIfNeeded(llvm::Value *V, llvm::MCRegister Reg);
+                                             llvm::IRBuilderBase &Builder,
+                                             llvm::Type *RegType = nullptr);
 
   /// Materialize the value of \p Reg in \p MBB.  Searches for an exact
   /// match first, then a containing super-register, then composable
   /// sub-registers, and finally falls back to predecessor PHI / undef.
   llvm::Value &materializeReg(const llvm::MachineBasicBlock &MBB,
-                              llvm::MCRegister Reg);
-
-public:
-  explicit MBBOperandTracker(const llvm::MachineFunction &MF);
-
-  const llvm::SIInstrInfo &getTII() const {
-    return *MF.getSubtarget<llvm::GCNSubtarget>().getInstrInfo();
-  }
-
-  const llvm::SIRegisterInfo &getTRI() const {
-    return *MF.getSubtarget<llvm::GCNSubtarget>().getRegisterInfo();
-  }
-
-  llvm::Value &getOperandAsValue(const llvm::MachineOperand &Op);
-
-  /// Seed the value of \p Reg in \p MBB without invalidating overlaps.
-  /// Used to initialize pre-loaded kernel entry registers before any
-  /// instructions are raised.
-  void seedRegValue(const llvm::MachineBasicBlock &MBB, llvm::MCRegister Reg,
-                    llvm::Value *Val) {
-    getMap(MBB)[Reg] = Val;
-  }
-
-  llvm::Value &getRegisterOperand(const llvm::MachineInstr &MI,
-                                  llvm::MCRegister Reg);
-
-  llvm::Value &getRegisterOperand(const llvm::MachineBasicBlock &MBB,
-                                  llvm::MCRegister Reg);
-
-  void setRegOperandValue(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
-                          llvm::Value *Val);
-
-  void setRegOperandValue(const llvm::MachineOperand &Op, llvm::Value *Val);
+                              llvm::MCRegister Reg, llvm::Type *RegType);
 };
 
 llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF);
+
+/// If a register count attribute is not present, that register class is
+/// omitted from the returned list.
+// llvm::SmallVector<llvm::MCRegister>
+// getISAVisibleRegisters(const llvm::MachineFunction &MF);
 
 /// Maps physical registers to IR values — used as input/output for
 /// \c translateSingleInstr.
