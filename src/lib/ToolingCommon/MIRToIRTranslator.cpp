@@ -715,9 +715,27 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
                        MBBOperandTracker &RegisterValueMap);
 
 #define GET_SI_INSTR_SEMANTIC_FUNCTIONS
-#define GET_SI_INSTR_SEMANTIC_DISPATCH
 #include "SIInstrSemantics.inc"
 
+#define GET_SI_INSTR_SEMANTIC_DISPATCH
+#define HANDLE_INST_SEMANTIC(OPCODE)                                           \
+  case OPCODE:                                                                 \
+    return raiseMachineInstr<llvm::AMDGPU::#OPCODE>(MI, Builder, Tracker);
+
+static void raiseMachineInstr(const llvm::MachineInstr &MI,
+                              llvm::IRBuilderBase &Builder,
+                              MBBOperandTracker &Tracker) {
+  uint16_t Opcode = MI.getOpcode();
+  switch (MI.getOpcode()) {
+
+#include "SIInstrSemantics.inc"
+
+  default:
+    llvm_unreachable(llvm::formatv("Unmodelled instruction opcode {0}.", Opcode)
+                         .str()
+                         .c_str());
+  }
+}
 //===----------------------------------------------------------------------===//
 // translateSingleInstr — public API for the fuzzer
 //===----------------------------------------------------------------------===//

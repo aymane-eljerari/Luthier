@@ -58,7 +58,7 @@ private:
 
   /// Emit the dispatch switch function that routes MI opcodes to the
   /// appropriate specialization.
-  void emitDispatchFunction(llvm::raw_ostream &OS,
+  void emitMacro(llvm::raw_ostream &OS,
                             llvm::ArrayRef<const llvm::Record *> Semantics,
                             llvm::ArrayRef<const llvm::Record *> Intrinsics);
 

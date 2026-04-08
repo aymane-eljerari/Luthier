@@ -319,26 +319,21 @@ void SIInstrSemanticsEmitter::emitIntrinsicFunction(llvm::raw_ostream &OS,
 // Dispatch function emitter
 //===----------------------------------------------------------------------===//
 
-void SIInstrSemanticsEmitter::emitDispatchFunction(
+void SIInstrSemanticsEmitter::emitMacro(
     llvm::raw_ostream &OS, llvm::ArrayRef<const llvm::Record *> Semantics,
     llvm::ArrayRef<const llvm::Record *> Intrinsics) {
-  OS << "static void raiseMachineInstr(\n";
-  OS << "    const llvm::MachineInstr &MI, llvm::IRBuilderBase &Builder,\n";
-  OS << "    MBBOperandTracker &Tracker) {\n";
-  OS << "  uint16_t Opcode = MI.getOpcode();\n";
-  OS << "  switch (MI.getOpcode()) {\n";
-
-  // Emit cases for InstSISemantic records (non-empty only)
+  OS << "#ifndef HANDLE_INST_SEMANTIC\n";
+  OS << "#define HANDLE_INST_SEMANTIC(OPCODE) \n";
+  OS << "#endif\n";
   for (const llvm::Record *Rec : Semantics) {
     const auto *SemList = Rec->getValueAsListInit("Semantic");
     if (!SemList || SemList->empty())
       continue;
     const llvm::Record *InstRec = Rec->getValueAsDef("Instruction");
     llvm::StringRef InstName = InstRec->getName();
-    OS << "  case llvm::AMDGPU::" << InstName << ":\n";
-    OS << "    return raiseMachineInstr<llvm::AMDGPU::" << InstName
-       << ">(MI, Builder, Tracker);\n";
+    OS << "HANDLE_INST_SEMANTIC(" << InstName << ")\n";
   }
+  OS << "#undef HANDLE_INST_SEMANTIC\n";
 
   // // Emit cases for InstSIIntrinsic records
   // for (const llvm::Record *Rec : Intrinsics) {
@@ -349,12 +344,6 @@ void SIInstrSemanticsEmitter::emitDispatchFunction(
   //      << ">(MI, Builder, Tracker);\n";
   //   OS << "    return true;\n";
   // }
-
-  OS << "  default:\n";
-  OS << "    return llvm_unreachable(llvm::formatv(\"Unmodeled Opcode: {0}.\", "
-        "Opcode).str().c_str());\n";
-  OS << "  }\n";
-  OS << "}\n\n";
 }
 
 //===----------------------------------------------------------------------===//
@@ -401,11 +390,7 @@ void SIInstrSemanticsEmitter::run(llvm::raw_ostream &OS) {
   //
   // OS << "#endif // GET_SI_INSTR_SEMANTIC_FUNCTIONS\n\n";
   //
-  // --- Emit dispatch function ---
-  OS << "#ifdef GET_SI_INSTR_SEMANTIC_DISPATCH\n\n";
-  emitDispatchFunction(OS, Semantics, Intrinsics);
-  OS << "#undef GET_SI_INSTR_SEMANTIC_DISPATCH\n";
-  OS << "#endif // GET_SI_INSTR_SEMANTIC_DISPATCH\n\n";
+  emitMacro(OS, Semantics, Intrinsics);
 
   // --- Emit array of all opcodes that have semantic definitions ---
   OS << "#ifdef GET_SI_INSTR_SEMANTIC_OPCODE_LIST\n";
