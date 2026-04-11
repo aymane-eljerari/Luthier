@@ -109,9 +109,9 @@ def S_BITCMP0_B32_sem : InstSISemantic<S_BITCMP0_B32> {
     (ImplicitDef SCC, (LLVMCmp LLVMICmpEQ,
       (LLVMAnd (LLVMLShr (GetNamedOperand $src0),
                           (LLVMAnd (GetNamedOperand $src1),
-                                   (ConstantInt llvm_i32_ty, 31))),
-               (ConstantInt llvm_i32_ty, 1)),
-      (ConstantInt llvm_i32_ty, 0)))
+                                   (ConstantInt si_llvm_i32_ty, 31))),
+               (ConstantInt si_llvm_i32_ty, 1)),
+      (ConstantInt si_llvm_i32_ty, 0)))
   ];
 }
 
@@ -122,10 +122,10 @@ def S_BITCMP0_B64_sem : InstSISemantic<S_BITCMP0_B64> {
     (ImplicitDef SCC, (LLVMCmp LLVMICmpEQ,
       (LLVMAnd (LLVMLShr (GetNamedOperand $src0),
                           (LLVMZExt (LLVMAnd (GetNamedOperand $src1),
-                                             (ConstantInt llvm_i32_ty, 63)),
-                                    llvm_i64_ty)),
-               (ConstantInt llvm_i64_ty, 1)),
-      (ConstantInt llvm_i64_ty, 0)))
+                                             (ConstantInt si_llvm_i32_ty, 63)),
+                                    si_llvm_i64_ty)),
+               (ConstantInt si_llvm_i64_ty, 1)),
+      (ConstantInt si_llvm_i64_ty, 0)))
   ];
 }
 
@@ -136,9 +136,9 @@ def S_BITCMP1_B32_sem : InstSISemantic<S_BITCMP1_B32> {
     (ImplicitDef SCC, (LLVMCmp LLVMICmpEQ,
       (LLVMAnd (LLVMLShr (GetNamedOperand $src0),
                           (LLVMAnd (GetNamedOperand $src1),
-                                   (ConstantInt llvm_i32_ty, 31))),
-               (ConstantInt llvm_i32_ty, 1)),
-      (ConstantInt llvm_i32_ty, 1)))
+                                   (ConstantInt si_llvm_i32_ty, 31))),
+               (ConstantInt si_llvm_i32_ty, 1)),
+      (ConstantInt si_llvm_i32_ty, 1)))
   ];
 }
 
@@ -149,10 +149,10 @@ def S_BITCMP1_B64_sem : InstSISemantic<S_BITCMP1_B64> {
     (ImplicitDef SCC, (LLVMCmp LLVMICmpEQ,
       (LLVMAnd (LLVMLShr (GetNamedOperand $src0),
                           (LLVMZExt (LLVMAnd (GetNamedOperand $src1),
-                                             (ConstantInt llvm_i32_ty, 63)),
-                                    llvm_i64_ty)),
-               (ConstantInt llvm_i64_ty, 1)),
-      (ConstantInt llvm_i64_ty, 1)))
+                                             (ConstantInt si_llvm_i32_ty, 63)),
+                                    si_llvm_i64_ty)),
+               (ConstantInt si_llvm_i64_ty, 1)),
+      (ConstantInt si_llvm_i64_ty, 1)))
   ];
 }
 
@@ -173,8 +173,8 @@ foreach i = 0-5 in {
   def op#_sem : InstSISemantic<op> {
     let Semantic = [
       (ImplicitDef SCC, (LLVMFCmp cmpPred,
-        (LLVMBitCast (GetNamedOperand $src0), llvm_float_ty),
-        (LLVMBitCast (GetNamedOperand $src1), llvm_float_ty)))
+        (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
+        (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty)))
     ];
   }
 }
@@ -188,8 +188,8 @@ foreach i = 0-5 in {
   def op#_sem : InstSISemantic<op> {
     let Semantic = [
       (ImplicitDef SCC, (LLVMFCmp cmpPred,
-        (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), llvm_i16_ty), llvm_half_ty),
-        (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), llvm_i16_ty), llvm_half_ty)))
+        (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), si_llvm_half_ty),
+        (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty)))
     ];
   }
 }
@@ -204,8 +204,8 @@ foreach i = 0-5 in {
   def op#_sem : InstSISemantic<op> {
     let Semantic = [
       (ImplicitDef SCC, (LLVMFCmp cmpPred,
-        (LLVMBitCast (GetNamedOperand $src0), llvm_float_ty),
-        (LLVMBitCast (GetNamedOperand $src1), llvm_float_ty)))
+        (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
+        (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty)))
     ];
   }
 }
@@ -219,8 +219,8 @@ foreach i = 0-5 in {
   def op#_sem : InstSISemantic<op> {
     let Semantic = [
       (ImplicitDef SCC, (LLVMFCmp cmpPred,
-        (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), llvm_i16_ty), llvm_half_ty),
-        (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), llvm_i16_ty), llvm_half_ty)))
+        (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), si_llvm_half_ty),
+        (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty)))
     ];
   }
 }
@@ -231,16 +231,16 @@ foreach i = 0-5 in {
 def S_CMP_O_F32_sem : InstSISemantic<S_CMP_O_F32> {
   let Semantic = [
     (ImplicitDef SCC, (LLVMFCmp LLVMFCmpOLE,
-      (LLVMBitCast (GetNamedOperand $src0), llvm_float_ty),
-      (LLVMBitCast (GetNamedOperand $src1), llvm_float_ty)))
+      (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
+      (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty)))
   ];
 }
 
 def S_CMP_O_F16_sem : InstSISemantic<S_CMP_O_F16> {
   let Semantic = [
     (ImplicitDef SCC, (LLVMFCmp LLVMFCmpOLE,
-      (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), llvm_i16_ty), llvm_half_ty),
-      (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), llvm_i16_ty), llvm_half_ty)))
+      (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), si_llvm_half_ty),
+      (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty)))
   ];
 }
 
@@ -250,15 +250,15 @@ def S_CMP_O_F16_sem : InstSISemantic<S_CMP_O_F16> {
 def S_CMP_U_F32_sem : InstSISemantic<S_CMP_U_F32> {
   let Semantic = [
     (ImplicitDef SCC, (LLVMFCmp LLVMFCmpUNO,
-      (LLVMBitCast (GetNamedOperand $src0), llvm_float_ty),
-      (LLVMBitCast (GetNamedOperand $src1), llvm_float_ty)))
+      (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
+      (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty)))
   ];
 }
 
 def S_CMP_U_F16_sem : InstSISemantic<S_CMP_U_F16> {
   let Semantic = [
     (ImplicitDef SCC, (LLVMFCmp LLVMFCmpUNO,
-      (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), llvm_i16_ty), llvm_half_ty),
-      (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), llvm_i16_ty), llvm_half_ty)))
+      (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), si_llvm_half_ty),
+      (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty)))
   ];
 }

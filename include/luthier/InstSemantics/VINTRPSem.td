@@ -58,7 +58,7 @@
 def V_INTERP_P1_F32_sem : InstSISemantic<V_INTERP_P1_F32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic llvm_float_ty, int_amdgcn_interp_p1, [(GetNamedOperand $vsrc), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_p1, [(GetNamedOperand $vsrc), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
   ];
 }
 
@@ -80,7 +80,7 @@ def V_INTERP_P1_F32_sem : InstSISemantic<V_INTERP_P1_F32> {
 def V_INTERP_P2_F32_sem : InstSISemantic<V_INTERP_P2_F32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic llvm_float_ty, int_amdgcn_interp_p2, [(GetNamedOperand $vsrc), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_p2, [(GetNamedOperand $vsrc), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
   ];
 }
 
@@ -99,7 +99,7 @@ def V_INTERP_P2_F32_sem : InstSISemantic<V_INTERP_P2_F32> {
 def V_INTERP_MOV_F32_sem : InstSISemantic<V_INTERP_MOV_F32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic llvm_float_ty, int_amdgcn_interp_mov, [(GetNamedOperand $vsrc), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_mov, [(GetNamedOperand $vsrc), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
   ];
 }
 
@@ -111,7 +111,7 @@ def V_INTERP_MOV_F32_sem : InstSISemantic<V_INTERP_MOV_F32> {
 def V_INTERP_P1_F32_16bank_sem : InstSISemantic<V_INTERP_P1_F32_16bank> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic llvm_float_ty, int_amdgcn_interp_p1, [(GetNamedOperand $vsrc), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_p1, [(GetNamedOperand $vsrc), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
   ];
 }
 
@@ -140,7 +140,7 @@ def V_INTERP_P1_F32_16bank_sem : InstSISemantic<V_INTERP_P1_F32_16bank> {
 def V_INTERP_P1LL_F16_sem : InstSISemantic<V_INTERP_P1LL_F16> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic llvm_float_ty, int_amdgcn_interp_p1_f16, [(GetNamedOperand $src0), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (GetNamedOperand $high), (ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_p1_f16, [(GetNamedOperand $src0), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (GetNamedOperand $high), (ImplicitUse M0)]))
   ];
 }
 
@@ -180,7 +180,7 @@ def V_INTERP_P1LV_F16_sem : InstSISemantic<V_INTERP_P1LV_F16> {
 def V_INTERP_P2_F16_sem : InstSISemantic<V_INTERP_P2_F16> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic llvm_half_ty, int_amdgcn_interp_p2_f16, [(GetNamedOperand $src0), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (GetNamedOperand $high), (ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_interp_p2_f16, [(GetNamedOperand $src0), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (GetNamedOperand $high), (ImplicitUse M0)]))
   ];
 }
 
@@ -206,7 +206,7 @@ def V_INTERP_P2_F16_sem : InstSISemantic<V_INTERP_P2_F16> {
 def LDS_PARAM_LOAD_sem : InstSISemantic<LDS_PARAM_LOAD> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic llvm_float_ty, int_amdgcn_lds_param_load, [(GetNamedOperand $attr), (GetNamedOperand $attrchan), (ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_lds_param_load, [(GetNamedOperand $attr), (GetNamedOperand $attrchan), (ImplicitUse M0)]))
   ];
 }
 
@@ -220,7 +220,7 @@ def LDS_PARAM_LOAD_sem : InstSISemantic<LDS_PARAM_LOAD> {
 def LDS_DIRECT_LOAD_sem : InstSISemantic<LDS_DIRECT_LOAD> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_lds_direct_load, [(ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_lds_direct_load, [(ImplicitUse M0)]))
   ];
 }
 
@@ -244,7 +244,7 @@ def LDS_DIRECT_LOAD_sem : InstSISemantic<LDS_DIRECT_LOAD> {
 def DS_PARAM_LOAD_sem : InstSISemantic<DS_PARAM_LOAD> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic llvm_float_ty, int_amdgcn_lds_param_load, [(GetNamedOperand $attr), (GetNamedOperand $attrchan), (ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_lds_param_load, [(GetNamedOperand $attr), (GetNamedOperand $attrchan), (ImplicitUse M0)]))
   ];
 }
 
@@ -258,6 +258,6 @@ def DS_PARAM_LOAD_sem : InstSISemantic<DS_PARAM_LOAD> {
 def DS_DIRECT_LOAD_sem : InstSISemantic<DS_DIRECT_LOAD> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_lds_direct_load, [(ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_lds_direct_load, [(ImplicitUse M0)]))
   ];
 }

@@ -30,7 +30,7 @@ class CalculateGlobalAddr<dag vaddr, dag offset> {
 
 class CalculateGlobalSAddr<dag saddr, dag vaddr, dag offset> {
   dag ret = (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr),
-                                                 (LLVMZExt (GetNamedOperand $vaddr), llvm_i64_ty)),
+                                                 (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)),
                           global_ptr_type),
                          (GetNamedOperand $offset));
 }
@@ -60,8 +60,8 @@ def FLAT_LOAD_UBYTE_sem : InstSISemantic<FLAT_LOAD_UBYTE> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdata, (LLVMZExt (GetVal $tmp), llvm_i32_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -69,8 +69,8 @@ def FLAT_LOAD_SBYTE_sem : InstSISemantic<FLAT_LOAD_SBYTE> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdata, (LLVMSExt (GetVal $tmp), llvm_i32_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -78,8 +78,8 @@ def FLAT_LOAD_USHORT_sem : InstSISemantic<FLAT_LOAD_USHORT> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdata, (LLVMZExt (GetVal $tmp), llvm_i32_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -87,8 +87,8 @@ def FLAT_LOAD_SSHORT_sem : InstSISemantic<FLAT_LOAD_SSHORT> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdata, (LLVMSExt (GetVal $tmp), llvm_i32_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -96,7 +96,7 @@ def FLAT_LOAD_DWORD_sem : InstSISemantic<FLAT_LOAD_DWORD> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (SetNamedOperand $vdata, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr)))
+    (SetNamedOperand $vdata, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr)))
   ];
 }
 
@@ -104,7 +104,7 @@ def FLAT_LOAD_DWORDX2_sem : InstSISemantic<FLAT_LOAD_DWORDX2> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_v2i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v2i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $vdata, (GetVal $tmp))
   ];
 }
@@ -113,7 +113,7 @@ def FLAT_LOAD_DWORDX3_sem : InstSISemantic<FLAT_LOAD_DWORDX3> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_v3i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v3i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $vdata, (GetVal $tmp))
   ];
 }
@@ -122,7 +122,7 @@ def FLAT_LOAD_DWORDX4_sem : InstSISemantic<FLAT_LOAD_DWORDX4> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_v4i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v4i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $vdata, (GetVal $tmp))
   ];
 }
@@ -146,8 +146,8 @@ def FLAT_LOAD_UBYTE_D16_sem : InstSISemantic<FLAT_LOAD_UBYTE_D16> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdata, (LLVMZExt (GetVal $tmp), llvm_i16_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty))
   ];
 }
 
@@ -155,10 +155,10 @@ def FLAT_LOAD_UBYTE_D16_HI_sem : InstSISemantic<FLAT_LOAD_UBYTE_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (DefVal $hi, (LLVMZExt (GetVal $tmp), llvm_i16_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty)),
     (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
-    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 65535))),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 65535))),
     (SetNamedOperand $vdata, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
   ];
 }
@@ -167,8 +167,8 @@ def FLAT_LOAD_SBYTE_D16_sem : InstSISemantic<FLAT_LOAD_SBYTE_D16> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdata, (LLVMSExt (GetVal $tmp), llvm_i16_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty))
   ];
 }
 
@@ -176,10 +176,10 @@ def FLAT_LOAD_SBYTE_D16_HI_sem : InstSISemantic<FLAT_LOAD_SBYTE_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (DefVal $hi, (LLVMSExt (GetVal $tmp), llvm_i16_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty)),
     (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
-    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 65535))),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 65535))),
     (SetNamedOperand $vdata, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
   ];
 }
@@ -188,7 +188,7 @@ def FLAT_LOAD_SHORT_D16_sem : InstSISemantic<FLAT_LOAD_SHORT_D16> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (SetNamedOperand $vdata, (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr)))
+    (SetNamedOperand $vdata, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr)))
   ];
 }
 
@@ -196,10 +196,10 @@ def FLAT_LOAD_SHORT_D16_HI_sem : InstSISemantic<FLAT_LOAD_SHORT_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr))),
-    (DefVal $hi, (None (GetVal $tmp), llvm_i16_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (None (GetVal $tmp), si_llvm_i16_ty)),
     (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
-    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 65535))),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 65535))),
     (SetNamedOperand $vdata, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
   ];
 }
@@ -224,7 +224,7 @@ def FLAT_STORE_BYTE_sem : InstSISemantic<FLAT_STORE_BYTE> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), llvm_i8_ty)),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i8_ty)),
     (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
   ];
 }
@@ -233,7 +233,7 @@ def FLAT_STORE_BYTE_D16_HI_sem : InstSISemantic<FLAT_STORE_BYTE_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp8, (LLVMTrunc (LLVMShr (GetNamedOperand $vdata), 16), llvm_i8_ty)),
+    (DefVal $tmp8, (LLVMTrunc (LLVMShr (GetNamedOperand $vdata), 16), si_llvm_i8_ty)),
     (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
   ];
 }
@@ -242,7 +242,7 @@ def FLAT_STORE_SHORT_sem : InstSISemantic<FLAT_STORE_SHORT> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), llvm_i16_ty)),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i16_ty)),
     (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
   ];
 }
@@ -251,7 +251,7 @@ def FLAT_STORE_SHORT_D16_HI_sem : InstSISemantic<FLAT_STORE_SHORT_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp8, (LLVMTrunc (LLVMShr (GetNamedOperand $vdata), 16), llvm_i16_ty)),
+    (DefVal $tmp8, (LLVMTrunc (LLVMShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
     (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
   ];
 }
@@ -316,9 +316,9 @@ def FLAT_ATOMIC_CMPSWAP_sem : InstSISemantic<FLAT_ATOMIC_CMPSWAP> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -417,7 +417,7 @@ def FLAT_ATOMIC_COND_SUB_U32_sem : InstSISemantic<FLAT_ATOMIC_COND_SUB_U32> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp), (GetNamedOperand $vdata)),
                                  (LLVMSub (GetVal $tmp), (GetNamedOperand $vdata)), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -429,10 +429,10 @@ def FLAT_ATOMIC_CSUB_U32_sem : InstSISemantic<FLAT_ATOMIC_CSUB_U32> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $tmp), (GetNamedOperand $vdata)),
                                  (LLVMSub (GetVal $tmp), (GetNamedOperand $vdata)),
-                                 (ConstantInt llvm_i32_ty, 0))),
+                                 (ConstantInt si_llvm_i32_ty, 0))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
   ];
@@ -442,7 +442,7 @@ def FLAT_ATOMIC_ADD_F32_sem : InstSISemantic<FLAT_ATOMIC_ADD_F32> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMFAdd (GetVal $tmp), (GetNamedOperand $vdata))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -453,7 +453,7 @@ def FLAT_ATOMIC_ADD_F64_sem : InstSISemantic<FLAT_ATOMIC_ADD_F64> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMFAdd (GetVal $tmp), (GetNamedOperand $vdata))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -464,7 +464,7 @@ def FLAT_ATOMIC_MIN_F64_sem : InstSISemantic<FLAT_ATOMIC_MIN_F64> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OLT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -476,7 +476,7 @@ def FLAT_ATOMIC_MAX_F64_sem : InstSISemantic<FLAT_ATOMIC_MAX_F64> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OGT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -488,7 +488,7 @@ def FLAT_ATOMIC_FMIN_sem : InstSISemantic<FLAT_ATOMIC_FMIN> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OLT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -500,7 +500,7 @@ def FLAT_ATOMIC_FMAX_sem : InstSISemantic<FLAT_ATOMIC_FMAX> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OGT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -512,9 +512,9 @@ def FLAT_ATOMIC_FCMPSWAP_sem : InstSISemantic<FLAT_ATOMIC_FCMPSWAP> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_float_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -525,18 +525,18 @@ def FLAT_ATOMIC_PK_ADD_F16_sem : InstSISemantic<FLAT_ATOMIC_PK_ADD_F16> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $src, (GetNamedOperand $vdata)),
-    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), llvm_i16_ty)),
-    (DefVal $src_lo, (LLVMTrunc (GetVal $src), llvm_i16_ty)),
-    (DefVal $tmp_hi, (LLVMTrunc (LLVMShr (GetVal $tmp), 16), llvm_i16_ty)),
-    (DefVal $src_hi, (LLVMTrunc (LLVMShr (GetVal $src), 16), llvm_i16_ty)),
-    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), llvm_f16_ty),
-                              (LLVMBitCast (GetVal $src_lo), llvm_f16_ty))),
-    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), llvm_f16_ty),
-                               (LLVMBitCast (GetVal $src_hi), llvm_f16_ty))),
-    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), llvm_i16_ty), llvm_i32_ty),
-                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), llvm_i16_ty), llvm_i32_ty), 16))),
+    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $src_lo, (LLVMTrunc (GetVal $src), si_llvm_i16_ty)),
+    (DefVal $tmp_hi, (LLVMTrunc (LLVMShr (GetVal $tmp), 16), si_llvm_i16_ty)),
+    (DefVal $src_hi, (LLVMTrunc (LLVMShr (GetVal $src), 16), si_llvm_i16_ty)),
+    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), si_llvm_f16_ty),
+                              (LLVMBitCast (GetVal $src_lo), si_llvm_f16_ty))),
+    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), si_llvm_f16_ty),
+                               (LLVMBitCast (GetVal $src_hi), si_llvm_f16_ty))),
+    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), si_llvm_i16_ty), si_llvm_i32_ty),
+                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), si_llvm_i16_ty), si_llvm_i32_ty), 16))),
     (LLVMStore (GetVal $res), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
   ];
@@ -546,18 +546,18 @@ def FLAT_ATOMIC_PK_ADD_BF16_sem : InstSISemantic<FLAT_ATOMIC_PK_ADD_BF16> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $src, (GetNamedOperand $vdata)),
-    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), llvm_i16_ty)),
-    (DefVal $src_lo, (LLVMTrunc (GetVal $src), llvm_i16_ty)),
-    (DefVal $tmp_hi, (LLVMTrunc (LLVMShr (GetVal $tmp), 16), llvm_i16_ty)),
-    (DefVal $src_hi, (LLVMTrunc (LLVMShr (GetVal $src), 16), llvm_i16_ty)),
-    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), llvm_i16_ty),
-                              (LLVMBitCast (GetVal $src_lo), llvm_i16_ty))),
-    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), llvm_i16_ty),
-                               (LLVMBitCast (GetVal $src_hi), llvm_i16_ty))),
-    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), llvm_i16_ty), llvm_i32_ty),
-                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), llvm_i16_ty), llvm_i32_ty), 16))),
+    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $src_lo, (LLVMTrunc (GetVal $src), si_llvm_i16_ty)),
+    (DefVal $tmp_hi, (LLVMTrunc (LLVMShr (GetVal $tmp), 16), si_llvm_i16_ty)),
+    (DefVal $src_hi, (LLVMTrunc (LLVMShr (GetVal $src), 16), si_llvm_i16_ty)),
+    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), si_llvm_i16_ty),
+                              (LLVMBitCast (GetVal $src_lo), si_llvm_i16_ty))),
+    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), si_llvm_i16_ty),
+                               (LLVMBitCast (GetVal $src_hi), si_llvm_i16_ty))),
+    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), si_llvm_i16_ty), si_llvm_i32_ty),
+                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), si_llvm_i16_ty), si_llvm_i32_ty), 16))),
     (LLVMStore (GetVal $res), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
   ];
@@ -591,9 +591,9 @@ def FLAT_ATOMIC_CMPSWAP_X2_sem : InstSISemantic<FLAT_ATOMIC_CMPSWAP_X2> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i64_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -692,9 +692,9 @@ def FLAT_ATOMIC_FCMPSWAP_X2_sem : InstSISemantic<FLAT_ATOMIC_FCMPSWAP_X2> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i64_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -705,7 +705,7 @@ def FLAT_ATOMIC_FMIN_X2_sem : InstSISemantic<FLAT_ATOMIC_FMIN_X2> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OLT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -717,7 +717,7 @@ def FLAT_ATOMIC_FMAX_X2_sem : InstSISemantic<FLAT_ATOMIC_FMAX_X2> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OGT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -763,9 +763,9 @@ def FLAT_ATOMIC_CMPSWAP_RTN_sem : InstSISemantic<FLAT_ATOMIC_CMPSWAP_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -776,9 +776,9 @@ def FLAT_ATOMIC_CMPSWAP_X2_RTN_sem : InstSISemantic<FLAT_ATOMIC_CMPSWAP_X2_RTN> 
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i64_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -965,7 +965,7 @@ def FLAT_ATOMIC_COND_SUB_U32_RTN_sem : InstSISemantic<FLAT_ATOMIC_COND_SUB_U32_R
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp), (GetNamedOperand $vdata)),
                                  (LLVMSub (GetVal $tmp), (GetNamedOperand $vdata)), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -977,10 +977,10 @@ def FLAT_ATOMIC_CSUB_U32_RTN_sem : InstSISemantic<FLAT_ATOMIC_CSUB_U32_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $tmp), (GetNamedOperand $vdata)),
                                  (LLVMSub (GetVal $tmp), (GetNamedOperand $vdata)),
-                                 (ConstantInt llvm_i32_ty, 0))),
+                                 (ConstantInt si_llvm_i32_ty, 0))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
   ];
@@ -990,7 +990,7 @@ def FLAT_ATOMIC_ADD_F32_RTN_sem : InstSISemantic<FLAT_ATOMIC_ADD_F32_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMFAdd (GetVal $tmp), (GetNamedOperand $vdata))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -1001,7 +1001,7 @@ def FLAT_ATOMIC_ADD_F64_RTN_sem : InstSISemantic<FLAT_ATOMIC_ADD_F64_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMFAdd (GetVal $tmp), (GetNamedOperand $vdata))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -1012,7 +1012,7 @@ def FLAT_ATOMIC_MIN_F64_RTN_sem : InstSISemantic<FLAT_ATOMIC_MIN_F64_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OLT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -1024,7 +1024,7 @@ def FLAT_ATOMIC_MAX_F64_RTN_sem : InstSISemantic<FLAT_ATOMIC_MAX_F64_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OGT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -1036,7 +1036,7 @@ def FLAT_ATOMIC_FMIN_RTN_sem : InstSISemantic<FLAT_ATOMIC_FMIN_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OLT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -1048,7 +1048,7 @@ def FLAT_ATOMIC_FMAX_RTN_sem : InstSISemantic<FLAT_ATOMIC_FMAX_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OGT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -1060,9 +1060,9 @@ def FLAT_ATOMIC_FCMPSWAP_RTN_sem : InstSISemantic<FLAT_ATOMIC_FCMPSWAP_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_float_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -1073,9 +1073,9 @@ def FLAT_ATOMIC_FCMPSWAP_X2_RTN_sem : InstSISemantic<FLAT_ATOMIC_FCMPSWAP_X2_RTN
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i64_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -1086,18 +1086,18 @@ def FLAT_ATOMIC_PK_ADD_F16_RTN_sem : InstSISemantic<FLAT_ATOMIC_PK_ADD_F16_RTN> 
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $src, (GetNamedOperand $vdata)),
-    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), llvm_i16_ty)),
-    (DefVal $src_lo, (LLVMTrunc (GetVal $src), llvm_i16_ty)),
-    (DefVal $tmp_hi, (LLVMTrunc (LLVMShr (GetVal $tmp), 16), llvm_i16_ty)),
-    (DefVal $src_hi, (LLVMTrunc (LLVMShr (GetVal $src), 16), llvm_i16_ty)),
-    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), llvm_f16_ty),
-                              (LLVMBitCast (GetVal $src_lo), llvm_f16_ty))),
-    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), llvm_f16_ty),
-                               (LLVMBitCast (GetVal $src_hi), llvm_f16_ty))),
-    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), llvm_i16_ty), llvm_i32_ty),
-                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), llvm_i16_ty), llvm_i32_ty), 16))),
+    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $src_lo, (LLVMTrunc (GetVal $src), si_llvm_i16_ty)),
+    (DefVal $tmp_hi, (LLVMTrunc (LLVMShr (GetVal $tmp), 16), si_llvm_i16_ty)),
+    (DefVal $src_hi, (LLVMTrunc (LLVMShr (GetVal $src), 16), si_llvm_i16_ty)),
+    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), si_llvm_f16_ty),
+                              (LLVMBitCast (GetVal $src_lo), si_llvm_f16_ty))),
+    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), si_llvm_f16_ty),
+                               (LLVMBitCast (GetVal $src_hi), si_llvm_f16_ty))),
+    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), si_llvm_i16_ty), si_llvm_i32_ty),
+                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), si_llvm_i16_ty), si_llvm_i32_ty), 16))),
     (LLVMStore (GetVal $res), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
   ];
@@ -1107,18 +1107,18 @@ def FLAT_ATOMIC_PK_ADD_BF16_RTN_sem : InstSISemantic<FLAT_ATOMIC_PK_ADD_BF16_RTN
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $src, (GetNamedOperand $vdata)),
-    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), llvm_i16_ty)),
-    (DefVal $src_lo, (LLVMTrunc (GetVal $src), llvm_i16_ty)),
-    (DefVal $tmp_hi, (LLVMTrunc (LLVMShr (GetVal $tmp), 16), llvm_i16_ty)),
-    (DefVal $src_hi, (LLVMTrunc (LLVMShr (GetVal $src), 16), llvm_i16_ty)),
-    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), llvm_i16_ty),
-                              (LLVMBitCast (GetVal $src_lo), llvm_i16_ty))),
-    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), llvm_i16_ty),
-                               (LLVMBitCast (GetVal $src_hi), llvm_i16_ty))),
-    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), llvm_i16_ty), llvm_i32_ty),
-                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), llvm_i16_ty), llvm_i32_ty), 16))),
+    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $src_lo, (LLVMTrunc (GetVal $src), si_llvm_i16_ty)),
+    (DefVal $tmp_hi, (LLVMTrunc (LLVMShr (GetVal $tmp), 16), si_llvm_i16_ty)),
+    (DefVal $src_hi, (LLVMTrunc (LLVMShr (GetVal $src), 16), si_llvm_i16_ty)),
+    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), si_llvm_i16_ty),
+                              (LLVMBitCast (GetVal $src_lo), si_llvm_i16_ty))),
+    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), si_llvm_i16_ty),
+                               (LLVMBitCast (GetVal $src_hi), si_llvm_i16_ty))),
+    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), si_llvm_i16_ty), si_llvm_i32_ty),
+                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), si_llvm_i16_ty), si_llvm_i32_ty), 16))),
     (LLVMStore (GetVal $res), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
   ];
@@ -1128,7 +1128,7 @@ def FLAT_ATOMIC_FMIN_X2_RTN_sem : InstSISemantic<FLAT_ATOMIC_FMIN_X2_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OLT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -1140,7 +1140,7 @@ def FLAT_ATOMIC_FMAX_X2_RTN_sem : InstSISemantic<FLAT_ATOMIC_FMAX_X2_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateFlatAddr<(GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OGT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -1167,8 +1167,8 @@ def GLOBAL_LOAD_UBYTE_sem : InstSISemantic<GLOBAL_LOAD_UBYTE> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), llvm_i32_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -1176,8 +1176,8 @@ def GLOBAL_LOAD_SBYTE_sem : InstSISemantic<GLOBAL_LOAD_SBYTE> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), llvm_i32_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -1185,8 +1185,8 @@ def GLOBAL_LOAD_USHORT_sem : InstSISemantic<GLOBAL_LOAD_USHORT> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), llvm_i32_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -1194,8 +1194,8 @@ def GLOBAL_LOAD_SSHORT_sem : InstSISemantic<GLOBAL_LOAD_SSHORT> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), llvm_i32_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -1203,7 +1203,7 @@ def GLOBAL_LOAD_DWORD_sem : InstSISemantic<GLOBAL_LOAD_DWORD> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (SetNamedOperand $vdst, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr)))
+    (SetNamedOperand $vdst, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr)))
   ];
 }
 
@@ -1211,7 +1211,7 @@ def GLOBAL_LOAD_DWORDX2_sem : InstSISemantic<GLOBAL_LOAD_DWORDX2> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_v2i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v2i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $vdst, (GetVal $tmp))
   ];
 }
@@ -1220,7 +1220,7 @@ def GLOBAL_LOAD_DWORDX3_sem : InstSISemantic<GLOBAL_LOAD_DWORDX3> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_v3i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v3i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $vdst, (GetVal $tmp))
   ];
 }
@@ -1229,7 +1229,7 @@ def GLOBAL_LOAD_DWORDX4_sem : InstSISemantic<GLOBAL_LOAD_DWORDX4> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_v4i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v4i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $vdst, (GetVal $tmp))
   ];
 }
@@ -1244,8 +1244,8 @@ def GLOBAL_LOAD_UBYTE_D16_sem : InstSISemantic<GLOBAL_LOAD_UBYTE_D16> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), llvm_i16_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty))
   ];
 }
 
@@ -1253,10 +1253,10 @@ def GLOBAL_LOAD_UBYTE_D16_HI_sem : InstSISemantic<GLOBAL_LOAD_UBYTE_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (DefVal $hi, (LLVMZExt (GetVal $tmp), llvm_i16_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty)),
     (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
-    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt llvm_i32_ty, 65535))),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
   ];
 }
@@ -1265,8 +1265,8 @@ def GLOBAL_LOAD_SBYTE_D16_sem : InstSISemantic<GLOBAL_LOAD_SBYTE_D16> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), llvm_i16_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty))
   ];
 }
 
@@ -1274,10 +1274,10 @@ def GLOBAL_LOAD_SBYTE_D16_HI_sem : InstSISemantic<GLOBAL_LOAD_SBYTE_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (DefVal $hi, (LLVMSExt (GetVal $tmp), llvm_i16_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty)),
     (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
-    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt llvm_i32_ty, 65535))),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
   ];
 }
@@ -1286,7 +1286,7 @@ def GLOBAL_LOAD_SHORT_D16_sem : InstSISemantic<GLOBAL_LOAD_SHORT_D16> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (SetNamedOperand $vdst, (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr)))
+    (SetNamedOperand $vdst, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr)))
   ];
 }
 
@@ -1294,10 +1294,10 @@ def GLOBAL_LOAD_SHORT_D16_HI_sem : InstSISemantic<GLOBAL_LOAD_SHORT_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr))),
-    (DefVal $hi, (None (GetVal $tmp), llvm_i16_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (None (GetVal $tmp), si_llvm_i16_ty)),
     (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
-    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt llvm_i32_ty, 65535))),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
   ];
 }
@@ -1312,7 +1312,7 @@ def GLOBAL_STORE_BYTE_sem : InstSISemantic<GLOBAL_STORE_BYTE> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), llvm_i8_ty)),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i8_ty)),
     (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
   ];
 }
@@ -1321,7 +1321,7 @@ def GLOBAL_STORE_BYTE_D16_HI_sem : InstSISemantic<GLOBAL_STORE_BYTE_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp8, (LLVMTrunc (LLVMShr (GetNamedOperand $vdata), 16), llvm_i8_ty)),
+    (DefVal $tmp8, (LLVMTrunc (LLVMShr (GetNamedOperand $vdata), 16), si_llvm_i8_ty)),
     (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
   ];
 }
@@ -1330,7 +1330,7 @@ def GLOBAL_STORE_SHORT_sem : InstSISemantic<GLOBAL_STORE_SHORT> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), llvm_i16_ty)),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i16_ty)),
     (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
   ];
 }
@@ -1339,7 +1339,7 @@ def GLOBAL_STORE_SHORT_D16_HI_sem : InstSISemantic<GLOBAL_STORE_SHORT_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp8, (LLVMTrunc (LLVMShr (GetNamedOperand $vdata), 16), llvm_i16_ty)),
+    (DefVal $tmp8, (LLVMTrunc (LLVMShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
     (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
   ];
 }
@@ -1515,9 +1515,9 @@ def GLOBAL_ATOMIC_CMPSWAP_sem : InstSISemantic<GLOBAL_ATOMIC_CMPSWAP> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -1528,7 +1528,7 @@ def GLOBAL_ATOMIC_ADD_F32_sem : InstSISemantic<GLOBAL_ATOMIC_ADD_F32> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMFAdd (GetVal $tmp), (GetNamedOperand $vdata))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -1539,7 +1539,7 @@ def GLOBAL_ATOMIC_ADD_F64_sem : InstSISemantic<GLOBAL_ATOMIC_ADD_F64> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMFAdd (GetVal $tmp), (GetNamedOperand $vdata))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -1550,9 +1550,9 @@ def GLOBAL_ATOMIC_FCMPSWAP_sem : InstSISemantic<GLOBAL_ATOMIC_FCMPSWAP> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_float_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -1563,9 +1563,9 @@ def GLOBAL_ATOMIC_FCMPSWAP_X2_sem : InstSISemantic<GLOBAL_ATOMIC_FCMPSWAP_X2> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i64_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -1576,7 +1576,7 @@ def GLOBAL_ATOMIC_FMIN_sem : InstSISemantic<GLOBAL_ATOMIC_FMIN> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OLT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -1588,7 +1588,7 @@ def GLOBAL_ATOMIC_FMAX_sem : InstSISemantic<GLOBAL_ATOMIC_FMAX> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OGT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -1600,7 +1600,7 @@ def GLOBAL_ATOMIC_MIN_F64_sem : InstSISemantic<GLOBAL_ATOMIC_MIN_F64> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OLT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -1612,7 +1612,7 @@ def GLOBAL_ATOMIC_MAX_F64_sem : InstSISemantic<GLOBAL_ATOMIC_MAX_F64> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMFCmp OGT, (GetNamedOperand $vdata), (GetVal $tmp)),
                                  (GetNamedOperand $vdata), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -1624,18 +1624,18 @@ def GLOBAL_ATOMIC_PK_ADD_F16_sem : InstSISemantic<GLOBAL_ATOMIC_PK_ADD_F16> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $src, (GetNamedOperand $vdata)),
-    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), llvm_i16_ty)),
-    (DefVal $src_lo, (LLVMTrunc (GetVal $src), llvm_i16_ty)),
-    (DefVal $tmp_hi, (LLVMTrunc (LLVMShr (GetVal $tmp), 16), llvm_i16_ty)),
-    (DefVal $src_hi, (LLVMTrunc (LLVMShr (GetVal $src), 16), llvm_i16_ty)),
-    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), llvm_f16_ty),
-                              (LLVMBitCast (GetVal $src_lo), llvm_f16_ty))),
-    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), llvm_f16_ty),
-                                (LLVMBitCast (GetVal $src_hi), llvm_f16_ty))),
-    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), llvm_i16_ty), llvm_i32_ty),
-                          (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), llvm_i16_ty), llvm_i32_ty), 16))),
+    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $src_lo, (LLVMTrunc (GetVal $src), si_llvm_i16_ty)),
+    (DefVal $tmp_hi, (LLVMTrunc (LLVMShr (GetVal $tmp), 16), si_llvm_i16_ty)),
+    (DefVal $src_hi, (LLVMTrunc (LLVMShr (GetVal $src), 16), si_llvm_i16_ty)),
+    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), si_llvm_f16_ty),
+                              (LLVMBitCast (GetVal $src_lo), si_llvm_f16_ty))),
+    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), si_llvm_f16_ty),
+                                (LLVMBitCast (GetVal $src_hi), si_llvm_f16_ty))),
+    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), si_llvm_i16_ty), si_llvm_i32_ty),
+                          (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), si_llvm_i16_ty), si_llvm_i32_ty), 16))),
     (LLVMStore (GetVal $res), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
   ];
@@ -1645,18 +1645,18 @@ def GLOBAL_ATOMIC_PK_ADD_BF16_sem : InstSISemantic<GLOBAL_ATOMIC_PK_ADD_BF16> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $src, (GetNamedOperand $vdata)),
-    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), llvm_i16_ty)),
-    (DefVal $src_lo, (LLVMTrunc (GetVal $src), llvm_i16_ty)),
-    (DefVal $tmp_hi, (LLVMTrunc (LLVMShr (GetVal $tmp), 16), llvm_i16_ty)),
-    (DefVal $src_hi, (LLVMTrunc (LLVMShr (GetVal $src), 16), llvm_i16_ty)),
-    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), llvm_i16_ty),
-                              (LLVMBitCast (GetVal $src_lo), llvm_i16_ty))),
-    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), llvm_i16_ty),
-                                (LLVMBitCast (GetVal $src_hi), llvm_i16_ty))),
-    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), llvm_i16_ty), llvm_i32_ty),
-                          (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), llvm_i16_ty), llvm_i32_ty), 16))),
+    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $src_lo, (LLVMTrunc (GetVal $src), si_llvm_i16_ty)),
+    (DefVal $tmp_hi, (LLVMTrunc (LLVMShr (GetVal $tmp), 16), si_llvm_i16_ty)),
+    (DefVal $src_hi, (LLVMTrunc (LLVMShr (GetVal $src), 16), si_llvm_i16_ty)),
+    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), si_llvm_i16_ty),
+                              (LLVMBitCast (GetVal $src_lo), si_llvm_i16_ty))),
+    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), si_llvm_i16_ty),
+                                (LLVMBitCast (GetVal $src_hi), si_llvm_i16_ty))),
+    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), si_llvm_i16_ty), si_llvm_i32_ty),
+                          (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), si_llvm_i16_ty), si_llvm_i32_ty), 16))),
     (LLVMStore (GetVal $res), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
   ];
@@ -1666,10 +1666,10 @@ def GLOBAL_ATOMIC_CSUB_sem : InstSISemantic<GLOBAL_ATOMIC_CSUB> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $tmp), (GetNamedOperand $vdata)),
                                  (LLVMSub (GetVal $tmp), (GetNamedOperand $vdata)),
-                                 (ConstantInt llvm_i32_ty, 0))),
+                                 (ConstantInt si_llvm_i32_ty, 0))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
   ];
@@ -1679,7 +1679,7 @@ def GLOBAL_ATOMIC_COND_SUB_U32_sem : InstSISemantic<GLOBAL_ATOMIC_COND_SUB_U32> 
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp), (GetNamedOperand $vdata)),
                                  (LLVMSub (GetVal $tmp), (GetNamedOperand $vdata)), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
@@ -1713,9 +1713,9 @@ def GLOBAL_ATOMIC_CMPSWAP_X2_sem : InstSISemantic<GLOBAL_ATOMIC_CMPSWAP_X2> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i64_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $vdata, (GetVal $tmp))
@@ -1981,8 +1981,8 @@ def SCRATCH_LOAD_UBYTE_sem : InstSISemantic<SCRATCH_LOAD_UBYTE> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), llvm_i32_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -1990,8 +1990,8 @@ def SCRATCH_LOAD_SBYTE_sem : InstSISemantic<SCRATCH_LOAD_SBYTE> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), llvm_i32_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -1999,8 +1999,8 @@ def SCRATCH_LOAD_USHORT_sem : InstSISemantic<SCRATCH_LOAD_USHORT> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), llvm_i32_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -2008,8 +2008,8 @@ def SCRATCH_LOAD_SSHORT_sem : InstSISemantic<SCRATCH_LOAD_SSHORT> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), llvm_i32_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -2017,7 +2017,7 @@ def SCRATCH_LOAD_DWORD_sem : InstSISemantic<SCRATCH_LOAD_DWORD> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (SetNamedOperand $vdst, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr)))
+    (SetNamedOperand $vdst, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr)))
   ];
 }
 
@@ -2025,7 +2025,7 @@ def SCRATCH_LOAD_DWORDX2_sem : InstSISemantic<SCRATCH_LOAD_DWORDX2> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_v2i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v2i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $vdst, (GetVal $tmp))
   ];
 }
@@ -2034,7 +2034,7 @@ def SCRATCH_LOAD_DWORDX3_sem : InstSISemantic<SCRATCH_LOAD_DWORDX3> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_v3i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v3i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $vdst, (GetVal $tmp))
   ];
 }
@@ -2043,7 +2043,7 @@ def SCRATCH_LOAD_DWORDX4_sem : InstSISemantic<SCRATCH_LOAD_DWORDX4> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_v4i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v4i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $vdst, (GetVal $tmp))
   ];
 }
@@ -2058,8 +2058,8 @@ def SCRATCH_LOAD_UBYTE_D16_sem : InstSISemantic<SCRATCH_LOAD_UBYTE_D16> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), llvm_i16_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty))
   ];
 }
 
@@ -2067,10 +2067,10 @@ def SCRATCH_LOAD_UBYTE_D16_HI_sem : InstSISemantic<SCRATCH_LOAD_UBYTE_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (DefVal $hi, (LLVMZExt (GetVal $tmp), llvm_i16_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty)),
     (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
-    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt llvm_i32_ty, 65535))),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
   ];
 }
@@ -2079,8 +2079,8 @@ def SCRATCH_LOAD_SBYTE_D16_sem : InstSISemantic<SCRATCH_LOAD_SBYTE_D16> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), llvm_i16_ty))
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty))
   ];
 }
 
@@ -2088,10 +2088,10 @@ def SCRATCH_LOAD_SBYTE_D16_HI_sem : InstSISemantic<SCRATCH_LOAD_SBYTE_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr))),
-    (DefVal $hi, (LLVMSExt (GetVal $tmp), llvm_i16_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty)),
     (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
-    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt llvm_i32_ty, 65535))),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
   ];
 }
@@ -2100,7 +2100,7 @@ def SCRATCH_LOAD_SHORT_D16_sem : InstSISemantic<SCRATCH_LOAD_SHORT_D16> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (SetNamedOperand $vdst, (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr)))
+    (SetNamedOperand $vdst, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr)))
   ];
 }
 
@@ -2108,10 +2108,10 @@ def SCRATCH_LOAD_SHORT_D16_HI_sem : InstSISemantic<SCRATCH_LOAD_SHORT_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp, (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr))),
-    (DefVal $hi, (None (GetVal $tmp), llvm_i16_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (None (GetVal $tmp), si_llvm_i16_ty)),
     (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
-    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt llvm_i32_ty, 65535))),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
   ];
 }
@@ -2126,7 +2126,7 @@ def SCRATCH_STORE_BYTE_sem : InstSISemantic<SCRATCH_STORE_BYTE> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), llvm_i8_ty)),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i8_ty)),
     (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
   ];
 }
@@ -2135,7 +2135,7 @@ def SCRATCH_STORE_BYTE_D16_HI_sem : InstSISemantic<SCRATCH_STORE_BYTE_D16_HI> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp8, (LLVMTrunc (LLVMShr (GetNamedOperand $vdata), 16), llvm_i8_ty)),
+    (DefVal $tmp8, (LLVMTrunc (LLVMShr (GetNamedOperand $vdata), 16), si_llvm_i8_ty)),
     (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
   ];
 }
@@ -2144,7 +2144,7 @@ def SCRATCH_STORE_SHORT_sem : InstSISemantic<SCRATCH_STORE_SHORT> {
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), llvm_i16_ty)),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i16_ty)),
     (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
   ];
 }
@@ -2153,7 +2153,7 @@ def SCRATCH_STORE_SHORT_D16_HI_sem : InstSISemantic<SCRATCH_STORE_SHORT_D16_HI> 
   let Semantic = [
     (DefVal $tmp_addr, (CalculateScratchAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret)),
-    (DefVal $tmp8, (LLVMTrunc (LLVMShr (GetNamedOperand $vdata), 16), llvm_i16_ty)),
+    (DefVal $tmp8, (LLVMTrunc (LLVMShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
     (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
   ];
 }

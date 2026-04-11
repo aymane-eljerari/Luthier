@@ -40,7 +40,7 @@
 //   rdna4-instruction-set-architecture.pdf, page 276.
 def S_NOP_sem : InstSISemantic<S_NOP> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_nop, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_nop, [(GetNamedOperand $simm16)])
   ];
 }
 
@@ -62,7 +62,7 @@ def S_NOP_sem : InstSISemantic<S_NOP> {
 //   (Removed in RDNA4; replaced by S_BARRIER_SIGNAL + S_BARRIER_WAIT.)
 def S_BARRIER_sem : InstSISemantic<S_BARRIER> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_barrier, []<dag>)
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_barrier, []<dag>)
   ];
 }
 
@@ -84,7 +84,7 @@ def S_BARRIER_sem : InstSISemantic<S_BARRIER> {
 //   (Removed in RDNA4; replaced by S_WAIT_KMCNT/LOADCNT/STORECNT/etc.)
 def S_WAITCNT_sem : InstSISemantic<S_WAITCNT> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_waitcnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(GetNamedOperand $simm16)])
   ];
 }
 
@@ -106,7 +106,7 @@ def S_WAITCNT_sem : InstSISemantic<S_WAITCNT> {
 //   rdna4-instruction-set-architecture.pdf, page 286.
 def S_SENDMSG_sem : InstSISemantic<S_SENDMSG> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_sendmsg, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_sendmsg, [(GetNamedOperand $simm16)])
   ];
 }
 
@@ -114,7 +114,7 @@ def S_SENDMSG_sem : InstSISemantic<S_SENDMSG> {
 // Sources: same pages as S_SENDMSG.
 def S_SENDMSGHALT_sem : InstSISemantic<S_SENDMSGHALT> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_sendmsghalt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_sendmsghalt, [(GetNamedOperand $simm16)])
   ];
 }
 
@@ -136,7 +136,7 @@ def S_SENDMSGHALT_sem : InstSISemantic<S_SENDMSGHALT> {
 //   rdna4-instruction-set-architecture.pdf, page 277.
 def S_SLEEP_sem : InstSISemantic<S_SLEEP> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_sleep, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_sleep, [(GetNamedOperand $simm16)])
   ];
 }
 
@@ -158,7 +158,7 @@ def S_SLEEP_sem : InstSISemantic<S_SLEEP> {
 //   rdna4-instruction-set-architecture.pdf, page 276.
 def S_SETHALT_sem : InstSISemantic<S_SETHALT> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_sethalt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_sethalt, [(GetNamedOperand $simm16)])
   ];
 }
 
@@ -180,7 +180,7 @@ def S_SETHALT_sem : InstSISemantic<S_SETHALT> {
 //   rdna4-instruction-set-architecture.pdf, page 286.
 def S_SETPRIO_sem : InstSISemantic<S_SETPRIO> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_setprio, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_setprio, [(GetNamedOperand $simm16)])
   ];
 }
 
@@ -245,7 +245,7 @@ def S_ICACHE_INV_sem : InstSISemantic<S_ICACHE_INV> {
 //   (Not present in RDNA3, RDNA4.)
 def S_TTRACEDATA_sem : InstSISemantic<S_TTRACEDATA> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_ttracedata, []<dag>)
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_ttracedata, []<dag>)
   ];
 }
 
@@ -256,7 +256,7 @@ def S_TTRACEDATA_sem : InstSISemantic<S_TTRACEDATA> {
 //   (Not present in RDNA3, RDNA4.)
 def S_TTRACEDATA_IMM_sem : InstSISemantic<S_TTRACEDATA_IMM> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_ttracedata_imm, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_ttracedata_imm, [(GetNamedOperand $simm16)])
   ];
 }
 
@@ -278,7 +278,7 @@ def S_TTRACEDATA_IMM_sem : InstSISemantic<S_TTRACEDATA_IMM> {
 //   rdna4-instruction-set-architecture.pdf, page 286.
 def S_INCPERFLEVEL_sem : InstSISemantic<S_INCPERFLEVEL> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_incperflevel, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_incperflevel, [(GetNamedOperand $simm16)])
   ];
 }
 
@@ -286,7 +286,7 @@ def S_INCPERFLEVEL_sem : InstSISemantic<S_INCPERFLEVEL> {
 // Sources: same as S_INCPERFLEVEL.
 def S_DECPERFLEVEL_sem : InstSISemantic<S_DECPERFLEVEL> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_decperflevel, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_decperflevel, [(GetNamedOperand $simm16)])
   ];
 }
 
@@ -353,37 +353,37 @@ def S_ROUND_MODE_sem : InstSISemantic<S_ROUND_MODE> {
 //   (Introduced in GFX12, replacing S_WAITCNT.)
 def S_WAIT_KMCNT_sem : InstSISemantic<S_WAIT_KMCNT> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_wait_kmcnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_kmcnt, [(GetNamedOperand $simm16)])
   ];
 }
 def S_WAIT_LOADCNT_sem : InstSISemantic<S_WAIT_LOADCNT> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_wait_loadcnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_loadcnt, [(GetNamedOperand $simm16)])
   ];
 }
 def S_WAIT_STORECNT_sem : InstSISemantic<S_WAIT_STORECNT> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_wait_storecnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_storecnt, [(GetNamedOperand $simm16)])
   ];
 }
 def S_WAIT_EXPCNT_sem : InstSISemantic<S_WAIT_EXPCNT> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_wait_expcnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_expcnt, [(GetNamedOperand $simm16)])
   ];
 }
 def S_WAIT_DSCNT_sem : InstSISemantic<S_WAIT_DSCNT> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_wait_dscnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_dscnt, [(GetNamedOperand $simm16)])
   ];
 }
 def S_WAIT_SAMPLECNT_sem : InstSISemantic<S_WAIT_SAMPLECNT> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_wait_samplecnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_samplecnt, [(GetNamedOperand $simm16)])
   ];
 }
 def S_WAIT_BVHCNT_sem : InstSISemantic<S_WAIT_BVHCNT> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_wait_bvhcnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_bvhcnt, [(GetNamedOperand $simm16)])
   ];
 }
 
@@ -401,7 +401,7 @@ def S_WAIT_IDLE_sem : InstSISemantic<S_WAIT_IDLE> {
 //   rdna4-instruction-set-architecture.pdf, page 282.
 def S_BARRIER_WAIT_sem : InstSISemantic<S_BARRIER_WAIT> {
   let Semantic = [
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_s_barrier_wait, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_barrier_wait, [(GetNamedOperand $simm16)])
   ];
 }
 
@@ -410,6 +410,234 @@ def S_BARRIER_WAIT_sem : InstSISemantic<S_BARRIER_WAIT> {
 //   (Not present in RDNA4; present in CDNA3+.)
 def S_BARRIER_LEAVE_sem : InstSISemantic<S_BARRIER_LEAVE> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMIntrinsic llvm_i1_ty, int_amdgcn_s_barrier_leave, []<dag>))
+    (ImplicitDef SCC, (LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_s_barrier_leave, []<dag>))
+  ];
+}
+
+//------------------------------------------------------------------------------
+// Branch Instructions
+//------------------------------------------------------------------------------
+
+// S_BRANCH: Unconditional branch to target.
+// Sources:
+//   gcn3-instruction-set-architecture.pdf, page 112.
+//   vega-7nm-shader-instruction-set-architecture.pdf, page 117.
+//   instinct-mi100-cdna1-shader-instruction-set-architecture.pdf, page 107.
+//   instinct-mi200-cdna2-instruction-set-architecture.pdf, page 106.
+//   amd-instinct-mi300-cdna3-instruction-set-architecture.pdf, page 132.
+//   amd-instinct-cdna4-instruction-set-architecture.pdf, page 144.
+//   rdna-shader-instruction-set-architecture.pdf, page 131.
+//   rdna2-shader-instruction-set-architecture.pdf, page 131.
+//   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 238.
+//   rdna4-instruction-set-architecture.pdf, page 267.
+def S_BRANCH_sem : InstSISemantic<S_BRANCH> {
+  let Semantic = [
+    (LLVMBranch (GetNamedOperand $simm16))
+  ];
+}
+
+def S_BRANCH_pad_s_nop_sem : InstSISemantic<S_BRANCH_pad_s_nop> {
+  let Semantic = [
+    (LLVMBranch (GetNamedOperand $simm16))
+  ];
+}
+
+// S_CBRANCH_SCC0: Branch if SCC == 0.
+// Sources: same as S_BRANCH.
+def S_CBRANCH_SCC0_sem : InstSISemantic<S_CBRANCH_SCC0> {
+  let Semantic = [
+    (LLVMCondBranch (ImplicitUse SCC),
+                   (GetNamedOperand $simm16),
+                   (GetNextBB))
+  ];
+}
+
+def S_CBRANCH_SCC0_pad_s_nop_sem : InstSISemantic<S_CBRANCH_SCC0_pad_s_nop> {
+  let Semantic = [
+    (LLVMCondBranch (ImplicitUse SCC),
+                   (GetNamedOperand $simm16),
+                   (GetNextBB))
+  ];
+}
+
+// S_CBRANCH_SCC1: Branch if SCC == 1.
+// Sources: same as S_BRANCH.
+def S_CBRANCH_SCC1_sem : InstSISemantic<S_CBRANCH_SCC1> {
+  let Semantic = [
+    (LLVMCondBranch (ImplicitUse SCC),
+                   (GetNamedOperand $simm16),
+                   (GetNextBB))
+  ];
+}
+
+def S_CBRANCH_SCC1_pad_s_nop_sem : InstSISemantic<S_CBRANCH_SCC1_pad_s_nop> {
+  let Semantic = [
+    (LLVMCondBranch (ImplicitUse SCC),
+                   (GetNamedOperand $simm16),
+                   (GetNextBB))
+  ];
+}
+
+// S_CBRANCH_EXECZ: Branch if EXEC == 0.
+// Sources: same as S_BRANCH.
+def S_CBRANCH_EXECZ_sem : InstSISemantic<S_CBRANCH_EXECZ> {
+  let Semantic = [
+    (LLVMCondBranch (LLVMCmp LLVMICmpEQ, (ImplicitUse EXEC),
+                                     (ConstantInt si_llvm_i64_ty, 0)),
+                   (GetNextBB),
+                   (GetNamedOperand $simm16))
+  ];
+}
+
+def S_CBRANCH_EXECZ_pad_s_nop_sem : InstSISemantic<S_CBRANCH_EXECZ_pad_s_nop> {
+  let Semantic = [
+    (LLVMCondBranch (LLVMCmp LLVMICmpEQ, (ImplicitUse EXEC),
+                                     (ConstantInt si_llvm_i64_ty, 0)),
+                   (GetNextBB),
+                   (GetNamedOperand $simm16))
+  ];
+}
+
+// S_CBRANCH_EXECNZ: Branch if EXEC != 0.
+// Sources: same as S_BRANCH.
+def S_CBRANCH_EXECNZ_sem : InstSISemantic<S_CBRANCH_EXECNZ> {
+  let Semantic = [
+    (LLVMCondBranch (LLVMCmp LLVMICmpNE, (ImplicitUse EXEC),
+                                     (ConstantInt si_llvm_i64_ty, 0)),
+                   (GetNamedOperand $simm16),
+                   (GetNextBB))
+  ];
+}
+
+def S_CBRANCH_EXECNZ_pad_s_nop_sem : InstSISemantic<S_CBRANCH_EXECNZ_pad_s_nop> {
+  let Semantic = [
+    (LLVMCondBranch (LLVMCmp LLVMICmpNE, (ImplicitUse EXEC),
+                                     (ConstantInt si_llvm_i64_ty, 0)),
+                   (GetNamedOperand $simm16),
+                   (GetNextBB))
+  ];
+}
+
+// S_CBRANCH_VCCZ: Branch if VCC == 0.
+// Sources: same as S_BRANCH.
+def S_CBRANCH_VCCZ_sem : InstSISemantic<S_CBRANCH_VCCZ> {
+  let Semantic = [
+    (LLVMCondBranch (LLVMCmp LLVMICmpEQ, (ImplicitUse VCC),
+                                     (ConstantInt si_llvm_i64_ty, 0)),
+                   (GetNextBB),
+                   (GetNamedOperand $simm16))
+  ];
+}
+
+def S_CBRANCH_VCCZ_pad_s_nop_sem : InstSISemantic<S_CBRANCH_VCCZ_pad_s_nop> {
+  let Semantic = [
+    (LLVMCondBranch (LLVMCmp LLVMICmpEQ, (ImplicitUse VCC),
+                                     (ConstantInt si_llvm_i64_ty, 0)),
+                   (GetNextBB),
+                   (GetNamedOperand $simm16))
+  ];
+}
+
+// S_CBRANCH_VCCNZ: Branch if VCC != 0.
+// Sources: same as S_BRANCH.
+def S_CBRANCH_VCCNZ_sem : InstSISemantic<S_CBRANCH_VCCNZ> {
+  let Semantic = [
+    (LLVMCondBranch (LLVMCmp LLVMICmpNE, (ImplicitUse VCC),
+                                     (ConstantInt si_llvm_i64_ty, 0)),
+                   (GetNamedOperand $simm16),
+                   (GetNextBB))
+  ];
+}
+
+def S_CBRANCH_VCCNZ_pad_s_nop_sem : InstSISemantic<S_CBRANCH_VCCNZ_pad_s_nop> {
+  let Semantic = [
+    (LLVMCondBranch (LLVMCmp LLVMICmpNE, (ImplicitUse VCC),
+                                     (ConstantInt si_llvm_i64_ty, 0)),
+                   (GetNamedOperand $simm16),
+                   (GetNextBB))
+  ];
+}
+
+// S_CBRANCH_CDBGSYS: Conditional branch for debug (HSA system debug).
+// Sources: same as S_BRANCH.
+def S_CBRANCH_CDBGSYS_sem : InstSISemantic<S_CBRANCH_CDBGSYS> {
+  let Semantic = [
+    (LLVMBranch (GetNamedOperand $simm16))
+  ];
+}
+
+def S_CBRANCH_CDBGSYS_pad_s_nop_sem : InstSISemantic<S_CBRANCH_CDBGSYS_pad_s_nop> {
+  let Semantic = [
+    (LLVMBranch (GetNamedOperand $simm16))
+  ];
+}
+
+def S_CBRANCH_CDBGSYS_AND_USER_sem : InstSISemantic<S_CBRANCH_CDBGSYS_AND_USER> {
+  let Semantic = [
+    (LLVMBranch (GetNamedOperand $simm16))
+  ];
+}
+
+def S_CBRANCH_CDBGSYS_AND_USER_pad_s_nop_sem : InstSISemantic<S_CBRANCH_CDBGSYS_AND_USER_pad_s_nop> {
+  let Semantic = [
+    (LLVMBranch (GetNamedOperand $simm16))
+  ];
+}
+
+def S_CBRANCH_CDBGSYS_OR_USER_sem : InstSISemantic<S_CBRANCH_CDBGSYS_OR_USER> {
+  let Semantic = [
+    (LLVMBranch (GetNamedOperand $simm16))
+  ];
+}
+
+def S_CBRANCH_CDBGSYS_OR_USER_pad_s_nop_sem : InstSISemantic<S_CBRANCH_CDBGSYS_OR_USER_pad_s_nop> {
+  let Semantic = [
+    (LLVMBranch (GetNamedOperand $simm16))
+  ];
+}
+
+def S_CBRANCH_CDBGUSER_sem : InstSISemantic<S_CBRANCH_CDBGUSER> {
+  let Semantic = [
+    (LLVMBranch (GetNamedOperand $simm16))
+  ];
+}
+
+def S_CBRANCH_CDBGUSER_pad_s_nop_sem : InstSISemantic<S_CBRANCH_CDBGUSER_pad_s_nop> {
+  let Semantic = [
+    (LLVMBranch (GetNamedOperand $simm16))
+  ];
+}
+
+//------------------------------------------------------------------------------
+// End Program Instructions
+//------------------------------------------------------------------------------
+
+// S_ENDPGM: End program.
+// Sources:
+//   gcn3-instruction-set-architecture.pdf, page 113.
+//   vega-7nm-shader-instruction-set-architecture.pdf, page 117.
+//   instinct-mi100-cdna1-shader-instruction-set-architecture.pdf, page 107.
+//   instinct-mi200-cdna2-instruction-set-architecture.pdf, page 106.
+//   amd-instinct-mi300-cdna3-instruction-set-architecture.pdf, page 132.
+//   amd-instinct-cdna4-instruction-set-architecture.pdf, page 144.
+//   rdna-shader-instruction-set-architecture.pdf, page 131.
+//   rdna2-shader-instruction-set-architecture.pdf, page 131.
+//   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 238.
+//   rdna4-instruction-set-architecture.pdf, page 268.
+def S_ENDPGM_sem : InstSISemantic<S_ENDPGM> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_endpgm, []<dag>)
+  ];
+}
+
+def S_ENDPGM_ORDERED_PS_DONE_sem : InstSISemantic<S_ENDPGM_ORDERED_PS_DONE> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_endpgm, []<dag>)
+  ];
+}
+
+def S_ENDPGM_SAVED_sem : InstSISemantic<S_ENDPGM_SAVED> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_endpgm, []<dag>)
   ];
 }

@@ -37,7 +37,7 @@ def S_BUFFER_LOAD_DWORD_IMM_sem : InstSISemantic<S_BUFFER_LOAD_DWORD_IMM> {
   let Semantic = [
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -47,7 +47,7 @@ def S_BUFFER_LOAD_DWORD_SGPR_sem : InstSISemantic<S_BUFFER_LOAD_DWORD_SGPR> {
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -57,7 +57,7 @@ def S_BUFFER_LOAD_DWORD_SGPR_IMM_sem : InstSISemantic<S_BUFFER_LOAD_DWORD_SGPR_I
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -65,7 +65,7 @@ def S_BUFFER_LOAD_DWORDX2_IMM_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX2_IMM> {
   let Semantic = [
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v2i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -75,7 +75,7 @@ def S_BUFFER_LOAD_DWORDX2_SGPR_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX2_SGPR> 
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v2i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -85,7 +85,7 @@ def S_BUFFER_LOAD_DWORDX2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX2_SG
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v2i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -93,7 +93,7 @@ def S_BUFFER_LOAD_DWORDX3_IMM_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX3_IMM> {
   let Semantic = [
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v3i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -103,7 +103,7 @@ def S_BUFFER_LOAD_DWORDX3_SGPR_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX3_SGPR> 
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v3i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -113,7 +113,7 @@ def S_BUFFER_LOAD_DWORDX3_SGPR_IMM_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX3_SG
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v3i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -121,7 +121,7 @@ def S_BUFFER_LOAD_DWORDX4_IMM_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX4_IMM> {
   let Semantic = [
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v4i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v4i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -131,7 +131,7 @@ def S_BUFFER_LOAD_DWORDX4_SGPR_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX4_SGPR> 
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v4i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v4i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -141,7 +141,7 @@ def S_BUFFER_LOAD_DWORDX4_SGPR_IMM_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX4_SG
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v4i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v4i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -149,7 +149,7 @@ def S_BUFFER_LOAD_DWORDX8_IMM_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX8_IMM> {
   let Semantic = [
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v8i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v8i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -159,7 +159,7 @@ def S_BUFFER_LOAD_DWORDX8_SGPR_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX8_SGPR> 
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v8i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v8i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -169,7 +169,7 @@ def S_BUFFER_LOAD_DWORDX8_SGPR_IMM_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX8_SG
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v8i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v8i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -177,7 +177,7 @@ def S_BUFFER_LOAD_DWORDX16_IMM_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX16_IMM> 
   let Semantic = [
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v16i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -187,7 +187,7 @@ def S_BUFFER_LOAD_DWORDX16_SGPR_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX16_SGPR
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v16i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -197,7 +197,7 @@ def S_BUFFER_LOAD_DWORDX16_SGPR_IMM_sem : InstSISemantic<S_BUFFER_LOAD_DWORDX16_
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_v16i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -211,9 +211,9 @@ def S_BUFFER_LOAD_U8_IMM_sem : InstSISemantic<S_BUFFER_LOAD_U8_IMM> {
   let Semantic = [
     (DefVal $tmp,
 
-      (LLVMIntrinsic llvm_i8_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0)])),
+      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0)])),
 
-    (SetNamedOperand $sdst, (LLVMZExt (GetVal $tmp), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -223,9 +223,9 @@ def S_BUFFER_LOAD_U8_SGPR_sem : InstSISemantic<S_BUFFER_LOAD_U8_SGPR> {
 
     (DefVal $tmp,
 
-      (LLVMIntrinsic llvm_i8_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)])),
+      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)])),
 
-    (SetNamedOperand $sdst, (LLVMZExt (GetVal $tmp), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -235,9 +235,9 @@ def S_BUFFER_LOAD_U8_SGPR_IMM_sem : InstSISemantic<S_BUFFER_LOAD_U8_SGPR_IMM> {
 
     (DefVal $tmp,
 
-      (LLVMIntrinsic llvm_i8_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)])),
+      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)])),
 
-    (SetNamedOperand $sdst, (LLVMZExt (GetVal $tmp), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -251,9 +251,9 @@ def S_BUFFER_LOAD_I8_IMM_sem : InstSISemantic<S_BUFFER_LOAD_I8_IMM> {
   let Semantic = [
     (DefVal $tmp,
 
-      (LLVMIntrinsic llvm_i8_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0)])),
+      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0)])),
 
-    (SetNamedOperand $sdst, (LLVMSExt (GetVal $tmp), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -263,9 +263,9 @@ def S_BUFFER_LOAD_I8_SGPR_sem : InstSISemantic<S_BUFFER_LOAD_I8_SGPR> {
 
     (DefVal $tmp,
 
-      (LLVMIntrinsic llvm_i8_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)])),
+      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)])),
 
-    (SetNamedOperand $sdst, (LLVMSExt (GetVal $tmp), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -275,9 +275,9 @@ def S_BUFFER_LOAD_I8_SGPR_IMM_sem : InstSISemantic<S_BUFFER_LOAD_I8_SGPR_IMM> {
 
     (DefVal $tmp,
 
-      (LLVMIntrinsic llvm_i8_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)])),
+      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)])),
 
-    (SetNamedOperand $sdst, (LLVMSExt (GetVal $tmp), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -291,9 +291,9 @@ def S_BUFFER_LOAD_U16_IMM_sem : InstSISemantic<S_BUFFER_LOAD_U16_IMM> {
   let Semantic = [
     (DefVal $tmp,
 
-      (LLVMIntrinsic llvm_i16_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0)])),
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0)])),
 
-    (SetNamedOperand $sdst, (LLVMZExt (GetVal $tmp), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -303,9 +303,9 @@ def S_BUFFER_LOAD_U16_SGPR_sem : InstSISemantic<S_BUFFER_LOAD_U16_SGPR> {
 
     (DefVal $tmp,
 
-      (LLVMIntrinsic llvm_i16_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)])),
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)])),
 
-    (SetNamedOperand $sdst, (LLVMZExt (GetVal $tmp), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -315,9 +315,9 @@ def S_BUFFER_LOAD_U16_SGPR_IMM_sem : InstSISemantic<S_BUFFER_LOAD_U16_SGPR_IMM> 
 
     (DefVal $tmp,
 
-      (LLVMIntrinsic llvm_i16_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)])),
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)])),
 
-    (SetNamedOperand $sdst, (LLVMZExt (GetVal $tmp), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -331,9 +331,9 @@ def S_BUFFER_LOAD_I16_IMM_sem : InstSISemantic<S_BUFFER_LOAD_I16_IMM> {
   let Semantic = [
     (DefVal $tmp,
 
-      (LLVMIntrinsic llvm_i16_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0)])),
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0)])),
 
-    (SetNamedOperand $sdst, (LLVMSExt (GetVal $tmp), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -343,9 +343,9 @@ def S_BUFFER_LOAD_I16_SGPR_sem : InstSISemantic<S_BUFFER_LOAD_I16_SGPR> {
 
     (DefVal $tmp,
 
-      (LLVMIntrinsic llvm_i16_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)])),
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)])),
 
-    (SetNamedOperand $sdst, (LLVMSExt (GetVal $tmp), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -355,9 +355,9 @@ def S_BUFFER_LOAD_I16_SGPR_IMM_sem : InstSISemantic<S_BUFFER_LOAD_I16_SGPR_IMM> 
 
     (DefVal $tmp,
 
-      (LLVMIntrinsic llvm_i16_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0)])),
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_s_buffer_load, [(GetNamedOperand $sbase), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0)])),
 
-    (SetNamedOperand $sdst, (LLVMSExt (GetVal $tmp), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -368,102 +368,102 @@ def S_BUFFER_LOAD_I16_SGPR_IMM_sem : InstSISemantic<S_BUFFER_LOAD_I16_SGPR_IMM> 
 def S_BUFFER_STORE_DWORD_IMM_sem : InstSISemantic<S_BUFFER_STORE_DWORD_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_STORE_DWORD_SGPR_sem : InstSISemantic<S_BUFFER_STORE_DWORD_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_STORE_DWORD_SGPR_IMM_sem : InstSISemantic<S_BUFFER_STORE_DWORD_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_STORE_DWORDX2_IMM_sem : InstSISemantic<S_BUFFER_STORE_DWORDX2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_STORE_DWORDX2_SGPR_sem : InstSISemantic<S_BUFFER_STORE_DWORDX2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_STORE_DWORDX2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_STORE_DWORDX2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_STORE_DWORDX4_IMM_sem : InstSISemantic<S_BUFFER_STORE_DWORDX4_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_STORE_DWORDX4_SGPR_sem : InstSISemantic<S_BUFFER_STORE_DWORDX4_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_STORE_DWORDX4_SGPR_IMM_sem : InstSISemantic<S_BUFFER_STORE_DWORDX4_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
@@ -474,148 +474,148 @@ def S_BUFFER_STORE_DWORDX4_SGPR_IMM_sem : InstSISemantic<S_BUFFER_STORE_DWORDX4_
 def S_BUFFER_ATOMIC_ADD_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_ADD_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_ADD_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_ADD_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_ADD_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_ADD_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_ADD_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_ADD_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_ADD_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_ADD_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_ADD_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_ADD_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_ADD_X2_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_ADD_X2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_ADD_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_ADD_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_ADD_X2_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_ADD_X2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_ADD_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_ADD_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_ADD_X2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_ADD_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_ADD_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_ADD_X2_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -626,148 +626,148 @@ def S_BUFFER_ATOMIC_ADD_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_ADD
 def S_BUFFER_ATOMIC_AND_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_AND_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_AND_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_AND_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_AND_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_AND_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_AND_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_AND_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_AND_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_AND_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_AND_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_AND_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_AND_X2_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_AND_X2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_AND_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_AND_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_AND_X2_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_AND_X2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_AND_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_AND_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_AND_X2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_AND_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_AND_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_AND_X2_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_and, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -778,148 +778,148 @@ def S_BUFFER_ATOMIC_AND_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_AND
 def S_BUFFER_ATOMIC_OR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_OR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_OR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_OR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_OR_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_OR_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_OR_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_OR_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_OR_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_OR_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_OR_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_OR_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_OR_X2_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_OR_X2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_OR_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_OR_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_OR_X2_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_OR_X2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_OR_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_OR_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_OR_X2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_OR_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_OR_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_OR_X2_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_or, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -930,148 +930,148 @@ def S_BUFFER_ATOMIC_OR_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_OR_X
 def S_BUFFER_ATOMIC_XOR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_XOR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_XOR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_XOR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_XOR_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_XOR_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_XOR_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_XOR_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_XOR_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_XOR_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_XOR_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_XOR_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_XOR_X2_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_XOR_X2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_XOR_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_XOR_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_XOR_X2_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_XOR_X2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_XOR_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_XOR_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_XOR_X2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_XOR_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_XOR_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_XOR_X2_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_xor, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -1082,148 +1082,148 @@ def S_BUFFER_ATOMIC_XOR_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_XOR
 def S_BUFFER_ATOMIC_SUB_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SUB_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SUB_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SUB_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SUB_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_SUB_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SUB_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SUB_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SUB_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SUB_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SUB_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SUB_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SUB_X2_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SUB_X2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SUB_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SUB_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SUB_X2_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_SUB_X2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SUB_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SUB_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SUB_X2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SUB_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SUB_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SUB_X2_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_sub, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -1234,148 +1234,148 @@ def S_BUFFER_ATOMIC_SUB_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SUB
 def S_BUFFER_ATOMIC_SWAP_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SWAP_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SWAP_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SWAP_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SWAP_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_SWAP_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SWAP_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SWAP_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SWAP_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SWAP_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SWAP_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SWAP_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SWAP_X2_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SWAP_X2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SWAP_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SWAP_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SWAP_X2_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_SWAP_X2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SWAP_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SWAP_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SWAP_X2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SWAP_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SWAP_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SWAP_X2_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_swap, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -1386,148 +1386,148 @@ def S_BUFFER_ATOMIC_SWAP_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SW
 def S_BUFFER_ATOMIC_SMAX_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SMAX_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SMAX_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SMAX_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SMAX_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_SMAX_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SMAX_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SMAX_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SMAX_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SMAX_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SMAX_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SMAX_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SMAX_X2_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SMAX_X2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SMAX_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SMAX_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SMAX_X2_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_SMAX_X2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SMAX_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SMAX_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SMAX_X2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SMAX_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SMAX_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SMAX_X2_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -1538,148 +1538,148 @@ def S_BUFFER_ATOMIC_SMAX_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SM
 def S_BUFFER_ATOMIC_SMIN_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SMIN_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SMIN_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SMIN_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SMIN_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_SMIN_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SMIN_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SMIN_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SMIN_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SMIN_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SMIN_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SMIN_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SMIN_X2_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SMIN_X2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SMIN_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SMIN_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SMIN_X2_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_SMIN_X2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SMIN_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SMIN_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_SMIN_X2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_SMIN_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_SMIN_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SMIN_X2_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_smin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -1690,148 +1690,148 @@ def S_BUFFER_ATOMIC_SMIN_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_SM
 def S_BUFFER_ATOMIC_UMAX_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_UMAX_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_UMAX_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UMAX_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_UMAX_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_UMAX_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_UMAX_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UMAX_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_UMAX_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_UMAX_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_UMAX_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UMAX_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_UMAX_X2_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_UMAX_X2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_UMAX_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UMAX_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_UMAX_X2_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_UMAX_X2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_UMAX_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UMAX_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_UMAX_X2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_UMAX_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_UMAX_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UMAX_X2_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umax, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -1842,148 +1842,148 @@ def S_BUFFER_ATOMIC_UMAX_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UM
 def S_BUFFER_ATOMIC_UMIN_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_UMIN_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_UMIN_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UMIN_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_UMIN_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_UMIN_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_UMIN_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UMIN_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_UMIN_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_UMIN_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_UMIN_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UMIN_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_UMIN_X2_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_UMIN_X2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_UMIN_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UMIN_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_UMIN_X2_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_UMIN_X2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_UMIN_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UMIN_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_UMIN_X2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_UMIN_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_UMIN_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UMIN_X2_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_umin, [(GetNamedOperand $sdata), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -1994,148 +1994,148 @@ def S_BUFFER_ATOMIC_UMIN_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_UM
 def S_BUFFER_ATOMIC_INC_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_INC_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt si_llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_INC_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_INC_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt si_llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_INC_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_INC_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt si_llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_INC_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_INC_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt si_llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_INC_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_INC_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt si_llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_INC_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_INC_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt si_llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_INC_X2_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_INC_X2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt si_llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_INC_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_INC_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt si_llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_INC_X2_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_INC_X2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt si_llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_INC_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_INC_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt si_llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_INC_X2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_INC_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt si_llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_INC_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_INC_X2_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_inc, [(ConstantInt si_llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -2146,148 +2146,148 @@ def S_BUFFER_ATOMIC_INC_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_INC
 def S_BUFFER_ATOMIC_DEC_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_DEC_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt si_llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_DEC_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_DEC_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt si_llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_DEC_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_DEC_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt si_llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_DEC_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_DEC_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt si_llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_DEC_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_DEC_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt si_llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_DEC_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_DEC_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt si_llvm_i32_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_DEC_X2_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_DEC_X2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt si_llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_DEC_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_DEC_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt si_llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_DEC_X2_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_DEC_X2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt si_llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_DEC_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_DEC_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt si_llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
 def S_BUFFER_ATOMIC_DEC_X2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_DEC_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt si_llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_DEC_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_DEC_X2_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
     (SetNamedOperand $sdst,
 
-      (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)]))
+      (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_dec, [(ConstantInt si_llvm_i64_ty, 1), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)]))
   ];
 }
 
@@ -2298,28 +2298,28 @@ def S_BUFFER_ATOMIC_DEC_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_DEC
 def S_BUFFER_ATOMIC_CMPSWAP_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWAP_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 0))),
 
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 1))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 1))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_CMPSWAP_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWAP_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 0))),
 
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 1))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 1))),
 
-    (DefVal $tmp, (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])),
+    (DefVal $tmp, (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2327,32 +2327,32 @@ def S_BUFFER_ATOMIC_CMPSWAP_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWAP
 def S_BUFFER_ATOMIC_CMPSWAP_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWAP_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 0))),
 
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 1))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 1))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_CMPSWAP_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWAP_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 0))),
 
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 1))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 1))),
 
-    (DefVal $tmp, (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])),
+    (DefVal $tmp, (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2360,32 +2360,32 @@ def S_BUFFER_ATOMIC_CMPSWAP_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWA
 def S_BUFFER_ATOMIC_CMPSWAP_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWAP_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 0))),
 
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 1))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 1))),
 
-    (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_CMPSWAP_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWAP_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 0))),
 
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 1))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 1))),
 
-    (DefVal $tmp, (LLVMIntrinsic llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])),
+    (DefVal $tmp, (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2393,28 +2393,28 @@ def S_BUFFER_ATOMIC_CMPSWAP_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_CM
 def S_BUFFER_ATOMIC_CMPSWAP_X2_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWAP_X2_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 0))),
 
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 1))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 1))),
 
-    (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_CMPSWAP_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWAP_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 0))),
 
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 1))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 1))),
 
-    (DefVal $tmp, (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])),
+    (DefVal $tmp, (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2422,32 +2422,32 @@ def S_BUFFER_ATOMIC_CMPSWAP_X2_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPS
 def S_BUFFER_ATOMIC_CMPSWAP_X2_SGPR_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWAP_X2_SGPR> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 0))),
 
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 1))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 1))),
 
-    (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_CMPSWAP_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWAP_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 0))),
 
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 1))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 1))),
 
-    (DefVal $tmp, (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])),
+    (DefVal $tmp, (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2455,32 +2455,32 @@ def S_BUFFER_ATOMIC_CMPSWAP_X2_SGPR_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_CMP
 def S_BUFFER_ATOMIC_CMPSWAP_X2_SGPR_IMM_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWAP_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 0))),
 
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 1))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 1))),
 
-    (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
 def S_BUFFER_ATOMIC_CMPSWAP_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_BUFFER_ATOMIC_CMPSWAP_X2_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $rsrc, (LLVMInsertElement (GetNamedOperand $sbase),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (ConstantInt llvm_i32_ty, 3))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (ConstantInt si_llvm_i32_ty, 3))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset))),
 
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 0))),
 
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 1))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 1))),
 
-    (DefVal $tmp, (LLVMIntrinsic llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt llvm_i32_ty, 0), (ConstantInt llvm_i32_ty, 0)])),
+    (DefVal $tmp, (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (GetVal $rsrc), (ConstantInt si_llvm_i32_ty, 0), (GetVal $total_offset), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 0)])),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2510,7 +2510,7 @@ def S_LOAD_DWORD_IMM_sem : InstSISemantic<S_LOAD_DWORD_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (SetNamedOperand $sdst, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr)))
+    (SetNamedOperand $sdst, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr)))
   ];
 }
 
@@ -2518,7 +2518,7 @@ def S_LOAD_DWORD_SGPR_sem : InstSISemantic<S_LOAD_DWORD_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (SetNamedOperand $sdst, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr)))
+    (SetNamedOperand $sdst, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr)))
   ];
 }
 
@@ -2526,7 +2526,7 @@ def S_LOAD_DWORD_SGPR_IMM_sem : InstSISemantic<S_LOAD_DWORD_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (SetNamedOperand $sdst, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr)))
+    (SetNamedOperand $sdst, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr)))
   ];
 }
 
@@ -2534,7 +2534,7 @@ def S_LOAD_DWORDX2_IMM_sem : InstSISemantic<S_LOAD_DWORDX2_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp, (LLVMLoad llvm_v2i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v2i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2543,7 +2543,7 @@ def S_LOAD_DWORDX2_SGPR_sem : InstSISemantic<S_LOAD_DWORDX2_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (DefVal $tmp, (LLVMLoad llvm_v2i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v2i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2552,7 +2552,7 @@ def S_LOAD_DWORDX2_SGPR_IMM_sem : InstSISemantic<S_LOAD_DWORDX2_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp, (LLVMLoad llvm_v2i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v2i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2561,7 +2561,7 @@ def S_LOAD_DWORDX3_IMM_sem : InstSISemantic<S_LOAD_DWORDX3_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp, (LLVMLoad llvm_v3i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v3i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2570,7 +2570,7 @@ def S_LOAD_DWORDX3_SGPR_sem : InstSISemantic<S_LOAD_DWORDX3_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (DefVal $tmp, (LLVMLoad llvm_v3i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v3i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2579,7 +2579,7 @@ def S_LOAD_DWORDX3_SGPR_IMM_sem : InstSISemantic<S_LOAD_DWORDX3_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp, (LLVMLoad llvm_v3i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v3i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2588,7 +2588,7 @@ def S_LOAD_DWORDX4_IMM_sem : InstSISemantic<S_LOAD_DWORDX4_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp, (LLVMLoad llvm_v4i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v4i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2597,7 +2597,7 @@ def S_LOAD_DWORDX4_SGPR_sem : InstSISemantic<S_LOAD_DWORDX4_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (DefVal $tmp, (LLVMLoad llvm_v4i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v4i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2606,7 +2606,7 @@ def S_LOAD_DWORDX4_SGPR_IMM_sem : InstSISemantic<S_LOAD_DWORDX4_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp, (LLVMLoad llvm_v4i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v4i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2615,7 +2615,7 @@ def S_LOAD_DWORDX8_IMM_sem : InstSISemantic<S_LOAD_DWORDX8_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp, (LLVMLoad llvm_v8i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v8i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2624,7 +2624,7 @@ def S_LOAD_DWORDX8_SGPR_sem : InstSISemantic<S_LOAD_DWORDX8_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (DefVal $tmp, (LLVMLoad llvm_v8i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v8i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2633,7 +2633,7 @@ def S_LOAD_DWORDX8_SGPR_IMM_sem : InstSISemantic<S_LOAD_DWORDX8_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp, (LLVMLoad llvm_v8i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v8i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2642,7 +2642,7 @@ def S_LOAD_DWORDX16_IMM_sem : InstSISemantic<S_LOAD_DWORDX16_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp, (LLVMLoad llvm_v16i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v16i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2651,7 +2651,7 @@ def S_LOAD_DWORDX16_SGPR_sem : InstSISemantic<S_LOAD_DWORDX16_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (DefVal $tmp, (LLVMLoad llvm_v16i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v16i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2660,7 +2660,7 @@ def S_LOAD_DWORDX16_SGPR_IMM_sem : InstSISemantic<S_LOAD_DWORDX16_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp, (LLVMLoad llvm_v16i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v16i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2750,31 +2750,31 @@ def S_SCRATCH_LOAD_DWORD_IMM_sem : InstSISemantic<S_SCRATCH_LOAD_DWORD_IMM> {
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
 
                                    (GetNamedOperand $offset))),
-    (SetNamedOperand $sdst, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr)))
+    (SetNamedOperand $sdst, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr)))
   ];
 }
 
 def S_SCRATCH_LOAD_DWORD_SGPR_sem : InstSISemantic<S_SCRATCH_LOAD_DWORD_SGPR> {
   let Semantic = [
-    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt llvm_i32_ty, 64))),
+    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 64))),
 
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
 
                                    (GetVal $soff_scaled))),
-    (SetNamedOperand $sdst, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr)))
+    (SetNamedOperand $sdst, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr)))
   ];
 }
 
 def S_SCRATCH_LOAD_DWORD_SGPR_IMM_sem : InstSISemantic<S_SCRATCH_LOAD_DWORD_SGPR_IMM> {
   let Semantic = [
-    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt llvm_i32_ty, 64))),
+    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 64))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetVal $soff_scaled))),
 
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
 
                                    (GetVal $total_offset))),
-    (SetNamedOperand $sdst, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr)))
+    (SetNamedOperand $sdst, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr)))
   ];
 }
 
@@ -2783,33 +2783,33 @@ def S_SCRATCH_LOAD_DWORDX2_IMM_sem : InstSISemantic<S_SCRATCH_LOAD_DWORDX2_IMM> 
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
 
                                    (GetNamedOperand $offset))),
-    (DefVal $tmp, (LLVMLoad llvm_v2i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v2i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
 
 def S_SCRATCH_LOAD_DWORDX2_SGPR_sem : InstSISemantic<S_SCRATCH_LOAD_DWORDX2_SGPR> {
   let Semantic = [
-    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt llvm_i32_ty, 64))),
+    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 64))),
 
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
 
                                    (GetVal $soff_scaled))),
-    (DefVal $tmp, (LLVMLoad llvm_v2i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v2i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
 
 def S_SCRATCH_LOAD_DWORDX2_SGPR_IMM_sem : InstSISemantic<S_SCRATCH_LOAD_DWORDX2_SGPR_IMM> {
   let Semantic = [
-    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt llvm_i32_ty, 64))),
+    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 64))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetVal $soff_scaled))),
 
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
 
                                    (GetVal $total_offset))),
-    (DefVal $tmp, (LLVMLoad llvm_v2i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v2i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2819,33 +2819,33 @@ def S_SCRATCH_LOAD_DWORDX4_IMM_sem : InstSISemantic<S_SCRATCH_LOAD_DWORDX4_IMM> 
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
 
                                    (GetNamedOperand $offset))),
-    (DefVal $tmp, (LLVMLoad llvm_v4i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v4i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
 
 def S_SCRATCH_LOAD_DWORDX4_SGPR_sem : InstSISemantic<S_SCRATCH_LOAD_DWORDX4_SGPR> {
   let Semantic = [
-    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt llvm_i32_ty, 64))),
+    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 64))),
 
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
 
                                    (GetVal $soff_scaled))),
-    (DefVal $tmp, (LLVMLoad llvm_v4i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v4i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
 
 def S_SCRATCH_LOAD_DWORDX4_SGPR_IMM_sem : InstSISemantic<S_SCRATCH_LOAD_DWORDX4_SGPR_IMM> {
   let Semantic = [
-    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt llvm_i32_ty, 64))),
+    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 64))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetVal $soff_scaled))),
 
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
 
                                    (GetVal $total_offset))),
-    (DefVal $tmp, (LLVMLoad llvm_v4i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v4i32_ty, (GetVal $tmp_addr))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -2865,7 +2865,7 @@ def S_SCRATCH_STORE_DWORD_IMM_sem : InstSISemantic<S_SCRATCH_STORE_DWORD_IMM> {
 
 def S_SCRATCH_STORE_DWORD_SGPR_sem : InstSISemantic<S_SCRATCH_STORE_DWORD_SGPR> {
   let Semantic = [
-    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt llvm_i32_ty, 64))),
+    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 64))),
 
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
 
@@ -2876,7 +2876,7 @@ def S_SCRATCH_STORE_DWORD_SGPR_sem : InstSISemantic<S_SCRATCH_STORE_DWORD_SGPR> 
 
 def S_SCRATCH_STORE_DWORD_SGPR_IMM_sem : InstSISemantic<S_SCRATCH_STORE_DWORD_SGPR_IMM> {
   let Semantic = [
-    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt llvm_i32_ty, 64))),
+    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 64))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetVal $soff_scaled))),
 
@@ -2898,7 +2898,7 @@ def S_SCRATCH_STORE_DWORDX2_IMM_sem : InstSISemantic<S_SCRATCH_STORE_DWORDX2_IMM
 
 def S_SCRATCH_STORE_DWORDX2_SGPR_sem : InstSISemantic<S_SCRATCH_STORE_DWORDX2_SGPR> {
   let Semantic = [
-    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt llvm_i32_ty, 64))),
+    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 64))),
 
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
 
@@ -2909,7 +2909,7 @@ def S_SCRATCH_STORE_DWORDX2_SGPR_sem : InstSISemantic<S_SCRATCH_STORE_DWORDX2_SG
 
 def S_SCRATCH_STORE_DWORDX2_SGPR_IMM_sem : InstSISemantic<S_SCRATCH_STORE_DWORDX2_SGPR_IMM> {
   let Semantic = [
-    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt llvm_i32_ty, 64))),
+    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 64))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetVal $soff_scaled))),
 
@@ -2931,7 +2931,7 @@ def S_SCRATCH_STORE_DWORDX4_IMM_sem : InstSISemantic<S_SCRATCH_STORE_DWORDX4_IMM
 
 def S_SCRATCH_STORE_DWORDX4_SGPR_sem : InstSISemantic<S_SCRATCH_STORE_DWORDX4_SGPR> {
   let Semantic = [
-    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt llvm_i32_ty, 64))),
+    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 64))),
 
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
 
@@ -2942,7 +2942,7 @@ def S_SCRATCH_STORE_DWORDX4_SGPR_sem : InstSISemantic<S_SCRATCH_STORE_DWORDX4_SG
 
 def S_SCRATCH_STORE_DWORDX4_SGPR_IMM_sem : InstSISemantic<S_SCRATCH_STORE_DWORDX4_SGPR_IMM> {
   let Semantic = [
-    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt llvm_i32_ty, 64))),
+    (DefVal $soff_scaled, (LLVMMul (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 64))),
 
     (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset), (GetVal $soff_scaled))),
 
@@ -3282,10 +3282,10 @@ def S_ATOMIC_INC_IMM_sem : InstSISemantic<S_ATOMIC_INC_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp_val), (GetNamedOperand $sdata)),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 1)))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
 }
@@ -3294,10 +3294,10 @@ def S_ATOMIC_INC_SGPR_IMM_sem : InstSISemantic<S_ATOMIC_INC_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp_val), (GetNamedOperand $sdata)),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 1)))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
 }
@@ -3306,10 +3306,10 @@ def S_ATOMIC_INC_X2_IMM_sem : InstSISemantic<S_ATOMIC_INC_X2_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp_val), (GetNamedOperand $sdata)),
-                                   (ConstantInt llvm_i64_ty, 0),
-                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 1)))),
+                                   (ConstantInt si_llvm_i64_ty, 0),
+                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
 }
@@ -3318,10 +3318,10 @@ def S_ATOMIC_INC_X2_SGPR_IMM_sem : InstSISemantic<S_ATOMIC_INC_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp_val), (GetNamedOperand $sdata)),
-                                   (ConstantInt llvm_i64_ty, 0),
-                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 1)))),
+                                   (ConstantInt si_llvm_i64_ty, 0),
+                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
 }
@@ -3331,11 +3331,11 @@ def S_ATOMIC_DEC_IMM_sem : InstSISemantic<S_ATOMIC_DEC_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
-    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 0)),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 0)),
                                            (LLVMCmp LLVMICmpUGT, (GetVal $tmp_val), (GetNamedOperand $sdata))),
                                    (GetNamedOperand $sdata),
-                                   (LLVMSub (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 1)))),
+                                   (LLVMSub (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
 }
@@ -3344,11 +3344,11 @@ def S_ATOMIC_DEC_SGPR_IMM_sem : InstSISemantic<S_ATOMIC_DEC_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
-    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 0)),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 0)),
                                            (LLVMCmp LLVMICmpUGT, (GetVal $tmp_val), (GetNamedOperand $sdata))),
                                    (GetNamedOperand $sdata),
-                                   (LLVMSub (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 1)))),
+                                   (LLVMSub (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
 }
@@ -3357,11 +3357,11 @@ def S_ATOMIC_DEC_X2_IMM_sem : InstSISemantic<S_ATOMIC_DEC_X2_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
-    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 0)),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 0)),
                                            (LLVMCmp LLVMICmpUGT, (GetVal $tmp_val), (GetNamedOperand $sdata))),
                                    (GetNamedOperand $sdata),
-                                   (LLVMSub (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 1)))),
+                                   (LLVMSub (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
 }
@@ -3370,11 +3370,11 @@ def S_ATOMIC_DEC_X2_SGPR_IMM_sem : InstSISemantic<S_ATOMIC_DEC_X2_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
-    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 0)),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 0)),
                                            (LLVMCmp LLVMICmpUGT, (GetVal $tmp_val), (GetNamedOperand $sdata))),
                                    (GetNamedOperand $sdata),
-                                   (LLVMSub (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 1)))),
+                                   (LLVMSub (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
 }
@@ -3383,9 +3383,9 @@ def S_ATOMIC_CMPSWAP_IMM_sem : InstSISemantic<S_ATOMIC_CMPSWAP_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
@@ -3395,9 +3395,9 @@ def S_ATOMIC_CMPSWAP_SGPR_IMM_sem : InstSISemantic<S_ATOMIC_CMPSWAP_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i32_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i32_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
@@ -3407,9 +3407,9 @@ def S_ATOMIC_CMPSWAP_X2_IMM_sem : InstSISemantic<S_ATOMIC_CMPSWAP_X2_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
@@ -3419,9 +3419,9 @@ def S_ATOMIC_CMPSWAP_X2_SGPR_IMM_sem : InstSISemantic<S_ATOMIC_CMPSWAP_X2_SGPR_I
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
-    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 1))),
-    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt llvm_i64_ty, 0))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $sdata), (ConstantInt si_llvm_i64_ty, 0))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
@@ -4148,10 +4148,10 @@ def S_ATOMIC_INC_SGPR_sem : InstSISemantic<S_ATOMIC_INC_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp_val), (GetNamedOperand $sdata)),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 1)))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
 }
@@ -4160,10 +4160,10 @@ def S_ATOMIC_INC_IMM_RTN_sem : InstSISemantic<S_ATOMIC_INC_IMM_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp_val), (GetNamedOperand $sdata)),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 1)))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $sdst, (GetVal $tmp_val))
   ];
@@ -4173,10 +4173,10 @@ def S_ATOMIC_INC_SGPR_IMM_RTN_sem : InstSISemantic<S_ATOMIC_INC_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp_val), (GetNamedOperand $sdata)),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 1)))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $sdst, (GetVal $tmp_val))
   ];
@@ -4186,10 +4186,10 @@ def S_ATOMIC_INC_SGPR_RTN_sem : InstSISemantic<S_ATOMIC_INC_SGPR_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp_val), (GetNamedOperand $sdata)),
-                                   (ConstantInt llvm_i32_ty, 0),
-                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 1)))),
+                                   (ConstantInt si_llvm_i32_ty, 0),
+                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $sdst, (GetVal $tmp_val))
   ];
@@ -4199,10 +4199,10 @@ def S_ATOMIC_INC_X2_SGPR_sem : InstSISemantic<S_ATOMIC_INC_X2_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp_val), (GetNamedOperand $sdata)),
-                                   (ConstantInt llvm_i64_ty, 0),
-                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 1)))),
+                                   (ConstantInt si_llvm_i64_ty, 0),
+                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
 }
@@ -4211,10 +4211,10 @@ def S_ATOMIC_INC_X2_IMM_RTN_sem : InstSISemantic<S_ATOMIC_INC_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp_val), (GetNamedOperand $sdata)),
-                                   (ConstantInt llvm_i64_ty, 0),
-                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 1)))),
+                                   (ConstantInt si_llvm_i64_ty, 0),
+                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $sdst, (GetVal $tmp_val))
   ];
@@ -4224,10 +4224,10 @@ def S_ATOMIC_INC_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_ATOMIC_INC_X2_SGPR_IMM_R
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp_val), (GetNamedOperand $sdata)),
-                                   (ConstantInt llvm_i64_ty, 0),
-                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 1)))),
+                                   (ConstantInt si_llvm_i64_ty, 0),
+                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $sdst, (GetVal $tmp_val))
   ];
@@ -4237,10 +4237,10 @@ def S_ATOMIC_INC_X2_SGPR_RTN_sem : InstSISemantic<S_ATOMIC_INC_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
     (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp_val), (GetNamedOperand $sdata)),
-                                   (ConstantInt llvm_i64_ty, 0),
-                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 1)))),
+                                   (ConstantInt si_llvm_i64_ty, 0),
+                                   (LLVMAdd (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $sdst, (GetVal $tmp_val))
   ];
@@ -4250,11 +4250,11 @@ def S_ATOMIC_DEC_SGPR_sem : InstSISemantic<S_ATOMIC_DEC_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
-    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 0)),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 0)),
                                            (LLVMCmp LLVMICmpUGT, (GetVal $tmp_val), (GetNamedOperand $sdata))),
                                    (GetNamedOperand $sdata),
-                                   (LLVMSub (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 1)))),
+                                   (LLVMSub (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
 }
@@ -4263,11 +4263,11 @@ def S_ATOMIC_DEC_IMM_RTN_sem : InstSISemantic<S_ATOMIC_DEC_IMM_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
-    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 0)),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 0)),
                                            (LLVMCmp LLVMICmpUGT, (GetVal $tmp_val), (GetNamedOperand $sdata))),
                                    (GetNamedOperand $sdata),
-                                   (LLVMSub (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 1)))),
+                                   (LLVMSub (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $sdst, (GetVal $tmp_val))
   ];
@@ -4277,11 +4277,11 @@ def S_ATOMIC_DEC_SGPR_IMM_RTN_sem : InstSISemantic<S_ATOMIC_DEC_SGPR_IMM_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
-    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 0)),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 0)),
                                            (LLVMCmp LLVMICmpUGT, (GetVal $tmp_val), (GetNamedOperand $sdata))),
                                    (GetNamedOperand $sdata),
-                                   (LLVMSub (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 1)))),
+                                   (LLVMSub (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $sdst, (GetVal $tmp_val))
   ];
@@ -4291,11 +4291,11 @@ def S_ATOMIC_DEC_SGPR_RTN_sem : InstSISemantic<S_ATOMIC_DEC_SGPR_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i32_ty, (GetVal $tmp_addr))),
-    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 0)),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 0)),
                                            (LLVMCmp LLVMICmpUGT, (GetVal $tmp_val), (GetNamedOperand $sdata))),
                                    (GetNamedOperand $sdata),
-                                   (LLVMSub (GetVal $tmp_val), (ConstantInt llvm_i32_ty, 1)))),
+                                   (LLVMSub (GetVal $tmp_val), (ConstantInt si_llvm_i32_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $sdst, (GetVal $tmp_val))
   ];
@@ -4305,11 +4305,11 @@ def S_ATOMIC_DEC_X2_SGPR_sem : InstSISemantic<S_ATOMIC_DEC_X2_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
-    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 0)),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 0)),
                                            (LLVMCmp LLVMICmpUGT, (GetVal $tmp_val), (GetNamedOperand $sdata))),
                                    (GetNamedOperand $sdata),
-                                   (LLVMSub (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 1)))),
+                                   (LLVMSub (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr))
   ];
 }
@@ -4318,11 +4318,11 @@ def S_ATOMIC_DEC_X2_IMM_RTN_sem : InstSISemantic<S_ATOMIC_DEC_X2_IMM_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
-    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 0)),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 0)),
                                            (LLVMCmp LLVMICmpUGT, (GetVal $tmp_val), (GetNamedOperand $sdata))),
                                    (GetNamedOperand $sdata),
-                                   (LLVMSub (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 1)))),
+                                   (LLVMSub (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $sdst, (GetVal $tmp_val))
   ];
@@ -4332,11 +4332,11 @@ def S_ATOMIC_DEC_X2_SGPR_IMM_RTN_sem : InstSISemantic<S_ATOMIC_DEC_X2_SGPR_IMM_R
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
-    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 0)),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 0)),
                                            (LLVMCmp LLVMICmpUGT, (GetVal $tmp_val), (GetNamedOperand $sdata))),
                                    (GetNamedOperand $sdata),
-                                   (LLVMSub (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 1)))),
+                                   (LLVMSub (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $sdst, (GetVal $tmp_val))
   ];
@@ -4346,11 +4346,11 @@ def S_ATOMIC_DEC_X2_SGPR_RTN_sem : InstSISemantic<S_ATOMIC_DEC_X2_SGPR_RTN> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (DefVal $tmp_val, (LLVMLoad llvm_i64_ty, (GetVal $tmp_addr))),
-    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 0)),
+    (DefVal $tmp_val, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 0)),
                                            (LLVMCmp LLVMICmpUGT, (GetVal $tmp_val), (GetNamedOperand $sdata))),
                                    (GetNamedOperand $sdata),
-                                   (LLVMSub (GetVal $tmp_val), (ConstantInt llvm_i64_ty, 1)))),
+                                   (LLVMSub (GetVal $tmp_val), (ConstantInt si_llvm_i64_ty, 1)))),
     (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
     (SetNamedOperand $sdst, (GetVal $tmp_val))
   ];
@@ -4370,7 +4370,7 @@ def S_LOAD_U8_IMM_sem : InstSISemantic<S_LOAD_U8_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (SetNamedOperand $sdst, (LLVMZExt (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr)), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMZExt (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr)), si_llvm_i32_ty))
   ];
 }
 
@@ -4378,7 +4378,7 @@ def S_LOAD_U8_SGPR_sem : InstSISemantic<S_LOAD_U8_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (SetNamedOperand $sdst, (LLVMZExt (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr)), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMZExt (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr)), si_llvm_i32_ty))
   ];
 }
 
@@ -4386,7 +4386,7 @@ def S_LOAD_U8_SGPR_IMM_sem : InstSISemantic<S_LOAD_U8_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (SetNamedOperand $sdst, (LLVMZExt (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr)), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMZExt (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr)), si_llvm_i32_ty))
   ];
 }
 
@@ -4400,7 +4400,7 @@ def S_LOAD_I8_IMM_sem : InstSISemantic<S_LOAD_I8_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (SetNamedOperand $sdst, (LLVMSExt (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr)), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMSExt (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr)), si_llvm_i32_ty))
   ];
 }
 
@@ -4408,7 +4408,7 @@ def S_LOAD_I8_SGPR_sem : InstSISemantic<S_LOAD_I8_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (SetNamedOperand $sdst, (LLVMSExt (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr)), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMSExt (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr)), si_llvm_i32_ty))
   ];
 }
 
@@ -4416,7 +4416,7 @@ def S_LOAD_I8_SGPR_IMM_sem : InstSISemantic<S_LOAD_I8_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (SetNamedOperand $sdst, (LLVMSExt (LLVMLoad llvm_i8_ty, (GetVal $tmp_addr)), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMSExt (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr)), si_llvm_i32_ty))
   ];
 }
 
@@ -4430,7 +4430,7 @@ def S_LOAD_U16_IMM_sem : InstSISemantic<S_LOAD_U16_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (SetNamedOperand $sdst, (LLVMZExt (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr)), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMZExt (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr)), si_llvm_i32_ty))
   ];
 }
 
@@ -4438,7 +4438,7 @@ def S_LOAD_U16_SGPR_sem : InstSISemantic<S_LOAD_U16_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (SetNamedOperand $sdst, (LLVMZExt (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr)), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMZExt (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr)), si_llvm_i32_ty))
   ];
 }
 
@@ -4446,7 +4446,7 @@ def S_LOAD_U16_SGPR_IMM_sem : InstSISemantic<S_LOAD_U16_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (SetNamedOperand $sdst, (LLVMZExt (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr)), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMZExt (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr)), si_llvm_i32_ty))
   ];
 }
 
@@ -4460,7 +4460,7 @@ def S_LOAD_I16_IMM_sem : InstSISemantic<S_LOAD_I16_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $offset))),
-    (SetNamedOperand $sdst, (LLVMSExt (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr)), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMSExt (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr)), si_llvm_i32_ty))
   ];
 }
 
@@ -4468,7 +4468,7 @@ def S_LOAD_I16_SGPR_sem : InstSISemantic<S_LOAD_I16_SGPR> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (GetNamedOperand $soffset))),
-    (SetNamedOperand $sdst, (LLVMSExt (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr)), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMSExt (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr)), si_llvm_i32_ty))
   ];
 }
 
@@ -4476,7 +4476,7 @@ def S_LOAD_I16_SGPR_IMM_sem : InstSISemantic<S_LOAD_I16_SGPR_IMM> {
   let Semantic = [
     (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
                                (LLVMAdd (GetNamedOperand $offset), (GetNamedOperand $soffset)))),
-    (SetNamedOperand $sdst, (LLVMSExt (LLVMLoad llvm_i16_ty, (GetVal $tmp_addr)), llvm_i32_ty))
+    (SetNamedOperand $sdst, (LLVMSExt (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr)), si_llvm_i32_ty))
   ];
 }
 
@@ -4522,7 +4522,7 @@ def S_GL1_INV_sem : InstSISemantic<S_GL1_INV>;
 def S_MEMTIME_sem : InstSISemantic<S_MEMTIME> {
   let Semantic = [
     (SetNamedOperand $sdst,
-      (LLVMIntrinsic llvm_i64_ty, int_amdgcn_s_memtime, []<dag>))
+      (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_memtime, []<dag>))
   ];
 }
 
@@ -4530,7 +4530,7 @@ def S_MEMTIME_sem : InstSISemantic<S_MEMTIME> {
 def S_MEMREALTIME_sem : InstSISemantic<S_MEMREALTIME> {
   let Semantic = [
     (SetNamedOperand $sdst,
-      (LLVMIntrinsic llvm_i64_ty, int_amdgcn_s_memrealtime, []<dag>))
+      (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_memrealtime, []<dag>))
   ];
 }
 
@@ -4538,7 +4538,7 @@ def S_MEMREALTIME_sem : InstSISemantic<S_MEMREALTIME> {
 def S_GET_WAVEID_IN_WORKGROUP_sem : InstSISemantic<S_GET_WAVEID_IN_WORKGROUP> {
   let Semantic = [
     (SetNamedOperand $sdst,
-      (LLVMIntrinsic llvm_i32_ty, int_amdgcn_s_get_waveid_in_workgroup, []<dag>))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_s_get_waveid_in_workgroup, []<dag>))
   ];
 }
 

@@ -168,6 +168,12 @@ def LLVMLdexp : LLVMOp<"CreateLdexp">;
 
 def LLVMAtomicRMW : LLVMOp<"CreateAtomicRMW">;
 
+def LLVMBranch : LLVMOp<"CreateBr">;
+
+def LLVMCondBranch : LLVMOp<"CreateCondBr">;
+
+def LLVMIndirectBranch : LLVMOp<"CreateIndirectBr">;
+
 //------------------------------------------------------------------------------
 // AtomicRMW Operation Enum Values
 //------------------------------------------------------------------------------
@@ -360,6 +366,10 @@ def ImplicitUse;
 /// the LLVMSelect operation). Does not translate into an IR operation
 def SelectOperand;
 
+/// Obtains the fallthrough basic block of the current machine instruction
+/// Useful when translating branch instructions
+def GetNextBB;
+
 /// Used to indicate definition of an intermediate value to be used by
 /// Later operations inside the semantic
 /// The second operand should be a name (e.g., (DefVal $tmp (...)))
@@ -384,8 +394,55 @@ def buffer_ptr_ty : LLVMQualPointerType<8>;
 /// Buffer fat pointer address space
 def buffer_fat_ptr_ty : LLVMQualPointerType<9>;
 
-/// 3 x f16 not defined in LLVM
-def llvm_v3f16_ty      : LLVMType<v3f16>;
+//------------------------------------------------------------------------------
+// LLVM Types
+//------------------------------------------------------------------------------
+
+/// We make a separate class for representing type arguments in the semantics
+/// to give us more freedom in representing more types, especially those
+/// used in LLVM but not in ISEL
+class SILLVMType<string builder, int nElem, int elemSize, bit isFP> {
+  string Builder = builder;
+  int NElem = nElem;
+  int ElemSize = elemSize;
+  bit IsFP = isFP;
+}
+
+foreach size = [1, 2, 4, 8, 16, 32, 64, 128] in {
+  def si_llvm_i#size#_ty : SILLVMType<"Builder.getInt"#size#"Ty()", 1, size, false>;
+}
+
+def si_llvm_half_ty : SILLVMType<"Builder.getHalfTy()", 1, 16, true>;
+def si_llvm_bfloat_ty : SILLVMType<"Builder.getBFloatTy()", 1, 16, true>;
+def si_llvm_float_ty : SILLVMType<"Builder.getFloatTy()", 1, 32, true>;
+def si_llvm_double_ty : SILLVMType<"Builder.getDoubleTy()", 1, 64, true>;
+
+def si_llvm_void_ty : SILLVMType<"Builder.getVoidTy()", 0, 0, false>;
+
+foreach size = [1, 2, 3, 4, 6, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096] in {
+  foreach int_size = [1, 2, 4, 8, 16, 32, 64, 128] in {
+    def si_llvm_v#size#i#int_size#_ty :
+      SILLVMType<"llvm::FixedVectorType::get("#!cast<SILLVMType>("si_llvm_i"#int_size#"_ty").Builder#", "#size#")", size, int_size, false>;
+  }
+}
+
+foreach size = [1, 2, 3, 4, 6, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096] in {
+  foreach idx = [0, 1, 2, 3] in {
+    defvar float_ty = [si_llvm_half_ty, si_llvm_bfloat_ty, si_llvm_float_ty, si_llvm_double_ty][idx];
+    defvar float_name = ["f16", "bf16", "f32", "f64"][idx];
+      def si_llvm_v#size#float_name#_ty :
+        SILLVMType<"llvm::FixedVectorType::get("#float_ty.Builder#", "#size#")", size, float_ty.ElemSize, true>;
+  }
+}
+
+/// Used to create super register operands. Super register records in LLVM backends don't get materialized
+/// in the tablegen source code; They instead get automatically generated in C++ by the CodeGenTarget class
+/// using the RegisterClass record descriptions. This means that we can't refer to the super register records
+/// directly in the semantics record files. This class exists so that the SI semantics generator backend
+/// can materialize the register itself instead of relying on the CodeGenTarget
+class SuperRegFactory<list<Register> regs> {
+  list<Register> Regs = regs;
+}
 
 //------------------------------------------------------------------------------
 // Complex LLVM IR Operation Definitions (i.e. low-level binary operations that
@@ -393,19 +450,19 @@ def llvm_v3f16_ty      : LLVMType<v3f16>;
 //------------------------------------------------------------------------------
 
 /// Performs a bit-wise inversion operation on any integer value
-class LLVMNot<dag val, LLVMType type> {
-  dag ret = (LLVMXor val, (LLVMSExt (ConstantTrue llvm_i1_ty), type));
+class LLVMNot<dag val, SILLVMType type> {
+  dag ret = (LLVMXor val, (LLVMSExt (ConstantTrue si_llvm_i1_ty), type));
 }
 
 /// Breaks down an input value of type inputType into a set of
 /// sub values
-//class LLVMBreakdownValue<dag input, LLVMType inputType, int numEls> {
+//class LLVMBreakdownValue<dag input, SILLVMType inputType, int numEls> {
 //  assert !eq(inputType.VT.nElem, 1), "inputType must be a scalar value";
 //  assert !or(inputType.VT.isFP, inputType.VT.isInteger),
 //         "inputType must either be a floating point or an integer";
 //  dag BitcastedVal = (LLVMBitCast:$bitcast input,
-//                       !cast<LLVMType>(
-//                        llvm_#!if(!head(types).VT.isFP, "f", "i")
+//                       !cast<SILLVMType>(
+//                        si_llvm_#!if(!head(types).VT.isFP, "f", "i")
 //                           #numEls
 //                           #_ty
 //                        )
@@ -419,7 +476,7 @@ class LLVMNot<dag val, LLVMType type> {
 /// floating point)
 /// For merging two types that are not the same, they must be
 /// broken down into a common type first manually
-//class LLVMMergeValue<list<dag> ins, LLVMType type> {
+//class LLVMMergeValue<list<dag> ins, SILLVMType type> {
 //  assert !not(!empty(ins)), "argument list shouldn't be empty";
 //  assert !eq(type.VT.nElem, 1), "type must be a scalar";
 //  assert !or(type.VT.isFP, type.VT.isInteger),
@@ -428,13 +485,13 @@ class LLVMNot<dag val, LLVMType type> {
 //
 //  /// The output type is a floating point or an integer, with its
 //  /// size being the aggregate of all input types
-//  LLVMType OutputType =
-//    !cast<LLVMType>(llvm_#!if(type.VT.isFP, "f", "i")#
+//  SILLVMType OutputType =
+//    !cast<SILLVMType>(llvm_#!if(type.VT.isFP, "f", "i")#
 //                          !mul(!size(ins), type.VT.Size)#_ty);
 //  /// Type of vector the values will be inserted to before being
 //  /// casted to the final scalar
-//  LLVMType MergeVectorType =
-//    !cast<LLVMType>(llvm_v#!size(ins)
+//  SILLVMType MergeVectorType =
+//    !cast<SILLVMType>(llvm_v#!size(ins)
 //                          #_#
 //                          !if(!head(types).VT.isFP, "f", "i")#
 //                          type.VT.Size
@@ -450,36 +507,36 @@ class LLVMNot<dag val, LLVMType type> {
 //  );
 //}
 
-class LLVMExtractValueConstIdx<dag val, LLVMType subValType, int idx> {
-  assert !gt(subValType.VT.nElem, 1), "subValType must be a vector type";
-  assert !gt(subValType.VT.nElem, idx),
+class LLVMExtractValueConstIdx<dag val, SILLVMType subValType, int idx> {
+  assert !gt(subValType.NElem, 1), "subValType must be a vector type";
+  assert !gt(subValType.NElem, idx),
          "Index cannot be greater than number of elements";
   assert !gt(idx, 0), "Index must be greater than zero";
   dag Op =
     (LLVMExtractElement (LLVMBitCast val, subValType), idx);
 }
 
-class LLVMExtractValueVarIdx<dag val, LLVMType subValType, dag idx> {
-  assert !gt(subValType.VT.nElem, 1), "subValType must be a vector type";
+class LLVMExtractValueVarIdx<dag val, SILLVMType subValType, dag idx> {
+  assert !gt(subValType.NElem, 1), "subValType must be a vector type";
   dag Op =
     (LLVMExtractElement (LLVMBitCast val, subValType), idx);
 }
 
-class LLVMExtractSignBit<dag val, LLVMType type> {
-  dag Op = LLVMExtractValueConstIdx<val, type, !sub(type.VT.Size, 1)>.Op;
+class LLVMExtractSignBit<dag val, SILLVMType type> {
+  dag Op = LLVMExtractValueConstIdx<val, type, !sub(type.ElemSize, 1)>.Op;
 }
 
-class LLVMSetSignBit<dag val, LLVMType type, dag sgn> {
-  dag Op = (LLVMAnd val, (LLVMShl sgn, !sub(type.VT.Size, 1)));
+class LLVMSetSignBit<dag val, SILLVMType type, dag sgn> {
+  dag Op = (LLVMAnd val, (LLVMShl sgn, !sub(type.ElemSize, 1)));
 }
 
 class LLVMExtractBitsIntStartIntNumBits<dag val,
-                                        LLVMType inputType,
+                                        SILLVMType inputType,
                                         bit isSigned, int startIdx,
                                         int numBits = 1> {
-  assert !lt(startIdx, inputType.VT.Size), "Start index must be less than the size of the element type";
-  assert !eq(inputType.VT.nElem, 1), "type must be a scalar";
-  assert !lt(!add(startIdx, numBits), inputType.VT.Size), "Total number of bits requested is out of range";
+  assert !lt(startIdx, inputType.ElemSize), "Start index must be less than the size of the element type";
+  assert !eq(inputType.NElem, 1), "type must be a scalar";
+  assert !lt(!add(startIdx, numBits), inputType.ElemSize), "Total number of bits requested is out of range";
   defvar rightShiftOp = !if(isSigned, LLVMAShr, LLVMLShr);
 
   dag Op = !if(!eq(numBits, 1),
@@ -488,21 +545,21 @@ class LLVMExtractBitsIntStartIntNumBits<dag val,
              (LLVMAnd (rightShiftOp val, (ConstantInt inputType, startIdx))));
 }
 
-class LLVMExtractBitsDagStartDagNumBits<dag val, LLVMType inputType, bit isSigned, dag startIdx, dag numBits> {
+class LLVMExtractBitsDagStartDagNumBits<dag val, SILLVMType inputType, bit isSigned, dag startIdx, dag numBits> {
   defvar rightShiftOp = !if(isSigned, LLVMAShr, LLVMLShr);
   dag Op = (LLVMAnd (rightShiftOp val, startIdx),
                     (LLVMSub (LLVMShl (ConstantInt inputType, 1), numBits), (ConstantInt inputType, 1)));
 }
 
-class LLVMExtractBitsIntStartDagNumBits<dag val, LLVMType inputType, bit isSigned, int startIdx, dag numBits> {
-  assert !eq(inputType.VT.nElem, 1), "type must be a scalar";
+class LLVMExtractBitsIntStartDagNumBits<dag val, SILLVMType inputType, bit isSigned, int startIdx, dag numBits> {
+  assert !eq(inputType.NElem, 1), "type must be a scalar";
   defvar rightShiftOp = !if(isSigned, LLVMAShr, LLVMLShr);
   dag Op = (LLVMAnd (rightShiftOp val, (ConstantInt inputType, startIdx)),
                     (LLVMSub (LLVMShl (ConstantInt inputType, 1), numBits),
                                       (ConstantInt inputType, 1)));
 }
 
-//class LLVMExtractBitsDagStartIntNumBits<dag val, LLVMType inputType, dag startIdx, int numBits = 1> {
+//class LLVMExtractBitsDagStartIntNumBits<dag val, SILLVMType inputType, dag startIdx, int numBits = 1> {
 //  assert !eq(inputType.VT.nElem, 1), "type must be a scalar";
 //  defvar rightShiftOp = !if(isSigned, LLVMAShr, LLVMLShr);
 //  dag Op = !if(!eq(numBits, 1),

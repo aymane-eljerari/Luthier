@@ -33,8 +33,8 @@
 def S_ADDK_I32_sem : InstSISemantic<S_ADDK_I32> {
   let Semantic = [
     (DefVal $tmp_add, (LLVMAdd (GetNamedOperand $src0), (GetNamedOperand $simm16))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp_add), (ConstantInt llvm_i32_ty, 0x100000000))),
-    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp_add), llvm_i32_ty))
+    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp_add), (ConstantInt si_llvm_i32_ty, 0x100000000))),
+    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp_add), si_llvm_i32_ty))
   ];
 }
 
@@ -331,3 +331,122 @@ def S_SETREG_B32_sem : InstSISemantic<S_SETREG_B32> {
     (LLVMBinaryIntrinsic int_amdgcn_s_setreg, (GetNamedOperand $simm16), (GetNamedOperand $sdst))
   ];
 }
+
+//------------------------------------------------------------------------------
+// S_CBRANCH_I_FORK
+//------------------------------------------------------------------------------
+
+// S_CBRANCH_I_FORK: Fork with integer operand.
+// $sdst = SGPR to store current EXEC mask
+// $simm16 = PC-relative target (already translated to BasicBlock)
+// mask_pass = exec & sdst
+// mask_fail = exec & ~sdst
+// Only available on GFX6-GFX9.
+// Sources:
+//   gcn3-instruction-set-architecture.pdf, page 112.
+//def S_CBRANCH_I_FORK_sem : InstSISemantic<S_CBRANCH_I_FORK> {
+//  let Semantic = [
+//    // Get current PC for branch stack entry
+//    (DefVal $current_pc, (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_getpc, []<dag>)),
+//    // Store current EXEC to sdst
+//    (SetNamedOperand $sdst, (ImplicitUse EXEC)),
+//    // Compute pass and fail masks
+//    (DefVal $pass_mask, (LLVMAnd (ImplicitUse EXEC), (GetNamedOperand $sdst))),
+//    (DefVal $fail_mask, (LLVMAnd (ImplicitUse EXEC),
+//                               (LLVMXor (GetNamedOperand $sdst),
+//                                        (ConstantInt si_llvm_i64_ty, -1)))),
+//    // Get CSP from MODE register (hwmode = 5953, returns i32)
+//    (DefVal $csp, (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_s_getreg,
+//      [(ConstantInt si_llvm_i16_ty, 5953)]<dag>)),
+//    // Read SGPR quads and bitcast to 128-bit vectors
+//    (DefVal $sgpr0_3, (LLVMBitCast (ImplicitUse SGPR0_SGPR1_SGPR2_SGPR3), si_llvm_i128_ty)),
+//    (DefVal $sgpr4_7, (LLVMBitCast (ImplicitUse SGPR4_SGPR5_SGPR6_SGPR7), si_llvm_i128_ty)),
+//    (DefVal $sgpr8_11, (LLVMBitCast (ImplicitUse SGPR8_SGPR9_SGPR10_SGPR11), si_llvm_i128_ty)),
+//    (DefVal $sgpr12_15, (LLVMBitCast (ImplicitUse SGPR12_SGPR13_SGPR14_SGPR15), si_llvm_i128_ty)),
+//    (DefVal $sgpr16_19, (LLVMBitCast (ImplicitUse SGPR16_SGPR17_SGPR18_SGPR19), si_llvm_i128_ty)),
+//    (DefVal $sgpr20_23, (LLVMBitCast (ImplicitUse SGPR20_SGPR21_SGPR22_SGPR23), si_llvm_i128_ty)),
+//    // Create 6x128-bit vector of SGPR values
+//    (DefVal $sgpr_vec, (LLVMInsertElement
+//      (LLVMInsertElement
+//        (LLVMInsertElement
+//          (LLVMInsertElement
+//            (LLVMInsertElement
+//              (LLVMInsertElement (ConstantPoison si_llvm_v6i128_ty),
+//                                 (GetVal $sgpr0_3), (ConstantInt si_llvm_i32_ty, 0)),
+//                                 (GetVal $sgpr4_7), (ConstantInt si_llvm_i32_ty, 1)),
+//                                 (GetVal $sgpr8_11), (ConstantInt si_llvm_i32_ty, 2)),
+//                                 (GetVal $sgpr12_15), (ConstantInt si_llvm_i32_ty, 3)),
+//                                 (GetVal $sgpr16_19), (ConstantInt si_llvm_i32_ty, 4)),
+//                                 (GetVal $sgpr20_23), (ConstantInt si_llvm_i32_ty, 5))),
+//    // Extract element at CSP index
+//    (DefVal $csp_val, (LLVMExtractElement (GetVal $sgpr_vec), (GetVal $csp))),
+//    // Branch to target (simm16 is already a BasicBlock)
+//    (LLVMBranch (GetNamedOperand $simm16))
+//  ];
+//}
+//
+//def S_CBRANCH_I_FORK_gfx6_gfx7_sem : InstSISemantic<S_CBRANCH_I_FORK_gfx6_gfx7> {
+//  let Semantic = [
+//    (DefVal $current_pc, (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_getpc, []<dag>)),
+//    (SetNamedOperand $sdst, (ImplicitUse EXEC)),
+//    (DefVal $pass_mask, (LLVMAnd (ImplicitUse EXEC), (GetNamedOperand $sdst))),
+//    (DefVal $fail_mask, (LLVMAnd (ImplicitUse EXEC),
+//                               (LLVMXor (GetNamedOperand $sdst),
+//                                        (ConstantInt si_llvm_i64_ty, -1)))),
+//    (DefVal $csp, (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_s_getreg,
+//      [(ConstantInt si_llvm_i16_ty, 5953)]<dag>)),
+//    (DefVal $sgpr0_3, (LLVMBitCast (ImplicitUse SGPR0_SGPR1_SGPR2_SGPR3), si_llvm_i128_ty)),
+//    (DefVal $sgpr4_7, (LLVMBitCast (ImplicitUse SGPR4_SGPR5_SGPR6_SGPR7), si_llvm_i128_ty)),
+//    (DefVal $sgpr8_11, (LLVMBitCast (ImplicitUse SGPR8_SGPR9_SGPR10_SGPR11), si_llvm_i128_ty)),
+//    (DefVal $sgpr12_15, (LLVMBitCast (ImplicitUse SGPR12_SGPR13_SGPR14_SGPR15), si_llvm_i128_ty)),
+//    (DefVal $sgpr16_19, (LLVMBitCast (ImplicitUse SGPR16_SGPR17_SGPR18_SGPR19), si_llvm_i128_ty)),
+//    (DefVal $sgpr20_23, (LLVMBitCast (ImplicitUse SGPR20_SGPR21_SGPR22_SGPR23), si_llvm_i128_ty)),
+//    (DefVal $sgpr_vec, (LLVMInsertElement
+//      (LLVMInsertElement
+//        (LLVMInsertElement
+//          (LLVMInsertElement
+//            (LLVMInsertElement
+//              (LLVMInsertElement (ConstantPoison si_llvm_v6i128_ty),
+//                                 (GetVal $sgpr0_3), (ConstantInt si_llvm_i32_ty, 0)),
+//                                 (GetVal $sgpr4_7), (ConstantInt si_llvm_i32_ty, 1)),
+//                                 (GetVal $sgpr8_11), (ConstantInt si_llvm_i32_ty, 2)),
+//                                 (GetVal $sgpr12_15), (ConstantInt si_llvm_i32_ty, 3)),
+//                                 (GetVal $sgpr16_19), (ConstantInt si_llvm_i32_ty, 4)),
+//                                 (GetVal $sgpr20_23), (ConstantInt si_llvm_i32_ty, 5))),
+//    (DefVal $csp_val, (LLVMExtractElement (GetVal $sgpr_vec), (GetVal $csp))),
+//    (LLVMBranch (GetNamedOperand $simm16))
+//  ];
+//}
+//
+//def S_CBRANCH_I_FORK_vi_sem : InstSISemantic<S_CBRANCH_I_FORK_vi> {
+//  let Semantic = [
+//    (DefVal $current_pc, (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_getpc, []<dag>)),
+//    (SetNamedOperand $sdst, (ImplicitUse EXEC)),
+//    (DefVal $pass_mask, (LLVMAnd (ImplicitUse EXEC), (GetNamedOperand $sdst))),
+//    (DefVal $fail_mask, (LLVMAnd (ImplicitUse EXEC),
+//                               (LLVMXor (GetNamedOperand $sdst),
+//                                        (ConstantInt si_llvm_i64_ty, -1)))),
+//    (DefVal $csp, (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_s_getreg,
+//      [(ConstantInt si_llvm_i16_ty, 5953)]<dag>)),
+//    (DefVal $sgpr0_3, (LLVMBitCast (ImplicitUse SGPR0_SGPR1_SGPR2_SGPR3), si_llvm_i128_ty)),
+//    (DefVal $sgpr4_7, (LLVMBitCast (ImplicitUse SGPR4_SGPR5_SGPR6_SGPR7), si_llvm_i128_ty)),
+//    (DefVal $sgpr8_11, (LLVMBitCast (ImplicitUse SGPR8_SGPR9_SGPR10_SGPR11), si_llvm_i128_ty)),
+//    (DefVal $sgpr12_15, (LLVMBitCast (ImplicitUse SGPR12_SGPR13_SGPR14_SGPR15), si_llvm_i128_ty)),
+//    (DefVal $sgpr16_19, (LLVMBitCast (ImplicitUse SGPR16_SGPR17_SGPR18_SGPR19), si_llvm_i128_ty)),
+//    (DefVal $sgpr20_23, (LLVMBitCast (ImplicitUse SGPR20_SGPR21_SGPR22_SGPR23), si_llvm_i128_ty)),
+//    (DefVal $sgpr_vec, (LLVMInsertElement
+//      (LLVMInsertElement
+//        (LLVMInsertElement
+//          (LLVMInsertElement
+//            (LLVMInsertElement
+//              (LLVMInsertElement (ConstantPoison si_llvm_v6i128_ty),
+//                                 (GetVal $sgpr0_3), (ConstantInt si_llvm_i32_ty, 0)),
+//                                 (GetVal $sgpr4_7), (ConstantInt si_llvm_i32_ty, 1)),
+//                                 (GetVal $sgpr8_11), (ConstantInt si_llvm_i32_ty, 2)),
+//                                 (GetVal $sgpr12_15), (ConstantInt si_llvm_i32_ty, 3)),
+//                                 (GetVal $sgpr16_19), (ConstantInt si_llvm_i32_ty, 4)),
+//                                 (GetVal $sgpr20_23), (ConstantInt si_llvm_i32_ty, 5))),
+//    (DefVal $csp_val, (LLVMExtractElement (GetVal $sgpr_vec), (GetVal $csp))),
+//    (LLVMBranch (GetNamedOperand $simm16))
+//  ];
+//}

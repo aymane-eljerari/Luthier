@@ -25,47 +25,6 @@
 
 namespace luthier {
 
-/// Converts a record of type \c LLVMType into its appropriate LLVM constructor
-static std::string getTypeExpr(llvm::ArrayRef<llvm::SMLoc> Loc,
-                               const llvm::Record *Type) {
-  const llvm::Record *ValueType = Type->getValueAsDef("VT");
-  bool IsFP = ValueType->getValueAsBit("isFP");
-  bool IsInt = ValueType->getValueAsBit("isInteger");
-  llvm::StringRef TypeName = Type->getName();
-
-  std::string Builder{};
-
-  if (IsInt) {
-    int64_t Size = ValueType->getValueAsInt("Size");
-    Builder += llvm::StringSwitch<std::string>(TypeName)
-                   .Case("llvm_i1_ty", "Builder.getInt1Ty()")
-                   .Case("llvm_i8_ty", "Builder.getInt8Ty()")
-                   .Case("llvm_i16_ty", "Builder.getInt16Ty()")
-                   .Case("llvm_i32_ty", "Builder.getInt32Ty()")
-                   .Case("llvm_i64_ty", "Builder.getInt64Ty()")
-                   .Case("llvm_i128_ty", "Builder.getInt128Ty()")
-                   .Default(llvm::formatv("Builder.getIntNTy({0})", Size));
-  } else if (IsFP) {
-    Builder += llvm::StringSwitch<std::string>(TypeName)
-                   .Case("llvm_half_ty", "Builder.getHalfTy()")
-                   .Case("llvm_float_ty", "Builder.getFloatTy()")
-                   .Case("llvm_double_ty", "Builder.getDoubleTy()")
-                   .Case("llvm_bfloat_ty", "Builder.getBFloatTy()");
-  } else if (TypeName == "llvm_void_ty") {
-    return "Builder.getVoidTy()";
-  } else {
-    llvm::PrintFatalError(Loc, "Unhandled type " + Type->getName() + ".");
-  }
-
-  if (ValueType->getValueAsBit("isVector")) {
-    int64_t NumEls = ValueType->getValueAsInt("nElem");
-    Builder =
-        llvm::formatv("llvm::FixedVectorType::get({0}, {1})", Builder, NumEls);
-  }
-
-  return Builder;
-}
-
 void SIInstrSemanticsEmitter::emitSemanticStatement(
     llvm::raw_ostream &OS, const llvm::Init *Stmt,
     llvm::ArrayRef<llvm::SMLoc> Loc) {
@@ -148,6 +107,12 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       OS << Dag->getArgNameStr(0);
     }
 
+    // --- GetNextBB ---
+    // Returns the fall-through BasicBlock (next block after current MI's block)
+    else if (OpName == "GetNextBB") {
+      OS << "Tracker.getNextBB(MI)";
+    }
+
     // --- ImplicitUse REG ---
     else if (OpName == "ImplicitUse") {
       // First arg is a register def (e.g., VCC, EXEC, SCC)
@@ -215,9 +180,9 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
          << (PtrSig->size() == 2 ? PtrSig->getElement(1)->getAsString() : "0")
          << ")";
     } else if (DefType->isSubClassOf(
-                   Stmt->getRecordKeeper().getClass("LLVMType"))) {
+                   Stmt->getRecordKeeper().getClass("SILLVMType"))) {
       llvm::errs() << "Leaf type: " << DefNode->getDef()->getName() << "\n";
-      OS << getTypeExpr(Loc, DefNode->getDef());
+      OS << DefNode->getDef()->getValueAsString("Builder");
     } else if (DefType->isSubClassOf(
                    Stmt->getRecordKeeper().getClass("Intrinsic"))) {
       llvm::errs() << "Leaf type: " << DefNode->getDef()->getName() << "\n";
@@ -228,6 +193,15 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       }
       llvm::errs() << "Final name of the intrinsic: " << IntrinsicName << "\n";
       OS << "llvm::Intrinsic::" << IntrinsicName;
+    } else if (DefType->isSubClassOf(
+                   Stmt->getRecordKeeper().getClass("SuperRegFactory"))) {
+      std::vector<const llvm::Record *> SubRegs =
+          DefNode->getDef()->getValueAsListOfDefs("Regs");
+      OS << "llvm::AMDGPU::";
+      llvm::interleave(
+          SubRegs, [&](const llvm::Record *SubReg) { OS << SubReg->getName(); },
+          [&] { OS << "_"; });
+
     } else {
       llvm::PrintFatalError(
           Loc, "Unhandled def node: " + DefNode->getAsString() + ".");

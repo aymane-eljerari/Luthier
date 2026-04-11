@@ -38,11 +38,11 @@ def S_ABSDIFF_I32_sem : InstSISemantic<S_ABSDIFF_I32> {
   let Semantic = [
     (DefVal $diff, (LLVMSub (GetNamedOperand $src0), (GetNamedOperand $src1))),
     (DefVal $result,
-      (LLVMSelect (LLVMCmp LLVMICmpSLT, (GetVal $diff), (ConstantInt llvm_i32_ty, 0)),
-                  (LLVMSub (ConstantInt llvm_i32_ty, 0), (GetVal $diff)),
+      (LLVMSelect (LLVMCmp LLVMICmpSLT, (GetVal $diff), (ConstantInt si_llvm_i32_ty, 0)),
+                  (LLVMSub (ConstantInt si_llvm_i32_ty, 0), (GetVal $diff)),
                   (GetVal $diff))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result),
-                                  (ConstantInt llvm_i32_ty, 0))),
+                                  (ConstantInt si_llvm_i32_ty, 0))),
     (SetNamedOperand $sdst, (GetVal $result))
   ];
 }
@@ -62,10 +62,10 @@ def S_ABSDIFF_I32_sem : InstSISemantic<S_ABSDIFF_I32> {
 def S_ADD_U32_sem : InstSISemantic<S_ADD_U32> {
    let Semantic = [
      (DefVal $tmp,
-       (LLVMAdd (LLVMZExt (GetNamedOperand $src0), llvm_i64_ty),
-                (LLVMZExt (GetNamedOperand $src1), llvm_i64_ty))),
-     (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp), (ConstantInt llvm_i64_ty, 0x100000000))),
-     (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), llvm_i32_ty))
+       (LLVMAdd (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
+     (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp), (ConstantInt si_llvm_i64_ty, 0x100000000))),
+     (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
    ];
 }
 
@@ -105,9 +105,9 @@ def S_SUB_U32_sem : InstSISemantic<S_SUB_U32> {
 def S_ADD_I32_sem : InstSISemantic<S_ADD_I32> {
   let Semantic = [
     (DefVal $tmp, (LLVMAdd (GetNamedOperand $src0), (GetNamedOperand $src1))),
-    (DefVal $src0_31, LLVMExtractValueConstIdx<(GetNamedOperand $src0), llvm_v32i1_ty, 31>.Op),
-    (DefVal $src1_31, LLVMExtractValueConstIdx<(GetNamedOperand $src1), llvm_v32i1_ty, 31>.Op),
-    (DefVal $sdst_31, LLVMExtractValueConstIdx<(GetNamedOperand $sdst), llvm_v32i1_ty, 31>.Op),
+    (DefVal $src0_31, LLVMExtractValueConstIdx<(GetNamedOperand $src0), si_llvm_v32i1_ty, 31>.Op),
+    (DefVal $src1_31, LLVMExtractValueConstIdx<(GetNamedOperand $src1), si_llvm_v32i1_ty, 31>.Op),
+    (DefVal $sdst_31, LLVMExtractValueConstIdx<(GetNamedOperand $sdst), si_llvm_v32i1_ty, 31>.Op),
     (ImplicitDef SCC, (LLVMAnd (LLVMCmp LLVMICmpEQ, (GetVal $src0_31), (GetVal $src1_31)),
                                (LLVMCmp LLVMICmpNE, (GetVal $src0_31), (GetVal $sdst_31)))
     ),
@@ -130,9 +130,9 @@ def S_ADD_I32_sem : InstSISemantic<S_ADD_I32> {
 def S_SUB_I32_sem : InstSISemantic<S_SUB_I32> {
   let Semantic = [
     (DefVal $tmp, (LLVMSub (GetNamedOperand $src0), (GetNamedOperand $src1))),
-    (DefVal $src0_31, LLVMExtractValueConstIdx<(GetNamedOperand $src0), llvm_v32i1_ty, 31>.Op),
-    (DefVal $src1_31, LLVMExtractValueConstIdx<(GetNamedOperand $src1), llvm_v32i1_ty, 31>.Op),
-    (DefVal $sdst_31, LLVMExtractValueConstIdx<(GetNamedOperand $sdst), llvm_v32i1_ty, 31>.Op),
+    (DefVal $src0_31, LLVMExtractValueConstIdx<(GetNamedOperand $src0), si_llvm_v32i1_ty, 31>.Op),
+    (DefVal $src1_31, LLVMExtractValueConstIdx<(GetNamedOperand $src1), si_llvm_v32i1_ty, 31>.Op),
+    (DefVal $sdst_31, LLVMExtractValueConstIdx<(GetNamedOperand $sdst), si_llvm_v32i1_ty, 31>.Op),
     (ImplicitDef SCC, (LLVMAnd (LLVMCmp LLVMICmpNE, (GetVal $src0_31), (GetVal $src1_31)),
                                (LLVMCmp LLVMICmpNE, (GetVal $src0_31), (GetVal $sdst_31)))),
     (SetNamedOperand $sdst, (GetVal $tmp))
@@ -153,12 +153,12 @@ def S_SUB_I32_sem : InstSISemantic<S_SUB_I32> {
 //   rdna4-instruction-set-architecture.pdf, page 217 (as S_ADD_CO_CI_U32).
 def S_ADDC_U32_sem : InstSISemantic<S_ADDC_U32> {
   let Semantic = [
-    (DefVal $tmp, (LLVMAdd (LLVMAdd (LLVMZExt (GetNamedOperand $src0), llvm_i64_ty),
-                                    (LLVMZExt (GetNamedOperand $src1), llvm_i64_ty)),
-                                    (LLVMZExt (ImplicitUse SCC), llvm_i64_ty))),
+    (DefVal $tmp, (LLVMAdd (LLVMAdd (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                                    (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty)),
+                                    (LLVMZExt (ImplicitUse SCC), si_llvm_i64_ty))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp),
-                                       (ConstantInt llvm_i64_ty, 0x100000000))),
-    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), llvm_i32_ty))
+                                       (ConstantInt si_llvm_i64_ty, 0x100000000))),
+    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -178,10 +178,10 @@ def S_SUBB_U32_sem : InstSISemantic<S_SUBB_U32> {
   let Semantic = [
     (DefVal $tmp, (LLVMSub (LLVMSub (GetNamedOperand $src0),
                                     (GetNamedOperand $src1)),
-                                    (LLVMZExt (ImplicitUse SCC), llvm_i32_ty))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGT, (LLVMAdd (LLVMZExt (GetNamedOperand $src1), llvm_i64_ty),
-                                                (LLVMZExt (ImplicitUse SCC), llvm_i64_ty)),
-                                       (LLVMZExt (GetNamedOperand $src0), llvm_i64_ty))),
+                                    (LLVMZExt (ImplicitUse SCC), si_llvm_i32_ty))),
+    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGT, (LLVMAdd (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty),
+                                                (LLVMZExt (ImplicitUse SCC), si_llvm_i64_ty)),
+                                       (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty))),
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -203,9 +203,9 @@ def S_LSHL_B32_sem : InstSISemantic<S_LSHL_B32> {
   let Semantic = [
     (DefVal $shifted, (LLVMShl (GetNamedOperand $src0),
                                 (LLVMAnd (GetNamedOperand $src1),
-                                         (ConstantInt llvm_i32_ty, 31)))),
+                                         (ConstantInt si_llvm_i32_ty, 31)))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
-                                      (ConstantInt llvm_i32_ty, 0))),
+                                      (ConstantInt si_llvm_i32_ty, 0))),
     (SetNamedOperand $sdst, (GetVal $shifted))
   ];
 }
@@ -227,9 +227,9 @@ def S_LSHL_B64_sem : InstSISemantic<S_LSHL_B64> {
   let Semantic = [
     (DefVal $shifted, (LLVMShl (GetNamedOperand $src0),
                                 (LLVMAnd (GetNamedOperand $src1),
-                                         (ConstantInt llvm_i64_ty, 63)))),
+                                         (ConstantInt si_llvm_i64_ty, 63)))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
-                                      (ConstantInt llvm_i64_ty, 0))),
+                                      (ConstantInt si_llvm_i64_ty, 0))),
     (SetNamedOperand $sdst, (GetVal $shifted))
   ];
 }
@@ -251,9 +251,9 @@ def S_LSHR_B32_sem : InstSISemantic<S_LSHR_B32> {
   let Semantic = [
     (DefVal $shifted, (LLVMLShr (GetNamedOperand $src0),
                                  (LLVMAnd (GetNamedOperand $src1),
-                                          (ConstantInt llvm_i32_ty, 31)))),
+                                          (ConstantInt si_llvm_i32_ty, 31)))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
-                                      (ConstantInt llvm_i32_ty, 0))),
+                                      (ConstantInt si_llvm_i32_ty, 0))),
     (SetNamedOperand $sdst, (GetVal $shifted))
   ];
 }
@@ -275,9 +275,9 @@ def S_LSHR_B64_sem : InstSISemantic<S_LSHR_B64> {
   let Semantic = [
     (DefVal $shifted, (LLVMLShr (GetNamedOperand $src0),
                                  (LLVMAnd (GetNamedOperand $src1),
-                                          (ConstantInt llvm_i64_ty, 63)))),
+                                          (ConstantInt si_llvm_i64_ty, 63)))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
-                                      (ConstantInt llvm_i64_ty, 0))),
+                                      (ConstantInt si_llvm_i64_ty, 0))),
     (SetNamedOperand $sdst, (GetVal $shifted))
   ];
 }
@@ -299,9 +299,9 @@ def S_ASHR_I32_sem : InstSISemantic<S_ASHR_I32> {
   let Semantic = [
     (DefVal $shifted, (LLVMAShr (GetNamedOperand $src0),
                                  (LLVMAnd (GetNamedOperand $src1),
-                                          (ConstantInt llvm_i32_ty, 31)))),
+                                          (ConstantInt si_llvm_i32_ty, 31)))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
-                                      (ConstantInt llvm_i32_ty, 0))),
+                                      (ConstantInt si_llvm_i32_ty, 0))),
     (SetNamedOperand $sdst, (GetVal $shifted))
   ];
 }
@@ -323,9 +323,9 @@ def S_ASHR_I64_sem : InstSISemantic<S_ASHR_I64> {
   let Semantic = [
     (DefVal $shifted, (LLVMAShr (GetNamedOperand $src0),
                                 (LLVMAnd (GetNamedOperand $src1),
-                                         (ConstantInt llvm_i64_ty, 63)))),
+                                         (ConstantInt si_llvm_i64_ty, 63)))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
-                                      (ConstantInt llvm_i64_ty, 0))),
+                                      (ConstantInt si_llvm_i64_ty, 0))),
     (SetNamedOperand $sdst, (GetVal $shifted))
   ];
 }
@@ -346,12 +346,12 @@ def S_LSHL1_ADD_U32_sem : InstSISemantic<S_LSHL1_ADD_U32> {
   let Semantic = [
     (DefVal $tmp,
       (LLVMAdd
-        (LLVMShl (LLVMZExt (GetNamedOperand $src0), llvm_i64_ty),
-                 (ConstantInt llvm_i64_ty, 1)),
-        (LLVMZExt (GetNamedOperand $src1), llvm_i64_ty))),
+        (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                 (ConstantInt si_llvm_i64_ty, 1)),
+        (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp),
-                                  (ConstantInt llvm_i64_ty, 0x100000000))),
-    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), llvm_i32_ty))
+                                  (ConstantInt si_llvm_i64_ty, 0x100000000))),
+    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -371,12 +371,12 @@ def S_LSHL2_ADD_U32_sem : InstSISemantic<S_LSHL2_ADD_U32> {
   let Semantic = [
     (DefVal $tmp,
       (LLVMAdd
-        (LLVMShl (LLVMZExt (GetNamedOperand $src0), llvm_i64_ty),
-                 (ConstantInt llvm_i64_ty, 2)),
-        (LLVMZExt (GetNamedOperand $src1), llvm_i64_ty))),
+        (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                 (ConstantInt si_llvm_i64_ty, 2)),
+        (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp),
-                                  (ConstantInt llvm_i64_ty, 0x100000000))),
-    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), llvm_i32_ty))
+                                  (ConstantInt si_llvm_i64_ty, 0x100000000))),
+    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -396,12 +396,12 @@ def S_LSHL3_ADD_U32_sem : InstSISemantic<S_LSHL3_ADD_U32> {
   let Semantic = [
     (DefVal $tmp,
       (LLVMAdd
-        (LLVMShl (LLVMZExt (GetNamedOperand $src0), llvm_i64_ty),
-                 (ConstantInt llvm_i64_ty, 3)),
-        (LLVMZExt (GetNamedOperand $src1), llvm_i64_ty))),
+        (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                 (ConstantInt si_llvm_i64_ty, 3)),
+        (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp),
-                                  (ConstantInt llvm_i64_ty, 0x100000000))),
-    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), llvm_i32_ty))
+                                  (ConstantInt si_llvm_i64_ty, 0x100000000))),
+    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -421,12 +421,12 @@ def S_LSHL4_ADD_U32_sem : InstSISemantic<S_LSHL4_ADD_U32> {
   let Semantic = [
     (DefVal $tmp,
       (LLVMAdd
-        (LLVMShl (LLVMZExt (GetNamedOperand $src0), llvm_i64_ty),
-                 (ConstantInt llvm_i64_ty, 4)),
-        (LLVMZExt (GetNamedOperand $src1), llvm_i64_ty))),
+        (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                 (ConstantInt si_llvm_i64_ty, 4)),
+        (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp),
-                                  (ConstantInt llvm_i64_ty, 0x100000000))),
-    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), llvm_i32_ty))
+                                  (ConstantInt si_llvm_i64_ty, 0x100000000))),
+    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
 
@@ -463,7 +463,7 @@ foreach op = ["And", "Or", "Xor"] in {
     def S_#!toupper(op)#_B#size#_sem : InstSISemantic<!cast<InstSI>("S_"#!toupper(op)#"_B"#size)> {
       let Semantic =
         [(SetNamedOperand $sdst, (!cast<LLVMOp>("LLVM"#op) (GetNamedOperand $src0), (GetNamedOperand $src1))),
-         (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetNamedOperand $sdst), (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 0)))
+         (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetNamedOperand $sdst), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0)))
         ];
     }
   }
@@ -485,8 +485,8 @@ foreach op = ["And", "Or"] in {
   foreach size = [32, 64] in {
     def S_#!toupper(op)#N2_B#size#_sem : InstSISemantic<!cast<InstSI>("S_"#!toupper(op)#"N2_B"#size)> {
       let Semantic = [
-        (SetNamedOperand $sdst, (!cast<LLVMOp>("LLVM"#op) (GetNamedOperand $src0), LLVMNot<(GetNamedOperand $src1), !cast<LLVMType>("llvm_i"#size#"_ty")>.ret)),
-        (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetNamedOperand $sdst), (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 0)))
+        (SetNamedOperand $sdst, (!cast<LLVMOp>("LLVM"#op) (GetNamedOperand $src0), LLVMNot<(GetNamedOperand $src1), !cast<SILLVMType>("si_llvm_i"#size#"_ty")>.ret)),
+        (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetNamedOperand $sdst), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0)))
       ];
     }
   }
@@ -500,8 +500,8 @@ foreach size = [32, 64] in {
   def S_NAND_B#size#_sem : InstSISemantic<!cast<InstSI>("S_NAND_B"#size)> {
     let Semantic = [
       (DefVal $result, (LLVMXor (LLVMAnd (GetNamedOperand $src0), (GetNamedOperand $src1)),
-                                 (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), -1))),
-      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 0))),
+                                 (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), -1))),
+      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))),
       (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
@@ -515,8 +515,8 @@ foreach size = [32, 64] in {
   def S_NOR_B#size#_sem : InstSISemantic<!cast<InstSI>("S_NOR_B"#size)> {
     let Semantic = [
       (DefVal $result, (LLVMXor (LLVMOr (GetNamedOperand $src0), (GetNamedOperand $src1)),
-                                 (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), -1))),
-      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 0))),
+                                 (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), -1))),
+      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))),
       (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
@@ -530,8 +530,8 @@ foreach size = [32, 64] in {
   def S_XNOR_B#size#_sem : InstSISemantic<!cast<InstSI>("S_XNOR_B"#size)> {
     let Semantic = [
       (DefVal $result, (LLVMXor (LLVMXor (GetNamedOperand $src0), (GetNamedOperand $src1)),
-                                 (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), -1))),
-      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 0))),
+                                 (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), -1))),
+      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))),
       (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
@@ -548,10 +548,10 @@ foreach size = [32, 64] in {
   defvar maskBits = !if(!eq(size, 32), 31, 63);
   def S_BFM_B#size#_sem : InstSISemantic<!cast<InstSI>("S_BFM_B"#size)> {
     let Semantic = [
-      (DefVal $count, (LLVMAnd (GetNamedOperand $src0), (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), maskBits))),
-      (DefVal $shift, (LLVMAnd (GetNamedOperand $src1), (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), maskBits))),
-      (DefVal $ones, (LLVMSub (LLVMShl (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 1), (GetVal $count)),
-                               (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 1))),
+      (DefVal $count, (LLVMAnd (GetNamedOperand $src0), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), maskBits))),
+      (DefVal $shift, (LLVMAnd (GetNamedOperand $src1), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), maskBits))),
+      (DefVal $ones, (LLVMSub (LLVMShl (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 1), (GetVal $count)),
+                               (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 1))),
       (SetNamedOperand $sdst, (LLVMShl (GetVal $ones), (GetVal $shift)))
     ];
   }
@@ -572,8 +572,8 @@ foreach size = [32, 64] in {
 def S_MUL_I32_sem : InstSISemantic<S_MUL_I32> {
   let Semantic = [
     (SetNamedOperand $sdst,
-      (LLVMMul (LLVMZExt (GetNamedOperand $src0), llvm_i32_ty),
-               (LLVMZExt (GetNamedOperand $src1), llvm_i32_ty)))
+      (LLVMMul (LLVMZExt (GetNamedOperand $src0), si_llvm_i32_ty),
+               (LLVMZExt (GetNamedOperand $src1), si_llvm_i32_ty)))
   ];
 }
 
@@ -591,9 +591,9 @@ def S_MUL_I32_sem : InstSISemantic<S_MUL_I32> {
 //   rdna4-instruction-set-architecture.pdf, page 227.
 def S_MUL_HI_U32_sem : InstSISemantic<S_MUL_HI_U32> {
   let Semantic = [
-    (DefVal $tmp, (LLVMMul (LLVMZExt (GetNamedOperand $src0), llvm_i64_ty),
-                        (LLVMZExt (GetNamedOperand $src1), llvm_i64_ty))),
-    (SetNamedOperand $sdst, (LLVMTrunc (LLVMLShr (GetVal $tmp), (ConstantInt llvm_i64_ty, 32)), llvm_i32_ty))
+    (DefVal $tmp, (LLVMMul (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                        (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
+    (SetNamedOperand $sdst, (LLVMTrunc (LLVMLShr (GetVal $tmp), (ConstantInt si_llvm_i64_ty, 32)), si_llvm_i32_ty))
   ];
 }
 
@@ -611,9 +611,9 @@ def S_MUL_HI_U32_sem : InstSISemantic<S_MUL_HI_U32> {
 //   rdna4-instruction-set-architecture.pdf, page 227.
 def S_MUL_HI_I32_sem : InstSISemantic<S_MUL_HI_I32> {
   let Semantic = [
-    (DefVal $tmp, (LLVMMul (LLVMSExt (GetNamedOperand $src0), llvm_i64_ty),
-                        (LLVMSExt (GetNamedOperand $src1), llvm_i64_ty))),
-    (SetNamedOperand $sdst, (LLVMTrunc (LLVMLShr (GetVal $tmp), (ConstantInt llvm_i64_ty, 32)), llvm_i32_ty))
+    (DefVal $tmp, (LLVMMul (LLVMSExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                        (LLVMSExt (GetNamedOperand $src1), si_llvm_i64_ty))),
+    (SetNamedOperand $sdst, (LLVMTrunc (LLVMLShr (GetVal $tmp), (ConstantInt si_llvm_i64_ty, 32)), si_llvm_i32_ty))
   ];
 }
 
@@ -650,11 +650,11 @@ foreach size = [32, 64] in {
 //   rdna4-instruction-set-architecture.pdf, page 228.
 def S_PACK_LL_B32_B16_sem : InstSISemantic<S_PACK_LL_B32_B16> {
   let Semantic = [
-    (DefVal $src0_lo, (LLVMTrunc (GetNamedOperand $src0), llvm_i16_ty)),
-    (DefVal $src1_lo, (LLVMTrunc (GetNamedOperand $src1), llvm_i16_ty)),
-    (DefVal $packed, (LLVMOr (LLVMZExt (GetVal $src1_lo), llvm_i32_ty),
-                             (LLVMShl (LLVMZExt (GetVal $src0_lo), llvm_i32_ty),
-                                      (ConstantInt llvm_i32_ty, 16)))),
+    (DefVal $src0_lo, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $src1_lo, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (DefVal $packed, (LLVMOr (LLVMZExt (GetVal $src1_lo), si_llvm_i32_ty),
+                             (LLVMShl (LLVMZExt (GetVal $src0_lo), si_llvm_i32_ty),
+                                      (ConstantInt si_llvm_i32_ty, 16)))),
     (SetNamedOperand $sdst, (GetVal $packed))
   ];
 }
@@ -672,11 +672,11 @@ def S_PACK_LL_B32_B16_sem : InstSISemantic<S_PACK_LL_B32_B16> {
 //   rdna4-instruction-set-architecture.pdf, page 228.
 def S_PACK_LH_B32_B16_sem : InstSISemantic<S_PACK_LH_B32_B16> {
   let Semantic = [
-    (DefVal $src0_lo, (LLVMTrunc (GetNamedOperand $src0), llvm_i16_ty)),
-    (DefVal $src1_hi, (LLVMTrunc (LLVMLShr (GetNamedOperand $src1), (ConstantInt llvm_i32_ty, 16)), llvm_i16_ty)),
-    (DefVal $packed, (LLVMOr (LLVMZExt (GetVal $src1_hi), llvm_i32_ty),
-                             (LLVMShl (LLVMZExt (GetVal $src0_lo), llvm_i32_ty),
-                                      (ConstantInt llvm_i32_ty, 16)))),
+    (DefVal $src0_lo, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $src1_hi, (LLVMTrunc (LLVMLShr (GetNamedOperand $src1), (ConstantInt si_llvm_i32_ty, 16)), si_llvm_i16_ty)),
+    (DefVal $packed, (LLVMOr (LLVMZExt (GetVal $src1_hi), si_llvm_i32_ty),
+                             (LLVMShl (LLVMZExt (GetVal $src0_lo), si_llvm_i32_ty),
+                                      (ConstantInt si_llvm_i32_ty, 16)))),
     (SetNamedOperand $sdst, (GetVal $packed))
   ];
 }
@@ -694,11 +694,11 @@ def S_PACK_LH_B32_B16_sem : InstSISemantic<S_PACK_LH_B32_B16> {
 //   rdna4-instruction-set-architecture.pdf, page 228.
 def S_PACK_HH_B32_B16_sem : InstSISemantic<S_PACK_HH_B32_B16> {
   let Semantic = [
-    (DefVal $src0_hi, (LLVMTrunc (LLVMLShr (GetNamedOperand $src0), (ConstantInt llvm_i32_ty, 16)), llvm_i16_ty)),
-    (DefVal $src1_hi, (LLVMTrunc (LLVMLShr (GetNamedOperand $src1), (ConstantInt llvm_i32_ty, 16)), llvm_i16_ty)),
-    (DefVal $packed, (LLVMOr (LLVMZExt (GetVal $src1_hi), llvm_i32_ty),
-                             (LLVMShl (LLVMZExt (GetVal $src0_hi), llvm_i32_ty),
-                                      (ConstantInt llvm_i32_ty, 16)))),
+    (DefVal $src0_hi, (LLVMTrunc (LLVMLShr (GetNamedOperand $src0), (ConstantInt si_llvm_i32_ty, 16)), si_llvm_i16_ty)),
+    (DefVal $src1_hi, (LLVMTrunc (LLVMLShr (GetNamedOperand $src1), (ConstantInt si_llvm_i32_ty, 16)), si_llvm_i16_ty)),
+    (DefVal $packed, (LLVMOr (LLVMZExt (GetVal $src1_hi), si_llvm_i32_ty),
+                             (LLVMShl (LLVMZExt (GetVal $src0_hi), si_llvm_i32_ty),
+                                      (ConstantInt si_llvm_i32_ty, 16)))),
     (SetNamedOperand $sdst, (GetVal $packed))
   ];
 }
@@ -712,11 +712,11 @@ def S_PACK_HH_B32_B16_sem : InstSISemantic<S_PACK_HH_B32_B16> {
 //   rdna4-instruction-set-architecture.pdf, page 228.
 def S_PACK_HL_B32_B16_sem : InstSISemantic<S_PACK_HL_B32_B16> {
   let Semantic = [
-    (DefVal $src0_hi, (LLVMTrunc (LLVMLShr (GetNamedOperand $src0), (ConstantInt llvm_i32_ty, 16)), llvm_i16_ty)),
-    (DefVal $src1_lo, (LLVMTrunc (GetNamedOperand $src1), llvm_i16_ty)),
-    (DefVal $packed, (LLVMOr (LLVMZExt (GetVal $src1_lo), llvm_i32_ty),
-                             (LLVMShl (LLVMZExt (GetVal $src0_hi), llvm_i32_ty),
-                                      (ConstantInt llvm_i32_ty, 16)))),
+    (DefVal $src0_hi, (LLVMTrunc (LLVMLShr (GetNamedOperand $src0), (ConstantInt si_llvm_i32_ty, 16)), si_llvm_i16_ty)),
+    (DefVal $src1_lo, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (DefVal $packed, (LLVMOr (LLVMZExt (GetVal $src1_lo), si_llvm_i32_ty),
+                             (LLVMShl (LLVMZExt (GetVal $src0_hi), si_llvm_i32_ty),
+                                      (ConstantInt si_llvm_i32_ty, 16)))),
     (SetNamedOperand $sdst, (GetVal $packed))
   ];
 }
@@ -737,14 +737,14 @@ foreach size = [32, 64] in {
   def S_BFE_U#size#_sem : InstSISemantic<!cast<InstSI>("S_BFE_U"#size)> {
     let Semantic = [
       (DefVal $shift_amt,
-        LLVMExtractBitsIntStartIntNumBits<(GetNamedOperand $src1), !cast<LLVMType>("llvm_i"#size#"_ty"), false, 0, !if(!eq(size, 64), 6, 5)>.Op),
+        LLVMExtractBitsIntStartIntNumBits<(GetNamedOperand $src1), !cast<SILLVMType>("si_llvm_i"#size#"_ty"), false, 0, !if(!eq(size, 64), 6, 5)>.Op),
       (DefVal $bit_width,
-        LLVMExtractBitsIntStartIntNumBits<(GetNamedOperand $src1), !cast<LLVMType>("llvm_i"#size#"_ty"), false, 16, 7>.Op),
+        LLVMExtractBitsIntStartIntNumBits<(GetNamedOperand $src1), !cast<SILLVMType>("si_llvm_i"#size#"_ty"), false, 16, 7>.Op),
       (DefVal $shifted, (LLVMLShr (GetNamedOperand $src0), (GetVal $shift_amt))),
-      (DefVal $mask, (LLVMSub (LLVMShl (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 1), (GetVal $bit_width)),
-                               (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 1))),
+      (DefVal $mask, (LLVMSub (LLVMShl (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 1), (GetVal $bit_width)),
+                               (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 1))),
       (DefVal $result, (LLVMAnd (GetVal $shifted), (GetVal $mask))),
-      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 0))),
+      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))),
       (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
@@ -766,18 +766,18 @@ foreach size = [32, 64] in {
   def S_BFE_I#size#_sem : InstSISemantic<!cast<InstSI>("S_BFE_I"#size)> {
     let Semantic = [
       (DefVal $shift_amt,
-        LLVMExtractBitsIntStartIntNumBits<(GetNamedOperand $src1), !cast<LLVMType>("llvm_i"#size#"_ty"), false, 0, !if(!eq(size, 64), 6, 5)>.Op),
+        LLVMExtractBitsIntStartIntNumBits<(GetNamedOperand $src1), !cast<SILLVMType>("si_llvm_i"#size#"_ty"), false, 0, !if(!eq(size, 64), 6, 5)>.Op),
       (DefVal $bit_width,
-        LLVMExtractBitsIntStartIntNumBits<(GetNamedOperand $src1), !cast<LLVMType>("llvm_i"#size#"_ty"), false, 16, 7>.Op),
+        LLVMExtractBitsIntStartIntNumBits<(GetNamedOperand $src1), !cast<SILLVMType>("si_llvm_i"#size#"_ty"), false, 16, 7>.Op),
       (DefVal $shifted, (LLVMLShr (GetNamedOperand $src0), (GetVal $shift_amt))),
-      (DefVal $mask, (LLVMSub (LLVMShl (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 1), (GetVal $bit_width)),
-                               (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 1))),
+      (DefVal $mask, (LLVMSub (LLVMShl (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 1), (GetVal $bit_width)),
+                               (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 1))),
       (DefVal $masked, (LLVMAnd (GetVal $shifted), (GetVal $mask))),
-      (DefVal $sign_bit, (LLVMTrunc (LLVMLShr (GetVal $masked), (LLVMSub (GetVal $bit_width), (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 1))), llvm_i1_ty)),
-      (DefVal $sign_ext, (LLVMSExt (GetVal $sign_bit), !cast<LLVMType>("llvm_i"#size#"_ty"))),
+      (DefVal $sign_bit, (LLVMTrunc (LLVMLShr (GetVal $masked), (LLVMSub (GetVal $bit_width), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 1))), si_llvm_i1_ty)),
+      (DefVal $sign_ext, (LLVMSExt (GetVal $sign_bit), !cast<SILLVMType>("si_llvm_i"#size#"_ty"))),
       (DefVal $result, (LLVMOr (LLVMAnd (GetVal $masked), (GetVal $mask)),
-                              (LLVMAnd (GetVal $sign_ext), LLVMNot<(GetVal $mask), !cast<LLVMType>("llvm_i"#size#"_ty")>.ret))),
-      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<LLVMType>("llvm_i"#size#"_ty"), 0))),
+                              (LLVMAnd (GetVal $sign_ext), LLVMNot<(GetVal $mask), !cast<SILLVMType>("si_llvm_i"#size#"_ty")>.ret))),
+      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))),
       (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
@@ -826,10 +826,10 @@ def S_MIN_F32_sem : InstSISemantic<S_MIN_F32> {
     (DefVal $is_less,
       (LLVMOr (LLVMFCmp LLVMFCmpOLT, (GetNamedOperand $src0), (GetNamedOperand $src1)),
               (LLVMAnd (LLVMFCmp LLVMFCmpOEQ, (GetNamedOperand $src0), (GetNamedOperand $src1)),
-                       (LLVMXor (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src0), (ConstantFP llvm_float_ty, "-0.0")),
-                                                             (ConstantFP llvm_float_ty, "-0.0")),
-                               (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src1), (ConstantFP llvm_float_ty, "-0.0")),
-                                                             (ConstantFP llvm_float_ty, "-0.0")))))),
+                       (LLVMXor (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src0), (ConstantFP si_llvm_float_ty, "-0.0")),
+                                                             (ConstantFP si_llvm_float_ty, "-0.0")),
+                               (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src1), (ConstantFP si_llvm_float_ty, "-0.0")),
+                                                             (ConstantFP si_llvm_float_ty, "-0.0")))))),
     (SetNamedOperand $sdst,
       (LLVMSelect (LLVMAnd (GetVal $is_less), (LLVMOr (GetVal $is_nan0), (GetVal $is_nan1))),
                   (GetNamedOperand $src0),
@@ -847,10 +847,10 @@ def S_MAX_F32_sem : InstSISemantic<S_MAX_F32> {
     (DefVal $is_greater,
       (LLVMOr (LLVMFCmp LLVMFCmpOGT, (GetNamedOperand $src0), (GetNamedOperand $src1)),
               (LLVMAnd (LLVMFCmp LLVMFCmpOEQ, (GetNamedOperand $src0), (GetNamedOperand $src1)),
-                       (LLVMXor (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src0), (ConstantFP llvm_float_ty, "-0.0")),
-                                                             (ConstantFP llvm_float_ty, "-0.0")),
-                               (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src1), (ConstantFP llvm_float_ty, "-0.0")),
-                                                             (ConstantFP llvm_float_ty, "-0.0")))))),
+                       (LLVMXor (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src0), (ConstantFP si_llvm_float_ty, "-0.0")),
+                                                             (ConstantFP si_llvm_float_ty, "-0.0")),
+                               (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src1), (ConstantFP si_llvm_float_ty, "-0.0")),
+                                                             (ConstantFP si_llvm_float_ty, "-0.0")))))),
     (SetNamedOperand $sdst,
       (LLVMSelect (LLVMAnd (GetVal $is_greater), (LLVMOr (GetVal $is_nan0), (GetVal $is_nan1))),
                   (GetNamedOperand $src0),
@@ -925,10 +925,10 @@ def S_MIN_F16_sem : InstSISemantic<S_MIN_F16> {
     (DefVal $is_less,
       (LLVMOr (LLVMFCmp LLVMFCmpOLT, (GetNamedOperand $src0), (GetNamedOperand $src1)),
               (LLVMAnd (LLVMFCmp LLVMFCmpOEQ, (GetNamedOperand $src0), (GetNamedOperand $src1)),
-                       (LLVMXor (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src0), (ConstantFP llvm_half_ty, "-0.0")),
-                                                             (ConstantFP llvm_half_ty, "-0.0")),
-                               (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src1), (ConstantFP llvm_half_ty, "-0.0")),
-                                                             (ConstantFP llvm_half_ty, "-0.0")))))),
+                       (LLVMXor (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src0), (ConstantFP si_llvm_half_ty, "-0.0")),
+                                                             (ConstantFP si_llvm_half_ty, "-0.0")),
+                               (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src1), (ConstantFP si_llvm_half_ty, "-0.0")),
+                                                             (ConstantFP si_llvm_half_ty, "-0.0")))))),
     (SetNamedOperand $sdst,
       (LLVMSelect (LLVMAnd (GetVal $is_less), (LLVMOr (GetVal $is_nan0), (GetVal $is_nan1))),
                   (GetNamedOperand $src0),
@@ -946,10 +946,10 @@ def S_MAX_F16_sem : InstSISemantic<S_MAX_F16> {
     (DefVal $is_greater,
       (LLVMOr (LLVMFCmp LLVMFCmpOGT, (GetNamedOperand $src0), (GetNamedOperand $src1)),
               (LLVMAnd (LLVMFCmp LLVMFCmpOEQ, (GetNamedOperand $src0), (GetNamedOperand $src1)),
-                       (LLVMXor (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src0), (ConstantFP llvm_half_ty, "-0.0")),
-                                                             (ConstantFP llvm_half_ty, "-0.0")),
-                               (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src1), (ConstantFP llvm_half_ty, "-0.0")),
-                                                             (ConstantFP llvm_half_ty, "-0.0")))))),
+                       (LLVMXor (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src0), (ConstantFP si_llvm_half_ty, "-0.0")),
+                                                             (ConstantFP si_llvm_half_ty, "-0.0")),
+                               (LLVMFCmp LLVMFCmpOLT, (LLVMFAdd (GetNamedOperand $src1), (ConstantFP si_llvm_half_ty, "-0.0")),
+                                                             (ConstantFP si_llvm_half_ty, "-0.0")))))),
     (SetNamedOperand $sdst,
       (LLVMSelect (LLVMAnd (GetVal $is_greater), (LLVMOr (GetVal $is_nan0), (GetVal $is_nan1))),
                   (GetNamedOperand $src0),
@@ -1039,13 +1039,13 @@ def S_FMAC_F16_sem : InstSISemantic<S_FMAC_F16> {
 //   rdna4-instruction-set-architecture.pdf, page 230.
 def S_CVT_PK_RTZ_F16_F32_sem : InstSISemantic<S_CVT_PK_RTZ_F16_F32> {
   let Semantic = [
-    (DefVal $low_f16, (LLVMFPTrunc (GetNamedOperand $src0), llvm_half_ty)),
-    (DefVal $high_f16, (LLVMFPTrunc (GetNamedOperand $src1), llvm_half_ty)),
-    (DefVal $low_i16, (LLVMBitCast (GetVal $low_f16), llvm_i16_ty)),
-    (DefVal $high_i16, (LLVMBitCast (GetVal $high_f16), llvm_i16_ty)),
-    (SetNamedOperand $sdst, (LLVMOr (LLVMZExt (GetVal $low_i16), llvm_i32_ty),
-                                    (LLVMShl (LLVMZExt (GetVal $high_i16), llvm_i32_ty),
-                                             (ConstantInt llvm_i32_ty, 16))))
+    (DefVal $low_f16, (LLVMFPTrunc (GetNamedOperand $src0), si_llvm_half_ty)),
+    (DefVal $high_f16, (LLVMFPTrunc (GetNamedOperand $src1), si_llvm_half_ty)),
+    (DefVal $low_i16, (LLVMBitCast (GetVal $low_f16), si_llvm_i16_ty)),
+    (DefVal $high_i16, (LLVMBitCast (GetVal $high_f16), si_llvm_i16_ty)),
+    (SetNamedOperand $sdst, (LLVMOr (LLVMZExt (GetVal $low_i16), si_llvm_i32_ty),
+                                    (LLVMShl (LLVMZExt (GetVal $high_i16), si_llvm_i32_ty),
+                                             (ConstantInt si_llvm_i32_ty, 16))))
   ];
 }
 
@@ -1077,7 +1077,88 @@ def S_MUL_U64_sem : InstSISemantic<S_MUL_U64> {
   ];
 }
 
-// S_CBRANCH_G_FORK: Control flow instruction (conditional branch).
-// Not translatable to LLVM IR data operations.
+// S_CBRANCH_G_FORK: Fork control flow with EXEC mask.
+// PC: in this pseudo-code is pointing to the cbranch_*_fork instruction
+// $current_pc = int_amdgcn_s_getpc();
+// $mask_pass = $src0 & exec;
+// $mask_fail = $src0 & exec;
+// $csp = int_amdgcn_s_getreg(5953);
+// $sgpr_vec = mergevalues (s[0:3], s[4:7], s[8:11], s[12:15], s[16:19], s[20:23]);
+// $csp_entry = $sgpr_vec[$csp];
+// $bitcount_mask_pass = int_ctpop $mask_pass;
+// $bitcount_mask_fail = int_ctpop $mask_fail;
+// $branch_cond = (($mask_pass == exec) || (bitcount_mask_fail >= bitcount_mask_pass));
+// $csp = (($mask_pass == exec) || ($mask_fail == exec)) ? ($csp) : ($csp + 1)
+// $csp_entry_final_val = (($mask_pass == exec) || ($mask_fail == exec)) ? $csp_entry : (
+// if (mask_pass == exec)
+//   PC = SGPR[arg1]
+// else if (mask_fail == exec)
+//   PC += 4
+// else if (bitcount(mask_fail) < bitcount(mask_pass))
+//   exec = mask_fail
+//   SGPR[CSP*4] = { SGPR[arg1], mask_pass }
+//   CSP++
+//   PC += 4
+// else
+//   exec = mask_pass
+//   SGPR[CSP*4] = { (pc+4), mask_fail }
+//   CSP++
+//   PC = SGPR[arg1]
+// $src0 = mask value
+// $src1 = target address (SGPR pair)
+// mask_pass = exec & src0
+// mask_fail = exec & ~src0
+// CSP selects element from SGPR vector.
+// Branch condition: (pass_mask == exec) OR (bitcount(fail_mask) < bitcount(pass_mask))
+// Only available on GFX6-GFX9.
 // Sources:
 //   gcn3-instruction-set-architecture.pdf, page 112.
+//def S_CBRANCH_G_FORK_sem : InstSISemantic<S_CBRANCH_G_FORK> {
+//  let Semantic = [
+//    // Get current PC for branch stack entry
+//    (DefVal $current_pc, (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_getpc, []<dag>)),
+//    // Compute pass and fail masks
+//    (DefVal $mask_pass, (LLVMAnd (ImplicitUse EXEC), (GetNamedOperand $src0))),
+//    (DefVal $mask_fail, (LLVMAnd (ImplicitUse EXEC),
+//                                 (LLVMNot<(GetNamedOperand $src0), si_llvm_i64_ty>.ret -1))),
+//    // Get CSP from MODE register (hwmode = 5953, returns i32)
+//    (DefVal $csp, (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_s_getreg,
+//      [(ConstantInt si_llvm_i16_ty, 5953)]<dag>)),
+//    // Read SGPR quads and bitcast to 128-bit vectors
+//    (DefVal $sgpr0_3, (ImplicitUse SuperRegFactory<[SGPR0, SGPR1, SGPR2, SGPR3]>)),
+//    (DefVal $sgpr4_7, (ImplicitUse SuperRegFactory<[SGPR4, SGPR5, SGPR6, SGPR7]>)),
+//    (DefVal $sgpr8_11, (ImplicitUse SuperRegFactory<[SGPR8, SGPR9, SGPR10, SGPR11]>)),
+//    (DefVal $sgpr12_15, (ImplicitUse SuperRegFactory<[SGPR12, SGPR13, SGPR14, SGPR15]>)),
+//    (DefVal $sgpr16_19, (ImplicitUse SuperRegFactory<[SGPR16, SGPR17, SGPR18, SGPR19]>)),
+//    (DefVal $sgpr20_23, (ImplicitUse SuperRegFactory<[SGPR20, SGPR21, SGPR22, SGPR23]>)),
+//    // Create 6x128-bit vector of SGPR values
+//    (DefVal $sgpr_vec, (LLVMInsertElement
+//      (LLVMInsertElement
+//        (LLVMInsertElement
+//          (LLVMInsertElement
+//            (LLVMInsertElement
+//              (LLVMInsertElement (PoisionVal si_llvm_v6i128_ty),
+//                                 (GetVal $sgpr0_3), (ConstantInt si_llvm_i32_ty, 0)),
+//                                 (GetVal $sgpr4_7), (ConstantInt si_llvm_i32_ty, 1)),
+//                                 (GetVal $sgpr8_11), (ConstantInt si_llvm_i32_ty, 2)),
+//                                 (GetVal $sgpr12_15), (ConstantInt si_llvm_i32_ty, 3)),
+//                                 (GetVal $sgpr16_19), (ConstantInt si_llvm_i32_ty, 4)),
+//                                 (GetVal $sgpr20_23), (ConstantInt si_llvm_i32_ty, 5))),
+//    (DefVal $mask_pass_exec_eq, (LLVMICmpEQ (ImplicitUse EXEC), (GetVal $mask_pass)),
+//    (DefVal $mask_fail_exec_eq, (LLVMICmpNE (ImplicitUse EXEC), (GetVal $mask_fail)),
+//    (DefVal $mask_pass_bc_greater,(LLVMICmpUGT
+//                                              (LLVMUnaryIntrinsic int_ctpop, (GetVal $mask_pass)),
+//                                              (LLVMUnaryIntrinsic int_ctpop, (GetVal $mask_fail)))),
+//    // Extract element at CSP index
+//    (DefVal $csp_val, (LLVMExtractElement (GetVal $sgpr_vec), (GetVal $csp))),
+//    // Construct 128-bit branch stack entry: { mask_pass, target[47:2] }
+//    (DefVal $target_shifted, (LLVMLShr (GetNamedOperand $src1), (ConstantInt si_llvm_i64_ty, 2))),
+//    (DefVal $entry_vec, (LLVMInsertElement
+//                          (LLVMInsertElement (ConstantPoison si_llvm_v2i64_ty),
+//                                             (GetVal $target_shifted), (ConstantInt si_llvm_i32_ty, 0)),
+//                                             (GetVal $pass_mask), (ConstantInt si_llvm_i32_ty, 1))),
+//    (DefVal $branch_stack_entry, (LLVMBitCast (GetVal $entry_vec), si_llvm_i128_ty)),
+//    // Indirect branch to target address
+//    (LLVMIndirectBranch (GetVal $csp_val))
+//  ];
+//}
