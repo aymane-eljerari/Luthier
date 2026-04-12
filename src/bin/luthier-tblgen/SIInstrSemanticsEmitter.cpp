@@ -100,6 +100,14 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
             "llvm::AMDGPU::OpName::"
          << ArgName << "))";
     }
+    // --- GetNamedOperandAsBB $name ---
+    else if (OpName == "GetNamedOperandAsBB") {
+      llvm::StringRef ArgName = Dag->getArgNameStr(0);
+      OS << "&Tracker.getOperandAsBasicBlock("
+         << "*Tracker.getTII().getNamedOperand(MI, "
+            "llvm::AMDGPU::OpName::"
+         << ArgName << "))";
+    }
 
     // --- GetVal $name ---
     else if (OpName == "GetVal") {

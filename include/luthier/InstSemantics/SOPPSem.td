@@ -432,13 +432,13 @@ def S_BARRIER_LEAVE_sem : InstSISemantic<S_BARRIER_LEAVE> {
 //   rdna4-instruction-set-architecture.pdf, page 267.
 def S_BRANCH_sem : InstSISemantic<S_BRANCH> {
   let Semantic = [
-    (LLVMBranch (GetNamedOperand $simm16))
+    (LLVMBranch (GetNamedOperandAsBB $simm16))
   ];
 }
 
 def S_BRANCH_pad_s_nop_sem : InstSISemantic<S_BRANCH_pad_s_nop> {
   let Semantic = [
-    (LLVMBranch (GetNamedOperand $simm16))
+    (LLVMBranch (GetNamedOperandAsBB $simm16))
   ];
 }
 
@@ -447,7 +447,7 @@ def S_BRANCH_pad_s_nop_sem : InstSISemantic<S_BRANCH_pad_s_nop> {
 def S_CBRANCH_SCC0_sem : InstSISemantic<S_CBRANCH_SCC0> {
   let Semantic = [
     (LLVMCondBranch (ImplicitUse SCC),
-                   (GetNamedOperand $simm16),
+                   (GetNamedOperandAsBB $simm16),
                    (GetNextBB))
   ];
 }
@@ -455,7 +455,7 @@ def S_CBRANCH_SCC0_sem : InstSISemantic<S_CBRANCH_SCC0> {
 def S_CBRANCH_SCC0_pad_s_nop_sem : InstSISemantic<S_CBRANCH_SCC0_pad_s_nop> {
   let Semantic = [
     (LLVMCondBranch (ImplicitUse SCC),
-                   (GetNamedOperand $simm16),
+                   (GetNamedOperandAsBB $simm16),
                    (GetNextBB))
   ];
 }
@@ -465,7 +465,7 @@ def S_CBRANCH_SCC0_pad_s_nop_sem : InstSISemantic<S_CBRANCH_SCC0_pad_s_nop> {
 def S_CBRANCH_SCC1_sem : InstSISemantic<S_CBRANCH_SCC1> {
   let Semantic = [
     (LLVMCondBranch (ImplicitUse SCC),
-                   (GetNamedOperand $simm16),
+                   (GetNamedOperandAsBB $simm16),
                    (GetNextBB))
   ];
 }
@@ -473,7 +473,7 @@ def S_CBRANCH_SCC1_sem : InstSISemantic<S_CBRANCH_SCC1> {
 def S_CBRANCH_SCC1_pad_s_nop_sem : InstSISemantic<S_CBRANCH_SCC1_pad_s_nop> {
   let Semantic = [
     (LLVMCondBranch (ImplicitUse SCC),
-                   (GetNamedOperand $simm16),
+                   (GetNamedOperandAsBB $simm16),
                    (GetNextBB))
   ];
 }
@@ -485,7 +485,7 @@ def S_CBRANCH_EXECZ_sem : InstSISemantic<S_CBRANCH_EXECZ> {
     (LLVMCondBranch (LLVMCmp LLVMICmpEQ, (ImplicitUse EXEC),
                                      (ConstantInt si_llvm_i64_ty, 0)),
                    (GetNextBB),
-                   (GetNamedOperand $simm16))
+                   (GetNamedOperandAsBB $simm16))
   ];
 }
 
@@ -494,7 +494,7 @@ def S_CBRANCH_EXECZ_pad_s_nop_sem : InstSISemantic<S_CBRANCH_EXECZ_pad_s_nop> {
     (LLVMCondBranch (LLVMCmp LLVMICmpEQ, (ImplicitUse EXEC),
                                      (ConstantInt si_llvm_i64_ty, 0)),
                    (GetNextBB),
-                   (GetNamedOperand $simm16))
+                   (GetNamedOperandAsBB $simm16))
   ];
 }
 
@@ -504,7 +504,7 @@ def S_CBRANCH_EXECNZ_sem : InstSISemantic<S_CBRANCH_EXECNZ> {
   let Semantic = [
     (LLVMCondBranch (LLVMCmp LLVMICmpNE, (ImplicitUse EXEC),
                                      (ConstantInt si_llvm_i64_ty, 0)),
-                   (GetNamedOperand $simm16),
+                   (GetNamedOperandAsBB $simm16),
                    (GetNextBB))
   ];
 }
@@ -513,7 +513,7 @@ def S_CBRANCH_EXECNZ_pad_s_nop_sem : InstSISemantic<S_CBRANCH_EXECNZ_pad_s_nop> 
   let Semantic = [
     (LLVMCondBranch (LLVMCmp LLVMICmpNE, (ImplicitUse EXEC),
                                      (ConstantInt si_llvm_i64_ty, 0)),
-                   (GetNamedOperand $simm16),
+                   (GetNamedOperandAsBB $simm16),
                    (GetNextBB))
   ];
 }
@@ -525,7 +525,7 @@ def S_CBRANCH_VCCZ_sem : InstSISemantic<S_CBRANCH_VCCZ> {
     (LLVMCondBranch (LLVMCmp LLVMICmpEQ, (ImplicitUse VCC),
                                      (ConstantInt si_llvm_i64_ty, 0)),
                    (GetNextBB),
-                   (GetNamedOperand $simm16))
+                   (GetNamedOperandAsBB $simm16))
   ];
 }
 
@@ -534,7 +534,7 @@ def S_CBRANCH_VCCZ_pad_s_nop_sem : InstSISemantic<S_CBRANCH_VCCZ_pad_s_nop> {
     (LLVMCondBranch (LLVMCmp LLVMICmpEQ, (ImplicitUse VCC),
                                      (ConstantInt si_llvm_i64_ty, 0)),
                    (GetNextBB),
-                   (GetNamedOperand $simm16))
+                   (GetNamedOperandAsBB $simm16))
   ];
 }
 
@@ -544,7 +544,7 @@ def S_CBRANCH_VCCNZ_sem : InstSISemantic<S_CBRANCH_VCCNZ> {
   let Semantic = [
     (LLVMCondBranch (LLVMCmp LLVMICmpNE, (ImplicitUse VCC),
                                      (ConstantInt si_llvm_i64_ty, 0)),
-                   (GetNamedOperand $simm16),
+                   (GetNamedOperandAsBB $simm16),
                    (GetNextBB))
   ];
 }
@@ -553,7 +553,7 @@ def S_CBRANCH_VCCNZ_pad_s_nop_sem : InstSISemantic<S_CBRANCH_VCCNZ_pad_s_nop> {
   let Semantic = [
     (LLVMCondBranch (LLVMCmp LLVMICmpNE, (ImplicitUse VCC),
                                      (ConstantInt si_llvm_i64_ty, 0)),
-                   (GetNamedOperand $simm16),
+                   (GetNamedOperandAsBB $simm16),
                    (GetNextBB))
   ];
 }
@@ -562,49 +562,49 @@ def S_CBRANCH_VCCNZ_pad_s_nop_sem : InstSISemantic<S_CBRANCH_VCCNZ_pad_s_nop> {
 // Sources: same as S_BRANCH.
 def S_CBRANCH_CDBGSYS_sem : InstSISemantic<S_CBRANCH_CDBGSYS> {
   let Semantic = [
-    (LLVMBranch (GetNamedOperand $simm16))
+    (LLVMBranch (GetNamedOperandAsBB $simm16))
   ];
 }
 
 def S_CBRANCH_CDBGSYS_pad_s_nop_sem : InstSISemantic<S_CBRANCH_CDBGSYS_pad_s_nop> {
   let Semantic = [
-    (LLVMBranch (GetNamedOperand $simm16))
+    (LLVMBranch (GetNamedOperandAsBB $simm16))
   ];
 }
 
 def S_CBRANCH_CDBGSYS_AND_USER_sem : InstSISemantic<S_CBRANCH_CDBGSYS_AND_USER> {
   let Semantic = [
-    (LLVMBranch (GetNamedOperand $simm16))
+    (LLVMBranch (GetNamedOperandAsBB $simm16))
   ];
 }
 
 def S_CBRANCH_CDBGSYS_AND_USER_pad_s_nop_sem : InstSISemantic<S_CBRANCH_CDBGSYS_AND_USER_pad_s_nop> {
   let Semantic = [
-    (LLVMBranch (GetNamedOperand $simm16))
+    (LLVMBranch (GetNamedOperandAsBB $simm16))
   ];
 }
 
 def S_CBRANCH_CDBGSYS_OR_USER_sem : InstSISemantic<S_CBRANCH_CDBGSYS_OR_USER> {
   let Semantic = [
-    (LLVMBranch (GetNamedOperand $simm16))
+    (LLVMBranch (GetNamedOperandAsBB $simm16))
   ];
 }
 
 def S_CBRANCH_CDBGSYS_OR_USER_pad_s_nop_sem : InstSISemantic<S_CBRANCH_CDBGSYS_OR_USER_pad_s_nop> {
   let Semantic = [
-    (LLVMBranch (GetNamedOperand $simm16))
+    (LLVMBranch (GetNamedOperandAsBB $simm16))
   ];
 }
 
 def S_CBRANCH_CDBGUSER_sem : InstSISemantic<S_CBRANCH_CDBGUSER> {
   let Semantic = [
-    (LLVMBranch (GetNamedOperand $simm16))
+    (LLVMBranch (GetNamedOperandAsBB $simm16))
   ];
 }
 
 def S_CBRANCH_CDBGUSER_pad_s_nop_sem : InstSISemantic<S_CBRANCH_CDBGUSER_pad_s_nop> {
   let Semantic = [
-    (LLVMBranch (GetNamedOperand $simm16))
+    (LLVMBranch (GetNamedOperandAsBB $simm16))
   ];
 }
 

@@ -1,4 +1,4 @@
-#include "luthier/InstSemantics/PseudoOpcodeAnRegMapper.h"
+#include "luthier/Tooling/PseudoOpcodeAndRegMapper.h"
 #include <AMDGPUTargetMachine.h>
 
 namespace luthier {

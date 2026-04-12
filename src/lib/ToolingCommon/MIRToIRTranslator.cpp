@@ -680,6 +680,13 @@ MBBOperandTracker::getOperandAsValue(const llvm::MachineOperand &Op,
   }
 }
 
+llvm::BasicBlock &
+MBBOperandTracker::getOperandAsBasicBlock(const llvm::MachineOperand &Op) {
+  auto *BB = const_cast<llvm::BasicBlock *>(Op.getMBB()->getBasicBlock());
+  assert(BB && "MBB operand has no IR BasicBlock");
+  return *BB;
+}
+
 void MBBOperandTracker::setRegOperandValue(const llvm::MachineInstr &MI,
                                            llvm::MCRegister Reg,
                                            llvm::Value *Val) {
@@ -709,6 +716,17 @@ void MBBOperandTracker::setRegOperandValue(const llvm::MachineOperand &Op,
   setRegOperandValue(*MI, Op.getReg(), Val);
 }
 
+llvm::BasicBlock *MBBOperandTracker::getNextBB(const llvm::MachineInstr &MI) {
+  const llvm::MachineBasicBlock *MBB = MI.getParent();
+  assert(MBB && "MI does not have a basic block");
+  const llvm::MachineFunction *MF = MBB->getParent();
+  assert(MF && "MBB has no parent function");
+  const llvm::MachineBasicBlock *NextMBB = MBB->getNextNode();
+  assert(NextMBB && "MI doesn't have a fall-through block");
+
+  return const_cast<llvm::BasicBlock *>(NextMBB->getBasicBlock());
+}
+
 template <uint16_t Opcode>
 void raiseMachineInstr(const llvm::MachineInstr &MI,
                        llvm::IRBuilderBase &Builder,
@@ -719,8 +737,8 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
 
 #define GET_SI_INSTR_SEMANTIC_DISPATCH
 #define HANDLE_INST_SEMANTIC(OPCODE)                                           \
-  case OPCODE:                                                                 \
-    return raiseMachineInstr<llvm::AMDGPU::#OPCODE>(MI, Builder, Tracker);
+  case llvm::AMDGPU::OPCODE:                                                   \
+    return raiseMachineInstr<llvm::AMDGPU::OPCODE>(MI, Builder, Tracker);
 
 static void raiseMachineInstr(const llvm::MachineInstr &MI,
                               llvm::IRBuilderBase &Builder,
@@ -740,10 +758,10 @@ static void raiseMachineInstr(const llvm::MachineInstr &MI,
 // translateSingleInstr — public API for the fuzzer
 //===----------------------------------------------------------------------===//
 
-llvm::Error luthier::translateSingleInstr(const llvm::MachineInstr &MI,
-                                          llvm::IRBuilderBase &Builder,
-                                          const PhysRegValueMap &InputRegs,
-                                          PhysRegValueMap &OutputRegs) {
+llvm::Error translateSingleInstr(const llvm::MachineInstr &MI,
+                                 llvm::IRBuilderBase &Builder,
+                                 const PhysRegValueMap &InputRegs,
+                                 PhysRegValueMap &OutputRegs) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   if (!MBB)
     return LUTHIER_MAKE_GENERIC_ERROR("MI has no parent MBB");
@@ -858,6 +876,9 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
       Builder.SetInsertPoint(BB);
       raiseMachineInstr(MI, Builder, Tracker);
     }
+    /// TODO: Emit branches at the end of vector instructions to indicate
+    /// they will not execute if the exec mask bit of the current thread is
+    /// not zero
   }
   return llvm::Error::success();
 }

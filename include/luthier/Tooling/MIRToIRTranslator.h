@@ -122,6 +122,8 @@ public:
   llvm::Value &getOperandAsValue(const llvm::MachineOperand &Op,
                                  llvm::Type *RegType = nullptr);
 
+  llvm::BasicBlock &getOperandAsBasicBlock(const llvm::MachineOperand &Op);
+
   /// Seed the value of \p Reg in \p MBB without invalidating overlaps.
   /// Used to initialize pre-loaded kernel entry registers before any
   /// instructions are raised.
@@ -142,6 +144,10 @@ public:
                           llvm::Value *Val);
 
   void setRegOperandValue(const llvm::MachineOperand &Op, llvm::Value *Val);
+
+  /// Returns the fall-through BasicBlock (next block after the current MI's
+  /// block). If there is no next block, returns a poison value.
+  llvm::BasicBlock *getNextBB(const llvm::MachineInstr &MI);
 
 private:
   MCRegValueMap &getMap(const llvm::MachineBasicBlock &MBB) {

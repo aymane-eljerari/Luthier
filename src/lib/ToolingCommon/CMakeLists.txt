@@ -23,23 +23,22 @@ add_library(LuthierToolingCommon OBJECT
         PseudoOpcodeAndRegMapper.cpp
         TargetMachineInstrMDNode.cpp
         CodeDiscoveryPass.cpp
-        MachineFunctionEntryPoint.cpp
         InstructionTracesAnalysis.cpp
         MemoryAllocationAccessor.cpp
-        PhysicalRegAccessVirtualizationPass.cpp
+        #        PhysicalRegAccessVirtualizationPass.cpp
         #        SVStorageAndLoadLocations.cpp
         #        LRCallGraph.cpp
-        IPPredicatedLiveness.cpp
-        IntrinsicMIRLoweringPass.cpp
+        #        IPPredicatedLiveness.cpp
+        #        IntrinsicMIRLoweringPass.cpp
         #        InjectedPayloadPEIPass.cpp
         #        PrePostAmbleEmitter.cpp
         #        StateValueArraySpecs.cpp
-        IPPredicatedCFG.cpp
+        #        IPPredicatedCFG.cpp
         #        StateValueArrayStorage.cpp
         #        IModuleIRGeneratorPass.cpp
         #        RunIRPassesOnIModulePass.cpp
         #        MMISlotIndexesAnalysis.cpp
-        ProcessIntrinsicsAtIRLevelPass.cpp
+        #        ProcessIntrinsicsAtIRLevelPass.cpp
         #        PhysRegsNotInLiveInsAnalysis.cpp
         WrapperAnalysisPasses.cpp
         #        RunMIRPassesOnIModulePass.cpp
@@ -47,9 +46,9 @@ add_library(LuthierToolingCommon OBJECT
         MIRConvenience.cpp
         MockAMDGPULoader.cpp
         MetadataParserAnalysis.cpp
-        IntrinsicProcessorRegistry.cpp
-        IntrinsicProcessorsAnalysis.cpp
-        InstrumentationPMDriver.cpp
+        #        IntrinsicProcessorRegistry.cpp
+        #        IntrinsicProcessorsAnalysis.cpp
+        #        InstrumentationPMDriver.cpp
         MockLoadAMDGPUCodeObjects.cpp
         CodeObjectManagerAnalysis.cpp
         InitialEntryPointAnalysis.cpp
@@ -59,13 +58,13 @@ add_library(LuthierToolingCommon OBJECT
         MIRToIRTranslator.cpp
         NewPMAsmPrinter.cpp
         FunctionAnnotations.cpp
-        IPReachingRefAnalysis.cpp
-        IPPredicatedLoopTraversal.cpp
+        #        IPReachingRefAnalysis.cpp
+        #        IPPredicatedLoopTraversal.cpp
         #        IPRegScavenger.cpp
-        IndirectBranchResolverAnalysis.cpp
-        PredicatedMachineBasicBlock.cpp
-        LinearMachineBasicBlock.cpp
-        PredicatedMachineFunction.cpp
+        #        IndirectBranchResolverAnalysis.cpp
+        #        PredicatedMachineBasicBlock.cpp
+        #        LinearMachineBasicBlock.cpp
+        #        PredicatedMachineFunction.cpp
 
 )
 

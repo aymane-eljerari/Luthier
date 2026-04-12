@@ -352,6 +352,9 @@ def LLVMICmpSLE : LLVMCmpPredicate<"llvm::CmpInst::ICMP_SLE">;
 /// coding the operand number)
 def GetNamedOperand;
 
+///
+def GetNamedOperandAsBB;
+
 /// Used to set the named operand of the machine instruction (instead of hard
 /// coding the operand number)
 def SetNamedOperand;
