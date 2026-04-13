@@ -45,6 +45,10 @@
 #include <llvm/Support/Error.h>
 #include <llvm/Support/MathExtras.h>
 
+#undef DEBUG_TYPE
+
+#define DEBUG_TYPE "luthier-mir-to-ir"
+
 namespace {
 /// Friend ADL trick to allow access to the private basic block field of
 /// machine basic block
@@ -438,11 +442,19 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
     auto ExactRegType = RegValueMap.find(RegType);
     if (ExactRegType != RegValueMap.end()) {
       /// We found the exact reg with the exact type already materialized
+      LLVM_DEBUG(llvm::dbgs()
+                 << llvm::formatv("[MIRToIRTranslator] Found cached value for "
+                                  "register {0} in MBB {1}\n",
+                                  RegName, MBB.getNumber()));
       return *ExactRegType->second;
     } else {
       /// We have the value but we don't have the exact type; Create a cast
       /// from the first available integer or pointer value
       assert(!RegValueMap.empty() && "The value map for the register is empty");
+      LLVM_DEBUG(llvm::dbgs()
+                 << llvm::formatv("[MIRToIRTranslator] Creating type cast for "
+                                  "register {0} in MBB {1}\n",
+                                  RegName, MBB.getNumber()));
       llvm::Value *CastVal =
           getOrCreateIntOrPtrTypeForReg(RegValueMap, Builder, TRI, Reg);
       llvm::Value *Out =
@@ -455,6 +467,10 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
 
   // 2. Try to extract from a stored super-register.
   if (llvm::Value *V = tryExtractFromSuperReg(Map, Reg, RegType, Builder)) {
+    LLVM_DEBUG(llvm::dbgs()
+               << llvm::formatv("[MIRToIRTranslator] Extracted register {0} "
+                                "from super-register in MBB {1}\n",
+                                RegName, MBB.getNumber()));
     annotateUniformIfNeeded(V, TRI, Reg);
     Map[Reg][RegType] = V;
     return *V;
@@ -462,6 +478,10 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
 
   // 3. Try to compose from stored sub-registers.
   if (llvm::Value *V = tryComposeFromSubRegs(Map, Reg, Builder, RegType)) {
+    LLVM_DEBUG(llvm::dbgs()
+               << llvm::formatv("[MIRToIRTranslator] Composed register {0} "
+                                "from sub-registers in MBB {1}\n",
+                                RegName, MBB.getNumber()));
     annotateUniformIfNeeded(V, TRI, Reg);
     Map[Reg][RegType] = V;
     return *V;
@@ -471,6 +491,10 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
   // the requested register that are not completely sub or super regs
   if (llvm::Value *V =
           tryComposeFromOverlappingRegs(MBB, Map, Reg, Builder, RegType)) {
+    LLVM_DEBUG(llvm::dbgs()
+               << llvm::formatv("[MIRToIRTranslator] Composed register {0} "
+                                "from overlapping registers in MBB {1}\n",
+                                RegName, MBB.getNumber()));
     annotateUniformIfNeeded(V, TRI, Reg);
     Map[Reg][RegType] = V;
     return *V;
@@ -479,11 +503,19 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
   // 5. Not available locally — search predecessors and emit PHI / undef.
 
   if (MBB.pred_empty()) {
+    LLVM_DEBUG(llvm::dbgs()
+               << llvm::formatv("[MIRToIRTranslator] No predecessors for "
+                                "MBB {0}, returning undef for register {1}\n",
+                                MBB.getNumber(), RegName));
     llvm::Value *Undef = llvm::UndefValue::get(RegType);
     Map[Reg][RegType] = Undef;
     return *Undef;
   }
 
+  LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
+                 "[MIRToIRTranslator] Creating PHI for "
+                 "register {0} in MBB {1} with {2} predecessors\n",
+                 RegName, MBB.getNumber(), MBB.pred_size()));
   llvm::SmallVector<std::pair<llvm::Value *, llvm::BasicBlock *>> PhiVals;
   PhiVals.reserve(MBB.pred_size());
   for (llvm::MachineBasicBlock *Pred : MBB.predecessors()) {
@@ -558,6 +590,8 @@ static void initKernelEntryRegs(const llvm::MachineFunction &MF,
                              llvm::Type *RetTy) {
     const llvm::ArgDescriptor *ArgDesc =
         std::get<0>(Info.getArgInfo().getPreloadedValue(Which));
+    if (!ArgDesc)
+      return;
     llvm::MCRegister Reg = ArgDesc->getRegister();
     if (!Reg)
       return;
@@ -699,6 +733,12 @@ void MBBOperandTracker::setRegOperandValue(const llvm::MachineInstr &MI,
   assert(BB && "MBB has no IR basic block");
   llvm::IRBuilder Builder{BB};
 
+  LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
+                 "[MIRToIRTranslator] Setting register value for {0} "
+                 "in MBB {1} (type: {2})\n",
+                 getTRI().getName(Reg), MBB->getNumber(),
+                 *Val->getType()->getScalarType()));
+
   // Preserve non-overlapping portions of any partially-overwritten
   // super-registers, then erase fully-covered entries.
   invalidateOverlaps(Map, Reg, Builder);
@@ -749,9 +789,10 @@ static void raiseMachineInstr(const llvm::MachineInstr &MI,
 #include "SIInstrSemantics.inc"
 
   default:
-    llvm_unreachable(llvm::formatv("Unmodelled instruction opcode {0}.", Opcode)
-                         .str()
-                         .c_str());
+    LLVM_DEBUG(llvm::dbgs()
+               << "[MIRToIRTranslator] Unmodelled instruction " << MI << "\n");
+    llvm_unreachable(
+        llvm::formatv("Unmodelled instruction {0}.", MI).str().c_str());
   }
 }
 //===----------------------------------------------------------------------===//
@@ -769,6 +810,11 @@ llvm::Error translateSingleInstr(const llvm::MachineInstr &MI,
   if (!MF)
     return LUTHIER_MAKE_GENERIC_ERROR("MBB has no parent MF");
 
+  LLVM_DEBUG(
+      llvm::dbgs() << "[MIRToIRTranslator] Translating single instruction in '"
+                   << MF->getName() << "': ";
+      MI.dump(););
+
   // Create a tracker and seed it with the caller's input register values.
   MBBOperandTracker Tracker(*MF);
   for (const auto &[Reg, Val] : InputRegs)
@@ -782,6 +828,10 @@ llvm::Error translateSingleInstr(const llvm::MachineInstr &MI,
     llvm::Value &Val = Tracker.getRegisterOperand(*MBB, Reg);
     OutputRegs[Reg] = &Val;
   }
+
+  LLVM_DEBUG(llvm::dbgs()
+             << "[MIRToIRTranslator] Single instruction translation complete, "
+             << "produced " << OutputRegs.size() << " output registers\n");
 
   return llvm::Error::success();
 }
@@ -848,6 +898,10 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
   if (MF.empty())
     return llvm::Error::success();
 
+  LLVM_DEBUG(
+      llvm::dbgs() << "[MIRToIRTranslator] Translating machine function '"
+                   << MF.getName() << "' with " << MF.size() << " MBBs\n");
+
   /// Delete any basic blocks already present in the IR Function
   if (!F.empty())
     (void)F.erase(F.begin(), F.end());
@@ -865,8 +919,13 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
   /// predecessors.
   for (llvm::MachineBasicBlock *MBB :
        llvm::ReversePostOrderTraversal(&*MF.begin())) {
+    LLVM_DEBUG(llvm::dbgs()
+               << "[MIRToIRTranslator] Processing MBB " << MBB->getNumber()
+               << " with " << MBB->size() << " instructions\n");
     auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
     for (llvm::MachineInstr &MI : *MBB) {
+      LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Translating MI: ";
+                 MI.print(llvm::dbgs()); llvm::dbgs() << "\n");
       llvm::ConstantFolder CF;
       llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
         if (MI.getPCSections())
@@ -880,6 +939,11 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
     /// they will not execute if the exec mask bit of the current thread is
     /// not zero
   }
+
+  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Translation complete for '"
+                          << MF.getName() << "': " << F.size()
+                          << " basic blocks\n");
+
   return llvm::Error::success();
 }
 
