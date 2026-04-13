@@ -43,6 +43,8 @@
 // #include <luthier/Tooling/IPVectorRegLiveness.h>
 // #include <luthier/Tooling/IndirectBranchResolverAnalysis.h>
 // #include <luthier/Tooling/MachineFunctionEntryPoint.h>
+#include "luthier/Tooling/MIRToIRTranslator.h"
+
 #include <unordered_set>
 
 #undef DEBUG_TYPE
@@ -1055,7 +1057,7 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     llvm::SmallDenseSet<llvm::MachineInstr *> UnresolvedShortCallInsts{};
 
     /// TODO: IR translation and indirect branch/call analysis goes here
-
+    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, translateMachineFunctionToIR(MF));
     /// Go over all unresolved trace terminator instructions and process them
     /// accordingly
     LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Processing "
@@ -1086,14 +1088,16 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
                      << "[CodeDiscoveryPass] Direct call found, target: "
                      << llvm::formatv("{0:x}\n", CallTarget));
         } else {
-          LLVM_DEBUG(llvm::dbgs()
-                     << "[CodeDiscoveryPass] Call instruction not recovered\n");
+          LLVM_DEBUG(
+              llvm::dbgs()
+              << "[CodeDiscoveryPass] Call instruction target not recovered\n");
           TargetModule.addModuleFlag(llvm::Module::Warning,
                                      "luthier.cg.not_recovered", false);
         }
       } else if (TraceTermMI->isIndirectBranch()) {
-        LLVM_DEBUG(llvm::dbgs()
-                   << "[CodeDiscoveryPass] Indirect branch not recovered\n");
+        LLVM_DEBUG(
+            llvm::dbgs()
+            << "[CodeDiscoveryPass] Indirect branch target not recovered\n");
         TargetModule.addModuleFlag(llvm::Module::Warning,
                                    "luthier.cg.not_recovered", false);
       }

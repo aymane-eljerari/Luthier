@@ -26,9 +26,11 @@
 #ifndef LUTHIER_TBLGEN_SI_INSTR_SEMANTICS_EMITTER_HPP
 #define LUTHIER_TBLGEN_SI_INSTR_SEMANTICS_EMITTER_HPP
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Support/SMLoc.h>
 #include <string>
+#include <vector>
 
 namespace llvm {
 class RecordKeeper;
@@ -53,14 +55,14 @@ private:
   /// Emit a single raiseMachineInstr<> specialization for an InstSISemantic.
   void emitSemanticFunction(llvm::raw_ostream &OS, const llvm::Record *Rec);
 
-  /// Emit a single raiseMachineInstr<> specialization for an InstSIIntrinsic.
-  void emitIntrinsicFunction(llvm::raw_ostream &OS, const llvm::Record *Rec);
+  /// Emit the inline assembly fallback handler for codegen-only instructions
+  /// without semantic records.
+  void emitInlineAsmHandler(llvm::raw_ostream &OS);
 
   /// Emit the dispatch switch function that routes MI opcodes to the
   /// appropriate specialization.
   void emitMacro(llvm::raw_ostream &OS,
-                            llvm::ArrayRef<const llvm::Record *> Semantics,
-                            llvm::ArrayRef<const llvm::Record *> Intrinsics);
+                 llvm::ArrayRef<const llvm::Record *> Semantics);
 
   /// Emit code for a top-level semantic statement (SetNamedOperand,
   /// ImplicitDef, DefVal, or a bare store/call).

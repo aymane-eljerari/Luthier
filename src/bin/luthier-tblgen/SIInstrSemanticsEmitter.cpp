@@ -263,47 +263,12 @@ void SIInstrSemanticsEmitter::emitSemanticFunction(llvm::raw_ostream &OS,
   OS << "}\n\n";
 }
 
-void SIInstrSemanticsEmitter::emitIntrinsicFunction(llvm::raw_ostream &OS,
-                                                    const llvm::Record *Rec) {
-  const llvm::Record *InstRec = Rec->getValueAsDef("Instruction");
-  llvm::StringRef InstName = InstRec->getName();
-
-  const llvm::Record *IntrRec = Rec->getValueAsDef("Intrinsic");
-  llvm::StringRef IntrName = IntrRec->getName();
-
-  // Convert tablegen intrinsic name to LLVM enum
-  // e.g., "int_amdgcn_interp_p1" -> "llvm::Intrinsic::amdgcn_interp_p1"
-  std::string IntrEnum = IntrName.str();
-  if (IntrEnum.starts_with("int_"))
-    IntrEnum = "llvm::Intrinsic::" + IntrEnum.substr(4);
-
-  OS << "template <>\n";
-  OS << "void raiseMachineInstr<llvm::AMDGPU::" << InstName << ">(\n";
-  OS << "    const llvm::MachineInstr &MI, llvm::IRBuilderBase &Builder,\n";
-  OS << "    MBBOperandTracker &Tracker) {\n";
-  OS << "  // Mapped to intrinsic: " << IntrName << "\n";
-  OS << "  llvm::SmallVector<llvm::Value *, 8> Args;\n";
-  OS << "  llvm::SmallVector<llvm::Type *, 4> OverloadTys;\n";
-  OS << "  // Collect operand values from the MachineInstr\n";
-  OS << "  for (const llvm::MachineOperand &MO : MI.explicit_uses()) {\n";
-  OS << "    Args.push_back(&Tracker.getOperandAsValue(MO));\n";
-  OS << "  }\n";
-  OS << "  llvm::Value *Result = Builder.CreateIntrinsic(\n";
-  OS << "      " << IntrEnum << ", OverloadTys, Args);\n";
-  OS << "  // Set the output operand if the instruction has a def\n";
-  OS << "  if (MI.getNumExplicitDefs() > 0) {\n";
-  OS << "    Tracker.setRegOperandValue(MI.getOperand(0), *Result);\n";
-  OS << "  }\n";
-  OS << "}\n\n";
-}
-
 //===----------------------------------------------------------------------===//
 // Dispatch function emitter
 //===----------------------------------------------------------------------===//
 
 void SIInstrSemanticsEmitter::emitMacro(
-    llvm::raw_ostream &OS, llvm::ArrayRef<const llvm::Record *> Semantics,
-    llvm::ArrayRef<const llvm::Record *> Intrinsics) {
+    llvm::raw_ostream &OS, llvm::ArrayRef<const llvm::Record *> Semantics) {
   OS << "#ifndef HANDLE_INST_SEMANTIC\n";
   OS << "#define HANDLE_INST_SEMANTIC(OPCODE) \n";
   OS << "#endif\n";
@@ -316,16 +281,6 @@ void SIInstrSemanticsEmitter::emitMacro(
     OS << "HANDLE_INST_SEMANTIC(" << InstName << ")\n";
   }
   OS << "#undef HANDLE_INST_SEMANTIC\n";
-
-  // // Emit cases for InstSIIntrinsic records
-  // for (const llvm::Record *Rec : Intrinsics) {
-  //   const llvm::Record *InstRec = Rec->getValueAsDef("Instruction");
-  //   llvm::StringRef InstName = InstRec->getName();
-  //   OS << "  case llvm::AMDGPU::" << InstName << ":\n";
-  //   OS << "    raiseMachineInstr<llvm::AMDGPU::" << InstName
-  //      << ">(MI, Builder, Tracker);\n";
-  //   OS << "    return true;\n";
-  // }
 }
 
 //===----------------------------------------------------------------------===//
@@ -348,13 +303,8 @@ void SIInstrSemanticsEmitter::run(llvm::raw_ostream &OS) {
   llvm::ArrayRef<const llvm::Record *> Semantics =
       Records.getAllDerivedDefinitions("InstSISemantic");
 
-  // Collect all InstSIIntrinsic records
-  llvm::ArrayRef<const llvm::Record *> Intrinsics =
-      Records.getAllDerivedDefinitions("InstSIIntrinsic");
-
   emitHeader(OS);
 
-  /// --- Emit template specializations ---
   OS << "#ifdef GET_SI_INSTR_SEMANTIC_FUNCTIONS\n";
   OS << "#undef GET_SI_INSTR_SEMANTIC_FUNCTIONS\n";
 
@@ -364,15 +314,7 @@ void SIInstrSemanticsEmitter::run(llvm::raw_ostream &OS) {
 
   OS << "#endif // GET_SI_INSTR_SEMANTIC_FUNCTIONS\n\n";
 
-  //
-  // // Emit specializations for InstSIIntrinsic
-  // for (const llvm::Record *Rec : Intrinsics) {
-  //   emitIntrinsicFunction(OS, Rec);
-  // }
-  //
-  // OS << "#endif // GET_SI_INSTR_SEMANTIC_FUNCTIONS\n\n";
-  //
-  emitMacro(OS, Semantics, Intrinsics);
+  emitMacro(OS, Semantics);
 
   // --- Emit array of all opcodes that have semantic definitions ---
   OS << "#ifdef GET_SI_INSTR_SEMANTIC_OPCODE_LIST\n";
