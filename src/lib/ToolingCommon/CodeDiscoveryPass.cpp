@@ -1107,5 +1107,6 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
   PA.preserve<llvm::MachineFunctionAnalysisManagerModuleProxy>();
   PA.preserve<llvm::FunctionAnalysisManagerModuleProxy>();
   PA.preserve<llvm::MachineFunctionAnalysis>();
+  return PA;
 }
 } // namespace luthier
