@@ -203,7 +203,8 @@ InstructionTraces::discoverTraces(EntryPoint EP,
 
       LLVM_DEBUG(llvm::dbgs()
                      << llvm::formatv("[InstructionTraces] {0:x}: ", InstAddr);
-                 TraceInst.getMCInst().dump_pretty(llvm::dbgs(), IP.get());
+                 TraceInst.getMCInst().dump_pretty(llvm::dbgs(), IP.get(), " ",
+                                                   &MCCtx);
                  llvm::dbgs() << "\n");
 
       bool IsDirectBranch =
