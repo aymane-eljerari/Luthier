@@ -214,6 +214,10 @@ public:
                             direct_branch_target_addr_end());
   }
 
+  [[nodiscard]] unsigned direct_branch_target_addrs_size() const {
+    return DirectBranchTargets.size();
+  }
+
   [[nodiscard]] bool isAddressDirectBranchTarget(uint64_t DevAddr) const {
     return DirectBranchTargets.contains(DevAddr);
   }

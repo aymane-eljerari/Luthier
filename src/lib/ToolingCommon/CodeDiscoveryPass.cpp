@@ -1,4 +1,21 @@
-
+//===-- CodeDiscoveryPass.cpp ---------------------------------------------===//
+// Copyright @ Northeastern University Computer Architecture Lab
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//===----------------------------------------------------------------------===//
+/// \file CodeDiscoveryPass.cpp
+/// Implements the \c CodeDiscoveryPass class.
+//===----------------------------------------------------------------------===//
 #include "luthier/Tooling/CodeDiscoveryPass.h"
 #include "AMDGPUTargetMachine.h"
 #include "luthier/Common/ErrorCheck.h"
@@ -7,7 +24,6 @@
 #include "luthier/Tooling/InitialEntryPointAnalysis.h"
 #include "luthier/Tooling/InstructionTracesAnalysis.h"
 #include "luthier/Tooling/MemoryAllocationAccessor.h"
-#include "luthier/Tooling/MetadataParserAnalysis.h"
 #include "luthier/Tooling/PseudoOpcodeAndRegMapper.h"
 #include "luthier/Tooling/TargetMachineInstrMDNode.h"
 #include <MCTargetDesc/AMDGPUMCExpr.h>
@@ -559,7 +575,11 @@ convertAndAddMCOperandsToMI(llvm::ArrayRef<llvm::MCOperand> MCOperands,
       MIBuilder->isBranch() && !MIBuilder->isIndirectBranch();
   for (auto [MCOpIdx, MCOp] : llvm::enumerate(MCOperands)) {
     if (MCOp.isReg()) {
-      LLVM_DEBUG(llvm::dbgs() << "Converting MC register operand.\n");
+      LLVM_DEBUG(llvm::dbgs()
+                 << "[CodeDiscoveryPass] Converting MC register operand "
+                 << llvm::printReg(MCOp.getReg(),
+                                   MF->getSubtarget().getRegisterInfo())
+                 << "\n");
       unsigned RegNum = RealToPseudoRegisterMapTable(MCOp.getReg());
       const bool IsDef = MCOpIdx < MCID.getNumDefs();
       auto Flags = 0x0;
@@ -568,38 +588,44 @@ convertAndAddMCOperandsToMI(llvm::ArrayRef<llvm::MCOperand> MCOperands,
         Flags |= llvm::RegState::Define;
       }
       LLVM_DEBUG(llvm::dbgs()
-                     << "Adding register "
+                     << "[CodeDiscoveryPass] Adding pseudo register "
                      << llvm::printReg(RegNum,
                                        MF->getSubtarget().getRegisterInfo())
-                     << " with flags " << Flags << "\n";);
+                     << llvm::formatv(" with flags 0x{0:X}\n", Flags););
       (void)MIBuilder.addReg(RegNum, Flags);
     } else if (MCOp.isImm()) {
-      LLVM_DEBUG(llvm::dbgs() << "Resolving an immediate operand.\n");
+      LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
+                     "[CodeDiscoveryPass] Resolving immediate operand: {0}\n",
+                     MCOp.getImm()));
 
       if (!IsDirectBranch) {
-        LLVM_DEBUG(llvm::dbgs()
-                       << "Relocation was not applied for the "
-                          "immediate operand, and it is not a direct branch.\n";
-                   llvm::dbgs()
-                   << "Adding the immediate operand directly to the "
-                      "instruction\n");
+        LLVM_DEBUG(
+            llvm::dbgs()
+            << "[CodeDiscoveryPass] Not a direct branch, adding immediate "
+               "directly to instruction\n");
         /// SOPK needs some special attention to be converted correctly
         if (llvm::SIInstrInfo::isSOPK(*MIBuilder)) {
-          LLVM_DEBUG(llvm::dbgs() << "Instruction is in SOPK format\n");
+          LLVM_DEBUG(llvm::dbgs()
+                     << "[CodeDiscoveryPass] Instruction is in SOPK format\n");
           if (llvm::SIInstrInfo::sopkIsZext(MIBuilder->getOpcode())) {
             auto Imm = static_cast<uint16_t>(MCOp.getImm());
-            LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
-                           "Adding truncated imm value: {0}\n", Imm));
+            LLVM_DEBUG(
+                llvm::dbgs() << llvm::formatv(
+                    "[CodeDiscoveryPass] Adding truncated imm (zext): {0}\n",
+                    Imm));
             (void)MIBuilder.addImm(Imm);
           } else {
             auto Imm = static_cast<int16_t>(MCOp.getImm());
-            LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
-                           "Adding truncated imm value: {0}\n", Imm));
+            LLVM_DEBUG(
+                llvm::dbgs() << llvm::formatv(
+                    "[CodeDiscoveryPass] Adding truncated imm (sex): {0}\n",
+                    Imm));
             (void)MIBuilder.addImm(Imm);
           }
         } else {
           LLVM_DEBUG(llvm::dbgs()
-                     << llvm::formatv("Adding Imm: {0}\n", MCOp.getImm()));
+                     << llvm::formatv("[CodeDiscoveryPass] Adding Imm: {0}\n",
+                                      MCOp.getImm()));
           (void)MIBuilder.addImm(MCOp.getImm());
         }
       }
@@ -641,24 +667,25 @@ convertAndAddMCOperandsToMI(llvm::ArrayRef<llvm::MCOperand> MCOperands,
   }
 
   if (size_t NumMCOps = MCOperands.size(); NumMCOps < MCID.NumOperands) {
-    LLVM_DEBUG(llvm::dbgs() << "Must fixup instruction ";
+    LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Must fixup instruction ";
                MIBuilder->print(llvm::dbgs()); llvm::dbgs() << "\n";
                llvm::dbgs()
-               << "Num explicit operands added so far: " << NumMCOps << "\n";
-               llvm::dbgs()
-               << "Num explicit operands according to Machine Instr Info: "
-               << MCID.NumOperands << "\n";);
+               << "[CodeDiscoveryPass] Num explicit operands added: "
+               << NumMCOps << ", "
+               << "expected: " << MCID.NumOperands << "\n");
     // Loop over missing explicit operands (if any) and fixup any missing
     // immediate operands; We ignore any other missing operand kinds here and
     // fix it later
     for (unsigned int MissingExpOpIdx = NumMCOps;
          MissingExpOpIdx < MCID.NumOperands; MissingExpOpIdx++) {
-      LLVM_DEBUG(llvm::dbgs()
-                     << "Fixing up operand no " << MissingExpOpIdx << "\n";);
+      LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
+                     "[CodeDiscoveryPass] Fixing up operand index {0}\n",
+                     MissingExpOpIdx));
       auto OpType = MCID.operands()[MissingExpOpIdx].OperandType;
       if (OpType == llvm::MCOI::OPERAND_IMMEDIATE ||
           OpType == llvm::AMDGPU::OPERAND_KIMM32) {
-        LLVM_DEBUG(llvm::dbgs() << "Added a 0-immediate operand.\n";);
+        LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Adding 0-immediate for "
+                                   "missing operand\n";);
         (void)MIBuilder.addImm(0);
       }
     }
@@ -740,11 +767,14 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
   for (const auto &[TraceStartEndAddr, Trace] : MFTrace.traces()) {
     uint64_t CurrentInstrAddr = TraceStartEndAddr.first;
     uint64_t LastTraceInstrAddr = TraceStartEndAddr.second;
+    LLVM_DEBUG(llvm::dbgs()
+               << llvm::formatv(
+                      "\n[CodeDiscoveryPass] Processing trace [{0:x}, {1:x}]",
+                      TraceStartEndAddr.first, TraceStartEndAddr.second)
+               << " with " << Trace->size() << " instructions\n");
+
     while (CurrentInstrAddr <= LastTraceInstrAddr) {
       const TraceInstr &Inst = Trace->at(CurrentInstrAddr);
-      LLVM_DEBUG(llvm::dbgs()
-                     << "+++++++++++++++++++++++++++++++++++++++++++++++"
-                        "+++++++++++++++++++++++++\n";);
       auto MCInst = Inst.getMCInst();
       const unsigned Opcode = getPseudoOpcodeFromReal(MCInst.getOpcode());
       const llvm::MCInstrDesc &MCID = MCInstInfo.get(Opcode);
@@ -752,41 +782,35 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
       bool IsDirectBranch = MCID.isBranch() && !IsIndirectBranch;
       bool IsDirectBranchTarget =
           MFTrace.isAddressDirectBranchTarget(Inst.getLoadedDeviceAddress());
-      LLVM_DEBUG(llvm::dbgs() << "Processing MCInst: ";
+      LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Processing MCInst at "
+                              << llvm::formatv("{0:x}:\n",
+                                               Inst.getLoadedDeviceAddress());
                  MCInst.dump_pretty(llvm::dbgs(), IP.get(), " ", &MCContext);
-                 llvm::dbgs() << "\n";
-                 llvm::dbgs()
-                 << llvm::formatv("Device address of the instruction: {0:x}\n",
-                                  Inst.getLoadedDeviceAddress());
-                 llvm::dbgs()
-                 << llvm::formatv("Is branch? {0}\n", MCID.isBranch());
-                 llvm::dbgs() << llvm::formatv("Is indirect branch? {0}\n",
-                                               IsIndirectBranch););
+                 llvm::dbgs() << llvm::formatv(
+                     "\n  Opcode: {0:x}, IsBranch={1}, IsIndirectBranch={2}\n",
+                     Opcode, MCID.isBranch(), IsIndirectBranch););
 
       if (IsDirectBranchTarget) {
-        LLVM_DEBUG(llvm::dbgs() << "Instruction is a branch target.\n";);
+        LLVM_DEBUG(llvm::dbgs()
+                   << "[CodeDiscoveryPass] Instruction is a branch target\n");
         if (!CurrentMBB->empty()) {
-          LLVM_DEBUG(
-              llvm::dbgs()
-              << "Current MBB is not empty; Creating a new basic block\n");
+          LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Current MBB is not "
+                                     "empty, creating new MBB\n");
           llvm::MachineBasicBlock *OldMBB = CurrentMBB;
           CurrentMBB = MF.CreateMachineBasicBlock();
           MF.push_back(CurrentMBB);
           OldMBB->addSuccessor(CurrentMBB);
-          // Branch targets mark the beginning of an MBB
-          LLVM_DEBUG(llvm::dbgs()
-                     << "*********************************************"
-                        "***************************\n");
+
         } else {
-          LLVM_DEBUG(llvm::dbgs()
-                     << "Current MBB is empty; No new block created "
-                        "for the branch target.\n");
+          LLVM_DEBUG(
+              llvm::dbgs()
+              << "[CodeDiscoveryPass] Current MBB is empty, using existing\n");
         }
         BranchTargetMBBs.insert({Inst.getLoadedDeviceAddress(), CurrentMBB});
         LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
-                       "Address {0:x} marks the beginning of MBB idx {1}.\n",
-                       Inst.getLoadedDeviceAddress(),
-                       CurrentMBB->getNumber()););
+                       "[CodeDiscoveryPass] New MBB created at "
+                       "address {0:x}, MBB idx {1}\n",
+                       Inst.getLoadedDeviceAddress(), CurrentMBB->getNumber()));
       }
       llvm::MachineInstrBuilder Builder =
           llvm::BuildMI(CurrentMBB, llvm::DebugLoc(), MCID);
@@ -794,14 +818,14 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
       LUTHIER_RETURN_ON_ERROR(MDNodeOrErr.takeError());
       MDNodeOrErr->setTraceInstrAddress(Ctx, CurrentInstrAddr);
 
-      LLVM_DEBUG(llvm::dbgs() << "Number of operands according to MCID: "
-                              << MCID.operands().size() << "\n";
-                 llvm::dbgs() << "Populating operands\n";);
+      LLVM_DEBUG(
+          llvm::dbgs() << llvm::formatv(
+              "[CodeDiscoveryPass] Populating {0} operands for instruction\n",
+              MCID.operands().size()));
       LUTHIER_RETURN_ON_ERROR(
           convertAndAddMCOperandsToMI(MCInst.getOperands(), Builder));
 
-      LLVM_DEBUG(llvm::dbgs() << "Final form of the instruction (not final if "
-                                 "it's a direct branch): ";
+      LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Built instruction: ";
                  Builder->print(llvm::dbgs()); llvm::dbgs() << "\n");
       if (Inst.getLoadedDeviceAddress() ==
           MFTrace.getInitialEntryPoint().getEntryPointAddress()) {
@@ -811,16 +835,18 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
       // and scalar block to make it easier to deal with predication calculation
       if (MCID.isTerminator()) {
         LLVM_DEBUG(llvm::dbgs()
-                   << "Instruction is a terminator; Finishing basic block.\n");
+                   << "[CodeDiscoveryPass] Instruction is a terminator\n");
         if (IsDirectBranch) {
-          LLVM_DEBUG(llvm::dbgs() << "The terminator is a direct branch.\n");
+          LLVM_DEBUG(llvm::dbgs()
+                     << "[CodeDiscoveryPass] Direct branch terminator\n");
           uint64_t BranchTarget;
           LUTHIER_RETURN_ON_ERROR(
               InstructionTracesAnalysis::evaluateDirectBranchOrCall(
                   MCInst, Inst.getLoadedDeviceAddress())
                   .moveInto(BranchTarget));
           LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
-                         "Address was resolved to {0:x}\n", BranchTarget));
+                         "[CodeDiscoveryPass] Branch target resolved: {0:x}\n",
+                         BranchTarget));
           if (!UnresolvedBranchMIs.contains(BranchTarget)) {
             UnresolvedBranchMIs.insert({BranchTarget, {Builder.getInstr()}});
           } else {
@@ -830,7 +856,9 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
         // if this is the last instruction in the trace group, no need for
         // creating a new basic block
         if (CurrentInstrAddr != LastTraceEndAddr) {
-          LLVM_DEBUG(llvm::dbgs() << "Creating a new basic block.\n");
+          LLVM_DEBUG(
+              llvm::dbgs()
+              << "[CodeDiscoveryPass] Creating new MBB after terminator\n");
           llvm::MachineBasicBlock *OldMBB = CurrentMBB;
           CurrentMBB = MF.CreateMachineBasicBlock();
           MF.push_back(CurrentMBB);
@@ -839,13 +867,9 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
           if (!MCID.isUnconditionalBranch())
             OldMBB->addSuccessor(CurrentMBB);
           LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
-                         "Address {0:x} marks the beginning of MBB idx {1}.\n",
-                         Inst.getLoadedDeviceAddress(),
-                         CurrentMBB->getNumber()););
+                         "[CodeDiscoveryPass] New MBB idx {0} created\n",
+                         CurrentMBB->getNumber()));
         }
-        LLVM_DEBUG(llvm::dbgs()
-                   << "*********************************************"
-                      "***************************\n");
       } else if (llvm::MachineInstr *PrevMI = Builder->getPrevNode()) {
         bool IsCurrentMIVector = shouldImplicitReadExec(*Builder);
         bool IsFormerMIVector = shouldImplicitReadExec(*PrevMI);
@@ -854,11 +878,10 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
         bool ShouldSplitCurrentMBB =
             CurrentMIWritesExecMask || IsCurrentMIVector ^ IsFormerMIVector;
         if (ShouldSplitCurrentMBB) {
+          LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Splitting MBB for "
+                                     "vector/scalar transition\n");
           llvm::MachineBasicBlock *OldMBB = CurrentMBB;
-          CurrentMBB = OldMBB->splitAt(*PrevMI);
-          LLVM_DEBUG(llvm::dbgs()
-                     << "*********************************************"
-                        "***************************\n");
+          CurrentMBB = OldMBB->splitAt(*PrevMI, false);
         }
       }
       /// Indirect branch and all call targets require further processing so
@@ -871,11 +894,14 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
     }
   }
   // Resolve the direct branch and target MIs/MBBs
-  LLVM_DEBUG(llvm::dbgs() << "Resolving direct branch MIs\n");
+  LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Resolving "
+                          << UnresolvedBranchMIs.size()
+                          << " direct branch MIs\n");
   for (auto &[TargetAddress, BranchMIs] : UnresolvedBranchMIs) {
     LLVM_DEBUG(
         llvm::dbgs() << llvm::formatv(
-            "Resolving MIs jumping to target address {0:x}.\n", TargetAddress));
+            "[CodeDiscoveryPass] Resolving {0} branches to target {1:x}\n",
+            BranchMIs.size(), TargetAddress));
     CurrentMBB = BranchTargetMBBs[TargetAddress];
     LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         CurrentMBB != nullptr,
@@ -883,15 +909,13 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
                       "the branch target address {0:x}.",
                       TargetAddress)));
     for (auto &MI : BranchMIs) {
-      LLVM_DEBUG(llvm::dbgs() << "Resolving branch for the instruction ";
+      LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Resolving branch: ";
                  MI->print(llvm::dbgs()); llvm::dbgs() << "\n");
       MI->addOperand(llvm::MachineOperand::CreateMBB(CurrentMBB));
       MI->getParent()->addSuccessor(CurrentMBB);
       LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
-                     "MBB {0:x} {1} was set as the target of the branch.\n",
-                     CurrentMBB, CurrentMBB->getName()));
-      LLVM_DEBUG(llvm::dbgs() << "Final branch instruction: ";
-                 MI->print(llvm::dbgs()); llvm::dbgs() << "\n");
+                     "[CodeDiscoveryPass] MBB {0} set as branch target\n",
+                     CurrentMBB->getNumber()));
     }
   }
 
@@ -929,11 +953,9 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
   Properties.reset(llvm::MachineFunctionProperties::Property::TracksLiveness);
   Properties.set(llvm::MachineFunctionProperties::Property::Selected);
 
-  LLVM_DEBUG(llvm::dbgs() << "Final form of the Machine function:\n";
-             MF.print(llvm::dbgs());
-             llvm::dbgs() << "\n"
-                          << "*********************************************"
-                             "***************************\n";);
+  LLVM_DEBUG(llvm::dbgs() << "\n[CodeDiscoveryPass] Machine function '"
+                          << MF.getName() << "' created with " << MF.size()
+                          << " MBBs\n";);
 
   return llvm::Error::success();
 }
@@ -942,6 +964,9 @@ llvm::PreservedAnalyses
 CodeDiscoveryPass::run(llvm::Module &TargetModule,
                        llvm::ModuleAnalysisManager &TargetMAM) {
   llvm::LLVMContext &Ctx = TargetModule.getContext();
+
+  LLVM_DEBUG(
+      llvm::dbgs() << "[CodeDiscoveryPass] Running code discovery pass\n";);
 
   llvm::MachineModuleInfo &TargetMMI =
       TargetMAM.getResult<llvm::MachineModuleAnalysis>(TargetModule).getMMI();
@@ -973,6 +998,11 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     EntryPoint CurrentEntryPoint = *UnvisitedPointsOfEntry.begin();
     if (VisitedPointsOfEntry.contains(CurrentEntryPoint))
       continue;
+
+    LLVM_DEBUG(llvm::dbgs()
+               << "\n[CodeDiscoveryPass] Processing entry point at address "
+               << llvm::formatv("{0:x}\n",
+                                CurrentEntryPoint.getEntryPointAddress()));
 
     auto [MF, FuncSymRef] =
         [&]() -> std::pair<llvm::MachineFunction &,
@@ -1028,6 +1058,9 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
 
     /// Go over all unresolved trace terminator instructions and process them
     /// accordingly
+    LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Processing "
+                            << UnresolvedTraceTermInstructions.size()
+                            << " unresolved trace terminators\n");
     for (llvm::MachineInstr *TraceTermMI : UnresolvedTraceTermInstructions) {
       /// If a terminator is a call, then it is likely that the instruction
       /// after the call is reachable. Add it to the list of unvisited entry
@@ -1049,11 +1082,18 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
                   TraceTermMI->getOperand(1).getImm(), *TraceTermAddr);
           UnvisitedPointsOfEntry.insert(EntryPoint{CallTarget});
           UnresolvedShortCallInsts.insert(TraceTermMI);
+          LLVM_DEBUG(llvm::dbgs()
+                     << "[CodeDiscoveryPass] Direct call found, target: "
+                     << llvm::formatv("{0:x}\n", CallTarget));
         } else {
+          LLVM_DEBUG(llvm::dbgs()
+                     << "[CodeDiscoveryPass] Call instruction not recovered\n");
           TargetModule.addModuleFlag(llvm::Module::Warning,
                                      "luthier.cg.not_recovered", false);
         }
       } else if (TraceTermMI->isIndirectBranch()) {
+        LLVM_DEBUG(llvm::dbgs()
+                   << "[CodeDiscoveryPass] Indirect branch not recovered\n");
         TargetModule.addModuleFlag(llvm::Module::Warning,
                                    "luthier.cg.not_recovered", false);
       }
@@ -1066,6 +1106,6 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
   llvm::PreservedAnalyses PA = llvm::PreservedAnalyses::none();
   PA.preserve<llvm::MachineFunctionAnalysisManagerModuleProxy>();
   PA.preserve<llvm::FunctionAnalysisManagerModuleProxy>();
-  return PA;
+  PA.preserve<llvm::MachineFunctionAnalysis>();
 }
 } // namespace luthier
