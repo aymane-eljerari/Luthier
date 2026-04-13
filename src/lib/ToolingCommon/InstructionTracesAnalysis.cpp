@@ -192,7 +192,7 @@ InstructionTraces::discoverTraces(EntryPoint EP,
     /// Handle direct branch and call instructions' targets, check if we have
     /// any targets not covered by current discovered traces
     LLVM_DEBUG(llvm::dbgs() << "\n[InstructionTraces] Processing trace from "
-                            << llvm::formatv("0x%016x", CurrentDeviceAddr)
+                            << llvm::formatv("{0:x}", CurrentDeviceAddr)
                             << " - " << InstTrace->size() << " instructions\n");
 
     for (const auto &[InstAddr, TraceInst] : *InstTrace) {
@@ -201,8 +201,8 @@ InstructionTraces::discoverTraces(EntryPoint EP,
       const llvm::MCInstrDesc &PseudoOpcodeDesc =
           MII.get(getPseudoOpcodeFromReal(Opcode));
 
-      LLVM_DEBUG(llvm::dbgs() << llvm::formatv("[InstructionTraces] 0x%016x: ",
-                                               InstAddr);
+      LLVM_DEBUG(llvm::dbgs()
+                     << llvm::formatv("[InstructionTraces] {0:x}: ", InstAddr);
                  TraceInst.getMCInst().dump_pretty(llvm::dbgs(), IP.get());
                  llvm::dbgs() << "\n");
 
@@ -212,7 +212,7 @@ InstructionTraces::discoverTraces(EntryPoint EP,
 
       if (IsDirectBranch) {
         LLVM_DEBUG(llvm::dbgs() << "[InstructionTraces] Direct branch found at "
-                                << llvm::formatv("0x%016x", InstAddr) << "\n";);
+                                << llvm::formatv("{0:x}", InstAddr) << "\n";);
         llvm::Expected<uint64_t> TargetOrErr =
             InstructionTracesAnalysis::evaluateDirectBranchOrCall(MCInst,
                                                                   InstAddr);
@@ -220,7 +220,7 @@ InstructionTraces::discoverTraces(EntryPoint EP,
 
         LLVM_DEBUG(llvm::dbgs()
                    << "[InstructionTraces] Branch target resolved: "
-                   << llvm::formatv("0x%016x\n", *TargetOrErr));
+                   << llvm::formatv("{0:x}\n", *TargetOrErr));
 
         Out->DirectBranchTargets.insert(*TargetOrErr);
         /// Find if we have already have the target of this branch in the
@@ -230,16 +230,16 @@ InstructionTraces::discoverTraces(EntryPoint EP,
           bool HaveVisitedDirectBranchTarget{false};
           for (const auto &[TraceInterval, Trace] : Out->Traces) {
             LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
-                           "[InstructionTraces] Checking trace [0x%016x, "
-                           "0x%016x] for branch target 0x%016x: Contains=%u\n",
+                           "[InstructionTraces] Checking trace [{0:x}, "
+                           "{1:x}] for branch target {2:x}: Contains={3}\n",
                            TraceInterval.first, TraceInterval.second,
                            *TargetOrErr, Trace->contains(*TargetOrErr)));
             if (Trace->contains(*TargetOrErr)) {
               HaveVisitedDirectBranchTarget = true;
               LLVM_DEBUG(
                   llvm::dbgs()
-                  << "[InstructionTraces] Branch target 0x"
-                  << llvm::formatv("%016x already in current trace, skipping\n",
+                  << "[InstructionTraces] Branch target "
+                  << llvm::formatv("{0:x} already in current trace, skipping\n",
                                    *TargetOrErr));
               break;
             }
@@ -247,8 +247,8 @@ InstructionTraces::discoverTraces(EntryPoint EP,
           if (!HaveVisitedDirectBranchTarget) {
             LLVM_DEBUG(
                 llvm::dbgs()
-                << "[InstructionTraces] Adding branch target 0x"
-                << llvm::formatv("%016x to unvisited set\n", *TargetOrErr));
+                << "[InstructionTraces] Adding branch target "
+                << llvm::formatv("{0:x} to unvisited set\n", *TargetOrErr));
             UnvisitedTraceAddresses.insert(*TargetOrErr);
           }
         }
@@ -259,7 +259,7 @@ InstructionTraces::discoverTraces(EntryPoint EP,
     if (!InstTrace->empty()) {
       LLVM_DEBUG(llvm::dbgs()
                  << "[InstructionTraces] Added trace ["
-                 << llvm::formatv("0x%016x, 0x%016x]", CurrentDeviceAddr,
+                 << llvm::formatv("{0:x}, {1:x}]", CurrentDeviceAddr,
                                   TraceDeviceEndAddr)
                  << " with " << InstTrace->size() << " instructions\n");
       Out->Traces.insert({std::make_pair(CurrentDeviceAddr, TraceDeviceEndAddr),
@@ -268,8 +268,8 @@ InstructionTraces::discoverTraces(EntryPoint EP,
 
     /// Remove the current entry point from the unvisited set
     UnvisitedTraceAddresses.erase(CurrentDeviceAddr);
-    LLVM_DEBUG(llvm::dbgs() << "[InstructionTraces] Removed 0x"
-                            << llvm::formatv("%016x from unvisited set\n",
+    LLVM_DEBUG(llvm::dbgs() << "[InstructionTraces] Removed "
+                            << llvm::formatv("{0:x} from unvisited set\n",
                                              CurrentDeviceAddr));
   }
   return std::move(Out);
