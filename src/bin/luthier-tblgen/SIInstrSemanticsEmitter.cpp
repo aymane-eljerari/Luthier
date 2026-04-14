@@ -98,7 +98,12 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       OS << "&Tracker.getOperandAsValue("
          << "*Tracker.getTII().getNamedOperand(MI, "
             "llvm::AMDGPU::OpName::"
-         << ArgName << "))";
+         << ArgName << ")";
+      if (Dag->getNumArgs() > 1) {
+        OS << ", ";
+        emitSemanticStatement(OS, Dag->getArg(1), Loc);
+      }
+      OS << ")";
     }
     // --- GetNamedOperandAsBB $name ---
     else if (OpName == "GetNamedOperandAsBB") {
@@ -215,12 +220,12 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
           Loc, "Unhandled def node: " + DefNode->getAsString() + ".");
     }
   } else if (const auto *ListNode = llvm::dyn_cast<llvm::ListInit>(Stmt)) {
-    OS << "llvm::ArrayRef<llvm::Value *>({";
+    OS << "{";
     llvm::interleave(
         ListNode->getElements(),
         [&](const llvm::Init *Elem) { emitSemanticStatement(OS, Elem, Loc); },
         [&] { OS << ", "; });
-    OS << "})";
+    OS << "}";
   } else if (auto *IntNode = llvm::dyn_cast<llvm::IntInit>(Stmt)) {
     llvm::outs() << "Int node: " << IntNode->getValue() << "\n";
     OS << IntNode->getValue();

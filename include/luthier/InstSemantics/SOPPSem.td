@@ -84,7 +84,7 @@ def S_BARRIER_sem : InstSISemantic<S_BARRIER> {
 //   (Removed in RDNA4; replaced by S_WAIT_KMCNT/LOADCNT/STORECNT/etc.)
 def S_WAITCNT_sem : InstSISemantic<S_WAITCNT> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(GetNamedOperand $simm16, si_llvm_i32_ty)])
   ];
 }
 

@@ -31,6 +31,7 @@
 #include <limits>
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/ADT/PostOrderIterator.h>
+#include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/CodeGen/AsmPrinter.h>
 #include <llvm/CodeGen/LivePhysRegs.h>
 #include <llvm/CodeGen/MachineDominators.h>
@@ -47,7 +48,6 @@
 #include <llvm/MC/MCAsmInfo.h>
 #include <llvm/MC/MCInstPrinter.h>
 #include <llvm/MC/TargetRegistry.h>
-#include <llvm/Support/Error.h>
 #include <llvm/Support/MathExtras.h>
 
 #undef DEBUG_TYPE
@@ -70,6 +70,19 @@ template <typename Tag, typename Tag::type MemPtr> struct Access {
 };
 
 template struct Access<TagBB, &llvm::MachineBasicBlock::BB>;
+
+/// Friend ADL trick to allow access to the private basic block field of
+/// machine basic block
+/// Unlike what LLVM assumes (IR comes after MIR), we have to construct the
+/// IR basic block after we have the machine basic block
+struct TagMF {
+  using type = llvm::MachineFunction *llvm::AsmPrinter::*;
+
+  friend type get(TagMF);
+};
+
+template struct Access<TagMF, &llvm::AsmPrinter::MF>;
+
 } // namespace
 
 namespace luthier {
@@ -167,7 +180,8 @@ static llvm::Value *breakdownToVecTyFromAvailableValues(
     unsigned ElemWidth, llvm::IRBuilderBase &Builder,
     const llvm::SIRegisterInfo &TRI, llvm::MCRegister Reg) {
   assert(!ValueEntries.empty() && "Empty value entry map");
-  unsigned TotalWidth = ValueEntries.begin()->getFirst()->getIntegerBitWidth();
+  unsigned TotalWidth =
+      ValueEntries.begin()->getFirst()->getPrimitiveSizeInBits();
   assert(TotalWidth % ElemWidth == 0);
   unsigned NumElems = TotalWidth / ElemWidth;
   auto *VecTy =
@@ -312,23 +326,32 @@ llvm::Value *MBBOperandTracker::tryExtractFromSuperReg(
     MCRegValueMap &Map, llvm::MCRegister Reg, llvm::Type *RegType,
     llvm::IRBuilderBase &Builder) {
   const llvm::SIRegisterInfo &TRI = getTRI();
-  unsigned ReqSize = TRI.getRegSizeInBits(*TRI.getMinimalPhysRegClass(Reg));
+  unsigned RegSize = TRI.getRegSizeInBits(*TRI.getMinimalPhysRegClass(Reg));
+
+  LLVM_DEBUG(llvm::StringRef RegName = TRI.getName(Reg);
+             llvm::dbgs() << "[MIRToIRTranslator] attempting to find a super "
+                             "register that contains "
+                          << RegName << " in the current basic block.\n";);
 
   for (auto &[StoredReg, Entry] : Map) {
     unsigned StoredSize =
         TRI.getRegSizeInBits(*TRI.getMinimalPhysRegClass(StoredReg));
-    if (StoredSize <= ReqSize)
+    if (StoredSize <= RegSize)
       continue;
     unsigned SubIdx = TRI.getSubRegIndex(StoredReg, Reg);
     if (SubIdx == 0)
       continue;
     unsigned Offset = TRI.getSubRegIdxOffset(SubIdx);
-    unsigned ElemIdx = Offset / ReqSize;
+    unsigned ElemIdx = Offset / RegSize;
 
     auto RegValIt = Entry.find(RegType);
     if (RegValIt == Entry.end()) {
+      LLVM_DEBUG(llvm::StringRef SuperRegName = TRI.getName(StoredReg);
+                 llvm::dbgs()
+                 << "[MIRToIRTranslator] found super register " << SuperRegName
+                 << " with sub idx " << SubIdx << "\n";);
       /// No entry was found; Create a bitcast
-      llvm::Value *Vec = breakdownToVecTyFromAvailableValues(Entry, ReqSize,
+      llvm::Value *Vec = breakdownToVecTyFromAvailableValues(Entry, RegSize,
                                                              Builder, TRI, Reg);
       return Builder.CreateExtractElement(Vec, ElemIdx, TRI.getName(Reg));
     } else {
@@ -411,7 +434,9 @@ llvm::Value *MBBOperandTracker::tryComposeFromOverlappingRegs(
 
   for (llvm::MCRegUnit IA : TRI.regunits(Reg)) {
     for (llvm::MCRegUnitRootIterator RI(IA, &TRI); RI.isValid(); ++RI) {
-      (void)materializeReg(MBB, *RI, RegType);
+      unsigned RegRootSize =
+          TRI.getRegSizeInBits(*TRI.getMinimalPhysRegClass(*RI));
+      (void)materializeReg(MBB, *RI, Builder.getIntNTy(RegRootSize));
     }
   }
   /// Registers should have been materialized by now; Simply ask for it again
@@ -427,6 +452,11 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
   assert(RC && "No register class for Reg");
   unsigned RegSize = TRI.getRegSizeInBits(*RC);
   llvm::StringRef RegName = TRI.getName(Reg);
+
+  LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
+                 "[MIRToIRTranslator] Materializing register {0} "
+                 "in MBB {1}\n",
+                 RegName, MBB.getNumber()));
 
   auto *BB = const_cast<llvm::BasicBlock *>(MBB.getBasicBlock());
   assert(BB && "MBB does not have an IR basic block");
@@ -492,18 +522,19 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
     return *V;
   }
 
+  /// TODO: Fix this part
   // 4. Try to see if there are multiple overlapping registers that contain
   // the requested register that are not completely sub or super regs
-  if (llvm::Value *V =
-          tryComposeFromOverlappingRegs(MBB, Map, Reg, Builder, RegType)) {
-    LLVM_DEBUG(llvm::dbgs()
-               << llvm::formatv("[MIRToIRTranslator] Composed register {0} "
-                                "from overlapping registers in MBB {1}\n",
-                                RegName, MBB.getNumber()));
-    annotateUniformIfNeeded(V, TRI, Reg);
-    Map[Reg][RegType] = V;
-    return *V;
-  }
+  // if (llvm::Value *V =
+  //         tryComposeFromOverlappingRegs(MBB, Map, Reg, Builder, RegType)) {
+  //   LLVM_DEBUG(llvm::dbgs()
+  //              << llvm::formatv("[MIRToIRTranslator] Composed register {0} "
+  //                               "from overlapping registers in MBB {1}\n",
+  //                               RegName, MBB.getNumber()));
+  //   annotateUniformIfNeeded(V, TRI, Reg);
+  //   Map[Reg][RegType] = V;
+  //   return *V;
+  // }
 
   // 5. Not available locally — search predecessors and emit PHI / undef.
 
@@ -524,10 +555,12 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
   llvm::SmallVector<std::pair<llvm::Value *, llvm::BasicBlock *>> PhiVals;
   PhiVals.reserve(MBB.pred_size());
   for (llvm::MachineBasicBlock *Pred : MBB.predecessors()) {
-    llvm::Value &PredVal = materializeReg(*Pred, Reg, RegType);
-    auto *PredBB = const_cast<llvm::BasicBlock *>(Pred->getBasicBlock());
-    assert(PredBB && "Predecessor MBB has no IR basic block");
-    PhiVals.push_back({&PredVal, PredBB});
+    if (Pred != &MBB || !MBB.isSuccessor(Pred)) {
+      llvm::Value &PredVal = materializeReg(*Pred, Reg, RegType);
+      auto *PredBB = const_cast<llvm::BasicBlock *>(Pred->getBasicBlock());
+      assert(PredBB && "Predecessor MBB has no IR basic block");
+      PhiVals.push_back({&PredVal, PredBB});
+    }
   }
 
   llvm::PHINode *Phi = Builder.CreatePHI(RegType, PhiVals.size(), RegName);
@@ -673,6 +706,16 @@ MBBOperandTracker::MBBOperandTracker(const llvm::MachineFunction &MF) : MF(MF) {
     assert(EntryBB && "Entry MBB has no IR basic block");
     llvm::IRBuilder Builder{EntryBB};
     initKernelEntryRegs(MF, Builder, *this);
+
+    /// Set the initial value of the execute mask to all ones on entry
+    const llvm::SIRegisterInfo *TRI =
+        MF.getSubtarget<llvm::GCNSubtarget>().getRegisterInfo();
+    llvm::MCRegister Exec = TRI->getExec();
+    seedRegValue(MF.front(), Exec,
+                 Builder.getIntN(TRI->getRegSizeInBits(Exec, MF.getRegInfo()),
+                                 0xFFFFFFFF));
+    /// Set the initial SCC value to zero
+    seedRegValue(MF.front(), llvm::AMDGPU::SCC, Builder.getInt1(false));
   }
 }
 
@@ -704,8 +747,8 @@ MBBOperandTracker::getOperandAsValue(const llvm::MachineOperand &Op,
     const llvm::MachineInstr *MI = Op.getParent();
     assert(MI && "Operand does not have a machine instruction");
     llvm::LLVMContext &Ctx = MF.getFunction().getContext();
-    return *llvm::ConstantInt::getSigned(llvm::IntegerType::getInt64Ty(Ctx),
-                                         Op.getImm());
+    return *llvm::ConstantInt::getSigned(
+        RegType ? RegType : llvm::IntegerType::getInt64Ty(Ctx), Op.getImm());
   }
   case llvm::MachineOperand::MO_MachineBasicBlock: {
     auto *BB = const_cast<llvm::BasicBlock *>(Op.getMBB()->getBasicBlock());
@@ -791,8 +834,7 @@ static void raiseMachineInstr(
     const std::function<std::string(const llvm::MachineInstr &MI)>
         &AsmStringPrinter,
     const std::function<std::string(llvm::MCRegister)> &AsmRegPrinter) {
-  uint16_t Opcode = MI.getOpcode();
-  switch (Opcode) {
+  switch (MI.getOpcode()) {
 
 #include "SIInstrSemantics.inc"
 
@@ -801,6 +843,10 @@ static void raiseMachineInstr(
                << "[MIRToIRTranslator] Unmodelled instruction " << MI << "\n");
 
     std::string AsmStr = AsmStringPrinter(MI);
+
+    LLVM_DEBUG(llvm::dbgs()
+               << "[MIRToIRTranslator] Obtained instruction asm string: "
+               << AsmStr << "\n");
 
     const llvm::MachineBasicBlock *MBB = MI.getParent();
     assert(MBB && "MI doesn't have a basic block");
@@ -813,11 +859,13 @@ static void raiseMachineInstr(
     struct RegOperandInfo {
       unsigned MIOpIdx;
       unsigned InlineAsmIdx;
-      std::string RegName;
+      llvm::StringRef RegName;
       std::string Constraint;
+      bool IsImplicit;
       bool IsDef;
     };
-    std::vector<RegOperandInfo> RegOperands;
+
+    llvm::SmallVector<RegOperandInfo> RegOperands;
 
     unsigned InlineAsmIdx = 0;
     for (unsigned I = 0; I < MI.getNumOperands(); ++I) {
@@ -825,7 +873,7 @@ static void raiseMachineInstr(
       if (!Op.isReg())
         continue;
 
-      std::string RegName = AsmRegPrinter(Op.getReg());
+      llvm::StringRef RegName = TRI->getRegAsmName(Op.getReg());
       std::string Constraint = [&] -> std::string {
         const llvm::TargetRegisterClass *RC =
             TRI->getMinimalPhysRegClass(Op.getReg());
@@ -842,14 +890,31 @@ static void raiseMachineInstr(
         Constraint = "=" + Constraint;
       }
 
-      RegOperands.push_back({I, InlineAsmIdx, RegName, Constraint, Op.isDef()});
+      LLVM_DEBUG(llvm::dbgs()
+                 << "[MIRToIRTranslator] Operand info: "
+                 << "Op idx: " << I << ", " << "Reg name: " << RegName << ", "
+                 << "Inline assembly index: " << InlineAsmIdx
+                 << ", constraint: " << Constraint << ", is def: " << Op.isDef()
+                 << ", is implicit: " << Op.isImplicit() << "\n");
+
+      RegOperands.push_back(
+          {I, InlineAsmIdx, RegName, Constraint, Op.isImplicit(), Op.isDef()});
       ++InlineAsmIdx;
     }
+
+    llvm::sort(RegOperands, [](RegOperandInfo &LHS, RegOperandInfo &RHS) {
+      if (LHS.IsDef && !RHS.IsDef)
+        return true;
+      else if (!LHS.IsDef && RHS.IsDef)
+        return false;
+      else
+        return LHS.MIOpIdx < RHS.MIOpIdx;
+    });
 
     for (const auto &RegOp : RegOperands) {
       size_t Pos = 0;
       while ((Pos = AsmStr.find(RegOp.RegName, Pos)) != std::string::npos) {
-        AsmStr.replace(Pos, RegOp.RegName.length(),
+        AsmStr.replace(Pos, RegOp.RegName.size(),
                        "%" + std::to_string(RegOp.InlineAsmIdx));
         Pos += 2;
       }
@@ -875,7 +940,7 @@ static void raiseMachineInstr(
 
     llvm::Type *RetTy = Builder.getVoidTy();
     if (MI.getNumDefs() > 0) {
-      llvm::Value &FirstDef = Tracker.getOperandAsValue(MI.getOperand(0));
+      llvm::Value &FirstDef = Tracker.getOperandAsValue(*MI.all_defs().begin());
       RetTy = FirstDef.getType();
     }
 
@@ -888,7 +953,7 @@ static void raiseMachineInstr(
                             llvm::Attribute::NoUnwind);
 
     if (MI.getNumDefs() > 0) {
-      Tracker.setRegOperandValue(MI.getOperand(0), CI);
+      Tracker.setRegOperandValue(*MI.all_defs().begin(), CI);
     }
     break;
   }
@@ -1049,6 +1114,7 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
   }
 
   MBBOperandTracker Tracker(MF);
+
   auto &TM = const_cast<llvm::TargetMachine &>(MF.getTarget());
   llvm::MCContext ExtMCCtx(TM.getTargetTriple(), TM.getMCAsmInfo(),
                            TM.getMCRegisterInfo(), TM.getMCSubtargetInfo(),
@@ -1069,6 +1135,7 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
         "Failed to create assembly printer for emitting instructions that are "
         "not modelled");
 
+  AsmPrinter->*get(TagMF()) = &MF;
   auto AsmStrEmitter = [&](const llvm::MachineInstr &MI) {
     AsmPrinter->emitInstruction(&MI);
     std::string Out{AsmString};
@@ -1098,8 +1165,11 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
     for (llvm::MachineInstr &MI : *MBB) {
       LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Translating MI: ";
                  MI.print(llvm::dbgs()); llvm::dbgs() << "\n");
-      llvm::ConstantFolder CF;
+      llvm::InstSimplifyFolder CF{MF.getDataLayout()};
       llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
+        LLVM_DEBUG(llvm::dbgs()
+                   << "[MIRToIRTranslator] Inserting translated instruction "
+                   << *I << "\n");
         if (MI.getPCSections())
           I->setMetadata(llvm::LLVMContext::MD_pcsections, MI.getPCSections());
       });
