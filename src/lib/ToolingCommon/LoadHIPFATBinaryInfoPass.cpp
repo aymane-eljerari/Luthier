@@ -38,9 +38,9 @@ namespace luthier {
 /// can access them later without needing to search again.
 /// \param M Module of the IR
 /// \param NameToVar StringMap which we will fill out
-static llvm::Error
-getAnnotatedValues(const llvm::Module &M,
-                   llvm::StringMap<llvm::GlobalVariable *> &NameToVar) {
+static llvm::Error getAnnotatedValues(
+    const llvm::Module &M,
+    llvm::StringMap<llvm::SmallVector<llvm::GlobalVariable *, 4>> &NameToVar) {
   const llvm::GlobalVariable *V =
       M.getGlobalVariable("llvm.global.annotations");
   if (V == nullptr)
@@ -58,7 +58,7 @@ getAnnotatedValues(const llvm::Module &M,
       llvm::StringRef Content;
       llvm::getConstantStringInfo(GV, Content);
       if (Content.starts_with("luthier.loader.hip")) {
-        NameToVar[Content] = Var;
+        NameToVar[Content].push_back(Var);
       }
     }
   }
@@ -78,25 +78,26 @@ getAnnotatedValues(const llvm::Module &M,
 static llvm::Error replacePlaceholderVariable(
     llvm::StringRef Name, llvm::StructType *Type, uint64_t Size,
     llvm::ArrayRef<llvm::Constant *> TempArr, llvm::Module &M,
-    llvm::StringMap<llvm::GlobalVariable *> &NameToVar) {
+    llvm::StringMap<llvm::SmallVector<llvm::GlobalVariable *, 4>> &NameToVar) {
+  if (NameToVar[Name].empty()) {
+    return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                   "There is no annotated variable for " +
+                                       Name);
+  }
   llvm::ArrayType *ArrayTy = llvm::ArrayType::get(Type, Size);
   llvm::Constant *Array = llvm::ConstantArray::get(ArrayTy, TempArr);
   /// Replace old variable with the array
-  auto *NewTable = new llvm::GlobalVariable(
-      M, Array->getType(), true, llvm::GlobalValue::ExternalLinkage, Array, "");
-  auto *OldVar = NameToVar[Name];
-  /// If OldVar is not in the table, then something is wrong
-  if (OldVar == nullptr) {
-    return llvm::make_error<llvm::StringError>(
-        llvm::formatv("Variable {0} is not in the NameToVar map", Name),
-        llvm::inconvertibleErrorCode());
-  }
-  NewTable->takeName(OldVar);
-  /// RAUW the new variable. We do a bitcast in case the type is different
-  OldVar->replaceAllUsesWith(
-      llvm::ConstantExpr::getBitCast(NewTable, OldVar->getType()));
+  for (auto *OldVar : NameToVar[Name]) {
+    auto *NewTable =
+        new llvm::GlobalVariable(M, Array->getType(), true,
+                                 llvm::GlobalValue::ExternalLinkage, Array, "");
+    NewTable->takeName(OldVar);
+    /// RAUW the new variable. We do a bitcast in case the type is different
+    OldVar->replaceAllUsesWith(
+        llvm::ConstantExpr::getBitCast(NewTable, OldVar->getType()));
 
-  OldVar->eraseFromParent();
+    OldVar->eraseFromParent();
+  }
   return llvm::Error::success();
 }
 
@@ -106,23 +107,26 @@ static llvm::Error replacePlaceholderVariable(
 static llvm::Error replacePlaceholderVariable(
     llvm::StringRef Name, llvm::PointerType *Type, uint64_t Size,
     llvm::ArrayRef<llvm::Constant *> TempArr, llvm::Module &M,
-    llvm::StringMap<llvm::GlobalVariable *> &NameToVar) {
+    llvm::StringMap<llvm::SmallVector<llvm::GlobalVariable *, 4>> &NameToVar) {
+  if (NameToVar[Name].empty()) {
+    return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                   "There is no annotated variable for " +
+                                       Name);
+  }
   llvm::Constant *Array =
       llvm::ConstantArray::get(llvm::ArrayType::get(Type, Size), TempArr);
   /// Replace old variable with the array
-  auto *NewTable = new llvm::GlobalVariable(
-      M, Array->getType(), true, llvm::GlobalValue::ExternalLinkage, Array, "");
-  auto *OldVar = NameToVar[Name];
-  if (OldVar == nullptr) {
-    return llvm::make_error<llvm::StringError>(
-        llvm::formatv("Variable {0} is not in the NameToVar map", Name),
-        llvm::inconvertibleErrorCode());
-  }
-  NewTable->takeName(OldVar);
-  OldVar->replaceAllUsesWith(
-      llvm::ConstantExpr::getBitCast(NewTable, OldVar->getType()));
 
-  OldVar->eraseFromParent();
+  for (auto *OldVar : NameToVar[Name]) {
+    auto *NewTable =
+        new llvm::GlobalVariable(M, Array->getType(), true,
+                                 llvm::GlobalValue::ExternalLinkage, Array, "");
+    NewTable->takeName(OldVar);
+    OldVar->replaceAllUsesWith(
+        llvm::ConstantExpr::getBitCast(NewTable, OldVar->getType()));
+
+    OldVar->eraseFromParent();
+  }
   return llvm::Error::success();
 }
 
@@ -133,20 +137,22 @@ static llvm::Error deleteModuleCtor(llvm::Module &M) {
   llvm::GlobalVariable *OldCtors = M.getGlobalVariable("llvm.global_ctors");
   /// If there are no global constructors there is nothing we should do
   if (!OldCtors)
-    return llvm::make_error<llvm::StringError>(
-        "llvm.global_ctors is not present in this file",
-        llvm::inconvertibleErrorCode());
+    return llvm::createStringError(
+        llvm::inconvertibleErrorCode(),
+        "llvm.global_ctors is not present in this file");
 
   if (!OldCtors->hasInitializer())
-    return llvm::make_error<llvm::StringError>("Missing initializer",
-                                               llvm::inconvertibleErrorCode());
+    return llvm::createStringError(
+        llvm::inconvertibleErrorCode(),
+        "llvm.global_ctors is missing the initializer");
 
   auto *CtorArray =
       llvm::dyn_cast<llvm::ConstantArray>(OldCtors->getInitializer());
-  if (!CtorArray)
-    return llvm::make_error<llvm::StringError>("Not a ConstantArray",
-                                               llvm::inconvertibleErrorCode());
 
+  if (!CtorArray)
+    return llvm::createStringError(
+        llvm::inconvertibleErrorCode(),
+        "llvm.global_ctors initializer is not a ConstantArray!");
   llvm::SmallVector<llvm::Constant *, 4> RemainingCtors;
   bool Found = false;
   /// We loop through all elements of the global ctor array and store them in a
@@ -235,7 +241,7 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
   if (T.getArch() == llvm::Triple::ArchType::amdgcn)
     return llvm::PreservedAnalyses::all();
   llvm::LLVMContext &C = M.getContext();
-  llvm::StringMap<llvm::GlobalVariable *> NameToVar{};
+  llvm::StringMap<llvm::SmallVector<llvm::GlobalVariable *, 4>> NameToVar{};
   LUTHIER_REPORT_FATAL_ON_ERROR(getAnnotatedValues(M, NameToVar));
 
   /// We get all the functions we need to process, for each one we loop over the
@@ -273,8 +279,10 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
   LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
       "luthier.loader.hip_fat_binaries_ptr", llvm::PointerType::getUnqual(C),
       HipFatBinariesSize, FatBinWrappers, M, NameToVar));
-  NameToVar["luthier.loader.hip_fat_binaries_size"]->setInitializer(
-      llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), HipFatBinariesSize));
+  for (auto *SizeVariable : NameToVar["luthier.loader.hip_fat_binaries_size"]) {
+    SizeVariable->setInitializer(
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), HipFatBinariesSize));
+  }
 
   if (RFUN) {
     /// Small vector holding the ConstantStructs we will use to construct the
@@ -283,9 +291,9 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
     /// We get the type of the info, if it doesn't exist (which it should) we
     /// construct it.
     llvm::StructType *FunInfoTy =
-        llvm::StructType::getTypeByName(C, "HipFunctionInfo");
+        llvm::StructType::getTypeByName(C, "struct.luthier::HipFunctionInfo");
     if (!FunInfoTy)
-      FunInfoTy = llvm::StructType::create("HipFunctionInfo",
+      FunInfoTy = llvm::StructType::create("struct.luthier::HipFunctionInfo",
                                            llvm::PointerType::getUnqual(C),
                                            llvm::PointerType::getUnqual(C));
     unsigned long long FunctionHandlesSize{};
@@ -308,16 +316,18 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
     LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
         "luthier.loader.hip_functions_ptr", FunInfoTy, FunctionHandlesSize,
         FunctionHandles, M, NameToVar));
-    NameToVar["luthier.loader.hip_functions_size"]->setInitializer(
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), FunctionHandlesSize));
+    for (auto *FunctionsSize : NameToVar["luthier.loader.hip_functions_size"]) {
+      FunctionsSize->setInitializer(llvm::ConstantInt::get(
+          llvm::Type::getInt64Ty(C), FunctionHandlesSize));
+    }
   }
 
   if (RMV) {
     llvm::StructType *ManagedVarTy =
-        llvm::StructType::getTypeByName(C, "HipManagedVarInfo");
+        llvm::StructType::getTypeByName(C, "struct.luthier::HipManagedVarInfo");
     if (!ManagedVarTy)
       ManagedVarTy = llvm::StructType::create(
-          "HipManagedVarInfo", llvm::PointerType::getUnqual(C),
+          "struct.luthier::HipManagedVarInfo", llvm::PointerType::getUnqual(C),
           llvm::PointerType::getUnqual(C), llvm::PointerType::getUnqual(C),
           llvm::IntegerType::getInt64Ty(C), llvm::IntegerType::getInt32Ty(C));
     llvm::SmallVector<llvm::Constant *, 10> ManagedVars{};
@@ -344,17 +354,20 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
     LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
         "luthier.loader.hip_managed_vars_ptr", ManagedVarTy, ManagedVarSize,
         ManagedVars, M, NameToVar));
-    NameToVar["luthier.loader.hip_managed_vars_size"]->setInitializer(
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), ManagedVarSize));
+    for (auto *ManagedSize :
+         NameToVar["luthier.loader.hip_managed_vars_size"]) {
+      ManagedSize->setInitializer(
+          llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), ManagedVarSize));
+    }
   }
 
   if (RDV) {
     /// FIXME: Should this be a normal vector?
     llvm::SmallVector<llvm::Constant *, 10> DeviceVars{};
     llvm::StructType *VarInfoTy =
-        llvm::StructType::getTypeByName(C, "HipDeviceVarInfo");
+        llvm::StructType::getTypeByName(C, "struct.luthier::HipDeviceVarInfo");
     if (!VarInfoTy)
-      VarInfoTy = llvm::StructType::create("HipDeviceVarInfo",
+      VarInfoTy = llvm::StructType::create("struct.luthier::HipDeviceVarInfo",
                                            llvm::PointerType::getUnqual(C),
                                            llvm::PointerType::getUnqual(C));
     unsigned long long DeviceVarsSize{};
@@ -373,17 +386,20 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
     LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
         "luthier.loader.hip_device_vars_ptr", VarInfoTy, DeviceVarsSize,
         DeviceVars, M, NameToVar));
-    NameToVar["luthier.loader.hip_device_vars_size"]->setInitializer(
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), DeviceVarsSize));
+    for (auto *DeviceVarSize :
+         NameToVar["luthier.loader.hip_device_vars_size"]) {
+      DeviceVarSize->setInitializer(
+          llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), DeviceVarsSize));
+    }
   }
 
   if (RTX) {
     /// FIXME: Should this be a normal vector?
     llvm::SmallVector<llvm::Constant *, 10> Textures{};
     llvm::StructType *TextureInfoTy =
-        llvm::StructType::getTypeByName(C, "HipTextureInfo");
+        llvm::StructType::getTypeByName(C, "struct.luthier::HipTextureInfo");
     if (!TextureInfoTy)
-      TextureInfoTy = llvm::StructType::create("HipTextureInfo",
+      TextureInfoTy = llvm::StructType::create("struct.luthier::HipTextureInfo",
                                                llvm::PointerType::getUnqual(C),
                                                llvm::PointerType::getUnqual(C));
     unsigned long long TexturesSize{};
@@ -402,17 +418,20 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
     LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
         "luthier.loader.hip_texture_vars_ptr", TextureInfoTy, TexturesSize,
         Textures, M, NameToVar));
-    NameToVar["luthier.loader.hip_texture_vars_size"]->setInitializer(
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), TexturesSize));
+    for (auto *TextureVarsSize :
+         NameToVar["luthier.loader.hip_texture_vars_size"]) {
+      TextureVarsSize->setInitializer(
+          llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), TexturesSize));
+    }
   }
 
   if (RSF) {
     /// FIXME: Should this be a normal vector?
     llvm::SmallVector<llvm::Constant *, 10> Surfaces{};
     llvm::StructType *SurfaceInfoTy =
-        llvm::StructType::getTypeByName(C, "HipSurfaceInfo");
+        llvm::StructType::getTypeByName(C, "struct.luthier::HipSurfaceInfo");
     if (!SurfaceInfoTy)
-      SurfaceInfoTy = llvm::StructType::create("HipSurfaceInfo",
+      SurfaceInfoTy = llvm::StructType::create("struct.luthier::HipSurfaceInfo",
                                                llvm::PointerType::getUnqual(C),
                                                llvm::PointerType::getUnqual(C));
     unsigned long long SurfacesSize{};
@@ -431,8 +450,11 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
     LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
         "luthier.loader.hip_surface_vars_ptr", SurfaceInfoTy, SurfacesSize,
         Surfaces, M, NameToVar));
-    NameToVar["luthier.loader.hip_surface_vars_size"]->setInitializer(
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), SurfacesSize));
+    for (auto *SurfaceVarsSize :
+         NameToVar["luthier.loader.hip_surface_vars_size"]) {
+      SurfaceVarsSize->setInitializer(
+          llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), SurfacesSize));
+    }
   }
   /// Make sure we remove the hip module Ctor from  llvm.global_ctors, not doing
   /// so the function cannot be deleted since it still would have a use

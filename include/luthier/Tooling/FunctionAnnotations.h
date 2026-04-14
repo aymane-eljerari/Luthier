@@ -83,47 +83,33 @@ static constexpr const char *IntrinsicAttribute =
 static constexpr const char *InjectedPayloadAttribute =
     LUTHIER_STRINGIFY(LUTHIER_INJECTED_PAYLOAD_ATTRIBUTE);
 
-static constexpr const char *EntryPointAddrAttr =
-    "luthier.function.entrypoint.addr";
+#define EntryPointAddrAttr      "luthier.function.entrypoint.addr"
 
-static constexpr const char *InitialEntryPointAttr =
-    "luthier.function.initial_entrypoint";
+#define InitialEntryPointAttr   "luthier.function.initial_entrypoint"
 
-static constexpr const char *HipFatBinariesPtrAttr =
-    "luthier.loader.hip_fat_binaries_ptr";
+#define HipFatBinariesPtrAttr   "luthier.loader.hip_fat_binaries_ptr"
 
-static constexpr const char *HipFatBinariesSizeAttr =
-    "luthier.loader.hip_fat_binaries_size";
+#define HipFatBinariesSizeAttr  "luthier.loader.hip_fat_binaries_size"
 
-static constexpr const char *HipFunctionsPtrAttr =
-    "luthier.loader.hip_functions_ptr";
+#define HipFunctionsPtrAttr     "luthier.loader.hip_functions_ptr"
 
-static constexpr const char *HipFunctionsSizeAttr =
-    "luthier.loader.hip_functions_size";
+#define HipFunctionsSizeAttr    "luthier.loader.hip_functions_size"
 
-static constexpr const char *HipDeviceVarsPtrAttr =
-    "luthier.loader.hip_device_vars_ptr";
+#define HipDeviceVarsPtrAttr    "luthier.loader.hip_device_vars_ptr"
 
-static constexpr const char *HipDeviceVarsSizeAttr =
-    "luthier.loader.hip_device_vars_size";
+#define HipDeviceVarsSizeAttr   "luthier.loader.hip_device_vars_size"
 
-static constexpr const char *HipManagedVarsPtrAttr =
-    "luthier.loader.hip_managed_vars_ptr";
+#define HipManagedVarsPtrAttr   "luthier.loader.hip_managed_vars_ptr"
 
-static constexpr const char *HipManagedVarsSizeAttr =
-    "luthier.loader.hip_managed_vars_size";
+#define HipManagedVarsSizeAttr  "luthier.loader.hip_managed_vars_size"
 
-static constexpr const char *HipTextureVarsPtrAttr =
-    "luthier.loader.hip_texture_vars_ptr";
+#define HipTextureVarsPtrAttr   "luthier.loader.hip_texture_vars_ptr"
 
-static constexpr const char *HipTextureVarsSizeAttr =
-    "luthier.loader.hip_texture_vars_size";
+#define HipTextureVarsSizeAttr  "luthier.loader.hip_texture_vars_size"
 
-static constexpr const char *HipSurfaceVarsPtrAttr =
-    "luthier.loader.hip_surface_vars_ptr";
+#define HipSurfaceVarsPtrAttr   "luthier.loader.hip_surface_vars_ptr"
 
-static constexpr const char *HipSurfaceVarsSizeAttr =
-    "luthier.loader.hip_surface_vars_size";
+#define HipSurfaceVarsSizeAttr  "luthier.loader.hip_surface_vars_size"
 
 /// \brief If a tool contains an instrumentation hook it \b must
 /// use this macro once. Luthier hooks are annotated via the
