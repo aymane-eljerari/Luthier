@@ -814,6 +814,9 @@ void MBBOperandTracker::setRegOperandValue(const llvm::MachineInstr &MI,
   invalidateOverlaps(Map, Reg, Builder);
   annotateUniformIfNeeded(Val, getTRI(), Reg);
   Map[Reg][Val->getType()] = Val;
+  const llvm::MachineFunction *MF = MBB->getParent();
+  assert(MF && "MBB has no parent function");
+  Val->setName(MF->getSubtarget().getRegisterInfo()->getName(Reg));
 }
 
 void MBBOperandTracker::setRegOperandValue(const llvm::MachineOperand &Op,
