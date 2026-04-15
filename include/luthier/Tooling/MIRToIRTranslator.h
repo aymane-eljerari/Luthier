@@ -23,6 +23,7 @@
 #include <GCNSubtarget.h>
 #include <SIInstrInfo.h>
 #include <llvm/ADT/DenseMap.h>
+#include <llvm/CodeGen/MachineDominators.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Value.h>
 #include <llvm/MC/MCRegister.h>
@@ -106,6 +107,15 @@ class MBBOperandTracker {
 
   const llvm::MachineFunction &MF;
 
+  llvm::MachineDominatorTree MDT{};
+
+  struct ToBeFixedVals {
+    llvm::Value *Val;
+    const llvm::MachineBasicBlock *MBB;
+    llvm::MCRegister Reg;
+  };
+
+  llvm::SmallVector<ToBeFixedVals> ToBeFixedVals{};
   BBValueMap VM{};
 
 public:

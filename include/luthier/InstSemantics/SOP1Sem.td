@@ -761,7 +761,7 @@ def S_FF0_I32_B32_sem : InstSISemantic<S_FF0_I32_B32> {
   let Semantic = [
     (DefVal $not_src, (LLVMXor (GetNamedOperand $src0),
                                 (ConstantInt si_llvm_i32_ty, -1))),
-    (DefVal $ctz, (LLVMUnaryIntrinsic int_cttz, (GetVal $not_src))),
+    (DefVal $ctz, (LLVMIntrinsic si_llvm_i32_ty, int_cttz, [(GetVal $not_src, si_llvm_i32_ty), (ConstantFalse si_llvm_i1_ty)])),
     (DefVal $result, (LLVMSelect
       (LLVMCmp LLVMICmpEQ, (GetVal $not_src), (ConstantInt si_llvm_i32_ty, 0)),
       (ConstantSignedInt si_llvm_i32_ty, -1),
@@ -787,7 +787,7 @@ def S_FF0_I32_B64_sem : InstSISemantic<S_FF0_I32_B64> {
   let Semantic = [
     (DefVal $not_src, (LLVMXor (GetNamedOperand $src0),
                                 (ConstantInt si_llvm_i64_ty, -1))),
-    (DefVal $ctz, (LLVMUnaryIntrinsic int_cttz, (GetVal $not_src))),
+    (DefVal $ctz, (LLVMIntrinsic si_llvm_i64_ty, int_cttz, [(GetVal $not_src, si_llvm_i64_ty), (ConstantFalse si_llvm_i1_ty)])),
     (DefVal $ctz32, (LLVMTrunc (GetVal $ctz), si_llvm_i32_ty)),
     (DefVal $result, (LLVMSelect
       (LLVMCmp LLVMICmpEQ, (GetVal $not_src), (ConstantInt si_llvm_i64_ty, 0)),
@@ -815,7 +815,7 @@ def S_FF0_I32_B64_sem : InstSISemantic<S_FF0_I32_B64> {
 //   (Renamed to S_CTZ_I32_B32 in RDNA3+: rdna4-instruction-set-architecture.pdf, page 231.)
 def S_FF1_I32_B32_sem : InstSISemantic<S_FF1_I32_B32> {
   let Semantic = [
-    (DefVal $ctz, (LLVMUnaryIntrinsic int_cttz, (GetNamedOperand $src0))),
+    (DefVal $ctz, (LLVMIntrinsic si_llvm_i32_ty, int_cttz, [(GetNamedOperand $src0, si_llvm_i32_ty), (ConstantFalse si_llvm_i1_ty)])),
     (DefVal $result, (LLVMSelect
       (LLVMCmp LLVMICmpEQ, (GetNamedOperand $src0), (ConstantInt si_llvm_i32_ty, 0)),
       (ConstantSignedInt si_llvm_i32_ty, -1),
@@ -839,7 +839,7 @@ def S_FF1_I32_B32_sem : InstSISemantic<S_FF1_I32_B32> {
 //   (Renamed to S_CTZ_I32_B64 in RDNA3+: rdna4-instruction-set-architecture.pdf, page 231.)
 def S_FF1_I32_B64_sem : InstSISemantic<S_FF1_I32_B64> {
   let Semantic = [
-    (DefVal $ctz, (LLVMUnaryIntrinsic int_cttz, (GetNamedOperand $src0))),
+    (DefVal $ctz, (LLVMIntrinsic si_llvm_i64_ty, int_cttz, [(GetNamedOperand $src0), (ConstantFalse si_llvm_i1_ty)])),
     (DefVal $ctz32, (LLVMTrunc (GetVal $ctz), si_llvm_i32_ty)),
     (DefVal $result, (LLVMSelect
       (LLVMCmp LLVMICmpEQ, (GetNamedOperand $src0), (ConstantInt si_llvm_i64_ty, 0)),

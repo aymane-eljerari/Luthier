@@ -263,6 +263,9 @@ void MBBOperandTracker::invalidateOverlaps(MCRegValueMap &Map,
                                            llvm::IRBuilder<> &Builder) {
   const llvm::SIRegisterInfo &TRI = getTRI();
 
+  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] invalidateOverlaps: "
+                          << TRI.getName(Reg) << "\n");
+
   struct Preserve {
     llvm::MCRegister SubReg;
     llvm::Value *Val;
@@ -278,6 +281,9 @@ void MBBOperandTracker::invalidateOverlaps(MCRegValueMap &Map,
 
     // Case 1: StoredReg ⊂ Reg — fully covered, just erase.
     if (unsigned SubIdx = TRI.getSubRegIndex(Reg, StoredReg); SubIdx != 0) {
+      LLVM_DEBUG(llvm::dbgs() << "  Case 1: " << TRI.getName(StoredReg)
+                              << " is sub-register of " << TRI.getName(Reg)
+                              << ", erasing\n");
       ToErase.push_back(StoredReg);
       continue;
     }
@@ -286,6 +292,10 @@ void MBBOperandTracker::invalidateOverlaps(MCRegValueMap &Map,
     // Bitcast super-reg value to a vector of sub-reg-sized elements and
     // extract the non-overlapping parts.
     if (unsigned SubIdx = TRI.getSubRegIndex(StoredReg, Reg); SubIdx != 0) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "  Case 2: " << TRI.getName(Reg) << " is sub-register of "
+                 << TRI.getName(StoredReg) << ", extracting preserved parts\n");
+      unsigned RegSize = TRI.getRegSizeInBits(*TRI.getMinimalPhysRegClass(Reg));
       for (llvm::MCSubRegIndexIterator SRII(StoredReg, &TRI); SRII.isValid();
            ++SRII) {
         llvm::MCRegister Sub = SRII.getSubReg();
@@ -296,6 +306,8 @@ void MBBOperandTracker::invalidateOverlaps(MCRegValueMap &Map,
         const llvm::TargetRegisterClass *SubRC =
             TRI.getMinimalPhysRegClass(Sub);
         unsigned SubSize = TRI.getRegSizeInBits(*SubRC);
+        if (SubSize != RegSize)
+          continue;
         unsigned Offset = TRI.getSubRegIdxOffset(SubSubIdx);
         unsigned ElemIdx = Offset / SubSize;
 
@@ -311,8 +323,26 @@ void MBBOperandTracker::invalidateOverlaps(MCRegValueMap &Map,
 
     // Case 3: Partial overlap, neither sub nor super - recursively erase
     // overlapping sub-regs
+    LLVM_DEBUG(llvm::dbgs()
+               << "  Case 3: partial overlap between " << TRI.getName(StoredReg)
+               << " and " << TRI.getName(Reg) << ", recursing\n");
     invalidateOverlaps(Map, getOverlappingSubReg(TRI, StoredReg, Reg), Builder);
   }
+
+  LLVM_DEBUG({
+    if (!ToErase.empty()) {
+      llvm::dbgs() << "  Erasing registers: ";
+      for (llvm::MCRegister R : ToErase)
+        llvm::dbgs() << TRI.getName(R) << " ";
+      llvm::dbgs() << "\n";
+    }
+    if (!ToPreserve.empty()) {
+      llvm::dbgs() << "  Preserving: ";
+      for (const Preserve &P : ToPreserve)
+        llvm::dbgs() << TRI.getName(P.SubReg) << " ";
+      llvm::dbgs() << "\n";
+    }
+  });
 
   for (llvm::MCRegister R : ToErase)
     Map.erase(R);
@@ -411,7 +441,7 @@ llvm::Value *MBBOperandTracker::tryComposeFromSubRegs(
     unsigned NumSubElems = P.Width / ElemWidth;
     for (unsigned I = 0; I < NumSubElems; ++I) {
       llvm::MCRegister SubReg =
-          TRI.getSubReg(Reg, TRI.getSubRegFromChannel(I, ElemWidth));
+          TRI.getSubReg(Reg, TRI.getSubRegFromChannel(I, NumSubElems));
       llvm::StringRef SubRegName = TRI.getName(SubReg);
       llvm::Value *SubVal =
           Builder.CreateExtractElement(PartVec, I, SubRegName);
@@ -448,9 +478,10 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
                                   llvm::MCRegister Reg, llvm::Type *RegType) {
   MCRegValueMap &Map = getMap(MBB);
   const llvm::SIRegisterInfo &TRI = getTRI();
-  const llvm::TargetRegisterClass *RC = TRI.getMinimalPhysRegClass(Reg);
-  assert(RC && "No register class for Reg");
-  unsigned RegSize = TRI.getRegSizeInBits(*RC);
+  unsigned RegSize =
+      Reg == llvm::AMDGPU::MODE
+          ? 32
+          : TRI.getRegSizeInBits(*TRI.getMinimalPhysRegClass(Reg));
   llvm::StringRef RegName = TRI.getName(Reg);
 
   LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
@@ -552,21 +583,12 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
                  "[MIRToIRTranslator] Creating PHI for "
                  "register {0} in MBB {1} with {2} predecessors\n",
                  RegName, MBB.getNumber(), MBB.pred_size()));
-  llvm::SmallVector<std::pair<llvm::Value *, llvm::BasicBlock *>> PhiVals;
-  PhiVals.reserve(MBB.pred_size());
-  for (llvm::MachineBasicBlock *Pred : MBB.predecessors()) {
-    if (Pred != &MBB || !MBB.isSuccessor(Pred)) {
-      llvm::Value &PredVal = materializeReg(*Pred, Reg, RegType);
-      auto *PredBB = const_cast<llvm::BasicBlock *>(Pred->getBasicBlock());
-      assert(PredBB && "Predecessor MBB has no IR basic block");
-      PhiVals.push_back({&PredVal, PredBB});
-    }
-  }
 
-  llvm::PHINode *Phi = Builder.CreatePHI(RegType, PhiVals.size(), RegName);
-  for (const auto &[V, B] : PhiVals)
-    Phi->addIncoming(V, B);
+  llvm::PHINode *Phi = Builder.CreatePHI(RegType, MBB.pred_size(), RegName);
 
+  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Emitted phi value " << *Phi
+                          << " for register " << RegName << " in basic block "
+                          << MBB.getNumber() << ".\n";);
   annotateUniformIfNeeded(Phi, TRI, Reg);
   Map[Reg][RegType] = Phi;
   return *Phi;
@@ -694,7 +716,8 @@ static void initKernelEntryRegs(const llvm::MachineFunction &MF,
                   Builder.getInt32Ty());
 }
 
-MBBOperandTracker::MBBOperandTracker(const llvm::MachineFunction &MF) : MF(MF) {
+MBBOperandTracker::MBBOperandTracker(const llvm::MachineFunction &MF)
+    : MF(MF), MDT(const_cast<llvm::MachineFunction &>(MF)) {
   for (const llvm::MachineBasicBlock &MBB : MF)
     VM.insert({std::ref(MBB), MCRegValueMap{}});
 
@@ -782,10 +805,10 @@ void MBBOperandTracker::setRegOperandValue(const llvm::MachineInstr &MI,
   llvm::IRBuilder Builder{BB};
 
   LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
-                 "[MIRToIRTranslator] Setting register value for {0} "
-                 "in MBB {1} (type: {2})\n",
+                 "[MIRToIRTranslator] Setting register {0} to value {3} for"
+                 "MBB {1} (type: {2})\n",
                  getTRI().getName(Reg), MBB->getNumber(),
-                 *Val->getType()->getScalarType()));
+                 *Val->getType()->getScalarType(), *Val));
 
   // Preserve non-overlapping portions of any partially-overwritten
   // super-registers, then erase fully-covered entries.
@@ -857,71 +880,74 @@ static void raiseMachineInstr(
         MF->getSubtarget<llvm::GCNSubtarget>().getRegisterInfo();
 
     struct RegOperandInfo {
-      unsigned MIOpIdx;
+      const llvm::MachineOperand *Op;
       unsigned InlineAsmIdx;
-      llvm::StringRef RegName;
       std::string Constraint;
-      bool IsImplicit;
-      bool IsDef;
     };
 
-    llvm::SmallVector<RegOperandInfo> RegOperands;
+    auto GetRegConstraint = [&](llvm::MCRegister Reg) -> std::string {
+      if (!TRI->isInAllocatableClass(Reg))
+        return "r";
+      const llvm::TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
+      if (llvm::SIRegisterInfo::isAGPRClass(RC)) {
+        return "a";
+      } else if (llvm::SIRegisterInfo::isVGPRClass(RC)) {
+        return "v";
+      } else if (llvm::SIRegisterInfo::isSGPRClass(RC)) {
+        return "s";
+      } else
+        return "r";
+    };
 
-    unsigned InlineAsmIdx = 0;
-    for (unsigned I = 0; I < MI.getNumOperands(); ++I) {
-      const llvm::MachineOperand &Op = MI.getOperand(I);
-      if (!Op.isReg())
+    llvm::SmallVector<RegOperandInfo> Defs;
+    llvm::SmallVector<RegOperandInfo> Uses;
+
+    unsigned OpIdx = 0;
+
+    for (const llvm::MachineOperand &Op : MI.all_defs()) {
+      /// TODO: Support MODE register
+      if (Op.getReg() == llvm::AMDGPU::MODE)
         continue;
-
-      llvm::StringRef RegName = TRI->getRegAsmName(Op.getReg());
-      std::string Constraint = [&] -> std::string {
-        const llvm::TargetRegisterClass *RC =
-            TRI->getMinimalPhysRegClass(Op.getReg());
-        if (llvm::SIRegisterInfo::isAGPRClass(RC)) {
-          return "a";
-        } else if (llvm::SIRegisterInfo::isVGPRClass(RC)) {
-          return "v";
-        } else if (llvm::SIRegisterInfo::isSGPRClass(RC)) {
-          return "s";
-        } else
-          return "r";
-      }();
-      if (Op.isDef()) {
-        Constraint = "=" + Constraint;
-      }
-
-      LLVM_DEBUG(llvm::dbgs()
-                 << "[MIRToIRTranslator] Operand info: "
-                 << "Op idx: " << I << ", " << "Reg name: " << RegName << ", "
-                 << "Inline assembly index: " << InlineAsmIdx
-                 << ", constraint: " << Constraint << ", is def: " << Op.isDef()
+      std::string RegConstraint = '=' + GetRegConstraint(Op.getReg().asMCReg());
+      LLVM_DEBUG(llvm::StringRef RegName = TRI->getRegAsmName(Op.getReg());
+                 llvm::dbgs()
+                 << "[MIRToIRTranslator] Def Operand info: "
+                 << "Op idx: " << OpIdx << ", "
+                 << "Reg name: " << RegName << ", constraint: " << RegConstraint
                  << ", is implicit: " << Op.isImplicit() << "\n");
 
-      RegOperands.push_back(
-          {I, InlineAsmIdx, RegName, Constraint, Op.isImplicit(), Op.isDef()});
-      ++InlineAsmIdx;
+      Defs.push_back({&Op, OpIdx, RegConstraint});
+      OpIdx++;
     }
 
-    llvm::sort(RegOperands, [](RegOperandInfo &LHS, RegOperandInfo &RHS) {
-      if (LHS.IsDef && !RHS.IsDef)
-        return true;
-      else if (!LHS.IsDef && RHS.IsDef)
-        return false;
-      else
-        return LHS.MIOpIdx < RHS.MIOpIdx;
-    });
+    for (const llvm::MachineOperand &Op : MI.all_uses()) {
+      /// TODO: Support MODE register
+      if (Op.getReg() == llvm::AMDGPU::MODE)
+        continue;
+      std::string RegConstraint = GetRegConstraint(Op.getReg().asMCReg());
+      LLVM_DEBUG(llvm::StringRef RegName = TRI->getRegAsmName(Op.getReg());
+                 llvm::dbgs()
+                 << "[MIRToIRTranslator] Use Operand info: "
+                 << "Op idx: " << OpIdx << ", "
+                 << "Reg name: " << RegName << ", constraint: " << RegConstraint
+                 << ", is implicit: " << Op.isImplicit() << "\n");
 
-    for (const auto &RegOp : RegOperands) {
+      Uses.push_back({&Op, OpIdx, RegConstraint});
+      OpIdx++;
+    }
+
+    for (const auto &RegOp : llvm::concat<RegOperandInfo>(Defs, Uses)) {
       size_t Pos = 0;
-      while ((Pos = AsmStr.find(RegOp.RegName, Pos)) != std::string::npos) {
-        AsmStr.replace(Pos, RegOp.RegName.size(),
-                       "%" + std::to_string(RegOp.InlineAsmIdx));
-        Pos += 2;
+      llvm::StringRef RegAsmName = TRI->getRegAsmName(RegOp.Op->getReg());
+      while ((Pos = AsmStr.find(RegAsmName, Pos)) != std::string::npos) {
+        std::string AsmOpIdxAsStr = llvm::formatv("${0}", RegOp.InlineAsmIdx);
+        AsmStr.replace(Pos, RegAsmName.size(), AsmOpIdxAsStr);
+        Pos += AsmOpIdxAsStr.size();
       }
     }
 
     std::string ConstraintStr;
-    for (const auto &RegOp : RegOperands) {
+    for (const auto &RegOp : llvm::concat<RegOperandInfo>(Defs, Uses)) {
       if (!ConstraintStr.empty())
         ConstraintStr += ",";
       ConstraintStr += RegOp.Constraint;
@@ -929,20 +955,28 @@ static void raiseMachineInstr(
 
     llvm::SmallVector<llvm::Value *, 8> Operands;
     llvm::SmallVector<llvm::Type *, 8> ArgTys;
-    for (const auto &RegOp : RegOperands) {
-      if (!RegOp.IsDef) {
-        llvm::Value &Val =
-            Tracker.getOperandAsValue(MI.getOperand(RegOp.MIOpIdx));
-        Operands.push_back(&Val);
-        ArgTys.push_back(Val.getType());
-      }
+    for (const auto &RegOp : Uses) {
+      llvm::Value &Val = Tracker.getOperandAsValue(*RegOp.Op);
+      Operands.push_back(&Val);
+      ArgTys.push_back(Val.getType());
     }
 
-    llvm::Type *RetTy = Builder.getVoidTy();
-    if (MI.getNumDefs() > 0) {
-      llvm::Value &FirstDef = Tracker.getOperandAsValue(*MI.all_defs().begin());
-      RetTy = FirstDef.getType();
-    }
+    llvm::Type *RetTy = [&] -> llvm::Type * {
+      unsigned NumDefs = Defs.size();
+      if (NumDefs == 0)
+        return Builder.getVoidTy();
+      else if (NumDefs == 1) {
+        return Builder.getIntNTy(TRI->getRegSizeInBits(
+            *TRI->getMinimalPhysRegClass(Defs[0].Op->getReg())));
+      } else {
+        llvm::SmallVector<llvm::Type *, 2> OutTypes;
+        for (const auto &Def : Defs) {
+          OutTypes.push_back(Builder.getIntNTy(TRI->getRegSizeInBits(
+              *TRI->getMinimalPhysRegClass(Def.Op->getReg()))));
+        }
+        return llvm::StructType::get(Builder.getContext(), OutTypes);
+      }
+    }();
 
     llvm::FunctionType *FTy = llvm::FunctionType::get(RetTy, ArgTys, false);
     llvm::InlineAsm *IA =
@@ -952,8 +986,13 @@ static void raiseMachineInstr(
     CI->addAttributeAtIndex(llvm::AttributeList::FunctionIndex,
                             llvm::Attribute::NoUnwind);
 
-    if (MI.getNumDefs() > 0) {
-      Tracker.setRegOperandValue(*MI.all_defs().begin(), CI);
+    if (Defs.size() == 1) {
+      Tracker.setRegOperandValue(*Defs[0].Op, CI);
+    } else if (Defs.size() > 1) {
+      for (const auto &[Idx, Def] : llvm::enumerate(Defs)) {
+        llvm::Value *DefVal = Builder.CreateExtractValue(CI, Idx);
+        Tracker.setRegOperandValue(*Def.Op, DefVal);
+      }
     }
     break;
   }
@@ -1112,6 +1151,8 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
   for (llvm::MachineBasicBlock &MBB : MF) {
     MBB.*get(TagBB()) = llvm::BasicBlock::Create(Ctx, "", &F);
   }
+  LLVM_DEBUG(llvm::dbgs() << "Before anything: "; F.dump();
+             llvm::dbgs() << "\n"; MF.dump(););
 
   MBBOperandTracker Tracker(MF);
 

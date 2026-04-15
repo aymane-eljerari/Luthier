@@ -225,8 +225,8 @@ def S_LSHL_B32_sem : InstSISemantic<S_LSHL_B32> {
 //   rdna4-instruction-set-architecture.pdf, page 219.
 def S_LSHL_B64_sem : InstSISemantic<S_LSHL_B64> {
   let Semantic = [
-    (DefVal $shifted, (LLVMShl (GetNamedOperand $src0),
-                                (LLVMAnd (GetNamedOperand $src1),
+    (DefVal $shifted, (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                                (LLVMAnd (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty),
                                          (ConstantInt si_llvm_i64_ty, 63)))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
                                       (ConstantInt si_llvm_i64_ty, 0))),
@@ -249,8 +249,8 @@ def S_LSHL_B64_sem : InstSISemantic<S_LSHL_B64> {
 //   rdna4-instruction-set-architecture.pdf, page 219.
 def S_LSHR_B32_sem : InstSISemantic<S_LSHR_B32> {
   let Semantic = [
-    (DefVal $shifted, (LLVMLShr (GetNamedOperand $src0),
-                                 (LLVMAnd (GetNamedOperand $src1),
+    (DefVal $shifted, (LLVMLShr (GetNamedOperand $src0, si_llvm_i32_ty),
+                                 (LLVMAnd (GetNamedOperand $src1, si_llvm_i32_ty),
                                           (ConstantInt si_llvm_i32_ty, 31)))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
                                       (ConstantInt si_llvm_i32_ty, 0))),
@@ -462,7 +462,9 @@ foreach op = ["And", "Or", "Xor"] in {
   foreach size = ["32", "64"] in {
     def S_#!toupper(op)#_B#size#_sem : InstSISemantic<!cast<InstSI>("S_"#!toupper(op)#"_B"#size)> {
       let Semantic =
-        [(SetNamedOperand $sdst, (!cast<LLVMOp>("LLVM"#op) (GetNamedOperand $src0), (GetNamedOperand $src1))),
+        [(SetNamedOperand $sdst, (!cast<LLVMOp>("LLVM"#op)
+          (GetNamedOperand $src0, !cast<SILLVMType>("si_llvm_i"#size#"_ty")),
+          (GetNamedOperand $src1, !cast<SILLVMType>("si_llvm_i"#size#"_ty")))),
          (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetNamedOperand $sdst), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0)))
         ];
     }

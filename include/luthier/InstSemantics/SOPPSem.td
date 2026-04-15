@@ -40,7 +40,7 @@
 //   rdna4-instruction-set-architecture.pdf, page 276.
 def S_NOP_sem : InstSISemantic<S_NOP> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_nop, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_nop, [(GetNamedOperand $simm16, si_llvm_i16_ty)])
   ];
 }
 
