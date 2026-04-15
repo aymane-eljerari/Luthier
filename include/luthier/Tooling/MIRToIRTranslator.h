@@ -107,15 +107,14 @@ class MBBOperandTracker {
 
   const llvm::MachineFunction &MF;
 
-  llvm::MachineDominatorTree MDT{};
-
-  struct ToBeFixedVals {
-    llvm::Value *Val;
+  struct ToBeFixedPhiInfo {
     const llvm::MachineBasicBlock *MBB;
     llvm::MCRegister Reg;
+    llvm::PHINode *Phi;
   };
 
-  llvm::SmallVector<ToBeFixedVals> ToBeFixedVals{};
+  llvm::SmallVector<ToBeFixedPhiInfo> ToBeFixedPhis{};
+
   BBValueMap VM{};
 
 public:
@@ -158,6 +157,8 @@ public:
   /// Returns the fall-through BasicBlock (next block after the current MI's
   /// block). If there is no next block, returns a poison value.
   llvm::BasicBlock *getNextBB(const llvm::MachineInstr &MI);
+
+  void fixupPhis();
 
 private:
   MCRegValueMap &getMap(const llvm::MachineBasicBlock &MBB) {

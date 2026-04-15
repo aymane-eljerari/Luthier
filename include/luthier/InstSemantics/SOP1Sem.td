@@ -33,7 +33,7 @@
 //   rdna4-instruction-set-architecture.pdf, page 230.
 def S_MOV_B32_sem : InstSISemantic<S_MOV_B32> {
   let Semantic = [
-    (SetNamedOperand $sdst, (GetNamedOperand $src0))
+    (SetNamedOperand $sdst, (GetNamedOperand $src0, si_llvm_i32_ty))
   ];
 }
 
@@ -52,7 +52,7 @@ def S_MOV_B32_sem : InstSISemantic<S_MOV_B32> {
 //   rdna4-instruction-set-architecture.pdf, page 230.
 def S_MOV_B64_sem : InstSISemantic<S_MOV_B64> {
   let Semantic = [
-    (SetNamedOperand $sdst, (GetNamedOperand $src0))
+    (SetNamedOperand $sdst, (GetNamedOperand $src0, si_llvm_i64_ty))
   ];
 }
 

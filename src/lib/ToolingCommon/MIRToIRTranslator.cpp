@@ -115,7 +115,7 @@ static llvm::Value *getOrCreateIntOrPtrTypeForReg(
   if (!VecIntOrPtrVal) {
     llvm::StringRef RegName = TRI.getName(Reg);
     auto &[T, V] = *ValueEntries.begin();
-    llvm::Type *OutTy = Builder.getIntNTy(T->getIntegerBitWidth());
+    llvm::Type *OutTy = Builder.getIntNTy(T->getPrimitiveSizeInBits());
     VecIntOrPtrVal = Builder.CreateBitOrPointerCast(V, OutTy, RegName);
     annotateUniformIfNeeded(VecIntOrPtrVal, TRI, Reg);
     ValueEntries[OutTy] = VecIntOrPtrVal;
@@ -584,7 +584,11 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
                  "register {0} in MBB {1} with {2} predecessors\n",
                  RegName, MBB.getNumber(), MBB.pred_size()));
 
+  if (!BB->empty())
+    Builder.SetInsertPoint(&BB->front());
   llvm::PHINode *Phi = Builder.CreatePHI(RegType, MBB.pred_size(), RegName);
+
+  ToBeFixedPhis.emplace_back(&MBB, Reg, Phi);
 
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Emitted phi value " << *Phi
                           << " for register " << RegName << " in basic block "
@@ -715,8 +719,7 @@ static void initKernelEntryRegs(const llvm::MachineFunction &MF,
                   Builder.getInt32Ty());
 }
 
-MBBOperandTracker::MBBOperandTracker(const llvm::MachineFunction &MF)
-    : MF(MF), MDT(const_cast<llvm::MachineFunction &>(MF)) {
+MBBOperandTracker::MBBOperandTracker(const llvm::MachineFunction &MF) : MF(MF) {
   for (const llvm::MachineBasicBlock &MBB : MF)
     VM.insert({std::ref(MBB), MCRegValueMap{}});
 
@@ -802,6 +805,14 @@ void MBBOperandTracker::setRegOperandValue(const llvm::MachineInstr &MI,
   auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
   assert(BB && "MBB has no IR basic block");
   llvm::IRBuilder Builder{BB};
+  const llvm::SIRegisterInfo &TRI = getTRI();
+  unsigned RegSize =
+      Reg == llvm::AMDGPU::MODE
+          ? 32
+          : TRI.getRegSizeInBits(*TRI.getMinimalPhysRegClass(Reg));
+
+  assert(Val->getType()->getPrimitiveSizeInBits() == RegSize &&
+         "Value type's size is not the same as the type of the register");
 
   LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
                  "[MIRToIRTranslator] Setting register {0} to value {3} for"
@@ -838,6 +849,20 @@ llvm::BasicBlock *MBBOperandTracker::getNextBB(const llvm::MachineInstr &MI) {
   assert(NextMBB && "MI doesn't have a fall-through block");
 
   return const_cast<llvm::BasicBlock *>(NextMBB->getBasicBlock());
+}
+
+void MBBOperandTracker::fixupPhis() {
+  while (!ToBeFixedPhis.empty()) {
+    decltype(ToBeFixedPhis)::iterator It = ToBeFixedPhis.begin();
+    for (const llvm::MachineBasicBlock *PredMBB : It->MBB->predecessors()) {
+      auto *PredBB = const_cast<llvm::BasicBlock *>(PredMBB->getBasicBlock());
+      if (!llvm::is_contained(It->Phi->blocks(), PredBB)) {
+        It->Phi->addIncoming(
+            &materializeReg(*PredMBB, It->Reg, It->Phi->getType()), PredBB);
+      }
+    }
+    ToBeFixedPhis.erase(It);
+  }
 }
 
 template <uint16_t Opcode>
@@ -1199,13 +1224,12 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
   /// Iterate over the MBBs in reverse post order (RPO) and raise the
   /// machine instructions in each MBB to LLVM IR. RPO guarantees that when
   /// we visit a block we have already visited its predecessors.
-  for (llvm::MachineBasicBlock *MBB :
-       llvm::ReversePostOrderTraversal(&*MF.begin())) {
+  for (llvm::MachineBasicBlock &MBB : MF) {
     LLVM_DEBUG(llvm::dbgs()
-               << "[MIRToIRTranslator] Processing MBB " << MBB->getNumber()
-               << " with " << MBB->size() << " instructions\n");
-    auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
-    for (llvm::MachineInstr &MI : *MBB) {
+               << "[MIRToIRTranslator] Processing MBB " << MBB.getNumber()
+               << " with " << MBB.size() << " instructions\n");
+    auto *BB = const_cast<llvm::BasicBlock *>(MBB.getBasicBlock());
+    for (llvm::MachineInstr &MI : MBB) {
       LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Translating MI: ";
                  MI.print(llvm::dbgs()); llvm::dbgs() << "\n");
       llvm::InstSimplifyFolder CF{MF.getDataLayout()};
@@ -1224,6 +1248,8 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
     /// they will not execute if the exec mask bit of the current thread is
     /// not zero
   }
+  /// Fixup all dangeling PHIs
+  Tracker.fixupPhis();
 
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Translation complete for '"
                           << MF.getName() << "': " << F.size()
