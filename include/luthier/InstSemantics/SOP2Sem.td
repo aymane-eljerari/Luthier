@@ -298,7 +298,7 @@ def S_LSHR_B64_sem : InstSISemantic<S_LSHR_B64> {
 def S_ASHR_I32_sem : InstSISemantic<S_ASHR_I32> {
   let Semantic = [
     (DefVal $shifted, (LLVMAShr (GetNamedOperand $src0),
-                                 (LLVMAnd (GetNamedOperand $src1),
+                                 (LLVMAnd (GetNamedOperand $src1, si_llvm_i32_ty),
                                           (ConstantInt si_llvm_i32_ty, 31)))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
                                       (ConstantInt si_llvm_i32_ty, 0))),
@@ -322,7 +322,7 @@ def S_ASHR_I32_sem : InstSISemantic<S_ASHR_I32> {
 def S_ASHR_I64_sem : InstSISemantic<S_ASHR_I64> {
   let Semantic = [
     (DefVal $shifted, (LLVMAShr (GetNamedOperand $src0),
-                                (LLVMAnd (GetNamedOperand $src1),
+                                (LLVMAnd (GetNamedOperand $src1, si_llvm_i64_ty),
                                          (ConstantInt si_llvm_i64_ty, 63)))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
                                       (ConstantInt si_llvm_i64_ty, 0))),

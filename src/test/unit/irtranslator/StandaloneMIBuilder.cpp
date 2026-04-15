@@ -61,7 +61,7 @@ static llvm::MCRegister getVGPRTuple(const llvm::SIRegisterInfo &TRI,
 //===----------------------------------------------------------------------===//
 
 llvm::Expected<StandaloneMIContext>
-StandaloneMIBuilder::build(const InstrProfile &Profile) {
+StandaloneMIBuilder::build(uint16_t Opcode) {
   StandaloneMIContext Ctx;
   Ctx.Ctx = std::make_unique<llvm::LLVMContext>();
   Ctx.Mod = std::make_unique<llvm::Module>("standalone_mi", *Ctx.Ctx);
@@ -70,9 +70,8 @@ StandaloneMIBuilder::build(const InstrProfile &Profile) {
 
   // Stub IR function (required by MachineFunction).
   auto *FTy = llvm::FunctionType::get(llvm::Type::getVoidTy(*Ctx.Ctx), false);
-  auto *F =
-      llvm::Function::Create(FTy, llvm::GlobalValue::ExternalLinkage,
-                             "standalone_" + Profile.Name.str(), Ctx.Mod.get());
+  auto *F = llvm::Function::Create(FTy, llvm::GlobalValue::ExternalLinkage,
+                                   "standalone_mi", Ctx.Mod.get());
   F->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
   F->addFnAttr("amdgpu-flat-work-group-size", "1,1");
   llvm::BasicBlock::Create(*Ctx.Ctx, "entry", F);
@@ -87,6 +86,73 @@ StandaloneMIBuilder::build(const InstrProfile &Profile) {
 
   auto *BB = MF.CreateMachineBasicBlock();
   MF.push_back(BB);
+
+  const llvm::MCInstrDesc &OpcodeDesc = TII.get(Opcode);
+
+  llvm::MachineInstrBuilder MIB = BuildMI(*BB, BB->end(), {}, OpcodeDesc);
+
+  // --- Analyze explicit operands ---
+  unsigned NumDefs = OpcodeDesc.getNumDefs();
+  unsigned NumOps = OpcodeDesc.getNumOperands();
+
+  for (unsigned I = 0; I < NumOps; ++I) {
+    const llvm::MCOperandInfo &OpInfo = OpcodeDesc.operands()[I];
+    OperandInfo OI;
+    OI.Idx = I;
+    OI.IsDef = I < NumDefs;
+    OI.IsReg = OpInfo.OperandType == llvm::MCOI::OPERAND_REGISTER;
+    OI.IsImm = OpInfo.OperandType == llvm::MCOI::OPERAND_IMMEDIATE;
+    OI.IsSGPR = false;
+    OI.IsVGPR = false;
+    OI.SizeBits = 32;
+    OI.RegClassID = OpInfo.RegClass;
+
+    if (OI.IsReg && OpInfo.RegClass != static_cast<unsigned>(-1)) {
+      const llvm::TargetRegisterClass *RC = TRI.getRegClass(OpInfo.RegClass);
+      OI.SizeBits = MRI->getRegClass(OpInfo.RegClass).getSizeInBits();
+
+      // Heuristic: AMDGPU SGPR classes have "SReg" or "SGPR" in name,
+      // VGPR classes have "VGPR" or "VReg".
+      llvm::StringRef ClassName = MRI->getRegClassName(&RC);
+      OI.IsSGPR = ClassName.contains("SReg") || ClassName.contains("SGPR");
+      OI.IsVGPR = ClassName.contains("VGPR") || ClassName.contains("VReg");
+    }
+
+    if (OI.IsDef)
+      P.Outputs.push_back(OI);
+    else
+      P.Inputs.push_back(OI);
+  }
+
+  // --- Implicit defs and uses ---
+  if (const llvm::MCPhysReg *ImpDefs = OpcodeDesc.implicit_defs()) {
+    for (; *ImpDefs; ++ImpDefs)
+      P.ImplicitDefs.push_back(llvm::MCRegister(*ImpDefs));
+  }
+  if (const llvm::MCPhysReg *ImpUses = OpcodeDesc.implicit_uses()) {
+    for (; *ImpUses; ++ImpUses)
+      P.ImplicitUses.push_back(llvm::MCRegister(*ImpUses));
+  }
+
+  // --- Memory access detection ---
+  P.Mem.MemKind = MemAccessInfo::None;
+  if (OpcodeDesc.mayLoad() || OpcodeDesc.mayStore()) {
+    // Determine memory kind from instruction name prefix.
+    if (P.Name.starts_with("S_LOAD") || P.Name.starts_with("S_STORE") ||
+        P.Name.starts_with("S_BUFFER") || P.Name.starts_with("S_SCRATCH") ||
+        P.Name.starts_with("S_ATOMIC"))
+      P.Mem.MemKind = MemAccessInfo::Buffer;
+    else if (P.Name.starts_with("DS_"))
+      P.Mem.MemKind = MemAccessInfo::LDS;
+    else if (P.Name.starts_with("FLAT_"))
+      P.Mem.MemKind = MemAccessInfo::Flat;
+    else if (P.Name.starts_with("GLOBAL_"))
+      P.Mem.MemKind = MemAccessInfo::Global;
+    else if (P.Name.starts_with("SCRATCH_"))
+      P.Mem.MemKind = MemAccessInfo::Scratch;
+    else if (P.Name.starts_with("BUFFER_"))
+      P.Mem.MemKind = MemAccessInfo::Buffer;
+  }
 
   // ====================================================================
   // Allocate physical registers for operands.
@@ -137,7 +203,6 @@ StandaloneMIBuilder::build(const InstrProfile &Profile) {
   // ====================================================================
   // Build the single MachineInstr.
   // ====================================================================
-  auto MIB = BuildMI(*BB, BB->end(), {}, TII.get(Profile.Opcode));
 
   // Defs (outputs).
   for (llvm::MCRegister Reg : Ctx.OutputRegs)
