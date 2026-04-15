@@ -492,7 +492,9 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
   auto *BB = const_cast<llvm::BasicBlock *>(MBB.getBasicBlock());
   assert(BB && "MBB does not have an IR basic block");
 
-  llvm::IRBuilder Builder{BB};
+  llvm::Instruction *TermInst = BB->getTerminator();
+  llvm::IRBuilder Builder =
+      TermInst ? llvm::IRBuilder{TermInst} : llvm::IRBuilder{BB};
   /// If the type of the register is not specified, we are going to assume
   /// integer type
   if (!RegType) {
@@ -808,7 +810,9 @@ void MBBOperandTracker::setRegOperandValue(const llvm::MachineInstr &MI,
   // Emit any extraction IR into the MBB's basic block.
   auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
   assert(BB && "MBB has no IR basic block");
-  llvm::IRBuilder Builder{BB};
+  llvm::Instruction *TermInst = BB->getTerminator();
+  llvm::IRBuilder Builder =
+      TermInst ? llvm::IRBuilder{TermInst} : llvm::IRBuilder{BB};
   const llvm::SIRegisterInfo &TRI = getTRI();
   unsigned RegSize =
       Reg == llvm::AMDGPU::MODE
@@ -1256,6 +1260,12 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
       Builder.SetInsertPoint(BB);
       raiseMachineInstr(MI, Builder, Tracker, AsmStrEmitter, RegNamePrinter);
     }
+    if (MBB.canFallThrough()) {
+      auto NextBB =
+          const_cast<llvm::BasicBlock *>(MBB.getNextNode()->getBasicBlock());
+      llvm::IRBuilder{BB}.CreateBr(NextBB);
+    }
+
     /// TODO: Emit branches at the end of vector instructions to indicate
     /// they will not execute if the exec mask bit of the current thread is
     /// not zero
