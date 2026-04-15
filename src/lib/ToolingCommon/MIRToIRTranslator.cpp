@@ -628,8 +628,7 @@ static void initKernelEntryRegs(const llvm::MachineFunction &MF,
     const llvm::TargetRegisterClass *RC = TRI.getMinimalPhysRegClass(Reg);
     unsigned BitWidth = TRI.getRegSizeInBits(*RC);
     return Builder.CreateFreeze(
-        llvm::PoisonValue::get(Builder.getIntNTy(BitWidth)),
-        llvm::formatv("kernel.arg.{0}", TRI.getName(Reg)));
+        llvm::PoisonValue::get(Builder.getIntNTy(BitWidth)), TRI.getName(Reg));
   };
 
   /// Emit a void-returning intrinsic whose result is a pointer, then

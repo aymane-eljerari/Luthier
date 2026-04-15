@@ -467,6 +467,42 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
     MFI->getUserSGPRInfo().allocKernargPreloadSGPRs(KDOnHost.kernarg_preload);
   }
 
+  /// Fix up some of the MFI fields that have a direct IR attribute but doesn't
+  /// get populated on creating the machine function
+
+  /// Workitem argument values
+  constexpr unsigned PackedMask = 0x3ff;
+  bool HasPackedTID = ST.hasFeature(llvm::AMDGPU::FeaturePackedTID);
+
+  if (!F->hasFnAttribute("amdgpu-no-workitem-id-x")) {
+    unsigned WorkItemXMask = HasPackedTID ? PackedMask : ~0u;
+    MFI->setWorkItemIDX(llvm::ArgDescriptor::createRegister(llvm::AMDGPU::VGPR0,
+                                                            WorkItemXMask));
+  }
+  if (!F->hasFnAttribute("amdgpu-no-workitem-id-y")) {
+    llvm::MCRegister WorkItemYReg =
+        HasPackedTID ? llvm::AMDGPU::VGPR0 : llvm::AMDGPU::VGPR1;
+    unsigned WorkItemYMask = HasPackedTID ? PackedMask << 10 : ~0u;
+    MFI->setWorkItemIDY(
+        llvm::ArgDescriptor::createRegister(WorkItemYReg, WorkItemYMask));
+  }
+
+  if (!F->hasFnAttribute("amdgpu-no-workitem-id-z")) {
+    llvm::MCRegister WorkItemZReg =
+        HasPackedTID ? llvm::AMDGPU::VGPR0 : llvm::AMDGPU::VGPR2;
+    unsigned WorkItemZMask = HasPackedTID ? PackedMask << 20 : ~0u;
+    MFI->setWorkItemIDZ(
+        llvm::ArgDescriptor::createRegister(WorkItemZReg, WorkItemZMask));
+  }
+
+  /// Workgroup IDs
+  if (!F->hasFnAttribute("amdgpu-no-workgroup-id-x"))
+    MFI->addWorkGroupIDX();
+  if (!F->hasFnAttribute("amdgpu-no-workgroup-id-y"))
+    MFI->addWorkGroupIDY();
+  if (!F->hasFnAttribute("amdgpu-no-workgroup-id-z"))
+    MFI->addWorkGroupIDZ();
+
   /// Kernel functions are 2^8 byte aligned
   MF.setAlignment(llvm::Align(256));
 
@@ -939,9 +975,6 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
         llvm::MachineOperand::CreateMBB(EntryInst->getParent()));
     EntryMBB->addSuccessor(EntryInst->getParent());
   }
-
-  LLVM_DEBUG(llvm::dbgs() << "*********************************************"
-                             "***************************\n");
 
   /// Freeze the set of reserved register because we will not do any register
   /// allocations here
