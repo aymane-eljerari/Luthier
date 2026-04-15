@@ -523,8 +523,8 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
                                   RegName, MBB.getNumber()));
       llvm::Value *CastVal =
           getOrCreateIntOrPtrTypeForReg(RegValueMap, Builder, TRI, Reg);
-      llvm::Value *Out =
-          Builder.CreateBitOrPointerCast(CastVal, RegType, RegName);
+      llvm::Value *Out = Builder.CreateBitOrPointerCast(CastVal, RegType,
+                                                        getRegValueName(Reg));
       annotateUniformIfNeeded(Out, TRI, Reg);
       Map[Reg][RegType] = Out;
       return *Out;
@@ -538,6 +538,7 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
                                 "from super-register in MBB {1}\n",
                                 RegName, MBB.getNumber()));
     annotateUniformIfNeeded(V, TRI, Reg);
+    V->setName(getRegValueName(Reg));
     Map[Reg][RegType] = V;
     return *V;
   }
@@ -549,6 +550,7 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
                                 "from sub-registers in MBB {1}\n",
                                 RegName, MBB.getNumber()));
     annotateUniformIfNeeded(V, TRI, Reg);
+    V->setName(getRegValueName(Reg));
     Map[Reg][RegType] = V;
     return *V;
   }
@@ -575,6 +577,7 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
                                 "MBB {0}, returning undef for register {1}\n",
                                 MBB.getNumber(), RegName));
     llvm::Value *Undef = llvm::UndefValue::get(RegType);
+    Undef->setName(getRegValueName(Reg));
     Map[Reg][RegType] = Undef;
     return *Undef;
   }
@@ -586,7 +589,8 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
 
   if (!BB->empty())
     Builder.SetInsertPoint(&BB->front());
-  llvm::PHINode *Phi = Builder.CreatePHI(RegType, MBB.pred_size(), RegName);
+  llvm::PHINode *Phi =
+      Builder.CreatePHI(RegType, MBB.pred_size(), getRegValueName(Reg));
 
   ToBeFixedPhis.emplace_back(&MBB, Reg, Phi);
 
@@ -827,7 +831,7 @@ void MBBOperandTracker::setRegOperandValue(const llvm::MachineInstr &MI,
   Map[Reg][Val->getType()] = Val;
   const llvm::MachineFunction *MF = MBB->getParent();
   assert(MF && "MBB has no parent function");
-  Val->setName(MF->getSubtarget().getRegisterInfo()->getName(Reg));
+  Val->setName(getRegValueName(Reg));
 }
 
 void MBBOperandTracker::setRegOperandValue(const llvm::MachineOperand &Op,
@@ -852,6 +856,7 @@ llvm::BasicBlock *MBBOperandTracker::getNextBB(const llvm::MachineInstr &MI) {
 }
 
 void MBBOperandTracker::fixupPhis() {
+  llvm::SmallVector<llvm::PHINode *> SingleValuePhis{};
   while (!ToBeFixedPhis.empty()) {
     decltype(ToBeFixedPhis)::iterator It = ToBeFixedPhis.begin();
     for (const llvm::MachineBasicBlock *PredMBB : It->MBB->predecessors()) {
@@ -861,7 +866,14 @@ void MBBOperandTracker::fixupPhis() {
             &materializeReg(*PredMBB, It->Reg, It->Phi->getType()), PredBB);
       }
     }
+    if (It->Phi->getNumIncomingValues() == 1)
+      SingleValuePhis.push_back(It->Phi);
     ToBeFixedPhis.erase(It);
+  }
+  for (llvm::PHINode *P : SingleValuePhis) {
+    llvm::Value *V = P->getIncomingValue(0);
+    P->replaceAllUsesWith(V);
+    P->eraseFromParent();
   }
 }
 

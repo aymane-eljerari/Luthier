@@ -161,6 +161,10 @@ public:
   void fixupPhis();
 
 private:
+  std::string getRegValueName(llvm::MCRegister Reg) {
+    return llvm::StringRef(getTRI().getName(Reg)).lower() + "_val";
+  }
+
   MCRegValueMap &getMap(const llvm::MachineBasicBlock &MBB) {
     auto It = VM.find(MBB);
     assert(It != VM.end() && "No value map for MBB");
