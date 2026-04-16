@@ -174,6 +174,8 @@ def LLVMCondBranch : LLVMOp<"CreateCondBr">;
 
 def LLVMIndirectBranch : LLVMOp<"CreateIndirectBr">;
 
+def LLVMCall : LLVMOp<"CreateCall">;
+
 //------------------------------------------------------------------------------
 // AtomicRMW Operation Enum Values
 //------------------------------------------------------------------------------
@@ -437,6 +439,14 @@ foreach size = [1, 2, 3, 4, 6, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096] i
         SILLVMType<"llvm::FixedVectorType::get("#float_ty.Builder#", "#size#")", size, float_ty.ElemSize, true>;
   }
 }
+
+class LLVMComplexType<string builder> {
+  string Builder = builder;
+}
+
+def LLVMFuncTy : LLVMComplexType<"llvm::FunctionType::get">;
+
+def LLVMStructTy : LLVMComplexType<"llvm::StructType::get">;
 
 /// Used to create super register operands. Super register records in LLVM backends don't get materialized
 /// in the tablegen source code; They instead get automatically generated in C++ by the CodeGenTarget class

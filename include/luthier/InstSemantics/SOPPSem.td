@@ -353,46 +353,37 @@ def S_ROUND_MODE_sem : InstSISemantic<S_ROUND_MODE> {
 //   (Introduced in GFX12, replacing S_WAITCNT.)
 def S_WAIT_KMCNT_sem : InstSISemantic<S_WAIT_KMCNT> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_kmcnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_kmcnt, [(GetNamedOperand $simm16, si_llvm_i16_ty)])
   ];
 }
 def S_WAIT_LOADCNT_sem : InstSISemantic<S_WAIT_LOADCNT> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_loadcnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_loadcnt, [(GetNamedOperand $simm16, si_llvm_i16_ty)])
   ];
 }
 def S_WAIT_STORECNT_sem : InstSISemantic<S_WAIT_STORECNT> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_storecnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_storecnt, [(GetNamedOperand $simm16, si_llvm_i16_ty)])
   ];
 }
 def S_WAIT_EXPCNT_sem : InstSISemantic<S_WAIT_EXPCNT> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_expcnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_expcnt, [(GetNamedOperand $simm16, si_llvm_i16_ty)])
   ];
 }
 def S_WAIT_DSCNT_sem : InstSISemantic<S_WAIT_DSCNT> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_dscnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_dscnt, [(GetNamedOperand $simm16, si_llvm_i16_ty)])
   ];
 }
 def S_WAIT_SAMPLECNT_sem : InstSISemantic<S_WAIT_SAMPLECNT> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_samplecnt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_samplecnt, [(GetNamedOperand $simm16, si_llvm_i16_ty)])
   ];
 }
 def S_WAIT_BVHCNT_sem : InstSISemantic<S_WAIT_BVHCNT> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_bvhcnt, [(GetNamedOperand $simm16)])
-  ];
-}
-
-// S_WAIT_IDLE: Wait for all outstanding operations.
-// Sources:
-//   rdna4-instruction-set-architecture.pdf, page 281.
-def S_WAIT_IDLE_sem : InstSISemantic<S_WAIT_IDLE> {
-  let Semantic = [
-    /// TODO: possibly model with Luthier intrinsic
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_bvhcnt, [(GetNamedOperand $simm16, si_llvm_i16_ty)])
   ];
 }
 
@@ -401,7 +392,7 @@ def S_WAIT_IDLE_sem : InstSISemantic<S_WAIT_IDLE> {
 //   rdna4-instruction-set-architecture.pdf, page 282.
 def S_BARRIER_WAIT_sem : InstSISemantic<S_BARRIER_WAIT> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_barrier_wait, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_barrier_wait, [(GetNamedOperand $simm16, si_llvm_i16_ty)])
   ];
 }
 

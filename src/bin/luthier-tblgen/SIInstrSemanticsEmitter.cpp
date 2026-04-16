@@ -29,8 +29,6 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
     llvm::raw_ostream &OS, const llvm::Init *Stmt,
     llvm::ArrayRef<llvm::SMLoc> Loc) {
   if (const auto *Dag = llvm::dyn_cast<llvm::DagInit>(Stmt)) {
-    Dag->print(llvm::errs());
-    llvm::errs() << "\n";
     const llvm::Record *Op = Dag->getOperatorAsDef(Loc);
     llvm::StringRef OpName = Op->getName();
     const llvm::RecordRecTy *OpClass = Op->getType();
@@ -116,7 +114,6 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
 
     // --- GetVal $name ---
     else if (OpName == "GetVal") {
-      llvm::errs() << "Getval: " << Dag->getArgNameStr(0) << "\n";
       OS << Dag->getArgNameStr(0);
     }
 
@@ -194,17 +191,17 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
          << ")";
     } else if (DefType->isSubClassOf(
                    Stmt->getRecordKeeper().getClass("SILLVMType"))) {
-      llvm::errs() << "Leaf type: " << DefNode->getDef()->getName() << "\n";
+      OS << DefNode->getDef()->getValueAsString("Builder");
+    } else if (DefType->isSubClassOf(
+                   Stmt->getRecordKeeper().getClass("LLVMComplexType"))) {
       OS << DefNode->getDef()->getValueAsString("Builder");
     } else if (DefType->isSubClassOf(
                    Stmt->getRecordKeeper().getClass("Intrinsic"))) {
-      llvm::errs() << "Leaf type: " << DefNode->getDef()->getName() << "\n";
       llvm::StringRef IntrinsicName = DefNode->getDef()->getName();
       if (!IntrinsicName.consume_front("int_")) {
         llvm::PrintFatalError(Loc, "Intrinsic record's name " + IntrinsicName +
                                        "does not start with 'int_'");
       }
-      llvm::errs() << "Final name of the intrinsic: " << IntrinsicName << "\n";
       OS << "llvm::Intrinsic::" << IntrinsicName;
     } else if (DefType->isSubClassOf(
                    Stmt->getRecordKeeper().getClass("SuperRegFactory"))) {
@@ -256,7 +253,6 @@ void SIInstrSemanticsEmitter::emitSemanticFunction(llvm::raw_ostream &OS,
   OS << "    const llvm::MachineInstr &MI, llvm::IRBuilderBase &Builder,\n";
   OS << "    MBBOperandTracker &Tracker) {\n";
 
-  llvm::errs() << "Record: " << Rec;
   for (const llvm::Init *El : SemList->getElements()) {
     const auto *StmtDag = llvm::dyn_cast<llvm::DagInit>(El);
     if (!StmtDag)
