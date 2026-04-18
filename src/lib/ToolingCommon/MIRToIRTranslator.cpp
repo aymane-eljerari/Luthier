@@ -505,6 +505,7 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
                                   RegName, MBB.getNumber()));
       llvm::Value *CastVal =
           getOrCreateIntOrPtrTypeForReg(RegValueMap, Builder, TRI, Reg);
+      CastVal->setName(getRegValueName(Reg));
       llvm::Value *Out = Builder.CreateBitOrPointerCast(CastVal, RegType,
                                                         getRegValueName(Reg));
       annotateUniformIfNeeded(Out, TRI, Reg);
@@ -990,7 +991,7 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
       /// Call instructions are not intended to fall through; Instead, we create
       /// a new function for it. Hence, at the IR level, the instruction
       /// after call instructions are unreachable in the current function
-      if (MBB.back().isCall()) {
+      if (!MBB.back().isCall()) {
         auto NextBB =
             const_cast<llvm::BasicBlock *>(MBB.getNextNode()->getBasicBlock());
         llvm::IRBuilder{BB}.CreateBr(NextBB);
