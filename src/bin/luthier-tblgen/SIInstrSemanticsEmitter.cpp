@@ -149,6 +149,14 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
           [&](const llvm::Init *Arg) { emitSemanticStatement(OS, Arg, Loc); },
           [&] { OS << ", "; });
       OS << ")";
+    } else if (OpClass->isSubClassOf(
+                   Stmt->getRecordKeeper().getClass("LLVMComplexType"))) {
+      OS << Op->getValueAsString("Builder") << "(";
+      llvm::interleave(
+          Dag->getArgs(),
+          [&](const llvm::Init *Arg) { emitSemanticStatement(OS, Arg, Loc); },
+          [&] { OS << ", "; });
+      OS << ")";
     } else {
       llvm::PrintFatalError(Loc, "Unhandled operand: " + OpName + ".");
     }
@@ -193,9 +201,6 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
                    Stmt->getRecordKeeper().getClass("SILLVMType"))) {
       OS << DefNode->getDef()->getValueAsString("Builder");
     } else if (DefType->isSubClassOf(
-                   Stmt->getRecordKeeper().getClass("LLVMComplexType"))) {
-      OS << DefNode->getDef()->getValueAsString("Builder");
-    } else if (DefType->isSubClassOf(
                    Stmt->getRecordKeeper().getClass("Intrinsic"))) {
       llvm::StringRef IntrinsicName = DefNode->getDef()->getName();
       if (!IntrinsicName.consume_front("int_")) {
@@ -224,10 +229,8 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
         [&] { OS << ", "; });
     OS << "}";
   } else if (auto *IntNode = llvm::dyn_cast<llvm::IntInit>(Stmt)) {
-    llvm::outs() << "Int node: " << IntNode->getValue() << "\n";
     OS << IntNode->getValue();
   } else if (auto *StrNode = llvm::dyn_cast<llvm::StringInit>(Stmt)) {
-    llvm::outs() << "String node: " << StrNode->getValue() << "\n";
     OS << StrNode->getValue();
   } else {
     llvm::PrintFatalError(Loc, "Unhandled node: " + Stmt->getAsString() + ".");
