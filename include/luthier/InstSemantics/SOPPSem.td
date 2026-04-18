@@ -617,18 +617,21 @@ def S_CBRANCH_CDBGUSER_pad_s_nop_sem : InstSISemantic<S_CBRANCH_CDBGUSER_pad_s_n
 //   rdna4-instruction-set-architecture.pdf, page 268.
 def S_ENDPGM_sem : InstSISemantic<S_ENDPGM> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_endpgm, []<dag>)
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_endpgm, []<dag>),
+    (LLVMUnreachable)
   ];
 }
 
 def S_ENDPGM_ORDERED_PS_DONE_sem : InstSISemantic<S_ENDPGM_ORDERED_PS_DONE> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_endpgm, []<dag>)
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_endpgm, []<dag>),
+    (LLVMUnreachable)
   ];
 }
 
 def S_ENDPGM_SAVED_sem : InstSISemantic<S_ENDPGM_SAVED> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_endpgm, []<dag>)
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_endpgm, []<dag>),
+    (LLVMUnreachable)
   ];
 }

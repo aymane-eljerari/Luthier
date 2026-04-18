@@ -176,6 +176,8 @@ def LLVMIndirectBranch : LLVMOp<"CreateIndirectBr">;
 
 def LLVMCall : LLVMOp<"CreateCall">;
 
+def LLVMUnreachable : LLVMOp<"CreateUnreachable">;
+
 //------------------------------------------------------------------------------
 // AtomicRMW Operation Enum Values
 //------------------------------------------------------------------------------
