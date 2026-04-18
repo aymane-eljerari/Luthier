@@ -128,7 +128,7 @@ void MIInlineAsmEmitter::emitInlineAsm(llvm::IRBuilderBase &Builder,
       continue;
     std::string RegConstraint = '=' + GetRegConstraint(Op.getReg().asMCReg());
 
-    LLVM_DEBUG(llvm::StringRef RegName = TRI->getRegAsmName(Op.getReg());
+    LLVM_DEBUG(llvm::StringRef RegName = TRI.getRegAsmName(Op.getReg());
                llvm::dbgs()
                << "[MIRToIRTranslator] Def Operand info: "
                << "Op idx: " << OpIdx << ", "
@@ -144,7 +144,7 @@ void MIInlineAsmEmitter::emitInlineAsm(llvm::IRBuilderBase &Builder,
       continue;
     std::string RegConstraint = GetRegConstraint(Op.getReg().asMCReg());
 
-    LLVM_DEBUG(llvm::StringRef RegName = TRI->getRegAsmName(Op.getReg());
+    LLVM_DEBUG(llvm::StringRef RegName = TRI.getRegAsmName(Op.getReg());
                llvm::dbgs()
                << "[MIRToIRTranslator] Use Operand info: "
                << "Op idx: " << OpIdx << ", "
