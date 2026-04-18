@@ -33,6 +33,8 @@
 #include <llvm/CodeGen/MachineFunctionAnalysis.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/ReachingDefAnalysis.h>
+#include <llvm/IR/InstIterator.h>
+#include <llvm/IR/IntrinsicsAMDGPU.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Module.h>
@@ -44,7 +46,8 @@
 // #include <luthier/Tooling/IndirectBranchResolverAnalysis.h>
 // #include <luthier/Tooling/MachineFunctionEntryPoint.h>
 #include "luthier/Tooling/MIRToIRTranslator.h"
-
+#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <unordered_set>
 
 #undef DEBUG_TYPE
@@ -1091,8 +1094,31 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
 
     /// TODO: IR translation and indirect branch/call analysis goes here
     LUTHIER_CTX_EMIT_ON_ERROR(Ctx, translateMachineFunctionToIR(MF));
-    /// Go over all unresolved trace terminator instructions and process them
-    /// accordingly
+
+    for (llvm::Instruction &I :
+         llvm::make_early_inc_range(llvm::instructions(MF.getFunction()))) {
+      if (auto *IntrinsicCall = llvm::dyn_cast<llvm::IntrinsicInst>(&I);
+          IntrinsicCall &&
+          IntrinsicCall->getIntrinsicID() == llvm::Intrinsic::amdgcn_s_getpc) {
+        if (llvm::MDNode *PCSections =
+                IntrinsicCall->getMetadata(llvm::LLVMContext::MD_pcsections)) {
+          std::optional<uint64_t> InstAddr =
+              llvm::cast<TargetMachineInstrMDNode>(PCSections)
+                  ->getTraceInstrAddress();
+          if (InstAddr.has_value()) {
+            auto *GetPCResult = llvm::ConstantInt::get(
+                llvm::IntegerType::getInt64Ty(Ctx), *InstAddr + 4, false);
+            I.replaceAllUsesWith(GetPCResult);
+            I.eraseFromParent();
+          }
+        }
+      }
+    }
+
+    llvm::InstCombinePass{}.run(MF.getFunction(), FAM);
+
+    /// Go over all unresolved trace terminator instructions and process
+    /// them accordingly
     LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Processing "
                             << UnresolvedTraceTermInstructions.size()
                             << " unresolved trace terminators\n");
