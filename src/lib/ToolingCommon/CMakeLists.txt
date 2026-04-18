@@ -56,6 +56,7 @@ add_library(LuthierToolingCommon OBJECT
         MockLoaderMemoryAccessor.cpp
         Metadata.cpp
         MIRToIRTranslator.cpp
+        MIInlineAsmEmitter.cpp
         NewPMAsmPrinter.cpp
         FunctionAnnotations.cpp
         #        IPReachingRefAnalysis.cpp

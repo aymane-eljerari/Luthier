@@ -1621,12 +1621,12 @@ def S_SWAPPC_B64_sem : InstSISemantic<S_SWAPPC_B64> {
   let Semantic = [
     (SetNamedOperand $sdst, (LLVMAdd (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_getpc, []<dag>),
                                      (ConstantInt si_llvm_i64_ty, 4))),
-    (LLVMCall (LLVMFuncTy si_llvm_void_ty), (GetNamedOperand $src0, global_ptr_ty))
+    (LLVMCall (LLVMFuncTy si_llvm_void_ty, false), (LLVMIntToPtr (GetNamedOperand $src0), global_ptr_ty))
   ];
 }
 
 def S_SETPC_B64_sem : InstSISemantic<S_SETPC_B64> {
   let Semantic = [
-    (LLVMCall (LLVMFuncTy si_llvm_void_ty), (GetNamedOperand $src0, global_ptr_ty))
+    (LLVMCall (LLVMFuncTy si_llvm_void_ty, false), (LLVMIntToPtr (GetNamedOperand $src0), global_ptr_ty))
   ];
 }

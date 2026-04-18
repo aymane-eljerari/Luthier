@@ -161,7 +161,7 @@ public:
   void fixupPhis();
 
 private:
-  std::string getRegValueName(llvm::MCRegister Reg) {
+  std::string getRegValueName(llvm::MCRegister Reg) const {
     return llvm::StringRef(getTRI().getName(Reg)).lower() + "_val";
   }
 

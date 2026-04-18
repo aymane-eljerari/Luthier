@@ -21,6 +21,7 @@
 #include "luthier/Common/DenseMapInfo.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
+#include "luthier/Tooling/MIInlineAsmEmitter.h"
 #include "luthier/Tooling/Metadata.h"
 #include "luthier/Tooling/TargetMachineInstrMDNode.h"
 #include <AMDGPUMachineFunction.h>
@@ -28,33 +29,28 @@
 #include <SIInstrInfo.h>
 #include <SIMachineFunctionInfo.h>
 #include <SIRegisterInfo.h>
-#include <limits>
-#include <llvm/ADT/DenseSet.h>
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/CodeGen/AsmPrinter.h>
 #include <llvm/CodeGen/LivePhysRegs.h>
 #include <llvm/CodeGen/MachineDominators.h>
 #include <llvm/CodeGen/MachineFunction.h>
-#include <llvm/CodeGen/MachineFunctionAnalysis.h>
 #include <llvm/CodeGen/MachineInstr.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
-#include <llvm/CodeGen/MachineRegisterInfo.h>
-#include <llvm/CodeGen/TargetSubtargetInfo.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/IntrinsicsAMDGPU.h>
-#include <llvm/IR/Module.h>
 #include <llvm/IR/ValueMap.h>
-#include <llvm/MC/MCAsmInfo.h>
-#include <llvm/MC/MCInstPrinter.h>
 #include <llvm/MC/TargetRegistry.h>
-#include <llvm/Support/MathExtras.h>
 
 #undef DEBUG_TYPE
 
 #define DEBUG_TYPE "luthier-mir-to-ir"
 
 namespace {
+template <typename Tag, typename Tag::type MemPtr> struct Access {
+  friend typename Tag::type get(Tag) { return MemPtr; }
+};
+
 /// Friend ADL trick to allow access to the private basic block field of
 /// machine basic block
 /// Unlike what LLVM assumes (IR comes after MIR), we have to construct the
@@ -65,23 +61,7 @@ struct TagBB {
   friend type get(TagBB);
 };
 
-template <typename Tag, typename Tag::type MemPtr> struct Access {
-  friend typename Tag::type get(Tag) { return MemPtr; }
-};
-
 template struct Access<TagBB, &llvm::MachineBasicBlock::BB>;
-
-/// Friend ADL trick to allow access to the private basic block field of
-/// machine basic block
-/// Unlike what LLVM assumes (IR comes after MIR), we have to construct the
-/// IR basic block after we have the machine basic block
-struct TagMF {
-  using type = llvm::MachineFunction *llvm::AsmPrinter::*;
-
-  friend type get(TagMF);
-};
-
-template struct Access<TagMF, &llvm::AsmPrinter::MF>;
 
 } // namespace
 
@@ -851,8 +831,6 @@ void MBBOperandTracker::setRegOperandValue(const llvm::MachineOperand &Op,
 llvm::BasicBlock *MBBOperandTracker::getNextBB(const llvm::MachineInstr &MI) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI does not have a basic block");
-  const llvm::MachineFunction *MF = MBB->getParent();
-  assert(MF && "MBB has no parent function");
   const llvm::MachineBasicBlock *NextMBB = MBB->getNextNode();
   assert(NextMBB && "MI doesn't have a fall-through block");
 
@@ -896,10 +874,8 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
 
 static void raiseMachineInstr(
     const llvm::MachineInstr &MI, llvm::IRBuilderBase &Builder,
-    MBBOperandTracker &Tracker,
-    const std::function<std::string(const llvm::MachineInstr &MI)>
-        &AsmStringPrinter,
-    const std::function<std::string(llvm::MCRegister)> &AsmRegPrinter) {
+                              MBBOperandTracker &Tracker,
+                              MIInlineAsmEmitter &InlineAsmEmitter) {
   switch (MI.getOpcode()) {
 
 #include "SIInstrSemantics.inc"
@@ -908,136 +884,7 @@ static void raiseMachineInstr(
     LLVM_DEBUG(llvm::dbgs()
                << "[MIRToIRTranslator] Unmodelled instruction " << MI << "\n");
 
-    std::string AsmStr = AsmStringPrinter(MI);
-
-    LLVM_DEBUG(llvm::dbgs()
-               << "[MIRToIRTranslator] Obtained instruction asm string: "
-               << AsmStr << "\n");
-
-    const llvm::MachineBasicBlock *MBB = MI.getParent();
-    assert(MBB && "MI doesn't have a basic block");
-    const llvm::MachineFunction *MF = MBB->getParent();
-    assert(MF && "MBB has no parent function");
-
-    const llvm::SIRegisterInfo *TRI =
-        MF->getSubtarget<llvm::GCNSubtarget>().getRegisterInfo();
-
-    struct RegOperandInfo {
-      const llvm::MachineOperand *Op;
-      unsigned InlineAsmIdx;
-      std::string Constraint;
-    };
-
-    auto GetRegConstraint = [&](llvm::MCRegister Reg) -> std::string {
-      if (!TRI->isInAllocatableClass(Reg))
-        return "r";
-      const llvm::TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
-      if (llvm::SIRegisterInfo::isAGPRClass(RC)) {
-        return "a";
-      } else if (llvm::SIRegisterInfo::isVGPRClass(RC)) {
-        return "v";
-      } else if (llvm::SIRegisterInfo::isSGPRClass(RC)) {
-        return "s";
-      } else
-        return "r";
-    };
-
-    llvm::SmallVector<RegOperandInfo> Defs;
-    llvm::SmallVector<RegOperandInfo> Uses;
-
-    unsigned OpIdx = 0;
-
-    for (const llvm::MachineOperand &Op : MI.all_defs()) {
-      /// TODO: Support MODE register
-      if (Op.getReg() == llvm::AMDGPU::MODE)
-        continue;
-      std::string RegConstraint = '=' + GetRegConstraint(Op.getReg().asMCReg());
-      LLVM_DEBUG(llvm::StringRef RegName = TRI->getRegAsmName(Op.getReg());
-                 llvm::dbgs()
-                 << "[MIRToIRTranslator] Def Operand info: "
-                 << "Op idx: " << OpIdx << ", "
-                 << "Reg name: " << RegName << ", constraint: " << RegConstraint
-                 << ", is implicit: " << Op.isImplicit() << "\n");
-
-      Defs.push_back({&Op, OpIdx, RegConstraint});
-      OpIdx++;
-    }
-
-    for (const llvm::MachineOperand &Op : MI.all_uses()) {
-      /// TODO: Support MODE register
-      if (Op.getReg() == llvm::AMDGPU::MODE)
-        continue;
-      std::string RegConstraint = GetRegConstraint(Op.getReg().asMCReg());
-      LLVM_DEBUG(llvm::StringRef RegName = TRI->getRegAsmName(Op.getReg());
-                 llvm::dbgs()
-                 << "[MIRToIRTranslator] Use Operand info: "
-                 << "Op idx: " << OpIdx << ", "
-                 << "Reg name: " << RegName << ", constraint: " << RegConstraint
-                 << ", is implicit: " << Op.isImplicit() << "\n");
-
-      Uses.push_back({&Op, OpIdx, RegConstraint});
-      OpIdx++;
-    }
-
-    for (const auto &RegOp : llvm::concat<RegOperandInfo>(Defs, Uses)) {
-      size_t Pos = 0;
-      llvm::StringRef RegAsmName = TRI->getRegAsmName(RegOp.Op->getReg());
-      while ((Pos = AsmStr.find(RegAsmName, Pos)) != std::string::npos) {
-        std::string AsmOpIdxAsStr = llvm::formatv("${0}", RegOp.InlineAsmIdx);
-        AsmStr.replace(Pos, RegAsmName.size(), AsmOpIdxAsStr);
-        Pos += AsmOpIdxAsStr.size();
-      }
-    }
-
-    std::string ConstraintStr;
-    for (const auto &RegOp : llvm::concat<RegOperandInfo>(Defs, Uses)) {
-      if (!ConstraintStr.empty())
-        ConstraintStr += ",";
-      ConstraintStr += RegOp.Constraint;
-    }
-
-    llvm::SmallVector<llvm::Value *, 8> Operands;
-    llvm::SmallVector<llvm::Type *, 8> ArgTys;
-    for (const auto &RegOp : Uses) {
-      llvm::Value &Val = Tracker.getOperandAsValue(*RegOp.Op);
-      Operands.push_back(&Val);
-      ArgTys.push_back(Val.getType());
-    }
-
-    llvm::Type *RetTy = [&] -> llvm::Type * {
-      unsigned NumDefs = Defs.size();
-      if (NumDefs == 0)
-        return Builder.getVoidTy();
-      else if (NumDefs == 1) {
-        return Builder.getIntNTy(TRI->getRegSizeInBits(
-            *TRI->getMinimalPhysRegClass(Defs[0].Op->getReg())));
-      } else {
-        llvm::SmallVector<llvm::Type *, 2> OutTypes;
-        for (const auto &Def : Defs) {
-          OutTypes.push_back(Builder.getIntNTy(TRI->getRegSizeInBits(
-              *TRI->getMinimalPhysRegClass(Def.Op->getReg()))));
-        }
-        return llvm::StructType::get(Builder.getContext(), OutTypes);
-      }
-    }();
-
-    llvm::FunctionType *FTy = llvm::FunctionType::get(RetTy, ArgTys, false);
-    llvm::InlineAsm *IA =
-        llvm::InlineAsm::get(FTy, AsmStr, ConstraintStr, true);
-
-    llvm::CallInst *CI = Builder.CreateCall(IA, Operands);
-    CI->addAttributeAtIndex(llvm::AttributeList::FunctionIndex,
-                            llvm::Attribute::NoUnwind);
-
-    if (Defs.size() == 1) {
-      Tracker.setRegOperandValue(*Defs[0].Op, CI);
-    } else if (Defs.size() > 1) {
-      for (const auto &[Idx, Def] : llvm::enumerate(Defs)) {
-        llvm::Value *DefVal = Builder.CreateExtractValue(CI, Idx);
-        Tracker.setRegOperandValue(*Def.Op, DefVal);
-      }
-    }
-    break;
+    InlineAsmEmitter.emitInlineAsm(Builder, MI, Tracker);
   }
   }
 }
@@ -1056,43 +903,12 @@ llvm::Error translateSingleInstr(const llvm::MachineInstr &MI,
   if (!MF)
     return LUTHIER_MAKE_GENERIC_ERROR("MBB has no parent MF");
 
-  auto &TM = const_cast<llvm::TargetMachine &>(MF->getTarget());
-  llvm::MCContext ExtMCCtx(TM.getTargetTriple(), TM.getMCAsmInfo(),
-                           TM.getMCRegisterInfo(), TM.getMCSubtargetInfo(),
-                           nullptr, &TM.Options.MCOptions, false);
+  std::unique_ptr<MIInlineAsmEmitter> InlineAsmEmitter;
 
-  llvm::SmallString<50> AsmString;
-  llvm::raw_svector_ostream OS(AsmString);
-
-  llvm::Expected<std::unique_ptr<llvm::MCStreamer>> MCSOrErr =
-      TM.createMCStreamer(OS, nullptr, llvm::CodeGenFileType::AssemblyFile,
-                          ExtMCCtx);
-  LUTHIER_RETURN_ON_ERROR(MCSOrErr.takeError());
-
-  llvm::AsmPrinter *AsmPrinter =
-      MF->getTarget().getTarget().createAsmPrinter(TM, std::move(*MCSOrErr));
-  if (!AsmPrinter)
-    return LUTHIER_MAKE_GENERIC_ERROR(
-        "Failed to create assembly printer for emitting instructions that are "
-        "not modelled");
-
-  auto AsmStrEmitter = [&](const llvm::MachineInstr &MI) {
-    AsmPrinter->emitInstruction(&MI);
-    std::string Out{AsmString};
-    AsmString.clear();
-    return Out;
-  };
-
-  std::unique_ptr<llvm::MCInstPrinter> IP(TM.getTarget().createMCInstPrinter(
-      TM.getTargetTriple(), TM.getMCAsmInfo()->getAssemblerDialect(),
-      *TM.getMCAsmInfo(), *TM.getMCInstrInfo(), *TM.getMCRegisterInfo()));
-
-  auto RegNamePrinter = [&](llvm::MCRegister Reg) {
-    std::string Out;
-    llvm::raw_string_ostream RegOS(Out);
-    IP->printRegName(RegOS, Reg);
-    return Out;
-  };
+  LUTHIER_RETURN_ON_ERROR(
+      MIInlineAsmEmitter::get(
+          const_cast<llvm::TargetMachine &>(MF->getTarget()))
+          .moveInto(InlineAsmEmitter));
 
   LLVM_DEBUG(
       llvm::dbgs() << "[MIRToIRTranslator] Translating single instruction in '"
@@ -1104,7 +920,7 @@ llvm::Error translateSingleInstr(const llvm::MachineInstr &MI,
   for (const auto &[Reg, Val] : InputRegs)
     Tracker.seedRegValue(*MBB, Reg, Val);
 
-  raiseMachineInstr(MI, Builder, Tracker, AsmStrEmitter, RegNamePrinter);
+  raiseMachineInstr(MI, Builder, Tracker, *InlineAsmEmitter);
 
   // Extract output register values from the tracker.
   for (const llvm::MachineOperand &Def : MI.all_defs()) {
@@ -1119,61 +935,6 @@ llvm::Error translateSingleInstr(const llvm::MachineInstr &MI,
 
   return llvm::Error::success();
 }
-
-// llvm::SmallVector<llvm::MCRegister>
-// getISAVisibleRegisters(const llvm::MachineFunction &MF) {
-//   llvm::SmallVector<llvm::MCRegister> Registers;
-//
-//   const auto &STI = MF.getSubtarget<llvm::GCNSubtarget>();
-//   const auto &TRI = *STI.getRegisterInfo();
-//
-//   const llvm::Function &F = MF.getFunction();
-//   unsigned NumAGPRs = STI.getMaxNumAGPRs(F);
-//   unsigned NumVGPRs = STI.getMaxNumVGPRs(F);
-//   unsigned NumSGPRs = STI.getMaxNumSGPRs(F);
-//
-//   llvm::BitVector ReservedRegs = TRI.getReservedRegs(MF);
-//
-//   auto addRegIfNotReserved = [&](llvm::MCRegister Reg) {
-//     if (!ReservedRegs.test(Reg))
-//       Registers.push_back(Reg);
-//   };
-//
-//   auto addRegClass32 = [&](const llvm::TargetRegisterClass &RC,
-//                            unsigned Count) {
-//     for (unsigned I = 0; I < Count; ++I) {
-//       addRegIfNotReserved(RC.getRegister(I));
-//     }
-//   };
-//
-//   const auto *VGPR32RC = TRI.getVGPRClassForBitWidth(32);
-//   const auto *AGPR32RC = llvm::SIRegisterInfo::getSGPRClassForBitWidth(32);
-//   if (AGPR32RC) {
-//     AGPR32RC = TRI.getAGPRClassForBitWidth(32);
-//   }
-//   const auto *SGPR32RC = llvm::SIRegisterInfo::getSGPRClassForBitWidth(32);
-//
-//   if (VGPR32RC && NumVGPRs != std::numeric_limits<unsigned>::max())
-//     addRegClass32(*VGPR32RC, NumVGPRs);
-//
-//   if (AGPR32RC && NumAGPRs != std::numeric_limits<unsigned>::max())
-//     addRegClass32(*AGPR32RC, NumAGPRs);
-//
-//   if (SGPR32RC && NumSGPRs != std::numeric_limits<unsigned>::max())
-//     addRegClass32(*SGPR32RC, NumSGPRs);
-//
-//   addRegIfNotReserved(TRI.getVCC());
-//   addRegIfNotReserved(TRI.getExec());
-//   addRegIfNotReserved(llvm::AMDGPU::SCC);
-//   addRegIfNotReserved(llvm::AMDGPU::M0);
-//   addRegIfNotReserved(llvm::AMDGPU::MODE);
-//
-//   addRegIfNotReserved(llvm::AMDGPU::FLAT_SCR_LO);
-//   addRegIfNotReserved(llvm::AMDGPU::FLAT_SCR_HI);
-//   addRegIfNotReserved(llvm::AMDGPU::FLAT_SCR);
-//
-//   return Registers;
-// }
 
 llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
   llvm::Function &F = MF.getFunction();
@@ -1194,52 +955,17 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
   for (llvm::MachineBasicBlock &MBB : MF) {
     MBB.*get(TagBB()) = llvm::BasicBlock::Create(Ctx, "", &F);
   }
-  LLVM_DEBUG(llvm::dbgs() << "Before anything: "; F.dump();
-             llvm::dbgs() << "\n"; MF.dump(););
 
   MBBOperandTracker Tracker(MF);
 
-  auto &TM = const_cast<llvm::TargetMachine &>(MF.getTarget());
-  llvm::MCContext ExtMCCtx(TM.getTargetTriple(), TM.getMCAsmInfo(),
-                           TM.getMCRegisterInfo(), TM.getMCSubtargetInfo(),
-                           nullptr, &TM.Options.MCOptions, false);
+  std::unique_ptr<MIInlineAsmEmitter> InlineAsmEmitter;
 
-  llvm::SmallString<50> AsmString;
-  llvm::raw_svector_ostream OS(AsmString);
+  LUTHIER_RETURN_ON_ERROR(
+      MIInlineAsmEmitter::get(const_cast<llvm::TargetMachine &>(MF.getTarget()))
+          .moveInto(InlineAsmEmitter));
 
-  llvm::Expected<std::unique_ptr<llvm::MCStreamer>> MCSOrErr =
-      TM.createMCStreamer(OS, nullptr, llvm::CodeGenFileType::AssemblyFile,
-                          ExtMCCtx);
-  LUTHIER_RETURN_ON_ERROR(MCSOrErr.takeError());
-
-  llvm::AsmPrinter *AsmPrinter =
-      MF.getTarget().getTarget().createAsmPrinter(TM, std::move(*MCSOrErr));
-  if (!AsmPrinter)
-    return LUTHIER_MAKE_GENERIC_ERROR(
-        "Failed to create assembly printer for emitting instructions that are "
-        "not modelled");
-
-  AsmPrinter->*get(TagMF()) = &MF;
-  auto AsmStrEmitter = [&](const llvm::MachineInstr &MI) {
-    AsmPrinter->emitInstruction(&MI);
-    std::string Out{AsmString};
-    AsmString.clear();
-    return Out;
-  };
-
-  std::unique_ptr<llvm::MCInstPrinter> IP(TM.getTarget().createMCInstPrinter(
-      TM.getTargetTriple(), TM.getMCAsmInfo()->getAssemblerDialect(),
-      *TM.getMCAsmInfo(), *TM.getMCInstrInfo(), *TM.getMCRegisterInfo()));
-  auto RegNamePrinter = [&](llvm::MCRegister Reg) {
-    std::string Out;
-    llvm::raw_string_ostream RegOS(Out);
-    IP->printRegName(RegOS, Reg);
-    return Out;
-  };
-
-  /// Iterate over the MBBs in reverse post order (RPO) and raise the
-  /// machine instructions in each MBB to LLVM IR. RPO guarantees that when
-  /// we visit a block we have already visited its predecessors.
+  /// Iterate over the MBBs and raise the machine instructions in each MBB to
+  /// LLVM IR
   for (llvm::MachineBasicBlock &MBB : MF) {
     LLVM_DEBUG(llvm::dbgs()
                << "[MIRToIRTranslator] Processing MBB " << MBB.getNumber()
@@ -1258,12 +984,21 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
       });
       llvm::IRBuilderBase Builder(Ctx, CF, Inserter, {}, {});
       Builder.SetInsertPoint(BB);
-      raiseMachineInstr(MI, Builder, Tracker, AsmStrEmitter, RegNamePrinter);
+      raiseMachineInstr(MI, Builder, Tracker, *InlineAsmEmitter);
     }
     if (MBB.canFallThrough()) {
-      auto NextBB =
-          const_cast<llvm::BasicBlock *>(MBB.getNextNode()->getBasicBlock());
-      llvm::IRBuilder{BB}.CreateBr(NextBB);
+      /// Call instructions are not intended to fall through; Instead, we create
+      /// a new function for it. Hence, at the IR level, the instruction
+      /// after call instructions are unreachable in the current function
+      if (MBB.back().isCall()) {
+        auto NextBB =
+            const_cast<llvm::BasicBlock *>(MBB.getNextNode()->getBasicBlock());
+        llvm::IRBuilder{BB}.CreateBr(NextBB);
+      } else {
+        llvm::IRBuilder Builder(
+            const_cast<llvm::BasicBlock *>(MBB.getBasicBlock()));
+        Builder.CreateUnreachable();
+      }
     }
 
     /// TODO: Emit branches at the end of vector instructions to indicate
@@ -1274,7 +1009,7 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
   Tracker.fixupPhis();
 
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Translation complete for '"
-                          << MF.getName() << "': " << F.size()
+                          << F.getName() << "': " << F.size()
                           << " basic blocks\n");
 
   return llvm::Error::success();
