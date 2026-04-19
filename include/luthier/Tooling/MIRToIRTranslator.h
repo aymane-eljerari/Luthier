@@ -128,6 +128,10 @@ class MIRToIRTranslator {
 public:
   explicit MIRToIRTranslator(const llvm::MachineFunction &MF);
 
+  llvm::Value &getOperandAsValue(const llvm::MachineInstr &MI,
+                                 llvm::AMDGPU::OpName OpName,
+                                 llvm::Type *RegType = nullptr);
+
   llvm::Value &getOperandAsValue(const llvm::MachineOperand &Op,
                                  llvm::Type *RegType = nullptr);
 

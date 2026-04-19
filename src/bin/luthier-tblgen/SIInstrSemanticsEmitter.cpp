@@ -93,10 +93,7 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
     // --- GetNamedOperand $name ---
     else if (OpName == "GetNamedOperand") {
       llvm::StringRef ArgName = Dag->getArgNameStr(0);
-      OS << "&Tracker.getOperandAsValue("
-         << "*Tracker.getTII().getNamedOperand(MI, "
-            "llvm::AMDGPU::OpName::"
-         << ArgName << ")";
+      OS << "&Tracker.getOperandAsValue(MI, llvm::AMDGPU::OpName::" << ArgName << ")";
       if (Dag->getNumArgs() > 1) {
         OS << ", ";
         emitSemanticStatement(OS, Dag->getArg(1), Loc);

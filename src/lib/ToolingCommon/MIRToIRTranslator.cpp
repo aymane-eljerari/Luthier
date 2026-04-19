@@ -726,6 +726,12 @@ MIRToIRTranslator::MIRToIRTranslator(const llvm::MachineFunction &MF)
   }
 }
 
+llvm::Value &MIRToIRTranslator::getOperandAsValue(const llvm::MachineInstr &MI,
+                                                  llvm::AMDGPU::OpName OpName,
+                                                  llvm::Type *RegType) {
+  return getOperandAsValue(*TII.getNamedOperand(MI, OpName), RegType);
+}
+
 llvm::Value &
 MIRToIRTranslator::getRegisterOperand(const llvm::MachineBasicBlock &MBB,
                                       llvm::MCRegister Reg,
