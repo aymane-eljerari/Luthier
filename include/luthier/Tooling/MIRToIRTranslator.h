@@ -207,7 +207,7 @@ private:
   ///    and preserve them as new entries.
   ///  - Otherwise (rare partial overlap): conservative erase.
   void invalidateOverlaps(MCRegValueMap &Map, llvm::MCRegister Reg,
-                          llvm::IRBuilder<> &Builder);
+                          llvm::IRBuilderBase &Builder);
 
   /// Search \p Map for a stored super-register that fully contains \p Reg.
   /// If found, bitcast to vector and extractelement the requested sub-reg.
@@ -234,8 +234,7 @@ private:
   llvm::Value &materializeReg(const llvm::MachineBasicBlock &MBB,
                               llvm::MCRegister Reg, llvm::Type *RegType);
 
-  void initKernelEntryRegs(const llvm::MachineFunction &MF,
-                           llvm::IRBuilderBase &Builder);
+  void initKernelEntryRegs(llvm::IRBuilderBase &Builder);
 
 public:
   void translate();

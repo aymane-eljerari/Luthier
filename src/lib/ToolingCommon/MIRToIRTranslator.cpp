@@ -240,7 +240,7 @@ getOverlappingSubReg(const llvm::TargetRegisterInfo &TRI, llvm::MCRegister RegA,
 
 void MIRToIRTranslator::invalidateOverlaps(MCRegValueMap &Map,
                                            llvm::MCRegister Reg,
-                                           llvm::IRBuilder<> &Builder) {
+                                           llvm::IRBuilderBase &Builder) {
 
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] invalidateOverlaps: "
                           << TRI.getName(Reg) << "\n");
@@ -554,10 +554,11 @@ MIRToIRTranslator::materializeReg(const llvm::MachineBasicBlock &MBB,
                << llvm::formatv("[MIRToIRTranslator] No predecessors for "
                                 "MBB {0}, returning undef for register {1}\n",
                                 MBB.getNumber(), RegName));
-    llvm::Value *Undef = llvm::UndefValue::get(RegType);
-    Undef->setName(getRegValueName(Reg));
-    Map[Reg][RegType] = Undef;
-    return *Undef;
+    llvm::Value *InitVal =
+        Builder.CreateFreeze(llvm::PoisonValue::get(RegType));
+    InitVal->setName(getRegValueName(Reg));
+    Map[Reg][RegType] = InitVal;
+    return *InitVal;
   }
 
   LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
@@ -588,8 +589,7 @@ MIRToIRTranslator::materializeReg(const llvm::MachineBasicBlock &MBB,
 /// corresponding AMDGCN intrinsic so that the resulting IR is idiomatic;
 /// for the few pre-loaded values that lack an intrinsic we fall back to a
 /// frozen poison placeholder.
-void MIRToIRTranslator::initKernelEntryRegs(const llvm::MachineFunction &MF,
-                                            llvm::IRBuilderBase &Builder) {
+void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
   const auto &Info = *MF.getInfo<llvm::SIMachineFunctionInfo>();
 
   using PV = llvm::AMDGPUFunctionArgInfo::PreloadedValue;
@@ -714,7 +714,7 @@ MIRToIRTranslator::MIRToIRTranslator(llvm::MachineFunction &MF,
     auto *EntryBB = const_cast<llvm::BasicBlock *>(MF.front().getBasicBlock());
     assert(EntryBB && "Entry MBB has no IR basic block");
     llvm::IRBuilder Builder{EntryBB};
-    initKernelEntryRegs(MF, Builder);
+    initKernelEntryRegs(Builder);
 
     /// Set the initial value of the execute mask to all ones on entry
     llvm::MCRegister Exec = TRI.getExec();
