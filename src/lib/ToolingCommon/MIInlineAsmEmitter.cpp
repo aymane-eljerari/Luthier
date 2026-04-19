@@ -80,9 +80,11 @@ std::string MIInlineAsmEmitter::getRegisterName(llvm::MCRegister Reg) {
   return Out;
 }
 
-void MIInlineAsmEmitter::emitInlineAsm(llvm::IRBuilderBase &Builder,
-                                       const llvm::MachineInstr &MI,
-                                       MIRToIRTranslator &Tracker) {
+void MIInlineAsmEmitter::emitInlineAsm(
+    llvm::IRBuilderBase &Builder, const llvm::MachineInstr &MI,
+    const std::function<llvm::Value &(llvm::MCRegister)> &InputRegValMap,
+    const std::function<void(llvm::MCRegister, llvm::Value &)>
+        &OutputRegValMap) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI has no parent MBB");
   const llvm::MachineFunction *MF = MBB->getParent();
@@ -175,7 +177,7 @@ void MIInlineAsmEmitter::emitInlineAsm(llvm::IRBuilderBase &Builder,
   llvm::SmallVector<llvm::Value *, 8> Operands;
   llvm::SmallVector<llvm::Type *, 8> ArgTys;
   for (const auto &RegOp : Uses) {
-    llvm::Value &Val = Tracker.getOperandAsValue(*RegOp.Op);
+    llvm::Value &Val = InputRegValMap(RegOp.Op->getReg());
     Operands.push_back(&Val);
     ArgTys.push_back(Val.getType());
   }
@@ -205,11 +207,11 @@ void MIInlineAsmEmitter::emitInlineAsm(llvm::IRBuilderBase &Builder,
                           llvm::Attribute::NoUnwind);
 
   if (Defs.size() == 1) {
-    Tracker.setRegOperandValue(*Defs[0].Op, CI);
+     OutputRegValMap(Defs[0].Op->getReg(), *CI);
   } else if (Defs.size() > 1) {
     for (const auto &[Idx, Def] : llvm::enumerate(Defs)) {
       llvm::Value *DefVal = Builder.CreateExtractValue(CI, Idx);
-      Tracker.setRegOperandValue(*Def.Op, DefVal);
+      OutputRegValMap(Def.Op->getReg(), *DefVal);
     }
   }
 }

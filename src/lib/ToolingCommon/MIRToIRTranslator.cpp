@@ -879,7 +879,14 @@ static void raiseMachineInstr(
     LLVM_DEBUG(llvm::dbgs()
                << "[MIRToIRTranslator] Unmodelled instruction " << MI << "\n");
 
-    InlineAsmEmitter.emitInlineAsm(Builder, MI, Tracker);
+    InlineAsmEmitter.emitInlineAsm(
+        Builder, MI,
+        [&](llvm::MCRegister Reg) -> llvm::Value & {
+          return Tracker.getRegisterOperand(MI, Reg);
+        },
+        [&](llvm::MCRegister Reg, llvm::Value &Val) {
+          Tracker.setRegOperandValue(MI, Reg, &Val);
+        });
   }
   }
 }
