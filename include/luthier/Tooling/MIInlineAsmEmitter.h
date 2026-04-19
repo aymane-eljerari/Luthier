@@ -40,7 +40,7 @@ class AsmPrinter;
 
 namespace luthier {
 
-class MBBOperandTracker;
+class MIRToIRTranslator;
 
 class MIInlineAsmEmitter {
 private:
@@ -62,7 +62,7 @@ public:
   get(llvm::TargetMachine &TM);
 
   void emitInlineAsm(llvm::IRBuilderBase &Builder, const llvm::MachineInstr &MI,
-                     MBBOperandTracker &Tracker);
+                     MIRToIRTranslator &Tracker);
 };
 
 } // namespace luthier

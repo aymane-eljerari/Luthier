@@ -254,7 +254,7 @@ void SIInstrSemanticsEmitter::emitSemanticFunction(llvm::raw_ostream &OS,
   OS << "template <>\n";
   OS << "void inline raiseMachineInstr<llvm::AMDGPU::" << InstName << ">(\n";
   OS << "    const llvm::MachineInstr &MI, llvm::IRBuilderBase &Builder,\n";
-  OS << "    MBBOperandTracker &Tracker) {\n";
+  OS << "    MIRToIRTranslator &Tracker) {\n";
 
   for (const llvm::Init *El : SemList->getElements()) {
     const auto *StmtDag = llvm::dyn_cast<llvm::DagInit>(El);

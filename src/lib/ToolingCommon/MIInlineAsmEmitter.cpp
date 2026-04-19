@@ -82,7 +82,7 @@ std::string MIInlineAsmEmitter::getRegisterName(llvm::MCRegister Reg) {
 
 void MIInlineAsmEmitter::emitInlineAsm(llvm::IRBuilderBase &Builder,
                                        const llvm::MachineInstr &MI,
-                                       MBBOperandTracker &Tracker) {
+                                       MIRToIRTranslator &Tracker) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI has no parent MBB");
   const llvm::MachineFunction *MF = MBB->getParent();

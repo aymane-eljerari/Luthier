@@ -91,12 +91,16 @@ namespace luthier {
 ///
 /// The process of seeding can also be done manually when translating individual
 /// basic blocks or instructions
-class MBBOperandTracker {
+class MIRToIRTranslator {
 
-  /// We keep track of the same register's value per type; For example, if the
-  /// translation requires a register value of i32 to be cast to a f32,
-  /// we cache both values. This way, when a later instruction requests the
-  /// f32 version, we don't emit a redundant cast instruction
+  /// We keep track of the same physical register's value per its available
+  /// type inside each basic block; For example, if the translation requires a
+  /// register value of i32 to be cast to a f32, we cache both values. This way,
+  /// when a later instruction requests the f32 version, we don't emit a
+  /// redundant cast instruction. Allowed types are ints, FP, and pointer types.
+  /// Pointer types don't have to check for size compatibility, as they will
+  /// use the \c llvm::IntToPtrInst which takes care of truncating/extending
+  /// the output pointer size
   using ValueTypeMap = llvm::DenseMap<llvm::Type *, llvm::Value *>;
 
   using MCRegValueMap = llvm::DenseMap<llvm::MCRegister, ValueTypeMap>;
@@ -117,9 +121,6 @@ class MBBOperandTracker {
 
   BBValueMap VM{};
 
-public:
-  explicit MBBOperandTracker(const llvm::MachineFunction &MF);
-
   const llvm::SIInstrInfo &getTII() const {
     return *MF.getSubtarget<llvm::GCNSubtarget>().getInstrInfo();
   }
@@ -127,6 +128,9 @@ public:
   const llvm::SIRegisterInfo &getTRI() const {
     return *MF.getSubtarget<llvm::GCNSubtarget>().getRegisterInfo();
   }
+
+public:
+  explicit MIRToIRTranslator(const llvm::MachineFunction &MF);
 
   llvm::Value &getOperandAsValue(const llvm::MachineOperand &Op,
                                  llvm::Type *RegType = nullptr);

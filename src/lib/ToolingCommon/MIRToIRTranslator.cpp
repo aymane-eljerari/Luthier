@@ -238,7 +238,7 @@ getOverlappingSubReg(const llvm::TargetRegisterInfo &TRI, llvm::MCRegister RegA,
   }
 }
 
-void MBBOperandTracker::invalidateOverlaps(MCRegValueMap &Map,
+void MIRToIRTranslator::invalidateOverlaps(MCRegValueMap &Map,
                                            llvm::MCRegister Reg,
                                            llvm::IRBuilder<> &Builder) {
   const llvm::SIRegisterInfo &TRI = getTRI();
@@ -332,7 +332,7 @@ void MBBOperandTracker::invalidateOverlaps(MCRegValueMap &Map,
   }
 }
 
-llvm::Value *MBBOperandTracker::tryExtractFromSuperReg(
+llvm::Value *MIRToIRTranslator::tryExtractFromSuperReg(
     MCRegValueMap &Map, llvm::MCRegister Reg, llvm::Type *RegType,
     llvm::IRBuilderBase &Builder) {
   const llvm::SIRegisterInfo &TRI = getTRI();
@@ -371,7 +371,7 @@ llvm::Value *MBBOperandTracker::tryExtractFromSuperReg(
   return nullptr;
 }
 
-llvm::Value *MBBOperandTracker::tryComposeFromSubRegs(
+llvm::Value *MIRToIRTranslator::tryComposeFromSubRegs(
     MCRegValueMap &Map, llvm::MCRegister Reg, llvm::IRBuilderBase &Builder,
     llvm::Type *RegType) {
   const llvm::SIRegisterInfo &TRI = getTRI();
@@ -434,7 +434,7 @@ llvm::Value *MBBOperandTracker::tryComposeFromSubRegs(
   return Builder.CreateBitOrPointerCast(Vec, RegType, RegName);
 }
 
-llvm::Value *MBBOperandTracker::tryComposeFromOverlappingRegs(
+llvm::Value *MIRToIRTranslator::tryComposeFromOverlappingRegs(
     const llvm::MachineBasicBlock &MBB, MCRegValueMap &Map,
     llvm::MCRegister Reg, llvm::IRBuilderBase &Builder, llvm::Type *RegType) {
   const llvm::SIRegisterInfo &TRI = getTRI();
@@ -454,7 +454,7 @@ llvm::Value *MBBOperandTracker::tryComposeFromOverlappingRegs(
 }
 
 llvm::Value &
-MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
+MIRToIRTranslator::materializeReg(const llvm::MachineBasicBlock &MBB,
                                   llvm::MCRegister Reg, llvm::Type *RegType) {
   MCRegValueMap &Map = getMap(MBB);
   const llvm::SIRegisterInfo &TRI = getTRI();
@@ -595,7 +595,7 @@ MBBOperandTracker::materializeReg(const llvm::MachineBasicBlock &MBB,
 /// frozen poison placeholder.
 static void initKernelEntryRegs(const llvm::MachineFunction &MF,
                                 llvm::IRBuilderBase &Builder,
-                                MBBOperandTracker &Tracker) {
+                                MIRToIRTranslator &Tracker) {
   const auto &Info = *MF.getInfo<llvm::SIMachineFunctionInfo>();
   const auto &TRI = *MF.getSubtarget<llvm::GCNSubtarget>().getRegisterInfo();
 
@@ -706,7 +706,7 @@ static void initKernelEntryRegs(const llvm::MachineFunction &MF,
                   Builder.getInt32Ty());
 }
 
-MBBOperandTracker::MBBOperandTracker(const llvm::MachineFunction &MF) : MF(MF) {
+MIRToIRTranslator::MIRToIRTranslator(const llvm::MachineFunction &MF) : MF(MF) {
   for (const llvm::MachineBasicBlock &MBB : MF)
     VM.insert({std::ref(MBB), MCRegValueMap{}});
 
@@ -732,13 +732,13 @@ MBBOperandTracker::MBBOperandTracker(const llvm::MachineFunction &MF) : MF(MF) {
 }
 
 llvm::Value &
-MBBOperandTracker::getRegisterOperand(const llvm::MachineBasicBlock &MBB,
+MIRToIRTranslator::getRegisterOperand(const llvm::MachineBasicBlock &MBB,
                                       llvm::MCRegister Reg,
                                       llvm::Type *RegType) {
   return materializeReg(MBB, Reg, RegType);
 }
 
-llvm::Value &MBBOperandTracker::getRegisterOperand(const llvm::MachineInstr &MI,
+llvm::Value &MIRToIRTranslator::getRegisterOperand(const llvm::MachineInstr &MI,
                                                    llvm::MCRegister Reg,
                                                    llvm::Type *RegType) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
@@ -747,7 +747,7 @@ llvm::Value &MBBOperandTracker::getRegisterOperand(const llvm::MachineInstr &MI,
 }
 
 llvm::Value &
-MBBOperandTracker::getOperandAsValue(const llvm::MachineOperand &Op,
+MIRToIRTranslator::getOperandAsValue(const llvm::MachineOperand &Op,
                                      llvm::Type *RegType) {
   switch (Op.getType()) {
   case llvm::MachineOperand::MO_Register: {
@@ -775,13 +775,13 @@ MBBOperandTracker::getOperandAsValue(const llvm::MachineOperand &Op,
 }
 
 llvm::BasicBlock &
-MBBOperandTracker::getOperandAsBasicBlock(const llvm::MachineOperand &Op) {
+MIRToIRTranslator::getOperandAsBasicBlock(const llvm::MachineOperand &Op) {
   auto *BB = const_cast<llvm::BasicBlock *>(Op.getMBB()->getBasicBlock());
   assert(BB && "MBB operand has no IR BasicBlock");
   return *BB;
 }
 
-void MBBOperandTracker::setRegOperandValue(const llvm::MachineInstr &MI,
+void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
                                            llvm::MCRegister Reg,
                                            llvm::Value *Val) {
   assert(Val && "Val is nullptr");
@@ -819,7 +819,7 @@ void MBBOperandTracker::setRegOperandValue(const llvm::MachineInstr &MI,
   Val->setName(getRegValueName(Reg));
 }
 
-void MBBOperandTracker::setRegOperandValue(const llvm::MachineOperand &Op,
+void MIRToIRTranslator::setRegOperandValue(const llvm::MachineOperand &Op,
                                            llvm::Value *Val) {
   assert(Val && "Val is nullptr");
   assert(Op.isReg() && "Operand is not a register");
@@ -829,7 +829,7 @@ void MBBOperandTracker::setRegOperandValue(const llvm::MachineOperand &Op,
   setRegOperandValue(*MI, Op.getReg(), Val);
 }
 
-llvm::BasicBlock *MBBOperandTracker::getNextBB(const llvm::MachineInstr &MI) {
+llvm::BasicBlock *MIRToIRTranslator::getNextBB(const llvm::MachineInstr &MI) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI does not have a basic block");
   const llvm::MachineBasicBlock *NextMBB = MBB->getNextNode();
@@ -838,7 +838,7 @@ llvm::BasicBlock *MBBOperandTracker::getNextBB(const llvm::MachineInstr &MI) {
   return const_cast<llvm::BasicBlock *>(NextMBB->getBasicBlock());
 }
 
-void MBBOperandTracker::fixupPhis() {
+void MIRToIRTranslator::fixupPhis() {
   llvm::SmallVector<llvm::PHINode *> SingleValuePhis{};
   while (!ToBeFixedPhis.empty()) {
     decltype(ToBeFixedPhis)::iterator It = ToBeFixedPhis.begin();
@@ -863,7 +863,7 @@ void MBBOperandTracker::fixupPhis() {
 template <uint16_t Opcode>
 void raiseMachineInstr(const llvm::MachineInstr &MI,
                        llvm::IRBuilderBase &Builder,
-                       MBBOperandTracker &RegisterValueMap);
+                       MIRToIRTranslator &RegisterValueMap);
 
 #define GET_SI_INSTR_SEMANTIC_FUNCTIONS
 #include "SIInstrSemantics.inc"
@@ -875,7 +875,7 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
 
 static void raiseMachineInstr(
     const llvm::MachineInstr &MI, llvm::IRBuilderBase &Builder,
-                              MBBOperandTracker &Tracker,
+                              MIRToIRTranslator &Tracker,
                               MIInlineAsmEmitter &InlineAsmEmitter) {
   switch (MI.getOpcode()) {
 
@@ -917,7 +917,7 @@ llvm::Error translateSingleInstr(const llvm::MachineInstr &MI,
       MI.dump(););
 
   // Create a tracker and seed it with the caller's input register values.
-  MBBOperandTracker Tracker(*MF);
+  MIRToIRTranslator Tracker(*MF);
   for (const auto &[Reg, Val] : InputRegs)
     Tracker.seedRegValue(*MBB, Reg, Val);
 
@@ -957,7 +957,7 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
     MBB.*get(TagBB()) = llvm::BasicBlock::Create(Ctx, "", &F);
   }
 
-  MBBOperandTracker Tracker(MF);
+  MIRToIRTranslator Tracker(MF);
 
   std::unique_ptr<MIInlineAsmEmitter> InlineAsmEmitter;
 
