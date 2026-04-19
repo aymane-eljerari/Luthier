@@ -20,6 +20,7 @@
 #ifndef LUTHIER_TOOLING_MIR_TO_IR_TRANSLATOR_H
 #define LUTHIER_TOOLING_MIR_TO_IR_TRANSLATOR_H
 #include "luthier/Common/DenseMapInfo.h"
+#include "luthier/Tooling/MIInlineAsmEmitter.h"
 #include <GCNSubtarget.h>
 #include <SIInstrInfo.h>
 #include <llvm/ADT/DenseMap.h>
@@ -42,6 +43,13 @@ class Error;
 } // namespace llvm
 
 namespace luthier {
+
+class MIRToIRTranslator;
+
+template <uint16_t Opcode>
+void raiseMachineInstr(const llvm::MachineInstr &MI,
+                       llvm::IRBuilderBase &Builder,
+                       MIRToIRTranslator &Translator);
 
 /// \brief A utility class that lazily materializes LLVM Values from
 /// physical register operands for use with the IR translator functions.
@@ -92,6 +100,13 @@ namespace luthier {
 /// The process of seeding can also be done manually when translating individual
 /// basic blocks or instructions
 class MIRToIRTranslator {
+  template <uint16_t Opcode>
+  friend void luthier::raiseMachineInstr(const llvm::MachineInstr &MI,
+                                         llvm::IRBuilderBase &Builder,
+                                         MIRToIRTranslator &Translator);
+
+  void raiseMachineInstr(const llvm::MachineInstr &MI,
+                         llvm::IRBuilderBase &Builder);
 
   /// We keep track of the same physical register's value per its available
   /// type inside each basic block; For example, if the translation requires a
@@ -109,7 +124,9 @@ class MIRToIRTranslator {
       llvm::DenseMap<std::reference_wrapper<const llvm::MachineBasicBlock>,
                      MCRegValueMap>;
 
-  const llvm::MachineFunction &MF;
+  llvm::MachineFunction &MF;
+
+  std::unique_ptr<MIInlineAsmEmitter> InlineAsmEmitter{};
 
   const llvm::SIRegisterInfo &TRI;
 
@@ -126,8 +143,9 @@ class MIRToIRTranslator {
   BBValueMap VM{};
 
 public:
-  explicit MIRToIRTranslator(const llvm::MachineFunction &MF);
+  MIRToIRTranslator(llvm::MachineFunction &MF, llvm::Error &Err);
 
+private:
   llvm::Value &getOperandAsValue(const llvm::MachineInstr &MI,
                                  llvm::AMDGPU::OpName OpName,
                                  llvm::Type *RegType = nullptr);
@@ -170,7 +188,6 @@ public:
 
   void fixupPhis();
 
-private:
   std::string getRegValueName(llvm::MCRegister Reg) const {
     return llvm::StringRef(TRI.getName(Reg)).lower() + "_val";
   }
@@ -216,34 +233,13 @@ private:
   /// sub-registers, and finally falls back to predecessor PHI / undef.
   llvm::Value &materializeReg(const llvm::MachineBasicBlock &MBB,
                               llvm::MCRegister Reg, llvm::Type *RegType);
+
+  void initKernelEntryRegs(const llvm::MachineFunction &MF,
+                           llvm::IRBuilderBase &Builder);
+
+public:
+  void translate();
 };
-
-llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF);
-
-/// If a register count attribute is not present, that register class is
-/// omitted from the returned list.
-// llvm::SmallVector<llvm::MCRegister>
-// getISAVisibleRegisters(const llvm::MachineFunction &MF);
-
-/// Maps physical registers to IR values — used as input/output for
-/// \c translateSingleInstr.
-using PhysRegValueMap = llvm::DenseMap<llvm::MCRegister, llvm::Value *>;
-
-/// Translate a single MachineInstr into LLVM IR using the TableGen-generated
-/// semantic definitions.
-///
-/// \param MI           The instruction to translate.
-/// \param Builder      IRBuilder positioned at the insertion point.
-/// \param InputRegs    Pre-populated map of physical register → IR values for
-///                     the instruction's input operands.
-/// \param[out] OutputRegs  Filled with physical register → IR values for the
-///                         instruction's output operands (explicit defs +
-///                         implicit defs like SCC, VCC).
-/// \returns Error on failure (e.g. unmodeled opcode).
-llvm::Error translateSingleInstr(const llvm::MachineInstr &MI,
-                                 llvm::IRBuilderBase &Builder,
-                                 const PhysRegValueMap &InputRegs,
-                                 PhysRegValueMap &OutputRegs);
 
 } // namespace luthier
 

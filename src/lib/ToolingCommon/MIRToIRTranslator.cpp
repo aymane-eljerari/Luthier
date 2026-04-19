@@ -588,11 +588,9 @@ MIRToIRTranslator::materializeReg(const llvm::MachineBasicBlock &MBB,
 /// corresponding AMDGCN intrinsic so that the resulting IR is idiomatic;
 /// for the few pre-loaded values that lack an intrinsic we fall back to a
 /// frozen poison placeholder.
-static void initKernelEntryRegs(const llvm::MachineFunction &MF,
-                                llvm::IRBuilderBase &Builder,
-                                MIRToIRTranslator &Tracker) {
+void MIRToIRTranslator::initKernelEntryRegs(const llvm::MachineFunction &MF,
+                                            llvm::IRBuilderBase &Builder) {
   const auto &Info = *MF.getInfo<llvm::SIMachineFunctionInfo>();
-  const auto &TRI = *MF.getSubtarget<llvm::GCNSubtarget>().getRegisterInfo();
 
   using PV = llvm::AMDGPUFunctionArgInfo::PreloadedValue;
 
@@ -603,7 +601,7 @@ static void initKernelEntryRegs(const llvm::MachineFunction &MF,
     if (!Reg)
       return;
     annotateUniformIfNeeded(Val, TRI, Reg);
-    Tracker.seedRegValue(MF.front(), Reg, Val);
+    seedRegValue(MF.front(), Reg, Val);
   };
 
   /// Create a frozen-poison placeholder for values with no intrinsic.
@@ -701,9 +699,11 @@ static void initKernelEntryRegs(const llvm::MachineFunction &MF,
                   Builder.getInt32Ty());
 }
 
-MIRToIRTranslator::MIRToIRTranslator(const llvm::MachineFunction &MF)
+MIRToIRTranslator::MIRToIRTranslator(llvm::MachineFunction &MF,
+                                     llvm::Error &Err)
     : MF(MF), TRI(*MF.getSubtarget<llvm::GCNSubtarget>().getRegisterInfo()),
       TII(*MF.getSubtarget<llvm::GCNSubtarget>().getInstrInfo()) {
+  llvm::ErrorAsOutParameter EAO(Err);
   for (const llvm::MachineBasicBlock &MBB : MF)
     VM.insert({std::ref(MBB), MCRegValueMap{}});
 
@@ -714,7 +714,7 @@ MIRToIRTranslator::MIRToIRTranslator(const llvm::MachineFunction &MF)
     auto *EntryBB = const_cast<llvm::BasicBlock *>(MF.front().getBasicBlock());
     assert(EntryBB && "Entry MBB has no IR basic block");
     llvm::IRBuilder Builder{EntryBB};
-    initKernelEntryRegs(MF, Builder, *this);
+    initKernelEntryRegs(MF, Builder);
 
     /// Set the initial value of the execute mask to all ones on entry
     llvm::MCRegister Exec = TRI.getExec();
@@ -723,6 +723,13 @@ MIRToIRTranslator::MIRToIRTranslator(const llvm::MachineFunction &MF)
                                  0xFFFFFFFF));
     /// Set the initial SCC value to zero
     seedRegValue(MF.front(), llvm::AMDGPU::SCC, Builder.getInt1(false));
+  }
+
+  Err =
+      MIInlineAsmEmitter::get(const_cast<llvm::TargetMachine &>(MF.getTarget()))
+          .moveInto(InlineAsmEmitter);
+  if (Err) {
+    return;
   }
 }
 
@@ -872,24 +879,16 @@ void MIRToIRTranslator::fixupPhis() {
   }
 }
 
-template <uint16_t Opcode>
-void raiseMachineInstr(const llvm::MachineInstr &MI,
-                       llvm::IRBuilderBase &Builder,
-                       MIRToIRTranslator &RegisterValueMap);
-
 #define GET_SI_INSTR_SEMANTIC_FUNCTIONS
 #include "SIInstrSemantics.inc"
 
 #define GET_SI_INSTR_SEMANTIC_DISPATCH
 #define HANDLE_INST_SEMANTIC(OPCODE)                                           \
   case llvm::AMDGPU::OPCODE:                                                   \
-    return raiseMachineInstr<llvm::AMDGPU::OPCODE>(MI, Builder,                \
-                                                   RegisterValueMap);
+    return luthier::raiseMachineInstr<llvm::AMDGPU::OPCODE>(MI, Builder, *this);
 
-static void raiseMachineInstr(const llvm::MachineInstr &MI,
-                              llvm::IRBuilderBase &Builder,
-                              MIRToIRTranslator &RegisterValueMap,
-                              MIInlineAsmEmitter &InlineAsmEmitter) {
+void MIRToIRTranslator::raiseMachineInstr(const llvm::MachineInstr &MI,
+                                          llvm::IRBuilderBase &Builder) {
   switch (MI.getOpcode()) {
 
 #include "SIInstrSemantics.inc"
@@ -898,71 +897,24 @@ static void raiseMachineInstr(const llvm::MachineInstr &MI,
     LLVM_DEBUG(llvm::dbgs()
                << "[MIRToIRTranslator] Unmodelled instruction " << MI << "\n");
 
-    InlineAsmEmitter.emitInlineAsm(
+    InlineAsmEmitter->emitInlineAsm(
         Builder, MI,
         [&](llvm::MCRegister Reg) -> llvm::Value & {
-          return RegisterValueMap.getRegisterOperand(MI, Reg);
+          return getRegisterOperand(MI, Reg);
         },
         [&](llvm::MCRegister Reg, llvm::Value &Val) {
-          RegisterValueMap.setRegOperandValue(MI, Reg, &Val);
+          setRegOperandValue(MI, Reg, &Val);
         });
   }
   }
 }
-//===----------------------------------------------------------------------===//
-// translateSingleInstr — public API for the fuzzer
-//===----------------------------------------------------------------------===//
 
-llvm::Error translateSingleInstr(const llvm::MachineInstr &MI,
-                                 llvm::IRBuilderBase &Builder,
-                                 const PhysRegValueMap &InputRegs,
-                                 PhysRegValueMap &OutputRegs) {
-  const llvm::MachineBasicBlock *MBB = MI.getParent();
-  if (!MBB)
-    return LUTHIER_MAKE_GENERIC_ERROR("MI has no parent MBB");
-  const llvm::MachineFunction *MF = MBB->getParent();
-  if (!MF)
-    return LUTHIER_MAKE_GENERIC_ERROR("MBB has no parent MF");
-
-  std::unique_ptr<MIInlineAsmEmitter> InlineAsmEmitter;
-
-  LUTHIER_RETURN_ON_ERROR(
-      MIInlineAsmEmitter::get(
-          const_cast<llvm::TargetMachine &>(MF->getTarget()))
-          .moveInto(InlineAsmEmitter));
-
-  LLVM_DEBUG(
-      llvm::dbgs() << "[MIRToIRTranslator] Translating single instruction in '"
-                   << MF->getName() << "': ";
-      MI.dump(););
-
-  // Create a tracker and seed it with the caller's input register values.
-  MIRToIRTranslator Tracker(*MF);
-  for (const auto &[Reg, Val] : InputRegs)
-    Tracker.seedRegValue(*MBB, Reg, Val);
-
-  raiseMachineInstr(MI, Builder, Tracker, *InlineAsmEmitter);
-
-  // Extract output register values from the tracker.
-  for (const llvm::MachineOperand &Def : MI.all_defs()) {
-    llvm::MCRegister Reg = Def.getReg();
-    llvm::Value &Val = Tracker.getRegisterOperand(*MBB, Reg);
-    OutputRegs[Reg] = &Val;
-  }
-
-  LLVM_DEBUG(llvm::dbgs()
-             << "[MIRToIRTranslator] Single instruction translation complete, "
-             << "produced " << OutputRegs.size() << " output registers\n");
-
-  return llvm::Error::success();
-}
-
-llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
-  llvm::Function &F = MF.getFunction();
+void MIRToIRTranslator::translate() {
+  auto &F = const_cast<llvm::Function &>(MF.getFunction());
   llvm::LLVMContext &Ctx = F.getContext();
   /// Early exit if there are no basic blocks in the machine function
   if (MF.empty())
-    return llvm::Error::success();
+    return;
 
   LLVM_DEBUG(
       llvm::dbgs() << "[MIRToIRTranslator] Translating machine function '"
@@ -976,14 +928,6 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
   for (llvm::MachineBasicBlock &MBB : MF) {
     MBB.*get(TagBB()) = llvm::BasicBlock::Create(Ctx, "", &F);
   }
-
-  MIRToIRTranslator Tracker(MF);
-
-  std::unique_ptr<MIInlineAsmEmitter> InlineAsmEmitter;
-
-  LUTHIER_RETURN_ON_ERROR(
-      MIInlineAsmEmitter::get(const_cast<llvm::TargetMachine &>(MF.getTarget()))
-          .moveInto(InlineAsmEmitter));
 
   /// Iterate over the MBBs and raise the machine instructions in each MBB to
   /// LLVM IR
@@ -1005,7 +949,7 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
       });
       llvm::IRBuilderBase Builder(Ctx, CF, Inserter, {}, {});
       Builder.SetInsertPoint(BB);
-      raiseMachineInstr(MI, Builder, Tracker, *InlineAsmEmitter);
+      raiseMachineInstr(MI, Builder);
     }
     if (MBB.canFallThrough()) {
       /// Call instructions are not intended to fall through; Instead, we create
@@ -1027,13 +971,11 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
     /// not zero
   }
   /// Fixup all dangeling PHIs
-  Tracker.fixupPhis();
+  fixupPhis();
 
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Translation complete for '"
                           << F.getName() << "': " << F.size()
                           << " basic blocks\n");
-
-  return llvm::Error::success();
 }
 
 } // namespace luthier

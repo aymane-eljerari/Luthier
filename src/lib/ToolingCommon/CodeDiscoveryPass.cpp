@@ -46,6 +46,8 @@
 // #include <luthier/Tooling/IndirectBranchResolverAnalysis.h>
 // #include <luthier/Tooling/MachineFunctionEntryPoint.h>
 #include "luthier/Tooling/MIRToIRTranslator.h"
+#include <llvm/Analysis/ConstantFolding.h>
+#include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <unordered_set>
@@ -1093,7 +1095,12 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     llvm::SmallDenseSet<llvm::MachineInstr *> UnresolvedShortCallInsts{};
 
     /// TODO: IR translation and indirect branch/call analysis goes here
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, translateMachineFunctionToIR(MF));
+    llvm::Error Err = llvm::Error::success();
+    MIRToIRTranslator Translator{MF, Err};
+
+    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
+    
+    Translator.translate();
 
     for (llvm::Instruction &I :
          llvm::make_early_inc_range(llvm::instructions(MF.getFunction()))) {
@@ -1116,6 +1123,25 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     }
 
     llvm::InstCombinePass{}.run(MF.getFunction(), FAM);
+
+    llvm::TargetLibraryInfoImpl TLII(llvm::Triple(TM.getTargetTriple()));
+    llvm::TargetLibraryInfo TLI(TLII, &MF.getFunction());
+    for (llvm::Instruction &I :
+         llvm::make_early_inc_range(llvm::instructions(MF.getFunction()))) {
+      if (auto *CallInst = llvm::dyn_cast<llvm::CallInst>(&I)) {
+        if (auto *ConstTarget = llvm::dyn_cast<llvm::ConstantExpr>(
+                CallInst->getCalledOperand())) {
+          llvm::outs() << ConstTarget->getOperand(0) << " , constant int: "
+                       << llvm::cast<llvm::ConstantInt>(
+                              ConstTarget->getOperand(0))
+                              ->getZExtValue()
+                       << "\n";
+          UnvisitedPointsOfEntry.insert(EntryPoint{
+              llvm::cast<llvm::ConstantInt>(ConstTarget->getOperand(0))
+                  ->getZExtValue()});
+        }
+      }
+    }
 
     /// Go over all unresolved trace terminator instructions and process
     /// them accordingly

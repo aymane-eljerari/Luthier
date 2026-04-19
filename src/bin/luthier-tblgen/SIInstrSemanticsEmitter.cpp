@@ -43,7 +43,7 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       const auto *AssignmentDag = llvm::dyn_cast<llvm::DagInit>(Dag->getArg(1));
       if (!AssignmentDag)
         llvm::PrintFatalError(Loc, "`SetNamedOperand` second arg is not a DAG");
-      OS << "Tracker.setRegOperandValue(MI, llvm::AMDGPU::OpName::"
+      OS << "Translator.setRegOperandValue(MI, llvm::AMDGPU::OpName::"
          << OperandName << ", ";
       emitSemanticStatement(OS, AssignmentDag, Loc);
       OS << ")";
@@ -74,7 +74,7 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       const auto *ValDag = llvm::dyn_cast<llvm::DagInit>(Dag->getArg(1));
       if (!ValDag)
         llvm::PrintFatalError("ImplicitDef second arg is not a DAG");
-      OS << "Tracker.setRegOperandValue(MI, llvm::AMDGPU::" << RegName << ", ";
+      OS << "Translator.setRegOperandValue(MI, llvm::AMDGPU::" << RegName << ", ";
       emitSemanticStatement(OS, ValDag, Loc);
       OS << ")";
     }
@@ -91,7 +91,7 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
     // --- GetNamedOperand $name ---
     else if (OpName == "GetNamedOperand") {
       llvm::StringRef ArgName = Dag->getArgNameStr(0);
-      OS << "&Tracker.getOperandAsValue(MI, llvm::AMDGPU::OpName::" << ArgName;
+      OS << "&Translator.getOperandAsValue(MI, llvm::AMDGPU::OpName::" << ArgName;
       if (Dag->getNumArgs() > 1) {
         OS << ", ";
         emitSemanticStatement(OS, Dag->getArg(1), Loc);
@@ -101,7 +101,7 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
     // --- GetNamedOperandAsBB $name ---
     else if (OpName == "GetNamedOperandAsBB") {
       llvm::StringRef ArgName = Dag->getArgNameStr(0);
-      OS << "&Tracker.getOperandAsBasicBlock(MI, llvm::AMDGPU::OpName::"
+      OS << "&Translator.getOperandAsBasicBlock(MI, llvm::AMDGPU::OpName::"
          << ArgName << ")";
     }
 
@@ -113,7 +113,7 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
     // --- GetNextBB ---
     // Returns the fall-through BasicBlock (next block after current MI's block)
     else if (OpName == "GetNextBB") {
-      OS << "Tracker.getNextBB(MI)";
+      OS << "Translator.getNextBB(MI)";
     }
 
     // --- ImplicitUse REG ---
@@ -121,7 +121,7 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       // First arg is a register def (e.g., VCC, EXEC, SCC)
       const auto *RegDef = llvm::dyn_cast<llvm::DefInit>(Dag->getArg(0));
       llvm::StringRef RegName = RegDef->getDef()->getName();
-      OS << "&Tracker.getRegisterOperand(MI, llvm::AMDGPU::" << RegName << ")";
+      OS << "&Translator.getRegisterOperand(MI, llvm::AMDGPU::" << RegName << ")";
     }
 
     // --- LLVM Operands ---
@@ -247,7 +247,7 @@ void SIInstrSemanticsEmitter::emitSemanticFunction(llvm::raw_ostream &OS,
   OS << "template <>\n";
   OS << "void inline raiseMachineInstr<llvm::AMDGPU::" << InstName << ">(\n";
   OS << "    const llvm::MachineInstr &MI, llvm::IRBuilderBase &Builder,\n";
-  OS << "    MIRToIRTranslator &Tracker) {\n";
+  OS << "    MIRToIRTranslator &Translator) {\n";
 
   for (const llvm::Init *El : SemList->getElements()) {
     const auto *StmtDag = llvm::dyn_cast<llvm::DagInit>(El);

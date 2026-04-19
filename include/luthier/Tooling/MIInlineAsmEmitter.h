@@ -22,6 +22,7 @@
 #define LUTHIER_TOOLING_MI_INLINE_ASM_EMITTER
 #include <GCNSubtarget.h>
 #include <SIInstrInfo.h>
+#include <llvm/CodeGen/AsmPrinter.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/MC/MCAsmInfo.h>
 #include <llvm/MC/MCContext.h>
@@ -35,7 +36,6 @@ class TargetMachine;
 class MachineInstr;
 class MachineOperand;
 class MCRegister;
-class AsmPrinter;
 } // namespace llvm
 
 namespace luthier {
