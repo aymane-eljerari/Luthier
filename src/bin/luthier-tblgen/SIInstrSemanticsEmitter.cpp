@@ -43,10 +43,8 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       const auto *AssignmentDag = llvm::dyn_cast<llvm::DagInit>(Dag->getArg(1));
       if (!AssignmentDag)
         llvm::PrintFatalError(Loc, "`SetNamedOperand` second arg is not a DAG");
-      OS << "Tracker.setRegOperandValue(";
-      OS << "*Tracker.getTII().getNamedOperand(MI, "
-            "llvm::AMDGPU::OpName::"
-         << OperandName << "), ";
+      OS << "Tracker.setRegOperandValue(MI, llvm::AMDGPU::OpName::"
+         << OperandName << ", ";
       emitSemanticStatement(OS, AssignmentDag, Loc);
       OS << ")";
     }
@@ -93,7 +91,7 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
     // --- GetNamedOperand $name ---
     else if (OpName == "GetNamedOperand") {
       llvm::StringRef ArgName = Dag->getArgNameStr(0);
-      OS << "&Tracker.getOperandAsValue(MI, llvm::AMDGPU::OpName::" << ArgName << ")";
+      OS << "&Tracker.getOperandAsValue(MI, llvm::AMDGPU::OpName::" << ArgName;
       if (Dag->getNumArgs() > 1) {
         OS << ", ";
         emitSemanticStatement(OS, Dag->getArg(1), Loc);
@@ -103,10 +101,8 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
     // --- GetNamedOperandAsBB $name ---
     else if (OpName == "GetNamedOperandAsBB") {
       llvm::StringRef ArgName = Dag->getArgNameStr(0);
-      OS << "&Tracker.getOperandAsBasicBlock("
-         << "*Tracker.getTII().getNamedOperand(MI, "
-            "llvm::AMDGPU::OpName::"
-         << ArgName << "))";
+      OS << "&Tracker.getOperandAsBasicBlock(MI, llvm::AMDGPU::OpName::"
+         << ArgName << ")";
     }
 
     // --- GetVal $name ---

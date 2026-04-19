@@ -135,6 +135,9 @@ public:
   llvm::Value &getOperandAsValue(const llvm::MachineOperand &Op,
                                  llvm::Type *RegType = nullptr);
 
+  llvm::BasicBlock &getOperandAsBasicBlock(const llvm::MachineInstr &MI,
+                                           llvm::AMDGPU::OpName OpName);
+
   llvm::BasicBlock &getOperandAsBasicBlock(const llvm::MachineOperand &Op);
 
   /// Seed the value of \p Reg in \p MBB without invalidating overlaps.
@@ -157,6 +160,9 @@ public:
                           llvm::Value *Val);
 
   void setRegOperandValue(const llvm::MachineOperand &Op, llvm::Value *Val);
+
+  void setRegOperandValue(const llvm::MachineInstr &MI,
+                          llvm::AMDGPU::OpName OpName, llvm::Value *Val);
 
   /// Returns the fall-through BasicBlock (next block after the current MI's
   /// block). If there is no next block, returns a poison value.

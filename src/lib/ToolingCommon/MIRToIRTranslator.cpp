@@ -776,6 +776,12 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineOperand &Op,
 }
 
 llvm::BasicBlock &
+MIRToIRTranslator::getOperandAsBasicBlock(const llvm::MachineInstr &MI,
+                                          llvm::AMDGPU::OpName OpName) {
+  return getOperandAsBasicBlock(*TII.getNamedOperand(MI, OpName));
+}
+
+llvm::BasicBlock &
 MIRToIRTranslator::getOperandAsBasicBlock(const llvm::MachineOperand &Op) {
   auto *BB = const_cast<llvm::BasicBlock *>(Op.getMBB()->getBasicBlock());
   assert(BB && "MBB operand has no IR BasicBlock");
@@ -829,6 +835,12 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineOperand &Op,
   setRegOperandValue(*MI, Op.getReg(), Val);
 }
 
+void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
+                                           llvm::AMDGPU::OpName OpName,
+                                           llvm::Value *Val) {
+  setRegOperandValue(*TII.getNamedOperand(MI, OpName), Val);
+}
+
 llvm::BasicBlock *MIRToIRTranslator::getNextBB(const llvm::MachineInstr &MI) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI does not have a basic block");
@@ -871,11 +883,12 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
 #define GET_SI_INSTR_SEMANTIC_DISPATCH
 #define HANDLE_INST_SEMANTIC(OPCODE)                                           \
   case llvm::AMDGPU::OPCODE:                                                   \
-    return raiseMachineInstr<llvm::AMDGPU::OPCODE>(MI, Builder, Tracker);
+    return raiseMachineInstr<llvm::AMDGPU::OPCODE>(MI, Builder,                \
+                                                   RegisterValueMap);
 
-static void raiseMachineInstr(
-    const llvm::MachineInstr &MI, llvm::IRBuilderBase &Builder,
-                              MIRToIRTranslator &Tracker,
+static void raiseMachineInstr(const llvm::MachineInstr &MI,
+                              llvm::IRBuilderBase &Builder,
+                              MIRToIRTranslator &RegisterValueMap,
                               MIInlineAsmEmitter &InlineAsmEmitter) {
   switch (MI.getOpcode()) {
 
@@ -888,10 +901,10 @@ static void raiseMachineInstr(
     InlineAsmEmitter.emitInlineAsm(
         Builder, MI,
         [&](llvm::MCRegister Reg) -> llvm::Value & {
-          return Tracker.getRegisterOperand(MI, Reg);
+          return RegisterValueMap.getRegisterOperand(MI, Reg);
         },
         [&](llvm::MCRegister Reg, llvm::Value &Val) {
-          Tracker.setRegOperandValue(MI, Reg, &Val);
+          RegisterValueMap.setRegOperandValue(MI, Reg, &Val);
         });
   }
   }
