@@ -241,7 +241,6 @@ getOverlappingSubReg(const llvm::TargetRegisterInfo &TRI, llvm::MCRegister RegA,
 void MIRToIRTranslator::invalidateOverlaps(MCRegValueMap &Map,
                                            llvm::MCRegister Reg,
                                            llvm::IRBuilder<> &Builder) {
-  const llvm::SIRegisterInfo &TRI = getTRI();
 
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] invalidateOverlaps: "
                           << TRI.getName(Reg) << "\n");
@@ -335,7 +334,6 @@ void MIRToIRTranslator::invalidateOverlaps(MCRegValueMap &Map,
 llvm::Value *MIRToIRTranslator::tryExtractFromSuperReg(
     MCRegValueMap &Map, llvm::MCRegister Reg, llvm::Type *RegType,
     llvm::IRBuilderBase &Builder) {
-  const llvm::SIRegisterInfo &TRI = getTRI();
   unsigned RegSize = TRI.getRegSizeInBits(*TRI.getMinimalPhysRegClass(Reg));
 
   LLVM_DEBUG(llvm::StringRef RegName = TRI.getName(Reg);
@@ -374,7 +372,6 @@ llvm::Value *MIRToIRTranslator::tryExtractFromSuperReg(
 llvm::Value *MIRToIRTranslator::tryComposeFromSubRegs(
     MCRegValueMap &Map, llvm::MCRegister Reg, llvm::IRBuilderBase &Builder,
     llvm::Type *RegType) {
-  const llvm::SIRegisterInfo &TRI = getTRI();
   unsigned RegSize = TRI.getRegSizeInBits(*TRI.getMinimalPhysRegClass(Reg));
   llvm::StringRef RegName = TRI.getName(Reg);
 
@@ -437,7 +434,6 @@ llvm::Value *MIRToIRTranslator::tryComposeFromSubRegs(
 llvm::Value *MIRToIRTranslator::tryComposeFromOverlappingRegs(
     const llvm::MachineBasicBlock &MBB, MCRegValueMap &Map,
     llvm::MCRegister Reg, llvm::IRBuilderBase &Builder, llvm::Type *RegType) {
-  const llvm::SIRegisterInfo &TRI = getTRI();
   unsigned RegSize = TRI.getRegSizeInBits(*TRI.getMinimalPhysRegClass(Reg));
   if (!RegType)
     RegType = Builder.getIntNTy(RegSize);
@@ -457,7 +453,6 @@ llvm::Value &
 MIRToIRTranslator::materializeReg(const llvm::MachineBasicBlock &MBB,
                                   llvm::MCRegister Reg, llvm::Type *RegType) {
   MCRegValueMap &Map = getMap(MBB);
-  const llvm::SIRegisterInfo &TRI = getTRI();
   unsigned RegSize =
       Reg == llvm::AMDGPU::MODE
           ? 32
@@ -706,7 +701,9 @@ static void initKernelEntryRegs(const llvm::MachineFunction &MF,
                   Builder.getInt32Ty());
 }
 
-MIRToIRTranslator::MIRToIRTranslator(const llvm::MachineFunction &MF) : MF(MF) {
+MIRToIRTranslator::MIRToIRTranslator(const llvm::MachineFunction &MF)
+    : MF(MF), TRI(*MF.getSubtarget<llvm::GCNSubtarget>().getRegisterInfo()),
+      TII(*MF.getSubtarget<llvm::GCNSubtarget>().getInstrInfo()) {
   for (const llvm::MachineBasicBlock &MBB : MF)
     VM.insert({std::ref(MBB), MCRegValueMap{}});
 
@@ -720,11 +717,9 @@ MIRToIRTranslator::MIRToIRTranslator(const llvm::MachineFunction &MF) : MF(MF) {
     initKernelEntryRegs(MF, Builder, *this);
 
     /// Set the initial value of the execute mask to all ones on entry
-    const llvm::SIRegisterInfo *TRI =
-        MF.getSubtarget<llvm::GCNSubtarget>().getRegisterInfo();
-    llvm::MCRegister Exec = TRI->getExec();
+    llvm::MCRegister Exec = TRI.getExec();
     seedRegValue(MF.front(), Exec,
-                 Builder.getIntN(TRI->getRegSizeInBits(Exec, MF.getRegInfo()),
+                 Builder.getIntN(TRI.getRegSizeInBits(Exec, MF.getRegInfo()),
                                  0xFFFFFFFF));
     /// Set the initial SCC value to zero
     seedRegValue(MF.front(), llvm::AMDGPU::SCC, Builder.getInt1(false));
@@ -794,7 +789,6 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
   llvm::Instruction *TermInst = BB->getTerminator();
   llvm::IRBuilder Builder =
       TermInst ? llvm::IRBuilder{TermInst} : llvm::IRBuilder{BB};
-  const llvm::SIRegisterInfo &TRI = getTRI();
   unsigned RegSize =
       Reg == llvm::AMDGPU::MODE
           ? 32
@@ -806,13 +800,13 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
   LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
                  "[MIRToIRTranslator] Setting register {0} to value {3} for"
                  "MBB {1} (type: {2})\n",
-                 getTRI().getName(Reg), MBB->getNumber(),
+                 TRI.getName(Reg), MBB->getNumber(),
                  *Val->getType()->getScalarType(), *Val));
 
   // Preserve non-overlapping portions of any partially-overwritten
   // super-registers, then erase fully-covered entries.
   invalidateOverlaps(Map, Reg, Builder);
-  annotateUniformIfNeeded(Val, getTRI(), Reg);
+  annotateUniformIfNeeded(Val, TRI, Reg);
   Map[Reg][Val->getType()] = Val;
   const llvm::MachineFunction *MF = MBB->getParent();
   assert(MF && "MBB has no parent function");

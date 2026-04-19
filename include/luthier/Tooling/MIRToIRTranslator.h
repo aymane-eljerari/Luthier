@@ -111,6 +111,10 @@ class MIRToIRTranslator {
 
   const llvm::MachineFunction &MF;
 
+  const llvm::SIRegisterInfo &TRI;
+
+  const llvm::SIInstrInfo &TII;
+
   struct ToBeFixedPhiInfo {
     const llvm::MachineBasicBlock *MBB;
     llvm::MCRegister Reg;
@@ -120,14 +124,6 @@ class MIRToIRTranslator {
   llvm::SmallVector<ToBeFixedPhiInfo> ToBeFixedPhis{};
 
   BBValueMap VM{};
-
-  const llvm::SIInstrInfo &getTII() const {
-    return *MF.getSubtarget<llvm::GCNSubtarget>().getInstrInfo();
-  }
-
-  const llvm::SIRegisterInfo &getTRI() const {
-    return *MF.getSubtarget<llvm::GCNSubtarget>().getRegisterInfo();
-  }
 
 public:
   explicit MIRToIRTranslator(const llvm::MachineFunction &MF);
@@ -166,7 +162,7 @@ public:
 
 private:
   std::string getRegValueName(llvm::MCRegister Reg) const {
-    return llvm::StringRef(getTRI().getName(Reg)).lower() + "_val";
+    return llvm::StringRef(TRI.getName(Reg)).lower() + "_val";
   }
 
   MCRegValueMap &getMap(const llvm::MachineBasicBlock &MBB) {
