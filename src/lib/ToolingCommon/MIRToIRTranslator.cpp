@@ -991,14 +991,14 @@ llvm::Error translateMachineFunctionToIR(llvm::MachineFunction &MF) {
       /// Call instructions are not intended to fall through; Instead, we create
       /// a new function for it. Hence, at the IR level, the instruction
       /// after call instructions are unreachable in the current function
-      if (!MBB.back().isCall()) {
-        auto NextBB =
-            const_cast<llvm::BasicBlock *>(MBB.getNextNode()->getBasicBlock());
-        llvm::IRBuilder{BB}.CreateBr(NextBB);
-      } else {
+      if (MBB.back().isCall()) {
         llvm::IRBuilder Builder(
             const_cast<llvm::BasicBlock *>(MBB.getBasicBlock()));
         Builder.CreateUnreachable();
+      } else if (!MBB.back().isBranch()) {
+        auto NextBB =
+            const_cast<llvm::BasicBlock *>(MBB.getNextNode()->getBasicBlock());
+        llvm::IRBuilder{BB}.CreateBr(NextBB);
       }
     }
 
