@@ -63,10 +63,14 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
              const llvm::GCNTargetMachine &TM, llvm::Function &F) {
   auto &ST = TM.getSubtarget<llvm::GCNSubtarget>(F);
   /// GRANULATED_WORKITEM_VGPR_COUNT is automatically calculated via the
-  /// resource usage analysis pass
-
-  /// GRANULATED_WAVEFRONT_SGPR_COUNT is automatically calculated via the
-  /// resouce usage analysis pass
+  /// resource usage analysis pass, but we add its count as an attribute
+  /// to the function for later use
+  uint32_t GranulatedWorkitemVGPRCount = AMDHSA_BITS_GET(
+      KD.compute_pgm_rsrc1,
+      llvm::amdhsa::COMPUTE_PGM_RSRC1_GRANULATED_WORKITEM_VGPR_COUNT);
+  uint32_t NextFreeVGPR =
+      (GranulatedWorkitemVGPRCount + 1) * ST.getVGPREncodingGranule();
+  F.addFnAttr("amdgpu-num-vgpr", llvm::formatv("{0}", NextFreeVGPR).str());
 
   /// PRIORITY is set by the CP automatically
 
@@ -515,6 +519,21 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
   /// level we don't care whether an argument is implicit or explicit and we
   /// treat them the same
   F->addFnAttr("amdgpu-implicitarg-num-bytes", "0");
+
+  /// GRANULATED_WAVEFRONT_SGPR_COUNT is automatically calculated via the
+  /// resouce usage analysis pass, but we add its count as an attribute
+  /// to the function for later use
+  uint32_t NextFreeSGPR = [&] {
+    if (!llvm::AMDGPU::isGFX10Plus(ST)) {
+      uint32_t GranulatedWavefrontSGPRCount = AMDHSA_BITS_GET(
+          KD.compute_pgm_rsrc1,
+          llvm::amdhsa::COMPUTE_PGM_RSRC1_GRANULATED_WAVEFRONT_SGPR_COUNT);
+      return (GranulatedWavefrontSGPRCount + 1) * ST.getSGPREncodingGranule();
+    } else {
+      return ST.getAddressableNumSGPRs();
+    }
+  }();
+  F->addFnAttr("amdgpu-num-sgpr", llvm::formatv("{0}", NextFreeSGPR).str());
 
   return std::make_pair(std::ref(MF), KDSymbolIfPresent);
 }
