@@ -707,24 +707,6 @@ MIRToIRTranslator::MIRToIRTranslator(llvm::MachineFunction &MF,
   for (const llvm::MachineBasicBlock &MBB : MF)
     VM.insert({std::ref(MBB), MCRegValueMap{}});
 
-  const llvm::Function &F = MF.getFunction();
-  /// If this is a kernel entry function, seed the register tracker with the
-  /// hardware pre-loaded SGPR/VGPR values.
-  if (F.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL) {
-    auto *EntryBB = const_cast<llvm::BasicBlock *>(MF.front().getBasicBlock());
-    assert(EntryBB && "Entry MBB has no IR basic block");
-    llvm::IRBuilder Builder{EntryBB};
-    initKernelEntryRegs(Builder);
-
-    /// Set the initial value of the execute mask to all ones on entry
-    llvm::MCRegister Exec = TRI.getExec();
-    seedRegValue(MF.front(), Exec,
-                 Builder.getIntN(TRI.getRegSizeInBits(Exec, MF.getRegInfo()),
-                                 0xFFFFFFFF));
-    /// Set the initial SCC value to zero
-    seedRegValue(MF.front(), llvm::AMDGPU::SCC, Builder.getInt1(false));
-  }
-
   Err =
       MIInlineAsmEmitter::get(const_cast<llvm::TargetMachine &>(MF.getTarget()))
           .moveInto(InlineAsmEmitter);
@@ -927,6 +909,23 @@ void MIRToIRTranslator::translate() {
   /// Create BBs associated with every MBB in the MF
   for (llvm::MachineBasicBlock &MBB : MF) {
     MBB.*get(TagBB()) = llvm::BasicBlock::Create(Ctx, "", &F);
+  }
+
+  /// If this is a kernel entry function, seed the register tracker with the
+  /// hardware pre-loaded SGPR/VGPR values.
+  if (F.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL) {
+    auto *EntryBB = const_cast<llvm::BasicBlock *>(MF.front().getBasicBlock());
+    assert(EntryBB && "Entry MBB has no IR basic block");
+    llvm::IRBuilder Builder{EntryBB};
+    initKernelEntryRegs(Builder);
+
+    /// Set the initial value of the execute mask to all ones on entry
+    llvm::MCRegister Exec = TRI.getExec();
+    seedRegValue(MF.front(), Exec,
+                 Builder.getIntN(TRI.getRegSizeInBits(Exec, MF.getRegInfo()),
+                                 0xFFFFFFFF));
+    /// Set the initial SCC value to zero
+    seedRegValue(MF.front(), llvm::AMDGPU::SCC, Builder.getInt1(false));
   }
 
   /// Iterate over the MBBs and raise the machine instructions in each MBB to

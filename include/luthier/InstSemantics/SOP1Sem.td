@@ -1,4 +1,4 @@
-//===- SOP1Sem.td -------------------------------------------------*- tblgen -*-===//
+//===- SOP1Sem.td --------------------------------------------*- tblgen -*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,7 +58,7 @@ def S_MOV_B64_sem : InstSISemantic<S_MOV_B64> {
 
 // Same as S_MOV_B32 but with side effects (e.g. SRC_POPS_EXITING_WAVE_ID).
 // LLVM-only pseudo (no distinct ISA opcode); same encoding as S_MOV_B32.
-// Defined in llvm-project: llvm/lib/Target/AMDGPU/SOPInstructions.td, line 226.
+// Defined in llvm-project: llvm/lib/Target/AMDGPU/SOPInstructions.td
 def S_MOV_B32_sideeffects_sem : InstSISemantic<S_MOV_B32_sideeffects> {
   let Semantic = [
     (SetNamedOperand $sdst, (GetNamedOperand $src0))
@@ -80,7 +80,8 @@ def S_MOV_B32_sideeffects_sem : InstSISemantic<S_MOV_B32_sideeffects> {
 //   rdna4-instruction-set-architecture.pdf, page 239.
 def S_NOT_B32_sem : InstSISemantic<S_NOT_B32> {
   let Semantic = [
-    (DefVal $result, (LLVMXor (GetNamedOperand $src0), (LLVMSExt (ConstantTrue si_llvm_i1_ty), si_llvm_i32_ty))),
+    (DefVal $result, (LLVMXor (GetNamedOperand $src0),
+                     (LLVMSExt (ConstantTrue si_llvm_i1_ty), si_llvm_i32_ty))),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt si_llvm_i32_ty, 0))),
     (SetNamedOperand $sdst, (GetVal $result))
   ];
@@ -120,9 +121,7 @@ def S_NOT_B64_sem : InstSISemantic<S_NOT_B64> {
 //   rdna4-instruction-set-architecture.pdf, page 235.
 def S_ABS_I32_sem : InstSISemantic<S_ABS_I32> {
   let Semantic = [
-    (DefVal $sign, (LLVMAnd (GetNamedOperand $src0), (ConstantInt si_llvm_i32_ty, 0x80000000))),
-    (DefVal $neg, (LLVMSub (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $src0))),
-    (DefVal $result, (LLVMSelect (LLVMCmp LLVMICmpNE, (GetVal $sign), (ConstantInt si_llvm_i32_ty, 0)), (GetVal $neg), (GetNamedOperand $src0))),
+    (DefVal $result, (LLVMIntrinsic si_llvm_i32_ty, int_abs, [(GetVal $src0, si_llvm_i32_ty)])),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt si_llvm_i32_ty, 0))),
     (SetNamedOperand $sdst, (GetVal $result))
   ];
@@ -184,8 +183,9 @@ def S_WQM_B64_sem : InstSISemantic<S_WQM_B64> {
 //   rdna4-instruction-set-architecture.pdf, page 234.
 def S_SEXT_I32_I16_sem : InstSISemantic<S_SEXT_I32_I16> {
   let Semantic = [
-    (DefVal $result, (LLVMSExt (GetNamedOperand $src0), si_llvm_i32_ty)),
-    (SetNamedOperand $sdst, (GetVal $result))
+    (SetNamedOperand $sdst,
+      (LLVMSExt (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), si_llvm_i32_ty)
+    )
   ];
 }
 
@@ -1627,6 +1627,7 @@ def S_SWAPPC_B64_sem : InstSISemantic<S_SWAPPC_B64> {
 
 def S_SETPC_B64_sem : InstSISemantic<S_SETPC_B64> {
   let Semantic = [
-    (LLVMCall (LLVMFuncTy si_llvm_void_ty, false), (LLVMIntToPtr (GetNamedOperand $src0), global_ptr_ty))
+    (LLVMCall (LLVMFuncTy si_llvm_void_ty, false), (LLVMIntToPtr (GetNamedOperand $src0), global_ptr_ty)),
+    (LLVMUnreachable)
   ];
 }
