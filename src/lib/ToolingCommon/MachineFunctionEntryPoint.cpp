@@ -16,10 +16,10 @@
 /// \file
 /// Implements the \c MachineFunctionEntryPoints analysis.
 //===----------------------------------------------------------------------===//
-#include "luthier/Tooling/MachineFunctionEntryPoint.h"
+#include "luthier/Tooling/EntryPoint.h"
 
 namespace luthier {
 
-llvm::AnalysisKey MachineFunctionEntryPoint::Key;
+//llvm::AnalysisKey MachineFunctionEntryPoint::Key;
 
 }
