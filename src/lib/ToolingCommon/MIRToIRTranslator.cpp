@@ -697,6 +697,15 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
                   Builder.getInt32Ty());
   scalarIntrinsic(PV::WORKITEM_ID_Z, llvm::Intrinsic::amdgcn_workitem_id_z,
                   Builder.getInt32Ty());
+
+  /// Execute mask and SCC values
+  /// Set the initial value of the execute mask to all ones on entry
+  llvm::MCRegister Exec = TRI.getExec();
+  seedRegValue(
+      MF.front(), Exec,
+      Builder.getIntN(TRI.getRegSizeInBits(Exec, MF.getRegInfo()), 0xFFFFFFFF));
+  /// Set the initial SCC value to zero
+  seedRegValue(MF.front(), llvm::AMDGPU::SCC, Builder.getInt1(false));
 }
 
 MIRToIRTranslator::MIRToIRTranslator(llvm::MachineFunction &MF,
@@ -842,7 +851,7 @@ llvm::BasicBlock *MIRToIRTranslator::getNextBB(const llvm::MachineInstr &MI) {
 void MIRToIRTranslator::fixupPhis() {
   llvm::SmallVector<llvm::PHINode *> SingleValuePhis{};
   while (!ToBeFixedPhis.empty()) {
-    decltype(ToBeFixedPhis)::iterator It = ToBeFixedPhis.begin();
+    auto It = ToBeFixedPhis.begin();
     for (const llvm::MachineBasicBlock *PredMBB : It->MBB->predecessors()) {
       auto *PredBB = const_cast<llvm::BasicBlock *>(PredMBB->getBasicBlock());
       if (!llvm::is_contained(It->Phi->blocks(), PredBB)) {
@@ -918,14 +927,6 @@ void MIRToIRTranslator::translate() {
     assert(EntryBB && "Entry MBB has no IR basic block");
     llvm::IRBuilder Builder{EntryBB};
     initKernelEntryRegs(Builder);
-
-    /// Set the initial value of the execute mask to all ones on entry
-    llvm::MCRegister Exec = TRI.getExec();
-    seedRegValue(MF.front(), Exec,
-                 Builder.getIntN(TRI.getRegSizeInBits(Exec, MF.getRegInfo()),
-                                 0xFFFFFFFF));
-    /// Set the initial SCC value to zero
-    seedRegValue(MF.front(), llvm::AMDGPU::SCC, Builder.getInt1(false));
   }
 
   /// Iterate over the MBBs and raise the machine instructions in each MBB to
