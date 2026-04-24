@@ -158,14 +158,6 @@ private:
 
   llvm::BasicBlock &getOperandAsBasicBlock(const llvm::MachineOperand &Op);
 
-  /// Seed the value of \p Reg in \p MBB without invalidating overlaps.
-  /// Used to initialize pre-loaded kernel entry registers before any
-  /// instructions are raised.
-  void seedRegValue(const llvm::MachineBasicBlock &MBB, llvm::MCRegister Reg,
-                    llvm::Value *Val) {
-    getMap(MBB)[Reg][Val->getType()] = Val;
-  }
-
   llvm::Value &getRegisterOperand(const llvm::MachineInstr &MI,
                                   llvm::MCRegister Reg,
                                   llvm::Type *RegType = nullptr);
@@ -190,12 +182,6 @@ private:
 
   std::string getRegValueName(llvm::MCRegister Reg) const {
     return llvm::StringRef(TRI.getName(Reg)).lower() + "_val";
-  }
-
-  MCRegValueMap &getMap(const llvm::MachineBasicBlock &MBB) {
-    auto It = VM.find(MBB);
-    assert(It != VM.end() && "No value map for MBB");
-    return It->second;
   }
 
   /// Handle overlapping entries in \p Map when \p Reg is about to be written.

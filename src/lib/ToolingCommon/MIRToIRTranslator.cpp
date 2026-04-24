@@ -452,7 +452,7 @@ llvm::Value *MIRToIRTranslator::tryComposeFromOverlappingRegs(
 llvm::Value &
 MIRToIRTranslator::materializeReg(const llvm::MachineBasicBlock &MBB,
                                   llvm::MCRegister Reg, llvm::Type *RegType) {
-  MCRegValueMap &Map = getMap(MBB);
+  MCRegValueMap &Map = VM[MBB];
   unsigned RegSize =
       Reg == llvm::AMDGPU::MODE
           ? 32
@@ -593,6 +593,11 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
   const auto &Info = *MF.getInfo<llvm::SIMachineFunctionInfo>();
 
   using PV = llvm::AMDGPUFunctionArgInfo::PreloadedValue;
+
+  auto seedRegValue = [&](const llvm::MachineBasicBlock &MBB,
+                          llvm::MCRegister Reg, llvm::Value *Val) {
+    VM[MBB][Reg][Val->getType()] = Val;
+  };
 
   /// Seed a single preloaded register with \p Val.
   /// Annotates non-VGPR values with \c !amdgpu.uniform.
@@ -792,7 +797,7 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
   assert(Val && "Val is nullptr");
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI has no parent MBB");
-  MCRegValueMap &Map = getMap(*MBB);
+  MCRegValueMap &Map = VM[*MBB];
   // Emit any extraction IR into the MBB's basic block.
   auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
   assert(BB && "MBB has no IR basic block");
