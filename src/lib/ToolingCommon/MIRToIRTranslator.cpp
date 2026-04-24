@@ -26,8 +26,10 @@
 #include "luthier/Tooling/TargetMachineInstrMDNode.h"
 #include <AMDGPUMachineFunction.h>
 #include <GCNSubtarget.h>
+#include <SIDefines.h>
 #include <SIInstrInfo.h>
 #include <SIMachineFunctionInfo.h>
+#include <SIModeRegisterDefaults.h>
 #include <SIRegisterInfo.h>
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
@@ -581,6 +583,91 @@ MIRToIRTranslator::materializeReg(const llvm::MachineBasicBlock &MBB,
   return *Phi;
 }
 
+/// Decode the "denormal-fp-math[-f32]" attribute value (e.g.
+/// "preserve-sign," or ",preserve-sign") into the AMDGPU \c FP_DENORM_*
+/// encoding used by the MODE register.
+static uint32_t decodeDenormAttr(llvm::StringRef AttrVal) {
+  auto [In, Out] = AttrVal.split(',');
+  In = In.trim();
+  Out = Out.trim();
+  bool InFlush = (In == "preserve-sign");
+  bool OutFlush = (Out == "preserve-sign");
+  if (InFlush && OutFlush)
+    return FP_DENORM_FLUSH_IN_FLUSH_OUT;
+  if (OutFlush)
+    return FP_DENORM_FLUSH_OUT;
+  if (InFlush)
+    return FP_DENORM_FLUSH_IN;
+  return FP_DENORM_FLUSH_NONE;
+}
+
+/// Build the i32 MODE register value that mirrors the kernel-entry state
+/// implied by the function's FP attributes (lifted from the kernel
+/// descriptor by \c CodeDiscoveryPass). Fields whose attribute is missing
+/// fall back to \c SIModeRegisterDefaults so the subtarget-specific
+/// defaults stay authoritative. Target-divergent bits (IEEE, DX10_CLAMP)
+/// are guarded with subtarget predicates.
+static llvm::Value *buildInitialModeValue(const llvm::Function &F,
+                                          const llvm::GCNSubtarget &ST,
+                                          llvm::IRBuilderBase &Builder) {
+  llvm::SIModeRegisterDefaults Defaults(F, ST);
+
+  uint32_t Mode = 0;
+
+  /// FP_ROUND (bits 0..3): the backend emits round-to-nearest at kernel
+  /// entry on every supported target and there is no function attribute
+  /// that overrides this, so both halves stay zero.
+
+  /// FP_DENORM_F32 (bits 4..5).
+  uint32_t Denorm32 =
+      F.hasFnAttribute("denormal-fp-math-f32")
+          ? decodeDenormAttr(
+                F.getFnAttribute("denormal-fp-math-f32").getValueAsString())
+          : Defaults.fpDenormModeSPValue();
+  Mode |= (Denorm32 & 0x3u) << 4;
+
+  /// FP_DENORM_F64/F16 (bits 6..7).
+  uint32_t Denorm1664 =
+      F.hasFnAttribute("denormal-fp-math")
+          ? decodeDenormAttr(
+                F.getFnAttribute("denormal-fp-math").getValueAsString())
+          : Defaults.fpDenormModeDPValue();
+  Mode |= (Denorm1664 & 0x3u) << 6;
+
+  /// DX10_CLAMP (bit 8) — pre-GFX12 only. On GFX12 the bit moved out of
+  /// WAVE_MODE; we leave it cleared here.
+  if (!llvm::AMDGPU::isGFX12Plus(ST)) {
+    bool DX10Clamp =
+        F.hasFnAttribute("amdgpu-dx10-clamp")
+            ? F.getFnAttribute("amdgpu-dx10-clamp").getValueAsString() == "true"
+            : Defaults.DX10Clamp;
+    if (DX10Clamp)
+      Mode |= llvm::AMDGPU::Hwreg::DX10_CLAMP_MASK;
+  }
+
+  /// IEEE (bit 9) — pre-GFX12 only. Moved out of WAVE_MODE on GFX12.
+  if (!llvm::AMDGPU::isGFX12Plus(ST)) {
+    bool IEEE =
+        F.hasFnAttribute("amdgpu-ieee")
+            ? F.getFnAttribute("amdgpu-ieee").getValueAsString() == "true"
+            : Defaults.IEEE;
+    if (IEEE)
+      Mode |= (1u << 9);
+  }
+
+  /// GPR_IDX_EN, VSKIP, CSP — GFX9-and-earlier only. These MODE bits were
+  /// removed / repurposed on GFX10+. On the targets that do have them,
+  /// they are guaranteed zero on kernel entry; the masked AND-NOT keeps
+  /// the invariant tied to the canonical SIDefines names.
+  if (!llvm::AMDGPU::isGFX10Plus(ST)) {
+    Mode &= ~llvm::AMDGPU::Hwreg::GPR_IDX_EN_MASK;
+    Mode &= ~llvm::AMDGPU::Hwreg::VSKIP_MASK;
+    Mode &= ~llvm::AMDGPU::Hwreg::CSP_MASK;
+  }
+
+  return Builder.getInt32(Mode);
+}
+
 /// Initialize the register tracker with the pre-loaded SGPR/VGPR values
 /// for an AMDGPU kernel entry function.
 ///
@@ -703,14 +790,35 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
   scalarIntrinsic(PV::WORKITEM_ID_Z, llvm::Intrinsic::amdgcn_workitem_id_z,
                   Builder.getInt32Ty());
 
-  /// Execute mask and SCC values
-  /// Set the initial value of the execute mask to all ones on entry
+  // ---- Writable specials ----
+
+  const auto &ST = MF.getSubtarget<llvm::GCNSubtarget>();
+
+  /// EXEC is all-ones on kernel entry (every lane active). Width matches
+  /// the wavefront size — use ~0ULL so wave64 sets all 64 bits, not just
+  /// the low 32.
   llvm::MCRegister Exec = TRI.getExec();
-  seedRegValue(
-      MF.front(), Exec,
-      Builder.getIntN(TRI.getRegSizeInBits(Exec, MF.getRegInfo()), 0xFFFFFFFF));
-  /// Set the initial SCC value to zero
+  unsigned ExecWidth = TRI.getRegSizeInBits(Exec, MF.getRegInfo());
+  llvm::Value *ExecInit = Builder.getIntN(ExecWidth, ~0ULL);
+  annotateUniformIfNeeded(ExecInit, TRI, Exec);
+  seedRegValue(MF.front(), Exec, ExecInit);
+
+  /// SCC is zero on kernel entry.
   seedRegValue(MF.front(), llvm::AMDGPU::SCC, Builder.getInt1(false));
+
+  /// MODE: constant assembled from the kernel-descriptor-derived attrs.
+  llvm::Value *ModeInit = buildInitialModeValue(MF.getFunction(), ST, Builder);
+  annotateUniformIfNeeded(ModeInit, TRI, llvm::AMDGPU::MODE);
+  seedRegValue(MF.front(), llvm::AMDGPU::MODE, ModeInit);
+
+  /// VCC is zero on kernel entry. \c TRI.getVCC() returns VCC_LO on
+  /// wave32 and the full VCC pair on wave64.
+  if (llvm::MCRegister VccReg = TRI.getVCC()) {
+    unsigned VccWidth = TRI.getRegSizeInBits(VccReg, MF.getRegInfo());
+    llvm::Value *VccInit = Builder.getIntN(VccWidth, 0);
+    annotateUniformIfNeeded(VccInit, TRI, VccReg);
+    seedRegValue(MF.front(), VccReg, VccInit);
+  }
 }
 
 MIRToIRTranslator::MIRToIRTranslator(llvm::MachineFunction &MF,
