@@ -120,9 +120,45 @@ class MIRToIRTranslator {
 
   using MCRegValueMap = llvm::DenseMap<llvm::MCRegister, ValueTypeMap>;
 
-  using BBValueMap =
+  /// Identifier for the four modeled register files. Stored as
+  /// \c <N x i32> vectors in each block's \c BlockRegState.
+  enum class RegFileID : uint8_t {
+    SGPR = 0,
+    VGPR = 1,
+    AGPR = 2,
+    TTMP = 3,
+    NumFiles = 4
+  };
+
+  /// Location of a physical register inside one of the file vectors. A
+  /// slot covers \c NumLanes consecutive 32-bit lanes starting at
+  /// \c LaneIdx in file \c File. For 16-bit sub-registers (e.g.
+  /// VGPR0_LO16 / VGPR0_HI16 on GFX11+, or TTMP0_LO16..TTMP15_LO16)
+  /// \c NumLanes is 1 and the pair (\c BitOffset, \c BitWidth)
+  /// describes the sub-lane window — otherwise both are zero and the
+  /// access covers the full \c NumLanes * 32 bits.
+  ///
+  /// \c LaneIdx for TTMP slots is the target-physical HW index obtained
+  /// via \c AMDGPU::getMCReg before calling \c TRI.getHWRegIndex —
+  /// querying the pseudo TTMP MCRegister directly yields encoding 0.
+  struct RegFileSlot {
+    RegFileID File;
+    uint16_t LaneIdx;
+    uint16_t NumLanes;
+    uint8_t BitOffset = 0;
+    uint8_t BitWidth = 0;
+  };
+
+  /// Per-block state: the existing read cache plus lazily built file
+  /// vectors. Each file slot is null until some semantic requests it.
+  struct BlockRegState {
+    MCRegValueMap RegCache;
+    llvm::Value *FileCache[static_cast<size_t>(RegFileID::NumFiles)] = {};
+  };
+
+  using BBStateMap =
       llvm::DenseMap<std::reference_wrapper<const llvm::MachineBasicBlock>,
-                     MCRegValueMap>;
+                     BlockRegState>;
 
   llvm::MachineFunction &MF;
 
@@ -132,6 +168,28 @@ class MIRToIRTranslator {
 
   const llvm::SIInstrInfo &TII;
 
+  /// Number of 32-bit lanes in each file. Zero if the file is unmodeled
+  /// for this target (e.g. AGPRs on non-MAI targets).
+  unsigned FileWidths[static_cast<size_t>(RegFileID::NumFiles)] = {};
+
+  /// \c <N x i32> type for each modeled file; null if unmodeled.
+  llvm::FixedVectorType *FileTypes[static_cast<size_t>(RegFileID::NumFiles)] =
+      {};
+
+  /// SGPR aliased by \c VCC_LO. \c VCC_HI aliases the next SGPR. VCC
+  /// always reserves two SGPR slots (VCC_HI is allocated even on wave32
+  /// where the shader only uses VCC_LO). Empty MCRegister if the kernel
+  /// did not have enough SGPRs to reserve the slot.
+  llvm::MCRegister VccLoSgpr{};
+  /// SGPR aliased by \c XNACK_MASK_LO on targets where xnack is
+  /// supported (regardless of whether it is currently enabled). Empty
+  /// MCRegister otherwise.
+  llvm::MCRegister XnackMaskLoSgpr{};
+  /// SGPR aliased by \c FLAT_SCR_LO when the target has flat-scratch
+  /// instructions and is pre-GFX10. Empty MCRegister otherwise (GFX10+
+  /// moves FLAT_SCR out of the user SGPR file).
+  llvm::MCRegister FlatScrLoSgpr{};
+
   struct ToBeFixedPhiInfo {
     const llvm::MachineBasicBlock *MBB;
     llvm::MCRegister Reg;
@@ -140,7 +198,17 @@ class MIRToIRTranslator {
 
   llvm::SmallVector<ToBeFixedPhiInfo> ToBeFixedPhis{};
 
-  BBValueMap VM{};
+  /// File-level placeholder PHIs queued for fixup after the whole function
+  /// has been translated.
+  struct ToBeFixedFilePhiInfo {
+    const llvm::MachineBasicBlock *MBB;
+    RegFileID File;
+    llvm::PHINode *Phi;
+  };
+
+  llvm::SmallVector<ToBeFixedFilePhiInfo> ToBeFixedFilePhis{};
+
+  BBStateMap VM{};
 
 public:
   MIRToIRTranslator(llvm::MachineFunction &MF, llvm::Error &Err);
@@ -222,7 +290,56 @@ private:
 
   void initKernelEntryRegs(llvm::IRBuilderBase &Builder);
 
+  /// Populate \c FileWidths, \c FileTypes, and the reserved LO-half SGPR
+  /// MCRegisters from the function's \c amdgpu-num-sgpr / \c amdgpu-num-vgpr
+  /// attributes and subtarget features. Called once from the constructor.
+  void buildRegFileLayout();
+
+  /// Classify \p Reg into one of the four modeled register files. Fires
+  /// an assertion if \p Reg is not part of any modeled file — it is the
+  /// instruction semantics' responsibility to only query file-backed
+  /// registers.
+  RegFileID getRegFileForReg(llvm::MCRegister Reg) const;
+
+  /// Compute the lane range that \p Reg occupies within its file.
+  RegFileSlot getRegFileSlot(llvm::MCRegister Reg) const;
+
+  /// Internal worker for \c getRegisterFileValue. Shared by the primary
+  /// MI-taking overload and the PHI-fixup path that walks predecessors.
+  llvm::Value *getRegisterFileValue(const llvm::MachineBasicBlock &MBB,
+                                    RegFileID File,
+                                    llvm::IRBuilderBase &Builder);
+
+  /// Drop every \c RegCache entry in \p State whose register belongs to
+  /// the given file. Used after a non-constant-index file write to make
+  /// the newly written file the sole source of truth.
+  void wipeFileRegsFromCache(BlockRegState &State, RegFileID File);
+
 public:
+  /// Return the LLVM value that represents the architectural register
+  /// file containing \p Reg at the point in the function corresponding to
+  /// \p MI. The result is an \c <N x i32> vector where lane \c k holds
+  /// the 32-bit value of register \c k in that file.
+  ///
+  /// Result is cached per-MBB: the first call in a given block either
+  /// builds the file from the cache (for entry / predecessor-less
+  /// blocks — frozen poison for any lane not already cached) or emits a
+  /// placeholder \c <N x i32> PHI that is wired up once all blocks have
+  /// been translated.
+  llvm::Value *getRegisterFileValue(const llvm::MachineInstr &MI,
+                                    llvm::MCRegister Reg);
+
+  /// Write \p Val into the file that contains \p Reg at lane \p Index.
+  /// When \p Index is a \c ConstantInt the write is folded into a normal
+  /// \c setRegOperandValue on the targeted sub-register; otherwise the
+  /// whole-file \c insertelement is emitted and every per-register cache
+  /// entry for that file is invalidated so that subsequent reads re-derive
+  /// from the new file value.
+  ///
+  /// Writes to the TTMP file are silently discarded.
+  void writeRegisterFile(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
+                         llvm::Value *Index, llvm::Value *Val);
+
   void translate();
 };
 
