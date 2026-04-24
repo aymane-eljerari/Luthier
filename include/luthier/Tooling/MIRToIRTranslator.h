@@ -130,27 +130,18 @@ class MIRToIRTranslator {
     NumFiles = 4
   };
 
-  /// Location of a physical register inside one of the file vectors. A
-  /// slot covers \c NumLanes consecutive 32-bit lanes starting at
-  /// \c LaneIdx in file \c File. For 16-bit sub-registers (e.g.
-  /// VGPR0_LO16 / VGPR0_HI16 on GFX11+, or TTMP0_LO16..TTMP15_LO16)
-  /// \c NumLanes is 1 and the pair (\c BitOffset, \c BitWidth)
-  /// describes the sub-lane window — otherwise both are zero and the
-  /// access covers the full \c NumLanes * 32 bits.
-  ///
-  /// \c LaneIdx for TTMP slots is the target-physical HW index obtained
-  /// via \c AMDGPU::getMCReg before calling \c TRI.getHWRegIndex —
-  /// querying the pseudo TTMP MCRegister directly yields encoding 0.
-  struct RegFileSlot {
-    RegFileID File;
-    uint16_t LaneIdx;
-    uint16_t NumLanes;
-    uint8_t BitOffset = 0;
-    uint8_t BitWidth = 0;
+  /// Location of a physical register inside one of the register file vectors.
+  /// A slot covers \c NumLanes consecutive 16-bit lanes starting at
+  /// \c LaneIdx in \c File
+  struct RegFileSlotInfo {
+    RegFileID File;    /// < Which register file this register belongs to
+    uint16_t LaneIdx;  /// < Lane Idx of the register; Corresponds to the HW Idx
+                       /// returned by the TRI
+    uint64_t NumLanes; /// < Number of lanes covered by the register
   };
 
-  /// Per-block state: the existing read cache plus lazily built file
-  /// vectors. Each file slot is null until some semantic requests it.
+  /// Per-basic block state; Contains individual register read cache plus
+  /// any built file vectors requested by the translation
   struct BlockRegState {
     MCRegValueMap RegCache;
     llvm::Value *FileCache[static_cast<size_t>(RegFileID::NumFiles)] = {};
@@ -168,52 +159,57 @@ class MIRToIRTranslator {
 
   const llvm::SIInstrInfo &TII;
 
-  /// Number of 32-bit lanes in each file. Zero if the file is unmodeled
+  const llvm::GCNSubtarget &ST;
+
+  /// Number of 16-bit lanes in each file. Zero if the file is unmodeled
   /// for this target (e.g. AGPRs on non-MAI targets).
   unsigned FileWidths[static_cast<size_t>(RegFileID::NumFiles)] = {};
 
-  /// \c <N x i32> type for each modeled file; null if unmodeled.
+  /// \c <N x i16> type for each modeled file; null if unmodeled.
   llvm::FixedVectorType *FileTypes[static_cast<size_t>(RegFileID::NumFiles)] =
       {};
 
-  /// SGPR aliased by \c VCC_LO. \c VCC_HI aliases the next SGPR. VCC
-  /// always reserves two SGPR slots (VCC_HI is allocated even on wave32
-  /// where the shader only uses VCC_LO). Empty MCRegister if the kernel
-  /// did not have enough SGPRs to reserve the slot.
-  llvm::MCRegister VccLoSgpr{};
-  /// SGPR aliased by \c XNACK_MASK_LO on targets where xnack is
-  /// supported (regardless of whether it is currently enabled). Empty
-  /// MCRegister otherwise.
-  llvm::MCRegister XnackMaskLoSgpr{};
-  /// SGPR aliased by \c FLAT_SCR_LO when the target has flat-scratch
-  /// instructions and is pre-GFX10. Empty MCRegister otherwise (GFX10+
-  /// moves FLAT_SCR out of the user SGPR file).
-  llvm::MCRegister FlatScrLoSgpr{};
+  /// Logical SGPR that aliases \c VCC_LO for applicable targets
+  llvm::MCRegister VccLoSgpr{llvm::MCRegister::NoRegister};
+  /// Logical SGPR that aliases \c XNACK_MASK_LO on targets where xnack is
+  /// supported
+  llvm::MCRegister XnackMaskLoSgpr{llvm::MCRegister::NoRegister};
+  /// Logical SGPR that aliases \c FLAT_SCR_LO on targets that store
+  /// \c FLAT_SRC before the VCC with the rest of the normal SGPRs
+  llvm::MCRegister FlatScrLoSgpr{llvm::MCRegister::NoRegister};
 
-  struct ToBeFixedPhiInfo {
+  struct ToBeFixedRegValuePhiInfo {
     const llvm::MachineBasicBlock *MBB;
     llvm::MCRegister Reg;
     llvm::PHINode *Phi;
   };
 
-  llvm::SmallVector<ToBeFixedPhiInfo> ToBeFixedPhis{};
+  /// Register value placeholder PHIs that need to be fixed up after the
+  /// function has been translated
+  llvm::SmallVector<ToBeFixedRegValuePhiInfo> ToBeFixedPhis{};
 
-  /// File-level placeholder PHIs queued for fixup after the whole function
-  /// has been translated.
   struct ToBeFixedFilePhiInfo {
     const llvm::MachineBasicBlock *MBB;
     RegFileID File;
     llvm::PHINode *Phi;
   };
 
+  /// File-level placeholder PHIs that need to be fixed up after the function
+  /// has been translated
   llvm::SmallVector<ToBeFixedFilePhiInfo> ToBeFixedFilePhis{};
 
+  /// Per-basic block register and file value mapping; This is updated every
+  /// time a single register/file is read/written to
   BBStateMap VM{};
 
 public:
   MIRToIRTranslator(llvm::MachineFunction &MF, llvm::Error &Err);
 
 private:
+  unsigned getPhysRegisterSize(llvm::MCRegister Reg) const;
+
+  static llvm::StringRef getFileDebugName(RegFileID File);
+
   llvm::Value &getOperandAsValue(const llvm::MachineInstr &MI,
                                  llvm::AMDGPU::OpName OpName,
                                  llvm::Type *RegType = nullptr);
@@ -302,7 +298,7 @@ private:
   RegFileID getRegFileForReg(llvm::MCRegister Reg) const;
 
   /// Compute the lane range that \p Reg occupies within its file.
-  RegFileSlot getRegFileSlot(llvm::MCRegister Reg) const;
+  RegFileSlotInfo getRegFileSlot(llvm::MCRegister Reg) const;
 
   /// Internal worker for \c getRegisterFileValue. Shared by the primary
   /// MI-taking overload and the PHI-fixup path that walks predecessors.
