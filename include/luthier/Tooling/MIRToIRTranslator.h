@@ -135,7 +135,7 @@ class MIRToIRTranslator {
   /// \c LaneIdx in \c File
   struct RegFileSlotInfo {
     RegFileID File;    /// < Which register file this register belongs to
-    uint16_t LaneIdx;  /// < Lane Idx of the register; Corresponds to the HW Idx
+    uint64_t LaneIdx;  /// < Lane Idx of the register; Corresponds to the HW Idx
                        /// returned by the TRI
     uint64_t NumLanes; /// < Number of lanes covered by the register
   };
@@ -206,6 +206,8 @@ public:
   MIRToIRTranslator(llvm::MachineFunction &MF, llvm::Error &Err);
 
 private:
+  std::optional<unsigned> get16BitOffsetFromBaseReg(llvm::MCRegister Reg) const;
+
   unsigned getPhysRegisterSize(llvm::MCRegister Reg) const;
 
   static llvm::StringRef getFileDebugName(RegFileID File);
@@ -295,10 +297,10 @@ private:
   /// an assertion if \p Reg is not part of any modeled file — it is the
   /// instruction semantics' responsibility to only query file-backed
   /// registers.
-  RegFileID getRegFileForReg(llvm::MCRegister Reg) const;
+  std::optional<RegFileID> getRegFileForReg(llvm::MCRegister Reg) const;
 
   /// Compute the lane range that \p Reg occupies within its file.
-  RegFileSlotInfo getRegFileSlot(llvm::MCRegister Reg) const;
+  std::optional<RegFileSlotInfo> getRegFileSlot(llvm::MCRegister Reg) const;
 
   /// Internal worker for \c getRegisterFileValue. Shared by the primary
   /// MI-taking overload and the PHI-fixup path that walks predecessors.
