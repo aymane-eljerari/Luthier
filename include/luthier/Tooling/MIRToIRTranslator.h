@@ -132,14 +132,11 @@ class MIRToIRTranslator {
 
   static constexpr unsigned RegGranule = 16;
 
-  /// Cache map for registers whose location is identified by a 16-bit-lane
-  /// offset within a register file (SGPR/VGPR/AGPR/Hardware registers)
+  /// Cache for registers
+  /// The location of each register is identified by a 16-bit-lane
+  /// offset within their associated register file
+  /// (SGPR/VGPR/AGPR/Hardware registers)
   using RegValueMap = llvm::DenseMap<RegFileKey, ValueTypeMap>;
-
-  /// Identifier for the three modeled register files. TTMPs live in the
-  /// SGPR file at their natural HW encoding (108..123 / 112..127), so they
-  /// are not a separate file.
-  enum class RegFileID : uint8_t { SGPR = 0, VGPR = 1, AGPR = 2, NumFiles = 3 };
 
   using BBStateMap =
       llvm::DenseMap<std::reference_wrapper<const llvm::MachineBasicBlock>,
@@ -156,18 +153,30 @@ class MIRToIRTranslator {
   /// \c FLAT_SRC before the VCC with the rest of the normal SGPRs
   llvm::MCRegister FlatScrLoSgpr{llvm::MCRegister::NoRegister};
 
-  /// Encoding offset (in 16-bit lanes) of the lowest SGPR slot past the
-  /// highest VCC register encoding
-  uint32_t SGPRFilePostVCCHiOffset = 0;
+  /// Marks the start of the TTMP0 to EXEC HI register file
+  llvm::MCRegister TTMPBaseReg = {llvm::AMDGPU::TTMP0};
+
+  /// Encoding offset (in 16-bit lanes) of the lane right after the EXEC_HI
+  /// register is encoded in the register file.
+  unsigned ExecHiHalfWordOffset = 0;
+
+  /// Encoding offset (in 16-bit lanes) of where the current subtarget encodes
+  /// the first status register in the SGPR file (i.e., VCCZ)
+  unsigned SrcVCCZHalfWordOffset = 0;
+
+  /// Number of allocated Half-word SGPRs by the kernel descriptor; This number
+  /// also signifies where the trap handler registers start
+  unsigned NumPreVCCHiHalfWordSGPRs = 0;
+
+  /// SGPR half-word index where the status registers are encoded in the
+  /// SGPR file; This usually comes after the aperture registers on GFX9+
+  /// targets
+  unsigned SGPRStatusRegHWordOffsetStart = 0;
 
   /// Total 16-bit-lane footprint of each register file.
   /// For the SGPR file this is sized to cover all the encoded SGPR range; for
   /// VGPR/AGPR it's exactly \c 2 * NumGPRs.
   llvm::SmallDenseMap<llvm::MCRegister, unsigned> RegFileSize{};
-
-  /// Allocated 16-bit-lane count for plain GPRs in each file. A plain
-  /// reg whose offset is ≥ this and not a special is out-of-range.
-  llvm::SmallDenseMap<llvm::MCRegister, unsigned> RegFileAllocated{};
 
   struct ToBeFixedRegValuePhiInfo {
     const llvm::MachineBasicBlock *MBB;
@@ -183,7 +192,13 @@ class MIRToIRTranslator {
   /// time a single register/file is read/written to
   BBStateMap VM{};
 
-  unsigned get16BitOffsetFromBaseReg(llvm::MCRegister Reg) const;
+  /// Provides the index of \p Reg w.r.t the base register of the register
+  /// file \p Reg resides in
+  unsigned getHardwareIdxOffsetFromBaseReg(llvm::MCRegister Reg) const;
+
+  /// Provides the offset where the \p Reg will be encoded inside the
+  /// translator's register file
+  unsigned getRegFileHalfWordOffset(llvm::MCRegister Reg) const;
 
   /// Maps the physical pseudo register to its hardware register
   llvm::MCRegister getPhysReg(llvm::MCRegister Reg) const;

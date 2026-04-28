@@ -103,7 +103,6 @@ static llvm::Value *getOrCreateIntOrPtrTypeForReg(
     auto &[T, V] = *ValueEntries.begin();
     llvm::Type *OutTy = Builder.getIntNTy(T->getPrimitiveSizeInBits());
     VecIntOrPtrVal = Builder.CreateBitOrPointerCast(V, OutTy, RegName);
-    annotateUniformIfNeeded(VecIntOrPtrVal, TRI, std::get<0>(Key));
     ValueEntries[OutTy] = VecIntOrPtrVal;
   }
   return VecIntOrPtrVal;
@@ -128,7 +127,6 @@ static llvm::Value *getOrCreateIntOrPtrTypeForReg(
     auto &[T, V] = *ValueEntries.begin();
     llvm::Type *OutTy = Builder.getIntNTy(T->getPrimitiveSizeInBits());
     VecIntOrPtrVal = Builder.CreateBitOrPointerCast(V, OutTy, RegName);
-    annotateUniformIfNeeded(VecIntOrPtrVal, TRI, Reg);
     ValueEntries[OutTy] = VecIntOrPtrVal;
   }
   return VecIntOrPtrVal;
@@ -150,7 +148,6 @@ static llvm::Value *getOrCreateIntOrFloatTypeForReg(
     auto &[T, V] = *ValueEntries.begin();
     llvm::Type *OutTy = Builder.getIntNTy(T->getIntegerBitWidth());
     IntOrFloatVecVal = Builder.CreateBitOrPointerCast(V, OutTy, ValueName);
-    annotateUniformIfNeeded(IntOrFloatVecVal, TRI, RegBileBase);
     ValueEntries[OutTy] = IntOrFloatVecVal;
   }
   return IntOrFloatVecVal;
@@ -179,8 +176,6 @@ static llvm::Value *breakdownToVecTyFromAvailableValues(
     llvm::Value *IntVal = getOrCreateIntOrFloatTypeForReg(
         ValueEntries, Builder, TRI, ValueName, BaseFileReg);
     llvm::Value *Out = Builder.CreateBitOrPointerCast(IntVal, VecTy, ValueName);
-
-    annotateUniformIfNeeded(Out, TRI, BaseFileReg);
     ValueEntries[VecTy] = Out;
     return Out;
   }
@@ -375,7 +370,6 @@ llvm::Value *MIRToIRTranslator::tryComposeFromSubRegs(
     }
   }
   State[KeyReg][VecTy] = Vec;
-  annotateUniformIfNeeded(Vec, TRI, BaseReg);
   return Builder.CreateBitOrPointerCast(Vec, RegType, OutValName);
 }
 
@@ -403,7 +397,6 @@ llvm::Value *MIRToIRTranslator::tryComposeFromOverlappingRegs(
       llvm::PHINode *PhiNode =
           Builder.CreatePHI(Builder.getInt16Ty(), MBB.pred_size(), OutValName);
       ToBeFixedPhis.emplace_back(&MBB, SubKey, PhiNode);
-      annotateUniformIfNeeded(SubVal, TRI, BaseReg);
       SubVal = PhiNode;
     } else {
       SubVal = Builder.CreateFreeze(
@@ -417,7 +410,6 @@ llvm::Value *MIRToIRTranslator::tryComposeFromOverlappingRegs(
     RegType = Builder.getIntNTy(RegSize);
 
   State[KeyReg][VecTy] = Vec;
-  annotateUniformIfNeeded(Vec, TRI, BaseReg);
   return Builder.CreateBitOrPointerCast(Vec, RegType, OutValName);
 }
 
@@ -438,8 +430,15 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineBasicBlock &MBB,
   assert(BB && "MBB does not have an IR basic block");
 
   llvm::Instruction *TermInst = BB->getTerminator();
-  llvm::IRBuilder Builder =
-      TermInst ? llvm::IRBuilder{TermInst} : llvm::IRBuilder{BB};
+  llvm::InstSimplifyFolder CF{MF.getDataLayout()};
+  llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
+    annotateUniformIfNeeded(I, TRI, Reg);
+    LLVM_DEBUG(llvm::dbgs()
+               << "[MIRToIRTranslator] Inserting reg read instruction " << *I
+               << "\n");
+  });
+  llvm::IRBuilderBase Builder(BB->getContext(), CF, Inserter, {}, {});
+  TermInst ? Builder.SetInsertPoint(TermInst) : Builder.SetInsertPoint(BB);
 
   return getOperandAsValue(MBB, getRegFileSlot(Reg), Builder, RegValName,
                            OutRegType);
@@ -483,7 +482,6 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
     CastVal->setName(ValName);
     llvm::Value *Out =
         Builder.CreateBitOrPointerCast(CastVal, OutRegType, ValName);
-    annotateUniformIfNeeded(Out, TRI, std::get<0>(Key));
     VTM[OutRegType] = Out;
     return *Out;
   }
@@ -491,7 +489,6 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
   // 2. Extract from a stored super-register.
   if (llvm::Value *V =
           tryExtractFromSuperReg(State, Key, ValName, Builder, OutRegType)) {
-    annotateUniformIfNeeded(V, TRI, BaseReg);
     V->setName(ValName);
     State[Key][OutRegType] = V;
     return *V;
@@ -500,7 +497,6 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
   // 3. Compose from stored sub-registers.
   if (llvm::Value *V =
           tryComposeFromSubRegs(State, Key, ValName, Builder, OutRegType)) {
-    annotateUniformIfNeeded(V, TRI, BaseReg);
     V->setName(ValName);
     State[Key][OutRegType] = V;
     return *V;
@@ -508,7 +504,6 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
 
   if (llvm::Value *V = tryComposeFromOverlappingRegs(State, MBB, Key, ValName,
                                                      Builder, OutRegType)) {
-    annotateUniformIfNeeded(V, TRI, BaseReg);
     V->setName(ValName);
     State[Key][OutRegType] = V;
     return *V;
@@ -524,7 +519,6 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
   }
   llvm::PHINode *Phi = Builder.CreatePHI(OutRegType, MBB.pred_size(), ValName);
   ToBeFixedPhis.emplace_back(&MBB, Key, Phi);
-  annotateUniformIfNeeded(Phi, TRI, BaseReg);
   State[Key][OutRegType] = Phi;
   return *Phi;
 }
@@ -639,7 +633,6 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
     llvm::MCRegister Reg = Info.getPreloadedReg(Which);
     if (!Reg)
       return;
-    annotateUniformIfNeeded(Val, TRI, Reg);
     seedRegValue(MF.front(), Reg, Val);
   };
 
@@ -747,7 +740,6 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
   llvm::MCRegister Exec = TRI.getExec();
   unsigned ExecWidth = TRI.getRegSizeInBits(Exec, MF.getRegInfo());
   llvm::Value *ExecInit = Builder.getIntN(ExecWidth, ~0ULL);
-  annotateUniformIfNeeded(ExecInit, TRI, Exec);
   seedRegValue(MF.front(), Exec, ExecInit);
 
   /// SCC is zero on kernel entry.
@@ -763,7 +755,6 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
   if (llvm::MCRegister VccReg = TRI.getVCC()) {
     unsigned VccWidth = TRI.getRegSizeInBits(VccReg, MF.getRegInfo());
     llvm::Value *VccInit = Builder.getIntN(VccWidth, 0);
-    annotateUniformIfNeeded(VccInit, TRI, VccReg);
     seedRegValue(MF.front(), VccReg, VccInit);
   }
 }
@@ -790,22 +781,14 @@ MIRToIRTranslator::MIRToIRTranslator(llvm::MachineFunction &MF,
 }
 
 unsigned
-MIRToIRTranslator::get16BitOffsetFromBaseReg(llvm::MCRegister Reg) const {
+MIRToIRTranslator::getHardwareIdxOffsetFromBaseReg(llvm::MCRegister Reg) const {
   if (Reg == llvm::AMDGPU::MODE)
     return 0;
 
-  /// Convert any pseudo / target-divergent encoding (TTMP, FLAT_SCR_LO,
-  /// etc.) to the actual physical encoding for the current subtarget
-  /// before reading the encoding bits.
   llvm::MCRegister MCReg = llvm::AMDGPU::getMCReg(Reg, ST);
   unsigned Enc = TRI.getEncodingValue(MCReg);
   unsigned HwIdx = Enc & llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
-  unsigned IsHi16 = (Enc & llvm::AMDGPU::HWEncoding::IS_HI16) ? 1u : 0u;
 
-  /// File-relative base index. Each file's base reg has HW index 0 in
-  /// the AMDGPU encoding scheme, so the subtraction is a no-op today —
-  /// kept explicit for symmetry / future-proofing against targets that
-  /// may use a non-zero base.
   llvm::MCRegister BaseReg;
   if (Enc & llvm::AMDGPU::HWEncoding::IS_AGPR)
     BaseReg = llvm::AMDGPU::AGPR0;
@@ -813,6 +796,52 @@ MIRToIRTranslator::get16BitOffsetFromBaseReg(llvm::MCRegister Reg) const {
     BaseReg = llvm::AMDGPU::VGPR0;
   else
     BaseReg = llvm::AMDGPU::SGPR0;
+
+  unsigned BaseHwIdx =
+      TRI.getEncodingValue(BaseReg) & llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
+  return HwIdx - BaseHwIdx;
+}
+
+unsigned
+MIRToIRTranslator::getRegFileHalfWordOffset(llvm::MCRegister Reg) const {
+  if (Reg == llvm::AMDGPU::MODE)
+    return 0;
+
+  llvm::MCRegister MCReg = llvm::AMDGPU::getMCReg(Reg, ST);
+  unsigned Enc = TRI.getEncodingValue(MCReg);
+  unsigned HwIdx = Enc & llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
+  unsigned IsHi16 = (Enc & llvm::AMDGPU::HWEncoding::IS_HI16) ? 1u : 0u;
+
+  llvm::MCRegister BaseReg;
+  if (Enc & llvm::AMDGPU::HWEncoding::IS_AGPR)
+    BaseReg = llvm::AMDGPU::AGPR0;
+  else if (Enc & llvm::AMDGPU::HWEncoding::IS_VGPR)
+    BaseReg = llvm::AMDGPU::VGPR0;
+  else
+    BaseReg = llvm::AMDGPU::SGPR0;
+
+  if (BaseReg == llvm::AMDGPU::SGPR0) {
+    if (llvm::AMDGPU::isGFX9Plus(ST)) {
+      unsigned SharedBaseIdx =
+          getHardwareIdxOffsetFromBaseReg(llvm::AMDGPU::SRC_SHARED_BASE);
+      switch (Reg) {
+      case llvm::AMDGPU::SRC_SHARED_BASE:
+      case llvm::AMDGPU::SRC_SHARED_BASE_LO:
+      case llvm::AMDGPU::SRC_SHARED_BASE_LO_HI16:
+        HwIdx = ExecHiHalfWordOffset;
+      }
+      if (TRI.regsOverlap(llvm::AMDGPU::SRC_SHARED_BASE_LO, Reg)) {
+        HwIdx = ExecHiHalfWordOffset
+
+      } else if (TRI.regsOverlap(llvm::AMDGPU::SRC_SHARED_BASE, Reg)) {
+      } else if (TRI.regsOverlap(llvm::AMDGPU::SRC_SHARED_LIMIT_LO, Reg)) {
+
+      } else if (TRI.regsOverlap(llvm::AMDGPU::SRC_PRIVATE_BASE_LO, Reg)) {
+
+      } else if (TRI.regsOverlap(llvm::AMDGPU::SRC_PRIVATE_BASE, Reg)) {
+      }
+    }
+  }
 
   unsigned BaseHwIdx =
       TRI.getEncodingValue(BaseReg) & llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
@@ -861,28 +890,26 @@ llvm::Error MIRToIRTranslator::buildRegFileLayout() {
     return LUTHIER_MAKE_GENERIC_ERROR(
         "amdgpu-num-vgpr must be a non-zero multiple of the VGPR granule");
   }
-  /// Per-file allocated 16-bit-lane footprint. VGPR/AGPR have no specials,
-  /// so the allocated count and the vector size match. The SGPR file is
-  /// extended past the allocation to cover the special encoding range
-  /// (TTMPs, M0, NULL, EXEC) so they have natural
-  /// per-encoding slots.
-  RegFileAllocated[llvm::AMDGPU::SGPR0] = 2u * NumSGPRs;
-  RegFileAllocated[llvm::AMDGPU::VGPR0] = 2u * NumVGPRs;
-  RegFileAllocated[llvm::AMDGPU::AGPR0] = ST.hasMAIInsts() ? 2u * NumVGPRs : 0u;
-  RegFileAllocated[llvm::AMDGPU::MODE] = 1 << 7;
 
-  /// File vector size matches the kernel's actual VGPR/AGPR allocation
-  /// (uniform across the program: the kernel descriptor pins it for
-  /// every device function discovered through the same code object).
-  /// The SGPR file vector keeps a fixed 512 i16-lane footprint to cover
-  /// the encoding space.
-  RegFileSize[llvm::AMDGPU::SGPR0] = 512u;
+  TTMPBaseReg = llvm::AMDGPU::isGFX9Plus(ST)
+                    ? llvm::AMDGPU::getMCReg(llvm::AMDGPU::TTMP0, ST)
+                    : llvm::AMDGPU::getMCReg(llvm::AMDGPU::TBA_LO, ST);
+
+  unsigned NumTTMPRegionRegs =
+      getHardwareIdxOffsetFromBaseReg(llvm::AMDGPU::EXEC_HI) -
+      getHardwareIdxOffsetFromBaseReg(TTMPBaseReg) + 1;
+
+  unsigned NumApertureSregs = llvm::AMDGPU::isGFX9_GFX10(ST)  ? 10
+                              : llvm::AMDGPU::isGFX11Plus(ST) ? 8
+                                                              : 0;
+  RegFileSize[llvm::AMDGPU::SGPR0] = 2u * NumSGPRs;
+  RegFileSize[TTMPBaseReg] = 2u * NumTTMPRegionRegs;
+  RegFileSize[llvm::AMDGPU::getMCReg(llvm::AMDGPU::SRC_VCCZ, ST)] = 6;
+  RegFileSize[llvm::AMDGPU::getMCReg(llvm::AMDGPU::SRC_SHARED_BASE, ST)] =
+      NumApertureSregs;
   RegFileSize[llvm::AMDGPU::VGPR0] = 2u * NumVGPRs;
   RegFileSize[llvm::AMDGPU::AGPR0] = ST.hasMAIInsts() ? 2u * NumVGPRs : 0u;
   RegFileSize[llvm::AMDGPU::MODE] = 1 << 7;
-
-  /// The first "special" SGPR starts right after where VCC's encoding ends
-  SGPRFilePostVCCHiOffset = get16BitOffsetFromBaseReg(llvm::AMDGPU::VCC_HI) + 2;
 
   /// Reserve two SGPR slots at the top of the kernel SGPR allocation for each
   /// SGPR-aliased special on pre-GFX10, in the order the GPU allocates them:
@@ -916,7 +943,7 @@ bool MIRToIRTranslator::isTTMPAndBeyondSGPRRegion(llvm::MCRegister BaseReg,
   /// that matters for those files.
   if (BaseReg != llvm::AMDGPU::SGPR0)
     return false;
-  return Offset >= SGPRFilePostVCCHiOffset;
+  return Offset >= TTMPBaseReg;
 }
 
 std::tuple<llvm::MCRegister, unsigned, unsigned>
@@ -925,7 +952,7 @@ MIRToIRTranslator::getRegFileSlot(llvm::MCRegister Reg) const {
   if (PhysReg == llvm::AMDGPU::MODE)
     return std::make_tuple(Reg, 0, 2);
 
-  unsigned PhysRegOffset = get16BitOffsetFromBaseReg(PhysReg);
+  unsigned PhysRegOffset = getRegFileHalfWordOffset(PhysReg);
 
   const llvm::TargetRegisterClass *RC = TRI.getPhysRegBaseClass(PhysReg);
   assert(RC && "No register class associated with the register");
@@ -942,8 +969,8 @@ MIRToIRTranslator::getRegFileSlot(llvm::MCRegister Reg) const {
                             llvm::MCRegister LogicalBase) -> bool {
       if (!TRI.regsOverlap(Reg, AliasReg))
         return false;
-      unsigned BaseAliasOffset = get16BitOffsetFromBaseReg(AliasReg);
-      unsigned LoAliasOffset = get16BitOffsetFromBaseReg(LogicalBase);
+      unsigned BaseAliasOffset = getRegFileHalfWordOffset(AliasReg);
+      unsigned LoAliasOffset = getRegFileHalfWordOffset(LogicalBase);
       PhysRegOffset = PhysRegOffset - BaseAliasOffset + LoAliasOffset;
       return true;
     };
@@ -1143,9 +1170,9 @@ void MIRToIRTranslator::setRegisterFileFull(const llvm::MachineInstr &MI,
 
   /// Invalidate every per-register cache entry for this file: the
   /// mega-entry now overlaps and supersedes them all.
-  BlockRegState &State = VM[*MBB];
+  RegValueMap &State = VM[*MBB];
   llvm::SmallVector<uint32_t, 32> ToErase;
-  for (auto &[Key, ValMap] : State.RegCache) {
+  for (auto &[Key, ValMap] : State) {
     if (fileFromKey(Key) == Reg)
       ToErase.push_back(Key);
   }
@@ -1399,12 +1426,20 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
   assert(Val && "Val is nullptr");
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI has no parent MBB");
-  BlockRegState &State = VM[*MBB];
+  RegValueMap &State = VM[*MBB];
   auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
   assert(BB && "MBB has no IR basic block");
   llvm::Instruction *TermInst = BB->getTerminator();
-  llvm::IRBuilder Builder =
-      TermInst ? llvm::IRBuilder{TermInst} : llvm::IRBuilder{BB};
+
+  llvm::InstSimplifyFolder CF{MF.getDataLayout()};
+  llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
+    annotateUniformIfNeeded(I, TRI, Reg);
+    LLVM_DEBUG(llvm::dbgs()
+               << "[MIRToIRTranslator] Inserting reg write instruction " << *I
+               << "\n");
+  });
+  llvm::IRBuilderBase Builder(BB->getContext(), CF, Inserter, {}, {});
+  TermInst ? Builder.SetInsertPoint(TermInst) : Builder.SetInsertPoint(BB);
 
   unsigned RegSize = getPhysRegisterSize(Reg);
   assert(Val->getType()->getPrimitiveSizeInBits() == RegSize &&
@@ -1421,7 +1456,6 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
 
   /// OtherCache write — no overlap logic, no file invalidation.
   if (!Slot) {
-    annotateUniformIfNeeded(Val, TRI, Reg);
     Val->setName(getRegValueName(Reg));
     State.HWRegCache[Reg][Val->getType()] = Val;
     return;
@@ -1444,7 +1478,6 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
   /// Preserve non-overlapping portions of partially-overwritten
   /// super-registers, then erase fully-covered entries.
   invalidateOverlaps(State, *Slot, Reg, Builder);
-  annotateUniformIfNeeded(Val, TRI, Reg);
   uint32_t Key = makeFileRegKey(Slot->File, Slot->Offset, Slot->NumHalves);
   State.RegCache[Key][Val->getType()] = Val;
   Val->setName(getRegValueName(Reg));
