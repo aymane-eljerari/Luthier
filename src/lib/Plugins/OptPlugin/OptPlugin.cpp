@@ -39,6 +39,7 @@
 // #include "luthier/Tooling/SVStorageAndLoadLocations.h"
 // #include "luthier/Tooling/IPPredicatedCFG.h"
 // #include "luthier/Tooling/IPReachingDefAnalysis.h"
+#include "luthier/Tooling/InitialExecutionPointAnalysis.h"
 #include "luthier/Tooling/NewPMAsmPrinter.h"
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Plugins/PassPlugin.h>
@@ -95,6 +96,14 @@ llvm::cl::opt<std::pair<uint64_t, std::variant<uint64_t, std::string>>, false,
             "Code objects are zero indexed w.r.t the order they are "
             "specified to be loaded into the mock loader."),
         llvm::cl::NotHidden, llvm::cl::cat(OptPluginOptions)};
+
+llvm::cl::opt<std::pair<uint64_t, std::string>> InitialExecutionPoint{
+    "initial-entrypoint",
+    llvm::cl::desc("The initial execution point of the lifting process. "
+                   "Formatted as <code-object-index>:<mangled-symbol-name>. \n"
+                   "Code objects are zero indexed w.r.t the order they are "
+                   "specified to be loaded into the mock loader."),
+    llvm::cl::NotHidden, llvm::cl::cat(OptPluginOptions)};
 }; // namespace luthier
 
 extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
@@ -171,6 +180,59 @@ llvmGetPassPluginInfo() {
                       return luthier::EntryPoint(LoadAddr);
                     }
                   }
+                }
+                CodeObjectIdx++;
+              };
+              LUTHIER_CTX_EMIT_ON_ERROR(
+                  Ctx, LUTHIER_MAKE_GENERIC_ERROR(
+                           "Failed to get the entry point; Code "
+                           "object index is out of range"));
+              llvm_unreachable("Should have thrown an error by now");
+            });
+      });
+      MAM.registerPass([&]() {
+        return luthier::InitialExecutionPointAnalysis(
+            [&](llvm::Module &M, llvm::ModuleAnalysisManager &AM)
+                -> llvm::amdhsa::kernel_descriptor_t {
+              llvm::LLVMContext &Ctx = M.getContext();
+              const auto &MockLoader =
+                  AM.getResult<luthier::MockAMDGPULoaderAnalysis>(M)
+                      .getLoader();
+              uint64_t CodeObjectIdx = 0;
+              for (const auto &LCO : MockLoader.loaded_code_objects()) {
+                if (CodeObjectIdx == luthier::InitialExecutionPoint.first) {
+                  std::optional<luthier::object::AMDGCNElfSymbolRef> Symbol{
+                      std::nullopt};
+                  llvm::Error Err =
+                      LCO.getCodeObject()
+                          .lookupSymbol(luthier::InitialExecutionPoint.second)
+                          .moveInto(Symbol);
+                  LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
+
+                  if (!Symbol.has_value()) {
+                    LUTHIER_CTX_EMIT_ON_ERROR(
+                        Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+                                 "Failed to find the symbol {0} in "
+                                 "code object index {1}",
+                                 luthier::InitialExecutionPoint.second,
+                                 CodeObjectIdx)));
+                  }
+                  uint64_t LoadOffset;
+                  Err = Symbol->getAddress().moveInto(LoadOffset);
+                  assert(LoadOffset < LCO.getLoadedRegion().size() &&
+                         "Load offset falls outside of the code object");
+                  uint64_t LoadAddr =
+                      reinterpret_cast<uint64_t>(LCO.getLoadedRegion().data()) +
+                      LoadOffset;
+                  LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
+                  if (!Symbol->isKernelDescriptor())
+                    LUTHIER_CTX_EMIT_ON_ERROR(
+                        Ctx,
+                        LUTHIER_MAKE_GENERIC_ERROR(
+                            "Initial execution point is not a kernel symbol"));
+                  auto &KD = *reinterpret_cast<
+                      const llvm::amdhsa::kernel_descriptor_t *>(LoadAddr);
+                  return KD;
                 }
                 CodeObjectIdx++;
               };

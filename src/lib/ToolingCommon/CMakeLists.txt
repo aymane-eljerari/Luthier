@@ -52,6 +52,7 @@ add_library(LuthierToolingCommon OBJECT
         MockLoadAMDGPUCodeObjects.cpp
         CodeObjectManagerAnalysis.cpp
         InitialEntryPointAnalysis.cpp
+        InitialExecutionPointAnalysis.cpp
         AMDGPUMockLoaderPrinter.cpp
         MockLoaderMemoryAccessor.cpp
         Metadata.cpp

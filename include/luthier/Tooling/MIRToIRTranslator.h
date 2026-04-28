@@ -14,8 +14,8 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 /// \file MIRToIRTranslator.h
-/// Describes a set of APIs used to translate machine functions and
-/// individual machine instructions to LLVM IR.
+/// Describes \c MIRToIRTranslator used to translate discovered machine
+/// functions by the \c CodeDiscoveryPass to LLVM IR.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_MIR_TO_IR_TRANSLATOR_H
 #define LUTHIER_TOOLING_MIR_TO_IR_TRANSLATOR_H
@@ -51,10 +51,10 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
                        llvm::IRBuilderBase &Builder,
                        MIRToIRTranslator &Translator);
 
-/// \brief A utility class that lazily materializes LLVM Values from
-/// physical register operands for use with the IR translator functions.
-///
-/// \details The tracker stores values keyed by the *exact* register that
+/// \brief Used by the \c CodeDiscoveryPass to translate lifted Machine IR
+/// instructions in a machine function to their equivalent LLVM IR in the
+/// associated \c llvm::Function
+/// \details The translator stores values keyed by the *exact* register that
 /// was written in each machine basic block by the translated IR instructions.
 /// When a different-sized overlapping register is requested (sub-register
 /// or super-register), the tracker extracts or merges values on demand rather
@@ -108,49 +108,6 @@ class MIRToIRTranslator {
   void raiseMachineInstr(const llvm::MachineInstr &MI,
                          llvm::IRBuilderBase &Builder);
 
-  /// We keep track of the same physical register's value per its available
-  /// type inside each basic block; For example, if the translation requires a
-  /// register value of i32 to be cast to a f32, we cache both values. This way,
-  /// when a later instruction requests the f32 version, we don't emit a
-  /// redundant cast instruction. Allowed types are ints, FP, and pointer types.
-  /// Pointer types don't have to check for size compatibility, as they will
-  /// use the \c llvm::IntToPtrInst which takes care of truncating/extending
-  /// the output pointer size
-  using ValueTypeMap = llvm::DenseMap<llvm::Type *, llvm::Value *>;
-
-  using MCRegValueMap = llvm::DenseMap<llvm::MCRegister, ValueTypeMap>;
-
-  /// Identifier for the four modeled register files. Stored as
-  /// \c <N x i32> vectors in each block's \c BlockRegState.
-  enum class RegFileID : uint8_t {
-    SGPR = 0,
-    VGPR = 1,
-    AGPR = 2,
-    TTMP = 3,
-    NumFiles = 4
-  };
-
-  /// Location of a physical register inside one of the register file vectors.
-  /// A slot covers \c NumLanes consecutive 16-bit lanes starting at
-  /// \c LaneIdx in \c File
-  struct RegFileSlotInfo {
-    RegFileID File;    /// < Which register file this register belongs to
-    uint64_t LaneIdx;  /// < Lane Idx of the register; Corresponds to the HW Idx
-                       /// returned by the TRI
-    uint64_t NumLanes; /// < Number of lanes covered by the register
-  };
-
-  /// Per-basic block state; Contains individual register read cache plus
-  /// any built file vectors requested by the translation
-  struct BlockRegState {
-    MCRegValueMap RegCache;
-    llvm::Value *FileCache[static_cast<size_t>(RegFileID::NumFiles)] = {};
-  };
-
-  using BBStateMap =
-      llvm::DenseMap<std::reference_wrapper<const llvm::MachineBasicBlock>,
-                     BlockRegState>;
-
   llvm::MachineFunction &MF;
 
   std::unique_ptr<MIInlineAsmEmitter> InlineAsmEmitter{};
@@ -161,26 +118,60 @@ class MIRToIRTranslator {
 
   const llvm::GCNSubtarget &ST;
 
-  /// Number of 16-bit lanes in each file. Zero if the file is unmodeled
-  /// for this target (e.g. AGPRs on non-MAI targets).
-  unsigned FileWidths[static_cast<size_t>(RegFileID::NumFiles)] = {};
+  /// We keep track of the same physical register's value per its available
+  /// type inside each basic block; For example, if the translation requires a
+  /// register value of i32 to be cast to a f32, we cache both values. This way,
+  /// when a later instruction requests the f32 version, we don't emit a
+  /// redundant cast instruction. Allowed types are ints, FP, and pointer types.
+  /// Pointer types don't have to check for size compatibility, as they will
+  /// use the \c llvm::IntToPtrInst which takes care of truncating/extending
+  /// the output pointer size
+  using ValueTypeMap = llvm::DenseMap<llvm::Type *, llvm::Value *>;
 
-  /// \c <N x i16> type for each modeled file; null if unmodeled.
-  llvm::FixedVectorType *FileTypes[static_cast<size_t>(RegFileID::NumFiles)] =
-      {};
+  using RegFileKey = std::tuple<llvm::MCRegister, unsigned, unsigned>;
+
+  static constexpr unsigned RegGranule = 16;
+
+  /// Cache map for registers whose location is identified by a 16-bit-lane
+  /// offset within a register file (SGPR/VGPR/AGPR/Hardware registers)
+  using RegValueMap = llvm::DenseMap<RegFileKey, ValueTypeMap>;
+
+  /// Identifier for the three modeled register files. TTMPs live in the
+  /// SGPR file at their natural HW encoding (108..123 / 112..127), so they
+  /// are not a separate file.
+  enum class RegFileID : uint8_t { SGPR = 0, VGPR = 1, AGPR = 2, NumFiles = 3 };
+
+  using BBStateMap =
+      llvm::DenseMap<std::reference_wrapper<const llvm::MachineBasicBlock>,
+                     RegValueMap>;
 
   /// Logical SGPR that aliases \c VCC_LO for applicable targets
   llvm::MCRegister VccLoSgpr{llvm::MCRegister::NoRegister};
+
   /// Logical SGPR that aliases \c XNACK_MASK_LO on targets where xnack is
   /// supported
   llvm::MCRegister XnackMaskLoSgpr{llvm::MCRegister::NoRegister};
+
   /// Logical SGPR that aliases \c FLAT_SCR_LO on targets that store
   /// \c FLAT_SRC before the VCC with the rest of the normal SGPRs
   llvm::MCRegister FlatScrLoSgpr{llvm::MCRegister::NoRegister};
 
+  /// Encoding offset (in 16-bit lanes) of the lowest SGPR slot past the
+  /// highest VCC register encoding
+  uint32_t SGPRFilePostVCCHiOffset = 0;
+
+  /// Total 16-bit-lane footprint of each register file.
+  /// For the SGPR file this is sized to cover all the encoded SGPR range; for
+  /// VGPR/AGPR it's exactly \c 2 * NumGPRs.
+  llvm::SmallDenseMap<llvm::MCRegister, unsigned> RegFileSize{};
+
+  /// Allocated 16-bit-lane count for plain GPRs in each file. A plain
+  /// reg whose offset is ≥ this and not a special is out-of-range.
+  llvm::SmallDenseMap<llvm::MCRegister, unsigned> RegFileAllocated{};
+
   struct ToBeFixedRegValuePhiInfo {
     const llvm::MachineBasicBlock *MBB;
-    llvm::MCRegister Reg;
+    RegFileKey RegKey;
     llvm::PHINode *Phi;
   };
 
@@ -188,36 +179,34 @@ class MIRToIRTranslator {
   /// function has been translated
   llvm::SmallVector<ToBeFixedRegValuePhiInfo> ToBeFixedPhis{};
 
-  struct ToBeFixedFilePhiInfo {
-    const llvm::MachineBasicBlock *MBB;
-    RegFileID File;
-    llvm::PHINode *Phi;
-  };
-
-  /// File-level placeholder PHIs that need to be fixed up after the function
-  /// has been translated
-  llvm::SmallVector<ToBeFixedFilePhiInfo> ToBeFixedFilePhis{};
-
   /// Per-basic block register and file value mapping; This is updated every
   /// time a single register/file is read/written to
   BBStateMap VM{};
 
-public:
-  MIRToIRTranslator(llvm::MachineFunction &MF, llvm::Error &Err);
+  unsigned get16BitOffsetFromBaseReg(llvm::MCRegister Reg) const;
 
-private:
-  std::optional<unsigned> get16BitOffsetFromBaseReg(llvm::MCRegister Reg) const;
+  /// Maps the physical pseudo register to its hardware register
+  llvm::MCRegister getPhysReg(llvm::MCRegister Reg) const;
 
   unsigned getPhysRegisterSize(llvm::MCRegister Reg) const;
 
-  static llvm::StringRef getFileDebugName(RegFileID File);
+  static llvm::StringRef getRegfileValueName(llvm::MCRegister Reg);
 
+  llvm::MCRegister getRegFileBaseReg(llvm::MCRegister Reg);
+
+  /// Retrieves and translates the named operand of type register and immediate
+  /// to a value and caches it for the current basic block
+  /// If \p RegType is specified, the returned value will be bitcasted to  ///
+  /// match the expected type. The returned value will also be truncated or
+  /// zero-extended to match the \p RegType's bit width.
+  /// If a pointer type is requested, a \c llvm::IntToPtrInst will be used
+  /// to convert a cached integer value to the requested pointer type
   llvm::Value &getOperandAsValue(const llvm::MachineInstr &MI,
                                  llvm::AMDGPU::OpName OpName,
-                                 llvm::Type *RegType = nullptr);
+                                 llvm::Type *OutType = nullptr);
 
   llvm::Value &getOperandAsValue(const llvm::MachineOperand &Op,
-                                 llvm::Type *RegType = nullptr);
+                                 llvm::Type *OutType = nullptr);
 
   llvm::BasicBlock &getOperandAsBasicBlock(const llvm::MachineInstr &MI,
                                            llvm::AMDGPU::OpName OpName);
@@ -228,9 +217,55 @@ private:
                                   llvm::MCRegister Reg,
                                   llvm::Type *RegType = nullptr);
 
-  llvm::Value &getRegisterOperand(const llvm::MachineBasicBlock &MBB,
-                                  llvm::MCRegister Reg,
-                                  llvm::Type *RegType = nullptr);
+  /// Search the file's cache for a stored super-register that fully
+  /// contains \p Slot. If found, bitcast to vector and extractelement the
+  /// requested 16-bit-aligned window.
+  llvm::Value *tryExtractFromSuperReg(
+      RegValueMap &State,
+      const std::tuple<llvm::MCRegister, unsigned, unsigned> &RegFileKey,
+      llvm::StringRef OutValueName, llvm::IRBuilderBase &Builder,
+      llvm::Type *OutValueType);
+
+  /// Try to compose \p Slot from stored sub-register entries in the file's
+  /// cache. Builds a vector via insertelement for each half-window, then
+  /// bitcasts to the target integer type.
+  llvm::Value *tryComposeFromSubRegs(
+      RegValueMap &State,
+      const std::tuple<llvm::MCRegister, unsigned, unsigned> &Key,
+      llvm::StringRef OutValName, llvm::IRBuilderBase &Builder,
+      llvm::Type *RegType = nullptr);
+
+  llvm::Value *tryComposeFromOverlappingRegs(
+      RegValueMap &State, const llvm::MachineBasicBlock &MBB,
+      const std::tuple<llvm::MCRegister, unsigned, unsigned> &KeyReg,
+      llvm::StringRef OutValName, llvm::IRBuilderBase &Builder,
+      llvm::Type *RegType);
+
+  /// Materialize the value of \p Reg in \p MBB.  Searches for an exact
+  /// match first, then a containing super-register, then composable
+  /// sub-registers, and finally falls back to predecessor PHI/ freeze(poison)
+  llvm::Value &getOperandAsValue(const llvm::MachineBasicBlock &MBB,
+                                 llvm::MCRegister Reg, llvm::Type *OutRegType);
+
+  llvm::Value &
+  getOperandAsValue(const llvm::MachineBasicBlock &MBB,
+                    const std::tuple<llvm::MCRegister, unsigned, unsigned> &Key,
+                    llvm::IRBuilderBase &Builder, llvm::StringRef ValName,
+                    llvm::Type *OutRegType = nullptr);
+
+  /// Handle overlapping entries in the file's \c RegCache when a write of
+  /// \p Slot is about to happen.
+  ///
+  /// For each stored entry whose \c [Offset, Offset+NumHalves) range overlaps:
+  ///  - Stored ⊂ Slot (fully covered): erase.
+  ///  - Slot ⊂ Stored (partial overwrite of super-reg): bitcast to
+  ///    \c <NumHalves x i16>, extract the non-overlapping halves, and
+  ///    preserve them as new sub-register entries.
+  ///  - Otherwise (rare partial overlap): conservative erase.
+  void
+  invalidateOverlaps(RegValueMap &State,
+                     std::tuple<llvm::MCRegister, unsigned, unsigned> &Slot,
+                     llvm::MCRegister Reg, llvm::IRBuilderBase &Builder);
 
   void setRegOperandValue(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
                           llvm::Value *Val);
@@ -246,97 +281,113 @@ private:
 
   void fixupPhis();
 
+  /// Used to get the final name of the value used for the physical register
   std::string getRegValueName(llvm::MCRegister Reg) const {
     return llvm::StringRef(TRI.getName(Reg)).lower() + "_val";
   }
 
-  /// Handle overlapping entries in \p Map when \p Reg is about to be written.
-  ///
-  /// For each stored register that overlaps with \p Reg:
-  ///  - If StoredReg is a *sub-register* of Reg (Reg fully covers it): erase.
-  ///  - If StoredReg is a *super-register* of Reg (Reg partially overwrites
-  ///    it): bitcast to vector, extractelement the non-overlapping sub-regs,
-  ///    and preserve them as new entries.
-  ///  - Otherwise (rare partial overlap): conservative erase.
-  void invalidateOverlaps(MCRegValueMap &Map, llvm::MCRegister Reg,
-                          llvm::IRBuilderBase &Builder);
-
-  /// Search \p Map for a stored super-register that fully contains \p Reg.
-  /// If found, bitcast to vector and extractelement the requested sub-reg.
-  llvm::Value *tryExtractFromSuperReg(MCRegValueMap &Map, llvm::MCRegister Reg,
-                                      llvm::Type *RegType,
-                                      llvm::IRBuilderBase &Builder);
-
-  /// Try to compose \p Reg from stored sub-register entries in \p Map.
-  /// Builds a vector via insertelement for each sub-reg, then bitcasts to
-  /// the target integer type.
-  llvm::Value *tryComposeFromSubRegs(MCRegValueMap &Map, llvm::MCRegister Reg,
-                                     llvm::IRBuilderBase &Builder,
-                                     llvm::Type *RegType = nullptr);
-
-  llvm::Value *tryComposeFromOverlappingRegs(const llvm::MachineBasicBlock &MBB,
-                                             MCRegValueMap &Map,
-                                             llvm::MCRegister Reg,
-                                             llvm::IRBuilderBase &Builder,
-                                             llvm::Type *RegType = nullptr);
-
-  /// Materialize the value of \p Reg in \p MBB.  Searches for an exact
-  /// match first, then a containing super-register, then composable
-  /// sub-registers, and finally falls back to predecessor PHI / undef.
-  llvm::Value &materializeReg(const llvm::MachineBasicBlock &MBB,
-                              llvm::MCRegister Reg, llvm::Type *RegType);
-
   void initKernelEntryRegs(llvm::IRBuilderBase &Builder);
 
-  /// Populate \c FileWidths, \c FileTypes, and the reserved LO-half SGPR
-  /// MCRegisters from the function's \c amdgpu-num-sgpr / \c amdgpu-num-vgpr
-  /// attributes and subtarget features. Called once from the constructor.
-  void buildRegFileLayout();
+  /// Seed the entry block's register cache from the function's
+  /// arguments (the standard device-function prototype). Called instead
+  /// of \c initKernelEntryRegs for non-kernel-entry functions.
+  void initDeviceFunctionEntryRegs(llvm::IRBuilderBase &Builder);
 
-  /// Classify \p Reg into one of the four modeled register files. Fires
-  /// an assertion if \p Reg is not part of any modeled file — it is the
-  /// instruction semantics' responsibility to only query file-backed
-  /// registers.
-  std::optional<RegFileID> getRegFileForReg(llvm::MCRegister Reg) const;
+  /// Populate \c FileSize16, \c FileAllocated16, \c FileTypes,
+  /// \c FirstSpecialSGPROffset, and the reserved LO-half SGPR MCRegisters
+  /// from the function's \c amdgpu-num-sgpr / \c amdgpu-num-vgpr attributes
+  /// and subtarget features. Called once from the constructor.
+  llvm::Error buildRegFileLayout();
 
-  /// Compute the lane range that \p Reg occupies within its file.
-  std::optional<RegFileSlotInfo> getRegFileSlot(llvm::MCRegister Reg) const;
+  /// Classify \p Reg into one of the modeled register files. Returns
+  /// \c std::nullopt if \p Reg is not file-backed (e.g. SCC, MODE, VCCZ,
+  /// EXECZ — those go through \c BlockRegState::OtherCache instead).
+  std::optional<llvm::MCRegister>
+  getBaseRegForRegFile(llvm::MCRegister Reg) const {
+    return std::get<0>(getRegFileSlot(Reg));
+  }
 
-  /// Internal worker for \c getRegisterFileValue. Shared by the primary
-  /// MI-taking overload and the PHI-fixup path that walks predecessors.
-  llvm::Value *getRegisterFileValue(const llvm::MachineBasicBlock &MBB,
-                                    RegFileID File,
-                                    llvm::IRBuilderBase &Builder);
+  /// Resolve \p Reg to a \c RegFileSlotInfo (file + 16-bit-lane offset +
+  /// number of 16-bit halves). Returns \c std::nullopt for non-file-backed
+  /// registers. Performs GFX9- alias translation for VCC/XNACK_MASK/
+  /// FLAT_SCR before encoding lookup.
+  std::tuple<llvm::MCRegister, unsigned, unsigned>
+  getRegFileSlot(llvm::MCRegister Reg) const;
 
-  /// Drop every \c RegCache entry in \p State whose register belongs to
-  /// the given file. Used after a non-constant-index file write to make
-  /// the newly written file the sole source of truth.
-  void wipeFileRegsFromCache(BlockRegState &State, RegFileID File);
+  /// True if \p Offset (in 16-bit-lane units) within \p File is a "special"
+  /// slot — TTMP/M0/NULL/EXEC on every target plus VCC on GFX10+. These
+  /// slots are always in-bounds for cache queries, regardless of the
+  /// kernel's allocation count.
+  bool isTTMPAndBeyondSGPRRegion(llvm::MCRegister BaseReg,
+                                 uint32_t Offset) const;
 
-public:
-  /// Return the LLVM value that represents the architectural register
-  /// file containing \p Reg at the point in the function corresponding to
-  /// \p MI. The result is an \c <N x i32> vector where lane \c k holds
-  /// the 32-bit value of register \c k in that file.
+  /// Build the canonical \c <NumLanes32 x i32> value for \p File at the
+  /// point in the function corresponding to \p MBB. Each lane holds the
+  /// i32 value of the corresponding hardware-encoded register slot;
+  /// allocated SGPRs occupy lanes \c [0, NumSGPRs) and SGPR specials
+  /// occupy lanes \c [FirstSpecialEnc, 128). Lanes between (the
+  /// unallocated normal-SGPR gap) are frozen poison. VGPR/AGPR are
+  /// dense \c [0, NumVGPRs) / \c [0, NumAGPRs).
   ///
-  /// Result is cached per-MBB: the first call in a given block either
-  /// builds the file from the cache (for entry / predecessor-less
-  /// blocks — frozen poison for any lane not already cached) or emits a
-  /// placeholder \c <N x i32> PHI that is wired up once all blocks have
-  /// been translated.
-  llvm::Value *getRegisterFileValue(const llvm::MachineInstr &MI,
-                                    llvm::MCRegister Reg);
+  /// Cached per-block as a mega-entry in \c RegCache.
+  llvm::Value *getRegisterFileFullCanonical(const llvm::MachineBasicBlock &MBB,
+                                            llvm::MCRegister RegInFile,
+                                            llvm::IRBuilderBase &Builder);
 
-  /// Write \p Val into the file that contains \p Reg at lane \p Index.
-  /// When \p Index is a \c ConstantInt the write is folded into a normal
+  /// Maps each 32-bit lane in the canonical SGPR file vector to the
+  /// MCRegister whose HW encoding is that lane (or empty if the lane
+  /// falls in the unallocated normal-SGPR gap).
+  llvm::SmallVector<llvm::MCRegister> buildSGPRFileLayout() const;
+
+  /// Public wrapper: returns the file as
+  /// \c <(TotalCanonicalBits / LaneTy.bits) x LaneTy>.
+  llvm::Value *getRegisterFileFull(const llvm::MachineInstr &MI,
+                                   llvm::MCRegister RegFileBase,
+                                   llvm::Type *LaneTy);
+
+  /// Replace the file's canonical mega-entry with \p NewVec (which must
+  /// have the same total bit width as the file). All per-register cache
+  /// entries belonging to this file are invalidated by the existing
+  /// overlap logic so subsequent reads extract from the new mega value.
+  void setRegisterFileFull(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
+                           llvm::Value *NewVec);
+
+  /// Build the function type used by all discovered device functions and
+  /// indirect call targets in this module. The signature is:
+  ///
+  ///   { <128 x i32>, <NumVGPRs x i32>, [<NumAGPRs x i32>,] i1, iWave, i1 }
+  ///   (<128 x i32>, <NumVGPRs x i32>, [<NumAGPRs x i32>,] i1, iWave, i1)
+  ///
+  /// where the i1 fields are SCC and VCCZ, the iWave field is VCC
+  /// (wave-size-wide), and the AGPR vector is only present on targets
+  /// with MAI support. The CodeDiscoveryPass uses this to give every
+  /// discovered device function the same shape so indirect targets can
+  /// be resolved via constant folding.
+  static llvm::FunctionType *
+  getStandardDeviceFunctionType(llvm::LLVMContext &Ctx,
+                                const llvm::GCNSubtarget &ST, unsigned NumVGPRs,
+                                unsigned NumAGPRs);
+
+  /// Convenience overload: uses the current MF's subtarget and the
+  /// allocation counts derived from \c amdgpu-num-vgpr (or the
+  /// addressable max as a fallback).
+  llvm::FunctionType *getStandardDeviceFunctionType() const;
+
+  /// Like \c emitIndirectCall but the call is a tail call followed by
+  /// \c ret of the call's return value. Used for \c S_SETPC_B64.
+  void emitIndirectTailCall(const llvm::MachineInstr &MI, llvm::Value *Target);
+
+  /// Write \p Val into the file that contains \p Reg at 32-bit lane index
+  /// \p Index (the \c S_/V_MOVREL-style hardware index). When \p Index is
+  /// a \c ConstantInt the write is folded into a normal
   /// \c setRegOperandValue on the targeted sub-register; otherwise the
-  /// whole-file \c insertelement is emitted and every per-register cache
-  /// entry for that file is invalidated so that subsequent reads re-derive
-  /// from the new file value.
-  ///
-  /// Writes to the TTMP file are silently discarded.
+  /// dynamic-index path materializes the whole file, performs an
+  /// \c insertelement, and writes back via \c setRegisterFileFull.
   void writeRegisterFile(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
                          llvm::Value *Index, llvm::Value *Val);
+
+public:
+  MIRToIRTranslator(llvm::MachineFunction &MF, llvm::Error &Err);
 
   void translate();
 };

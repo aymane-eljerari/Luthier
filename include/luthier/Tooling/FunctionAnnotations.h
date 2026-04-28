@@ -113,6 +113,9 @@ static constexpr const char *InjectedPayloadAttribute =
 
 #define HipSurfaceVarsSizeAttr  "luthier.loader.hip_surface_vars_size"
 
+static constexpr const char *InitialExecutionPointAttr =
+    "luthier.function.initial_execution_point";
+
 /// \brief If a tool contains an instrumentation hook it \b must
 /// use this macro once. Luthier hooks are annotated via the
 /// \p LUTHIER_HOOK_CREATE macro. \n

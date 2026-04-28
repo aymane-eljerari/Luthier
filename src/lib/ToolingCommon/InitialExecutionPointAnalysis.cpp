@@ -1,4 +1,4 @@
-//===-- InitialEntryPointAnalysis.cpp -------------------------------------===//
+//===-- InitialExecutionPointAnalysis.cpp ---------------------------------===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file InitialEntryPointAnalysis.cpp
-/// Implements the \c InitialEntryPointAnalysis class.
+/// \file InitialExecutionPointAnalysis.cpp
+/// Implements the \c InitialExecutionPointAnalysis class.
 //===----------------------------------------------------------------------===//
-#include "luthier/Tooling/InitialEntryPointAnalysis.h"
+#include "luthier/Tooling/InitialExecutionPointAnalysis.h"
 
 namespace luthier {
 
-llvm::AnalysisKey InitialEntryPointAnalysis::Key;
+llvm::AnalysisKey InitialExecutionPointAnalysis::Key;
 
 }

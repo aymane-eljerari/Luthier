@@ -373,6 +373,31 @@ def ImplicitUse;
 /// the LLVMSelect operation). Does not translate into an IR operation
 def SelectOperand;
 
+/// Read the full SGPR/VGPR/AGPR architectural file as a vector. The
+/// argument is the lane scalar type (e.g. \c si_llvm_i32_ty for
+/// \c <NumGPRs x i32>, \c si_llvm_i64_ty of \c <NumGPRs / 2 x i64).
+/// For SGPRs, the allocated SGPRs occupy lanes \c [0, NumSGPRs),
+/// with \c NumSGPRs being the number of SGPRs requested by the
+/// kernel in GFX9 and earlier. The unallocated SGPR gap in GFX9 and
+/// earlier is poison, and then is followed by TTMP/M0/NULL/EXEC:
+/// <sgpr0, sgpr1 ..., sgprn, poison, poison..., ttmp0, ttmp1... exec_hi>
+def GetSGPRFile;
+def GetVGPRFile;
+def GetAGPRFile;
+
+/// Write back the entire SGPR/VGPR/AGPR file from a vector value. The
+/// first argument is the value to write. The value to write must match
+/// the lane formation of the target kernel, which is why it generally
+/// should origiate from a \c Get*GPRFile.
+def SetSGPRFile;
+def SetVGPRFile;
+def SetAGPRFile;
+
+/// Indirect transfer of control to \c <target> (PC)'s function without
+/// ever returning. Materializes the full register-file state, packages
+/// them as arguments to a call against a device function.
+def IndirectTailCall;
+
 /// Obtains the fallthrough basic block of the current machine instruction
 /// Useful when translating branch instructions
 def GetNextBB;

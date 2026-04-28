@@ -45,6 +45,7 @@
 // #include <luthier/Tooling/IPVectorRegLiveness.h>
 // #include <luthier/Tooling/IndirectBranchResolverAnalysis.h>
 // #include <luthier/Tooling/MachineFunctionEntryPoint.h>
+#include "luthier/Tooling/InitialExecutionPointAnalysis.h"
 #include "luthier/Tooling/MIRToIRTranslator.h"
 #include <llvm/Analysis/ConstantFolding.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
@@ -543,6 +544,7 @@ llvm::Expected<std::pair<llvm::MachineFunction &,
 initLiftedDeviceFunctionEntry(uint64_t DeviceEntryPointAddr,
                               const MemoryAllocationAccessor &SegAccessor,
                               llvm::Module &TargetModule,
+                              const llvm::Function &InitialExecutionPoint,
                               llvm::FunctionAnalysisManager &FAM) {
 
   llvm::LLVMContext &LLVMContext = TargetModule.getContext();
@@ -591,12 +593,188 @@ initLiftedDeviceFunctionEntry(uint64_t DeviceEntryPointAddr,
   llvm::Function *F = llvm::Function::Create(
       FunctionType, llvm::GlobalValue::PrivateLinkage, FuncName, TargetModule);
   F->setCallingConv(llvm::CallingConv::C);
+  /// Inherit \c amdgpu-num-vgpr / \c amdgpu-num-sgpr from the initial
+  /// execution point handle
+  assert(InitialExecutionPoint.getCallingConv() !=
+             llvm::CallingConv::AMDGPU_KERNEL &&
+         "initial execution point is not a kernel");
+  unsigned NumVGPRs =
+      InitialExecutionPoint.getFnAttributeAsParsedInteger("amdgpu-num-vgpr");
+  unsigned NumSGPRs =
+      InitialExecutionPoint.getFnAttributeAsParsedInteger("amdgpu-num-sgpr");
+  F->addFnAttr("amdgpu-num-vgpr", llvm::formatv("{0}", NumVGPRs).str());
+  F->addFnAttr("amdgpu-num-sgpr", llvm::formatv("{0}", NumSGPRs).str());
 
   llvm::MachineFunction &MF =
       FAM.getResult<llvm::MachineFunctionAnalysis>(*F).getMF();
 
   MF.setAlignment(llvm::Align(4));
   return std::make_pair(std::ref(MF), FuncSymRef);
+}
+
+/// Recursively walk \p V (interpreted at lane \p LaneIdx for vector
+/// values, or \c -1 for scalar / whole-value access) and collect every
+/// distinct constant address that flows into the requested position.
+///
+/// Resolved patterns:
+///   - \c ConstantInt leaf — the address itself;
+///   - \c ConstantExpr wrapping a \c ConstantInt via \c inttoptr /
+///     \c ptrtoint / \c bitcast — unwraps;
+///   - \c PHINode / \c SelectInst — every incoming value / arm
+///     contributes recursively at the same lane;
+///   - \c InsertElementInst with constant index — picks the inserted
+///     scalar when its lane matches our \p LaneIdx, else falls
+///     through to the previous vector;
+///   - \c ExtractElementInst with constant index — recurses on the
+///     source vector with the extracted lane index;
+///   - same-shape \c BitCast — recurses on operand 0 with the same
+///     \p LaneIdx;
+///   - scalar-pass-through \c CastInst (\c IntToPtr / \c PtrToInt /
+///     \c Trunc / \c ZExt / \c SExt) — recurses with \c LaneIdx == -1;
+///   - \c Argument — walks every call site of the parent function and
+///     recurses on the matching call-arg operand (inter-procedural
+///     tracking).
+///
+/// Unhandled (returns \c false): scalar↔vector bitcasts (would need
+/// bit-window tracking), loads, arbitrary arithmetic, opaque
+/// inline-asm values, function pointers stored in memory, etc.
+///
+/// Returns \c true iff every path terminates at a recognized constant
+/// leaf. \p Visited breaks cycles introduced by PHIs and recursive
+/// argument chains.
+static constexpr unsigned kCollectMaxDepth = 64;
+
+static bool collectConstantTargets(
+    llvm::Value *V, int LaneIdx, llvm::SmallSetVector<uint64_t, 8> &Targets,
+    llvm::SmallPtrSetImpl<llvm::Value *> &Visited, unsigned Depth = 0) {
+  if (!V)
+    return false;
+  if (Depth >= kCollectMaxDepth)
+    return false;
+  if (!Visited.insert(V).second)
+    return true;
+
+  if (auto *CI = llvm::dyn_cast<llvm::ConstantInt>(V)) {
+    if (LaneIdx == -1) {
+      Targets.insert(CI->getZExtValue());
+      return true;
+    }
+    return false;
+  }
+
+  if (auto *CDV = llvm::dyn_cast<llvm::ConstantDataVector>(V)) {
+    if (LaneIdx >= 0 &&
+        static_cast<unsigned>(LaneIdx) < CDV->getNumElements()) {
+      if (auto *CI = llvm::dyn_cast<llvm::ConstantInt>(
+              CDV->getElementAsConstant(static_cast<unsigned>(LaneIdx)))) {
+        Targets.insert(CI->getZExtValue());
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (auto *CE = llvm::dyn_cast<llvm::ConstantExpr>(V)) {
+    if (LaneIdx == -1 && (CE->getOpcode() == llvm::Instruction::IntToPtr ||
+                          CE->getOpcode() == llvm::Instruction::PtrToInt ||
+                          CE->getOpcode() == llvm::Instruction::BitCast)) {
+      if (auto *Inner = llvm::dyn_cast<llvm::ConstantInt>(CE->getOperand(0))) {
+        Targets.insert(Inner->getZExtValue());
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (auto *Phi = llvm::dyn_cast<llvm::PHINode>(V)) {
+    bool AllResolved = true;
+    for (llvm::Value *In : Phi->incoming_values())
+      AllResolved &=
+          collectConstantTargets(In, LaneIdx, Targets, Visited, Depth + 1);
+    return AllResolved;
+  }
+
+  if (auto *Sel = llvm::dyn_cast<llvm::SelectInst>(V)) {
+    bool A = collectConstantTargets(Sel->getTrueValue(), LaneIdx, Targets,
+                                    Visited, Depth + 1);
+    bool B = collectConstantTargets(Sel->getFalseValue(), LaneIdx, Targets,
+                                    Visited, Depth + 1);
+    return A && B;
+  }
+
+  if (auto *EE = llvm::dyn_cast<llvm::ExtractElementInst>(V)) {
+    if (LaneIdx != -1)
+      return false;
+    if (auto *Idx = llvm::dyn_cast<llvm::ConstantInt>(EE->getIndexOperand()))
+      return collectConstantTargets(EE->getVectorOperand(),
+                                    static_cast<int>(Idx->getZExtValue()),
+                                    Targets, Visited, Depth + 1);
+    return false;
+  }
+
+  if (auto *IE = llvm::dyn_cast<llvm::InsertElementInst>(V)) {
+    if (LaneIdx == -1)
+      return false;
+    auto *Idx = llvm::dyn_cast<llvm::ConstantInt>(IE->getOperand(2));
+    if (!Idx)
+      return false;
+    if (static_cast<int>(Idx->getZExtValue()) == LaneIdx)
+      return collectConstantTargets(IE->getOperand(1), -1, Targets, Visited,
+                                    Depth + 1);
+    return collectConstantTargets(IE->getOperand(0), LaneIdx, Targets, Visited,
+                                  Depth + 1);
+  }
+
+  if (auto *BC = llvm::dyn_cast<llvm::BitCastInst>(V)) {
+    llvm::Type *SrcTy = BC->getSrcTy();
+    llvm::Type *DstTy = BC->getDestTy();
+    auto *SrcVec = llvm::dyn_cast<llvm::FixedVectorType>(SrcTy);
+    auto *DstVec = llvm::dyn_cast<llvm::FixedVectorType>(DstTy);
+    if (SrcVec && DstVec &&
+        SrcVec->getNumElements() == DstVec->getNumElements())
+      return collectConstantTargets(BC->getOperand(0), LaneIdx, Targets,
+                                    Visited, Depth + 1);
+    if (LaneIdx == -1 && !SrcTy->isVectorTy() && !DstTy->isVectorTy())
+      return collectConstantTargets(BC->getOperand(0), -1, Targets, Visited,
+                                    Depth + 1);
+    return false;
+  }
+
+  if (auto *Cast = llvm::dyn_cast<llvm::CastInst>(V)) {
+    if (LaneIdx != -1)
+      return false;
+    return collectConstantTargets(Cast->getOperand(0), -1, Targets, Visited,
+                                  Depth + 1);
+  }
+
+  if (auto *Arg = llvm::dyn_cast<llvm::Argument>(V)) {
+    /// Inter-procedural step: trace into every direct call site of the
+    /// argument's parent function. The \c Visited set already has \p V
+    /// (this Argument), so a callee → caller → callee cycle through
+    /// the same arg is broken on the second visit. We additionally cap
+    /// the size of \p Visited as a defensive bound — extremely deep
+    /// argument chains (e.g. through long insertelement sequences in
+    /// callers) are bounded by \p Depth, but \p Visited size guards
+    /// against pathological-fanout call graphs.
+    if (Visited.size() > 4096)
+      return false;
+    llvm::Function *F = Arg->getParent();
+    unsigned ArgNo = Arg->getArgNo();
+    bool AllResolved = true;
+    for (llvm::User *U : F->users()) {
+      auto *Call = llvm::dyn_cast<llvm::CallBase>(U);
+      if (!Call || Call->getCalledFunction() != F ||
+          ArgNo >= Call->arg_size()) {
+        AllResolved = false;
+        continue;
+      }
+      AllResolved &= collectConstantTargets(Call->getArgOperand(ArgNo), LaneIdx,
+                                            Targets, Visited, Depth + 1);
+    }
+    return AllResolved;
+  }
+
+  return false;
 }
 
 static bool shouldImplicitReadExec(const llvm::MachineInstr &MI) {
@@ -1049,6 +1227,17 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
       TargetMAM.getResult<InitialEntryPointAnalysis>(TargetModule)
           .getInitialEntryPoint();
 
+  const llvm::amdhsa::kernel_descriptor_t &InitialExecutionPoint =
+      TargetMAM.getResult<InitialExecutionPointAnalysis>(TargetModule)
+          .getInitialExecutionPoint();
+
+  auto InitialExecPointMFAndSymbol = initKernelEntryPointFunction(
+      InitialExecutionPoint, SegAccessor, TargetModule, TM, FAM);
+  LUTHIER_CTX_EMIT_ON_ERROR(Ctx, InitialExecPointMFAndSymbol.takeError());
+
+  InitialExecPointMFAndSymbol->first.getFunction().addFnAttr(
+      InitialEntryPointAttr);
+
   llvm::SmallDenseSet<EntryPoint> UnvisitedPointsOfEntry{InitialEntryPoint};
 
   llvm::SmallDenseSet<EntryPoint> VisitedPointsOfEntry{};
@@ -1063,21 +1252,17 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
                << llvm::formatv("{0:x}\n",
                                 CurrentEntryPoint.getEntryPointAddress()));
 
+    const auto *KDOnDevice = CurrentEntryPoint.getKernelDescriptor();
     auto [MF, FuncSymRef] =
         [&]() -> std::pair<llvm::MachineFunction &,
                            std::optional<object::AMDGCNElfSymbolRef>> {
       /// Initialize the function handle associated with the entry point
-      if (const auto *KDOnDevice = CurrentEntryPoint.getKernelDescriptor()) {
-
-        auto MFOrAndSymOrErr = initKernelEntryPointFunction(
-            *KDOnDevice, SegAccessor, TargetModule, TM, FAM);
-        LUTHIER_CTX_EMIT_ON_ERROR(Ctx, MFOrAndSymOrErr.takeError());
-
-        return *MFOrAndSymOrErr;
+      if (KDOnDevice) {
+        return *InitialExecPointMFAndSymbol;
       } else {
         auto MFOrAndSymOrErr = initLiftedDeviceFunctionEntry(
             CurrentEntryPoint.getEntryPointAddress(), SegAccessor, TargetModule,
-            FAM);
+            InitialExecPointMFAndSymbol->first.getFunction(), FAM);
         LUTHIER_CTX_EMIT_ON_ERROR(Ctx, MFOrAndSymOrErr.takeError());
         return *MFOrAndSymOrErr;
       }
@@ -1118,7 +1303,7 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     MIRToIRTranslator Translator{MF, Err};
 
     LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
-    
+
     Translator.translate();
 
     for (llvm::Instruction &I :
@@ -1147,18 +1332,22 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     llvm::TargetLibraryInfo TLI(TLII, &MF.getFunction());
     for (llvm::Instruction &I :
          llvm::make_early_inc_range(llvm::instructions(MF.getFunction()))) {
-      if (auto *CallInst = llvm::dyn_cast<llvm::CallInst>(&I)) {
-        if (auto *ConstTarget = llvm::dyn_cast<llvm::ConstantExpr>(
-                CallInst->getCalledOperand())) {
-          llvm::outs() << ConstTarget->getOperand(0) << " , constant int: "
-                       << llvm::cast<llvm::ConstantInt>(
-                              ConstTarget->getOperand(0))
-                              ->getZExtValue()
-                       << "\n";
-          UnvisitedPointsOfEntry.insert(EntryPoint{
-              llvm::cast<llvm::ConstantInt>(ConstTarget->getOperand(0))
-                  ->getZExtValue()});
-        }
+      auto *CallInst = llvm::dyn_cast<llvm::CallInst>(&I);
+      if (!CallInst)
+        continue;
+      llvm::Value *Callee = CallInst->getCalledOperand();
+      if (llvm::isa<llvm::Function>(Callee) ||
+          llvm::isa<llvm::InlineAsm>(Callee))
+        continue;
+      llvm::SmallSetVector<uint64_t, 8> Targets;
+      llvm::SmallPtrSet<llvm::Value *, 16> Visited;
+      bool Complete =
+          collectConstantTargets(Callee, /*LaneIdx=*/-1, Targets, Visited);
+      for (uint64_t Addr : Targets) {
+        llvm::outs() << "indirect target: 0x" << llvm::utohexstr(Addr) << " in "
+                     << MF.getFunction().getName()
+                     << (Complete ? "" : " (incomplete)") << "\n";
+        UnvisitedPointsOfEntry.insert(EntryPoint{Addr});
       }
     }
 

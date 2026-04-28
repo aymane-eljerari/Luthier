@@ -121,7 +121,7 @@ def S_NOT_B64_sem : InstSISemantic<S_NOT_B64> {
 //   rdna4-instruction-set-architecture.pdf, page 235.
 def S_ABS_I32_sem : InstSISemantic<S_ABS_I32> {
   let Semantic = [
-    (DefVal $result, (LLVMIntrinsic si_llvm_i32_ty, int_abs, [(GetVal $src0, si_llvm_i32_ty)])),
+    (DefVal $result, (LLVMIntrinsic si_llvm_i32_ty, int_abs, [(GetNamedOperand $src0, si_llvm_i32_ty)])),
     (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt si_llvm_i32_ty, 0))),
     (SetNamedOperand $sdst, (GetVal $result))
   ];
@@ -1621,13 +1621,12 @@ def S_SWAPPC_B64_sem : InstSISemantic<S_SWAPPC_B64> {
   let Semantic = [
     (SetNamedOperand $sdst, (LLVMAdd (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_getpc, []<dag>),
                                      (ConstantInt si_llvm_i64_ty, 4))),
-    (LLVMCall (LLVMFuncTy si_llvm_void_ty, false), (LLVMIntToPtr (GetNamedOperand $src0), global_ptr_ty))
+    (IndirectTailCall (GetNamedOperand $src0))
   ];
 }
 
 def S_SETPC_B64_sem : InstSISemantic<S_SETPC_B64> {
   let Semantic = [
-    (LLVMCall (LLVMFuncTy si_llvm_void_ty, false), (LLVMIntToPtr (GetNamedOperand $src0), global_ptr_ty)),
-    (LLVMUnreachable)
+    (IndirectTailCall (GetNamedOperand $src0))
   ];
 }
