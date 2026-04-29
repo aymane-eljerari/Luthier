@@ -164,18 +164,12 @@ class MIRToIRTranslator {
   /// the first status register in the SGPR file (i.e., VCCZ)
   unsigned SrcVCCZHalfWordOffset = 0;
 
-  /// Number of allocated Half-word SGPRs by the kernel descriptor; This number
-  /// also signifies where the trap handler registers start
-  unsigned NumPreVCCHiHalfWordSGPRs = 0;
-
   /// SGPR half-word index where the status registers are encoded in the
   /// SGPR file; This usually comes after the aperture registers on GFX9+
   /// targets
   unsigned SGPRStatusRegHWordOffsetStart = 0;
 
   /// Total 16-bit-lane footprint of each register file.
-  /// For the SGPR file this is sized to cover all the encoded SGPR range; for
-  /// VGPR/AGPR it's exactly \c 2 * NumGPRs.
   llvm::SmallDenseMap<llvm::MCRegister, unsigned> RegFileSize{};
 
   struct ToBeFixedRegValuePhiInfo {
@@ -195,10 +189,6 @@ class MIRToIRTranslator {
   /// Provides the index of \p Reg w.r.t the base register of the register
   /// file \p Reg resides in
   unsigned getHardwareIdxOffsetFromBaseReg(llvm::MCRegister Reg) const;
-
-  /// Provides the offset where the \p Reg will be encoded inside the
-  /// translator's register file
-  unsigned getRegFileHalfWordOffset(llvm::MCRegister Reg) const;
 
   /// Maps the physical pseudo register to its hardware register
   llvm::MCRegister getPhysReg(llvm::MCRegister Reg) const;
@@ -238,23 +228,19 @@ class MIRToIRTranslator {
   llvm::Value *tryExtractFromSuperReg(
       RegValueMap &State,
       const std::tuple<llvm::MCRegister, unsigned, unsigned> &RegFileKey,
-      llvm::StringRef OutValueName, llvm::IRBuilderBase &Builder,
-      llvm::Type *OutValueType);
+      llvm::IRBuilderBase &Builder, llvm::Type *OutValueType);
 
   /// Try to compose \p Slot from stored sub-register entries in the file's
   /// cache. Builds a vector via insertelement for each half-window, then
   /// bitcasts to the target integer type.
-  llvm::Value *tryComposeFromSubRegs(
-      RegValueMap &State,
-      const std::tuple<llvm::MCRegister, unsigned, unsigned> &Key,
-      llvm::StringRef OutValName, llvm::IRBuilderBase &Builder,
-      llvm::Type *RegType = nullptr);
+  llvm::Value *tryComposeFromSubRegs(RegValueMap &State, const RegFileKey &Key,
+                                     llvm::IRBuilderBase &Builder,
+                                     llvm::Type *RegType = nullptr);
 
   llvm::Value *tryComposeFromOverlappingRegs(
       RegValueMap &State, const llvm::MachineBasicBlock &MBB,
       const std::tuple<llvm::MCRegister, unsigned, unsigned> &KeyReg,
-      llvm::StringRef OutValName, llvm::IRBuilderBase &Builder,
-      llvm::Type *RegType);
+      llvm::IRBuilderBase &Builder, llvm::Type *RegType);
 
   /// Materialize the value of \p Reg in \p MBB.  Searches for an exact
   /// match first, then a containing super-register, then composable
@@ -265,7 +251,7 @@ class MIRToIRTranslator {
   llvm::Value &
   getOperandAsValue(const llvm::MachineBasicBlock &MBB,
                     const std::tuple<llvm::MCRegister, unsigned, unsigned> &Key,
-                    llvm::IRBuilderBase &Builder, llvm::StringRef ValName,
+                    llvm::IRBuilderBase &Builder,
                     llvm::Type *OutRegType = nullptr);
 
   /// Handle overlapping entries in the file's \c RegCache when a write of
@@ -277,10 +263,8 @@ class MIRToIRTranslator {
   ///    \c <NumHalves x i16>, extract the non-overlapping halves, and
   ///    preserve them as new sub-register entries.
   ///  - Otherwise (rare partial overlap): conservative erase.
-  void
-  invalidateOverlaps(RegValueMap &State,
-                     std::tuple<llvm::MCRegister, unsigned, unsigned> &Slot,
-                     llvm::MCRegister Reg, llvm::IRBuilderBase &Builder);
+  void invalidateOverlaps(RegValueMap &State, const RegFileKey &Slot,
+                          llvm::MCRegister Reg, llvm::IRBuilderBase &Builder);
 
   void setRegOperandValue(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
                           llvm::Value *Val);
@@ -322,12 +306,11 @@ class MIRToIRTranslator {
     return std::get<0>(getRegFileSlot(Reg));
   }
 
-  /// Resolve \p Reg to a \c RegFileSlotInfo (file + 16-bit-lane offset +
-  /// number of 16-bit halves). Returns \c std::nullopt for non-file-backed
-  /// registers. Performs GFX9- alias translation for VCC/XNACK_MASK/
-  /// FLAT_SCR before encoding lookup.
-  std::tuple<llvm::MCRegister, unsigned, unsigned>
-  getRegFileSlot(llvm::MCRegister Reg) const;
+  /// Resolve \p Reg to a \c RegFileKey (register base index + 16-bit-lane
+  /// offset + number of 16-bit halves). Returns \c std::nullopt for
+  /// non-file-backed registers. Performs GFX9- alias translation for
+  /// VCC/XNACK_MASK/ FLAT_SCR before encoding lookup.
+  RegFileKey getRegFileSlot(llvm::MCRegister Reg) const;
 
   /// True if \p Offset (in 16-bit-lane units) within \p File is a "special"
   /// slot — TTMP/M0/NULL/EXEC on every target plus VCC on GFX10+. These
