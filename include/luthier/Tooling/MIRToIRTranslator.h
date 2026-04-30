@@ -45,6 +45,10 @@ namespace luthier {
 
 class MIRToIRTranslator;
 
+/// Individual machine instruction to LLVM IR translation functions emitted
+/// by the tablegen backend. Each of these function is specialized on
+/// \p MI's opcode. \c MIRToIRTranslator::raiseMachineInstr is in charge
+/// of dispatching the correct specialization
 template <uint16_t Opcode>
 void raiseMachineInstr(const llvm::MachineInstr &MI,
                        llvm::IRBuilderBase &Builder,
@@ -68,21 +72,65 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
 /// Instead of directly using MC register enums to map registers to their
 /// associated set of values, This class instead uses the following three
 /// things to distinguish each register entry: 1. The base physical MC register
-/// of a "register file", 2. The base register index offset in units of
+/// of a "register file", 2. The base hardware register index offset in units of
 /// half-words (16-bits), and 3. The size of the register in half-words
 /// (16-bits). This was chosen instead of utilizing the register's MC reg enum
 /// as a key, to allow for assigning values to arbitrarily-sized regions inside
-/// the register file arbitrarily-sized  registers inside the value map,/// (which includes the entirety of the register file itself).
+/// the register file arbitrarily-sized registers inside the value map,
+/// (which includes the entire register file itself). The hardware
+/// register index (opcode encoding) of each register can be queried from
+/// both LLVM's AMDGPU register records (see \c llvm::AMDGPU::getMCReg and
+/// \c llvm::SIRegisterInfo::getEncodingValue) and the AMD GPU public ISA docs.
 /// Possible register files include:
-/// - User SGPR register file, with \c SGPR0 as its base index.
+/// - <b>User SGPR register file</b>, with \c SGPR0 as its base index.
 /// This file covers the entire number of SGPRs the kernel descriptor requests
-/// in its \c RSRC1 field. This file includes \c VCC, and on GFX9 and earlier
-/// targets, \c FLAT_SCR and \c XNACK_MASK register. The translator will
-/// have to detect if a logical SGPR encoding was used to refer to any of
-/// these special registers on GFX9 and earlier targets and hash them to
-/// the same entry.
-/// - Trap handler and
-/// was written in each machine basic block by the translated IR instructions.
+/// in its \c RSRC1 field via the `amdgpu-num-sgpr` function attribute.
+/// This file includes \c VCC, and on GFX9 and earlier targets,
+/// \c FLAT_SCR and \c XNACK_MASK register. The translator detects
+/// if a logical SGPR encoding was used to refer to where these special
+/// registers are stored in GFX9 and earlier targets and hases them to the
+/// same entry. The maximum size of this region at the time of
+/// writing is 108 DWORDs, ending right after \c VCC_HI
+/// - <b>The Trap handler SGPR register file</b>, which starts from the
+/// first encoded trap handler register located right after \c VCC_HI
+/// (index 108) in all targets. On older targets, the base register of this
+/// file is \c TBA_LO and on newer targets, \c TTMP0. This region includes all
+/// trap handler registers. This region usually ends right before index 124.
+/// - <b>\c EXEC mask, \c MO, and \c SGPR_NULL (if available on the target)
+/// register file</b>, starts from the last trap handler index (124) to
+/// the end of the \c EXEC_HI's encoding, which is 128.
+/// - <b>Aperature register file</b>, which includes \c SRC_SHARED_BASE,
+/// \c SRC_SHARED_LIMIT, \c SRC_PRIVATE_BASE, \c SRC_PRIVATE_LIMIT, and \c
+/// (on GFX9 and GFX10) \c SRC_POPS_EXITING_WAVE_ID. On GFX8 and earlier
+/// targets, these registers are not available, hence their associated file
+/// must be zero. The hardware encoding range of this file is from 235 to 239,
+/// inclusive.
+/// - <b>Status register SGPR file</b>, which includes \c SRC_VCCZ, \c
+/// SRC_EXECZ, and \c SRC_SCC, ranging from hardware index of 251 to 253 on
+/// all targets, inclusive. These are modelled as 32-bit SGPR registers in the
+/// AMDGPU backend, and the translator honors that in its register files.
+/// All reads/writes for the pseudo register \c SCC will be resolved into
+/// \c SRC_SCC.
+/// - <b>Hardware register file</b>, with the \c MODE register as its base,
+/// is meant to model the value of the hardware registers that can be
+/// read/written to via the \c S_GETREG_B32 and \c S_SETREG_B32 instructions.
+/// As of right now, only the \c MODE register is supported, as it is the
+/// only register with an MC enum in the AMD GPU backen. Additional hardware
+/// register will be added in the future as conversion of \c S_GETREG_B32
+/// and \c S_SETREG_B32 instructions to simple read/writes to hardware
+/// register values is implemented.
+/// - <b>VGPR register file</b>, with \c VGPR0 as its base register. The number
+/// of VGPRs is determined by the `amdgpu-num-vgpr` function attribute. If
+/// it is determined that the function is using the dynamic VGPR feature
+/// introduced in GFX12+ (how to detect this is TBD), maximum number of
+/// addressable VGPRs for the sub target is assumed.
+/// - <b>AGPR register file</b>, with \c AGPR0 as its base register. On targets
+/// that support it, its size should be the same as the number of VGPRs///
+/// requested by the kernel.
+///
+/// The translator also takes care of materializing register values as the
+/// instruction semantics translator functions (i.e. \c raiseMachineInstr)
+/// requests them. The translator
 /// When a different-sized overlapping register is requested (sub-register
 /// or super-register), the tracker extracts or merges values on demand rather
 /// than eagerly splitting every write into register-unit granularity. Registers
@@ -123,9 +171,6 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
 /// properly configured. If a non-entry function is invoked with dynamically
 /// allocated VGPRs, it must include the maximum possible number of VGPRs
 /// available to each wave.
-///
-/// The process of seeding can also be done manually when translating individual
-/// basic blocks or instructions
 class MIRToIRTranslator {
   template <uint16_t Opcode>
   friend void luthier::raiseMachineInstr(const llvm::MachineInstr &MI,
