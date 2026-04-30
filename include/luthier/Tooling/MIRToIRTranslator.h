@@ -14,12 +14,11 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 /// \file MIRToIRTranslator.h
-/// Describes \c MIRToIRTranslator used to translate discovered machine
-/// functions by the \c CodeDiscoveryPass to LLVM IR.
+/// Describes the \c MIRToIRTranslator class which is used to translate
+/// discovered machine function traces by the \c CodeDiscoveryPass to LLVM IR.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_MIR_TO_IR_TRANSLATOR_H
 #define LUTHIER_TOOLING_MIR_TO_IR_TRANSLATOR_H
-#include "luthier/Common/DenseMapInfo.h"
 #include "luthier/Tooling/MIInlineAsmEmitter.h"
 #include <GCNSubtarget.h>
 #include <SIInstrInfo.h>
@@ -52,15 +51,43 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
                        MIRToIRTranslator &Translator);
 
 /// \brief Used by the \c CodeDiscoveryPass to translate lifted Machine IR
-/// instructions in a machine function to their equivalent LLVM IR in the
-/// associated \c llvm::Function
-/// \details The translator stores values keyed by the *exact* register that
+/// instructions in a machine function trace to their equivalent LLVM IR and
+/// inserts the translated IR into the associated LLVM Function handle.
+/// The translated IR can then be used to query semantics-related information
+/// about the instructions inside the target module
+/// \details The translator performs a per-basic block translation of the
+/// machine function. Each basic block maintains a mapping between registers
+/// and a list of available LLVM values hashed based on their type. The map
+/// gets updated after translating each instruction in the basic block
+/// from the basic block's beginning. The entry basic block's initial values
+/// are initialized based on the calling convention of the function; Kernels'
+/// initial values are populated according to the AMD GPU kernel initial
+/// state described by the AMDGPU backend documentation; Device (non-entry)
+/// function's entry basic blocks obtain their initial values from their
+/// arguments.
+/// Instead of directly using MC register enums to map registers to their
+/// associated set of values, This class instead uses the following three
+/// things to distinguish each register entry: 1. The base physical MC register
+/// of a "register file", 2. The base register index offset in units of
+/// half-words (16-bits), and 3. The size of the register in half-words
+/// (16-bits). This was chosen instead of utilizing the register's MC reg enum
+/// as a key, to allow for assigning values to arbitrarily-sized regions inside
+/// the register file arbitrarily-sized  registers inside the value map,/// (which includes the entirety of the register file itself).
+/// Possible register files include:
+/// - User SGPR register file, with \c SGPR0 as its base index.
+/// This file covers the entire number of SGPRs the kernel descriptor requests
+/// in its \c RSRC1 field. This file includes \c VCC, and on GFX9 and earlier
+/// targets, \c FLAT_SCR and \c XNACK_MASK register. The translator will
+/// have to detect if a logical SGPR encoding was used to refer to any of
+/// these special registers on GFX9 and earlier targets and hash them to
+/// the same entry.
+/// - Trap handler and
 /// was written in each machine basic block by the translated IR instructions.
 /// When a different-sized overlapping register is requested (sub-register
 /// or super-register), the tracker extracts or merges values on demand rather
 /// than eagerly splitting every write into register-unit granularity. Registers
 /// that overlap but are not strictly super or sub-registers (rare) will be
-/// broken down to reg units and then processed via the sub and super reg logic.
+/// broken down to reg units and then processed via the super reg logic.
 ///
 /// On a write to register R, all overlapping entries (sub- and super-regs)
 /// are invalidated so that subsequent reads through a different alias will
@@ -182,7 +209,7 @@ class MIRToIRTranslator {
   /// function has been translated
   llvm::SmallVector<ToBeFixedRegValuePhiInfo> ToBeFixedPhis{};
 
-  /// Per-basic block register and file value mapping; This is updated every
+  /// Per-basic block register file value mapping; This is updated every
   /// time a single register/file is read/written to
   BBStateMap VM{};
 
@@ -292,11 +319,10 @@ class MIRToIRTranslator {
   /// of \c initKernelEntryRegs for non-kernel-entry functions.
   void initDeviceFunctionEntryRegs(llvm::IRBuilderBase &Builder);
 
-  /// Populate \c FileSize16, \c FileAllocated16, \c FileTypes,
-  /// \c FirstSpecialSGPROffset, and the reserved LO-half SGPR MCRegisters
-  /// from the function's \c amdgpu-num-sgpr / \c amdgpu-num-vgpr attributes
-  /// and subtarget features. Called once from the constructor.
-  llvm::Error buildRegFileLayout();
+  /// Initializes the register layout of the current function based on its
+  /// subtarget, and the number of SGPR and VGPRs it contains
+  ///
+  llvm::Error initRegFileLayouts();
 
   /// Classify \p Reg into one of the modeled register files. Returns
   /// \c std::nullopt if \p Reg is not file-backed (e.g. SCC, MODE, VCCZ,

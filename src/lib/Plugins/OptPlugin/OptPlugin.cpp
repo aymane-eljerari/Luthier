@@ -98,7 +98,7 @@ llvm::cl::opt<std::pair<uint64_t, std::variant<uint64_t, std::string>>, false,
         llvm::cl::NotHidden, llvm::cl::cat(OptPluginOptions)};
 
 llvm::cl::opt<std::pair<uint64_t, std::string>> InitialExecutionPoint{
-    "initial-entrypoint",
+    "initial-execution-point",
     llvm::cl::desc("The initial execution point of the lifting process. "
                    "Formatted as <code-object-index>:<mangled-symbol-name>. \n"
                    "Code objects are zero indexed w.r.t the order they are "

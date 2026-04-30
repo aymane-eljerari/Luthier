@@ -705,7 +705,6 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
 
   /// MODE: constant assembled from the kernel-descriptor-derived attrs.
   llvm::Value *ModeInit = buildInitialModeValue(MF.getFunction(), ST, Builder);
-  annotateUniformIfNeeded(ModeInit, TRI, llvm::AMDGPU::MODE);
   seedRegValue(MF.front(), llvm::AMDGPU::MODE, ModeInit);
 
   /// VCC is zero on kernel entry. \c TRI.getVCC() returns VCC_LO on
@@ -784,7 +783,7 @@ unsigned MIRToIRTranslator::getPhysRegisterSize(llvm::MCRegister Reg) const {
           .c_str());
 }
 
-llvm::Error MIRToIRTranslator::buildRegFileLayout() {
+llvm::Error MIRToIRTranslator::initRegFileLayouts() {
   const llvm::Function &F = MF.getFunction();
   const auto &ST = MF.getSubtarget<llvm::GCNSubtarget>();
 
