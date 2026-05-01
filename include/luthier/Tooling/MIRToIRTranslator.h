@@ -260,6 +260,8 @@ class MIRToIRTranslator {
   /// Marks the start of the TTMP0 to EXEC HI register file
   llvm::MCRegister TTMPBaseReg = {llvm::AMDGPU::TTMP0};
 
+  unsigned ExecBaseReg = 0;
+
   /// Encoding offset (in 16-bit lanes) of the lane right after the EXEC_HI
   /// register is encoded in the register file.
   unsigned ExecHiHalfWordOffset = 0;
@@ -302,7 +304,7 @@ class MIRToIRTranslator {
   /// Given the base register of the register file, returns the value name
   /// for that register file; Primarily used for creating value entries
   /// covering the entirety of the register file
-  static llvm::StringRef getRegfileValueName(llvm::MCRegister BaseReg);
+  std::string getRegfileValueName(llvm::MCRegister BaseReg);
 
   /// Used to get the final name of the value associated with a physical
   /// register
@@ -319,6 +321,15 @@ class MIRToIRTranslator {
   /// <tt>VCC</tt>/<tt>XNACK_MASK</tt>/<tt>FLAT_SCR</tt> before encoding the
   /// final key
   RegFileKey getRegFileKey(llvm::MCRegister Reg) const;
+
+  /// Initializes fields related to the layout of the register files based
+  /// on the number of SGPRs/VGPRs and other fields of the function
+  /// being translated
+  llvm::Error initRegFileLayouts();
+
+  /// Initializes the initial values in the entry basic block if it's
+  /// determined that the function is a kernel
+  void initKernelEntryRegs(llvm::IRBuilderBase &Builder);
 
   /// Retrieves the named operand \p OpName in \p MI, retrieves it as a
   /// \c llvm::MachineBasicBlock. It then returns the MBB's \c llvm::BasicBlock
@@ -438,6 +449,11 @@ class MIRToIRTranslator {
   /// register value map to \p Val
   void setRegOperandValue(const llvm::MachineOperand &Op, llvm::Value *Val);
 
+  llvm::Value &setRegOperandValue(const llvm::MachineBasicBlock &MBB,
+                                  const RegFileKey &Key,
+                                  llvm::IRBuilderBase &Builder,
+                                  llvm::Value *Val);
+
   /// Invalidates register value entries overlapping with \p RegKey before
   /// a write happens by \c setRegOperandValue
   ///
@@ -449,7 +465,7 @@ class MIRToIRTranslator {
   ///  - Stored = Reg (exact match): skip, since the \c setRegOperandValue
   ///  is going to overwrite the entry anyway
   void invalidateOverlaps(RegValueMap &State, const RegFileKey &RegKey,
-                          llvm::MCRegister Reg, llvm::IRBuilderBase &Builder);
+                          llvm::IRBuilderBase &Builder);
 
   /// Goes over the unresolved PHIs generated when materializing values during
   /// the instruction translation period, and fixes them up by looking up the
@@ -459,40 +475,28 @@ class MIRToIRTranslator {
   /// PHI is then processed in the same loop
   /// \note If a PHI value does not have a predecessor block, it will be
   /// changed to \c freeze(poision)
-  /// \note After PHIs are processed, if it is determined that the PHI
-  /// node only has a single predecessor, it is changed to a direct value
-  /// use
+  /// \note After PHIs are processed, if it is determined that the PHI node only
+  /// has a single predecessor, it is changed to a direct value use
   void fixupPhis();
 
-  /// Build the canonical \c <NumLanes32 x i32> value for \p File at the
-  /// point in the function corresponding to \p MBB. Each lane holds the
-  /// i32 value of the corresponding hardware-encoded register slot;
-  /// allocated SGPRs occupy lanes \c [0, NumSGPRs) and SGPR specials
-  /// occupy lanes \c [FirstSpecialEnc, 128). Lanes between (the
-  /// unallocated normal-SGPR gap) are frozen poison. VGPR/AGPR are
-  /// dense \c [0, NumVGPRs) / \c [0, NumAGPRs).
-  ///
-  /// Cached per-block as a mega-entry in \c RegCache.
-  llvm::Value *getRegisterFileFullCanonical(const llvm::MachineBasicBlock &MBB,
-                                            llvm::MCRegister RegInFile,
-                                            llvm::IRBuilderBase &Builder);
-
-  /// Maps each 32-bit lane in the canonical SGPR file vector to the
-  /// MCRegister whose HW encoding is that lane (or empty if the lane
-  /// falls in the unallocated normal-SGPR gap).
-  llvm::SmallVector<llvm::MCRegister> buildSGPRFileLayout() const;
-
-  /// Public wrapper: returns the file as
-  /// \c <(TotalCanonicalBits / LaneTy.bits) x LaneTy>.
   llvm::Value *getRegisterFile(const llvm::MachineInstr &MI,
-                               llvm::MCRegister Register, llvm::Type *LaneTy);
+                               llvm::MCRegister Register,
+                               llvm::Type *LaneTy = nullptr);
 
-  /// Replace the file's canonical mega-entry with \p NewVec (which must
-  /// have the same total bit width as the file). All per-register cache
-  /// entries belonging to this file are invalidated by the existing
-  /// overlap logic so subsequent reads extract from the new mega value.
+  llvm::Value *getRegisterFile(const llvm::MachineBasicBlock &MBB,
+                               llvm::MCRegister Reg,
+                               llvm::IRBuilderBase &Builder,
+                               llvm::Type *LaneTy = nullptr);
+
   void setRegisterFile(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
                        llvm::Value *NewVec);
+
+  void setRegisterFile(const llvm::MachineBasicBlock &MBB, llvm::MCRegister Reg,
+                       llvm::IRBuilderBase &Builder, llvm::Value *Val);
+
+  /// Like \c emitIndirectCall but the call is a tail call followed by
+  /// \c ret of the call's return value
+  void emitIndirectTailCall(const llvm::MachineInstr &MI, llvm::Value *Target);
 
   /// Build the function type used by all discovered device functions and
   /// indirect call targets in this module. The signature is:
@@ -514,19 +518,6 @@ class MIRToIRTranslator {
   /// allocation counts derived from \c amdgpu-num-vgpr (or the
   /// addressable max as a fallback).
   llvm::FunctionType *getStandardDeviceFunctionType() const;
-
-  /// Like \c emitIndirectCall but the call is a tail call followed by
-  /// \c ret of the call's return value. Used for \c S_SETPC_B64.
-  void emitIndirectTailCall(const llvm::MachineInstr &MI, llvm::Value *Target);
-
-  /// Write \p Val into the file that contains \p Reg at 32-bit lane index
-  /// \p Index (the \c S_/V_MOVREL-style hardware index). When \p Index is
-  /// a \c ConstantInt the write is folded into a normal
-  /// \c setRegOperandValue on the targeted sub-register; otherwise the
-  /// dynamic-index path materializes the whole file, performs an
-  /// \c insertelement, and writes back via \c setRegisterFileFull.
-  void writeRegisterFile(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
-                         llvm::Value *Index, llvm::Value *Val);
 
 public:
   MIRToIRTranslator(llvm::MachineFunction &MF, llvm::Error &Err);
