@@ -330,7 +330,6 @@ class MIRToIRTranslator {
   /// returns its associated \c llvm::BasicBlock
   llvm::BasicBlock &getOperandAsBasicBlock(const llvm::MachineOperand &Op);
 
-
   /// Returns the fall-through BasicBlock (next block after the current MI's
   /// block)
   llvm::BasicBlock *getNextBB(const llvm::MachineInstr &MI);
@@ -424,34 +423,46 @@ class MIRToIRTranslator {
       const std::tuple<llvm::MCRegister, unsigned, unsigned> &KeyReg,
       llvm::IRBuilderBase &Builder, llvm::Type *RegType = nullptr);
 
-  void setRegOperandValue(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
-                          llvm::Value *Val);
-
-  void setRegOperandValue(const llvm::MachineOperand &Op, llvm::Value *Val);
-
+  /// Retrieves the register associated with the named destination operand
+  /// \p OpName in \p MI and sets its associated value in the register value
+  /// map of \p MI's basic block to \p Val
   void setRegOperandValue(const llvm::MachineInstr &MI,
                           llvm::AMDGPU::OpName OpName, llvm::Value *Val);
 
-  /// Handle overlapping entries in the file's \c RegCache when a write of
-  /// \p Slot is about to happen.
+  /// Sets the register's associated value in \p MI's basic block register
+  /// value map to \p Val
+  void setRegOperandValue(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
+                          llvm::Value *Val);
+
+  /// Sets the destination operand's associated value in \p MI's basic block
+  /// register value map to \p Val
+  void setRegOperandValue(const llvm::MachineOperand &Op, llvm::Value *Val);
+
+  /// Invalidates register value entries overlapping with \p RegKey before
+  /// a write happens by \c setRegOperandValue
   ///
   /// For each stored entry whose \c [Offset, Offset+NumHalves) range overlaps:
-  ///  - Stored ⊂ Slot (fully covered): erase.
-  ///  - Slot ⊂ Stored (partial overwrite of super-reg): bitcast to
+  ///  - Stored ⊂ Reg (fully covered): erase.
+  ///  - Reg ⊂ Stored (partial overwrite of super-reg): bitcast to
   ///    \c <NumHalves x i16>, extract the non-overlapping halves, and
   ///    preserve them as new sub-register entries.
-  ///  - Otherwise (rare partial overlap): conservative erase.
-  void invalidateOverlaps(RegValueMap &State, const RegFileKey &Slot,
+  ///  - Stored = Reg (exact match): skip, since the \c setRegOperandValue
+  ///  is going to overwrite the entry anyway
+  void invalidateOverlaps(RegValueMap &State, const RegFileKey &RegKey,
                           llvm::MCRegister Reg, llvm::IRBuilderBase &Builder);
 
+  /// Goes over the unresolved PHIs generated when materializing values during
+  /// the instruction translation period, and fixes them up by looking up the
+  /// PHI's value in its predecessor blocks
+  /// \note If a value is not found in a predecessor block, another PHI is
+  /// generated at the beginning of the predecessor block, and the generated
+  /// PHI is then processed in the same loop
+  /// \note If a PHI value does not have a predecessor block, it will be
+  /// changed to \c freeze(poision)
+  /// \note After PHIs are processed, if it is determined that the PHI
+  /// node only has a single predecessor, it is changed to a direct value
+  /// use
   void fixupPhis();
-
-  /// True if \p Offset (in 16-bit-lane units) within \p File is a "special"
-  /// slot — TTMP/M0/NULL/EXEC on every target plus VCC on GFX10+. These
-  /// slots are always in-bounds for cache queries, regardless of the
-  /// kernel's allocation count.
-  bool isTTMPAndBeyondSGPRRegion(llvm::MCRegister BaseReg,
-                                 uint32_t Offset) const;
 
   /// Build the canonical \c <NumLanes32 x i32> value for \p File at the
   /// point in the function corresponding to \p MBB. Each lane holds the
@@ -473,16 +484,15 @@ class MIRToIRTranslator {
 
   /// Public wrapper: returns the file as
   /// \c <(TotalCanonicalBits / LaneTy.bits) x LaneTy>.
-  llvm::Value *getRegisterFileFull(const llvm::MachineInstr &MI,
-                                   llvm::MCRegister RegFileBase,
-                                   llvm::Type *LaneTy);
+  llvm::Value *getRegisterFile(const llvm::MachineInstr &MI,
+                               llvm::MCRegister Register, llvm::Type *LaneTy);
 
   /// Replace the file's canonical mega-entry with \p NewVec (which must
   /// have the same total bit width as the file). All per-register cache
   /// entries belonging to this file are invalidated by the existing
   /// overlap logic so subsequent reads extract from the new mega value.
-  void setRegisterFileFull(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
-                           llvm::Value *NewVec);
+  void setRegisterFile(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
+                       llvm::Value *NewVec);
 
   /// Build the function type used by all discovered device functions and
   /// indirect call targets in this module. The signature is:

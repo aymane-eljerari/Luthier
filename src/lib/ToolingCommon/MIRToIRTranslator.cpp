@@ -169,12 +169,12 @@ static llvm::Value *breakdownToVecTyFromAvailableValues(
 }
 
 void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
-                                           const RegFileKey &Slot,
+                                           const RegFileKey &RegKey,
                                            llvm::MCRegister Reg,
                                            llvm::IRBuilderBase &Builder) {
-  llvm::MCRegister BaseReg = std::get<0>(Slot);
-  const unsigned WStart = std::get<1>(Slot);
-  const unsigned WNumHalves = std::get<2>(Slot);
+  llvm::MCRegister BaseReg = std::get<0>(RegKey);
+  const unsigned WStart = std::get<1>(RegKey);
+  const unsigned WNumHalves = std::get<2>(RegKey);
   const unsigned WEnd = WStart + WNumHalves;
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] invalidateOverlaps: "
                           << TRI.getName(Reg) << " @ file="
@@ -845,15 +845,6 @@ llvm::Error MIRToIRTranslator::initRegFileLayouts() {
   return llvm::Error::success();
 }
 
-bool MIRToIRTranslator::isTTMPAndBeyondSGPRRegion(llvm::MCRegister BaseReg,
-                                                  uint32_t Offset) const {
-  /// VGPR/AGPR have no specials. The bounds-check path is the only check
-  /// that matters for those files.
-  if (BaseReg != llvm::AMDGPU::SGPR0)
-    return false;
-  return Offset >= TTMPBaseReg;
-}
-
 MIRToIRTranslator::RegFileKey
 MIRToIRTranslator::getRegFileKey(llvm::MCRegister Reg) const {
   llvm::MCRegister MCReg = llvm::AMDGPU::getMCReg(Reg, ST);
@@ -1073,9 +1064,9 @@ llvm::Value *MIRToIRTranslator::getRegisterFileFullCanonical(
 }
 
 llvm::Value *
-MIRToIRTranslator::getRegisterFileFull(const llvm::MachineInstr &MI,
-                                       llvm::MCRegister RegFileBase,
-                                       llvm::Type *LaneTy) {
+MIRToIRTranslator::getRegisterFile(const llvm::MachineInstr &MI,
+                                                llvm::MCRegister Register,
+                                                llvm::Type *LaneTy) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI has no parent MBB");
   auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
@@ -1085,20 +1076,20 @@ MIRToIRTranslator::getRegisterFileFull(const llvm::MachineInstr &MI,
       TermInst ? llvm::IRBuilder{TermInst} : llvm::IRBuilder{BB};
 
   llvm::Value *Canonical =
-      getRegisterFileFullCanonical(*MBB, RegFileBase, Builder);
+      getRegisterFileFullCanonical(*MBB, Register, Builder);
   if (LaneTy == Builder.getInt32Ty())
     return Canonical;
-  unsigned TotalBits = RegFileSize[static_cast<size_t>(RegFileBase)] * 16u;
+  unsigned TotalBits = RegFileSize[static_cast<size_t>(Register)] * 16u;
   unsigned LaneBits = LaneTy->getPrimitiveSizeInBits();
   assert(LaneBits != 0 && (TotalBits % LaneBits == 0) &&
          "lane type does not divide register file footprint");
   auto *DstTy = llvm::FixedVectorType::get(LaneTy, TotalBits / LaneBits);
   return Builder.CreateBitOrPointerCast(Canonical, DstTy,
-                                        getRegfileValueName(RegFileBase));
+                                        getRegfileValueName(Register));
 }
 
-void MIRToIRTranslator::setRegisterFileFull(const llvm::MachineInstr &MI,
-                                            llvm::MCRegister Reg,
+void MIRToIRTranslator::setRegisterFile(const llvm::MachineInstr &MI,
+                                        llvm::MCRegister Reg,
                                             llvm::Value *NewVec) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI has no parent MBB");
@@ -1322,7 +1313,7 @@ void MIRToIRTranslator::writeRegisterFile(const llvm::MachineInstr &MI,
     V = Builder.CreateBitOrPointerCast(V, I32);
   llvm::Value *NewFile = Builder.CreateInsertElement(
       OldFile, V, Index, getRegfileValueName(*File));
-  setRegisterFileFull(MI, *File, NewFile);
+  setRegisterFile(MI, *File, NewFile);
 }
 
 llvm::Value &MIRToIRTranslator::getOperandAsValue(const llvm::MachineInstr &MI,
