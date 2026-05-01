@@ -116,36 +116,22 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       OS << "Translator.getNextBB(MI)";
     }
 
-    // --- GetSGPRFile/GetVGPRFile/GetAGPRFile <laneTy> ---
-    else if (OpName == "GetSGPRFile" || OpName == "GetVGPRFile" ||
-             OpName == "GetAGPRFile") {
-      llvm::StringRef File = OpName == "GetSGPRFile"   ? "SGPR"
-                             : OpName == "GetVGPRFile" ? "VGPR"
-                                                       : "AGPR";
-      OS << "Translator.getRegisterFileFull(MI, "
-         << "luthier::MIRToIRTranslator::RegFileID::" << File << ", ";
+    // --- GetRegisterFile <reg>, <laneTy> ---
+    else if (OpName == "GetRegisterFile") {
+      OS << "Translator.getRegisterFile(MI, ";
       emitSemanticStatement(OS, Dag->getArg(0), Loc);
+      OS << ", ";
+      emitSemanticStatement(OS, Dag->getArg(1), Loc);
       OS << ")";
     }
 
-    // --- SetSGPRFile/SetVGPRFile/SetAGPRFile <laneTy>[, <val>] ---
-    // With just the lane-type arg, this becomes a wipe — invalidates the
-    // file's mega-entry to fresh frozen poison. With a value arg, writes
-    // the supplied vector as the new file value.
-    else if (OpName == "SetSGPRFile" || OpName == "SetVGPRFile" ||
-             OpName == "SetAGPRFile") {
-      llvm::StringRef File = OpName == "SetSGPRFile"   ? "SGPR"
-                             : OpName == "SetVGPRFile" ? "VGPR"
-                                                       : "AGPR";
-      if (Dag->getNumArgs() == 1) {
-        OS << "Translator.wipeRegisterFile(MI, "
-           << "luthier::MIRToIRTranslator::RegFileID::" << File << ")";
-      } else {
-        OS << "Translator.setRegisterFileFull(MI, "
-           << "luthier::MIRToIRTranslator::RegFileID::" << File << ", ";
-        emitSemanticStatement(OS, Dag->getArg(1), Loc);
-        OS << ")";
-      }
+    // --- SetRegisterFile <reg>, <val> ---
+    else if (OpName == "SetRegisterFile") {
+      OS << "Translator.setRegisterFile(MI, ";
+      emitSemanticStatement(OS, Dag->getArg(0), Loc);
+      OS << ", ";
+      emitSemanticStatement(OS, Dag->getArg(1), Loc);
+      OS << ")";
     }
 
     // --- IndirectTailCall <target> ---
