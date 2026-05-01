@@ -177,10 +177,17 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
 /// As of right now, Luthier does not model read/write privilege of registers.
 /// Luthier also does not currently model VGPR indexing operand access
 /// used in GFX9.
-/// \note The initial basic block in the machine function must not have any
+/// \TODO The initial basic block in the machine function must not have any
 /// predecessors. The \c CodeDiscoveryPass is in charge of detecting this
 /// issue and fixing it up in the discovered trace before passing the
 /// machine function for translation.
+/// \TODO The \c MIRToIRTranslator was designed to exepect
+/// well-formed Luthier trace machine functions; In other words, during
+/// translation, it doesn't return a \c llvm::Error that can be later checked,
+/// and only has assertions for sanity checks for performance reasons and
+/// readabilty; Which is why the \p CodeDiscoveryPass if prompted runs the
+/// machine verifier on the trace machine function before passing it
+/// down to the translator.
 class MIRToIRTranslator {
   template <uint16_t Opcode>
   friend void luthier::raiseMachineInstr(const llvm::MachineInstr &MI,
@@ -297,15 +304,42 @@ class MIRToIRTranslator {
   /// covering the entirety of the register file
   static llvm::StringRef getRegfileValueName(llvm::MCRegister BaseReg);
 
+  /// Used to get the final name of the value associated with a physical
+  /// register
+  std::string getRegValueName(llvm::MCRegister Reg) const {
+    return llvm::StringRef(TRI.getName(Reg)).lower() + "_val";
+  }
+
   /// Given a \p Reg prvoides the base register of the register file it
   /// belongs to
   llvm::MCRegister getRegFileBaseReg(llvm::MCRegister Reg);
 
-  /// Retrieves and translates the named operand \p OpName to a value
-  /// and caches it for the \p MI's basic block
-  /// If \p OutType is given, truncates or zero-extends the returned
-  /// register to match its size and type; Otherwise, an int with the size of
-  /// the register or a 64-bit immediate is returned.
+  /// Resolve \p Reg to a \c RegFileKey (register base index + 16-bit-lane
+  /// offset + number of 16-bit halves). Performs GFX9- alias translation for
+  /// <tt>VCC</tt>/<tt>XNACK_MASK</tt>/<tt>FLAT_SCR</tt> before encoding the
+  /// final key
+  RegFileKey getRegFileKey(llvm::MCRegister Reg) const;
+
+  /// Retrieves the named operand \p OpName in \p MI, retrieves it as a
+  /// \c llvm::MachineBasicBlock. It then returns the MBB's \c llvm::BasicBlock
+  /// Primarily used with branch instructions
+  llvm::BasicBlock &getOperandAsBasicBlock(const llvm::MachineInstr &MI,
+                                           llvm::AMDGPU::OpName OpName);
+
+  /// Retrieves the \c llvm::MachineBasicBlock stored in the \p Op, and
+  /// returns its associated \c llvm::BasicBlock
+  llvm::BasicBlock &getOperandAsBasicBlock(const llvm::MachineOperand &Op);
+
+
+  /// Returns the fall-through BasicBlock (next block after the current MI's
+  /// block)
+  llvm::BasicBlock *getNextBB(const llvm::MachineInstr &MI);
+
+  /// Retrieves and translates the named operand \p OpName to a value and caches
+  /// it for the \p MI's basic block
+  /// If \p OutType is given, appropriately converts the returned
+  /// value to match the <tt>OutType</tt>; Otherwise, the returned type will
+  /// have an integer type.
   /// \note \p OutType's scalar type must be either integer, floating point,
   /// or pointer
   /// \note The named operand represented by \p OpName must be either a
@@ -314,49 +348,89 @@ class MIRToIRTranslator {
                                  llvm::AMDGPU::OpName OpName,
                                  llvm::Type *OutType = nullptr);
 
+  /// Translates the machine operand \p Op of type register or immediate to a
+  /// value and caches it for the the basic block of the \p Op's instruction
+  /// \see getOperandAsValue
   llvm::Value &getOperandAsValue(const llvm::MachineOperand &Op,
                                  llvm::Type *OutType = nullptr);
 
-  llvm::BasicBlock &getOperandAsBasicBlock(const llvm::MachineInstr &MI,
-                                           llvm::AMDGPU::OpName OpName);
+  /// Convenience method for obtaining the basic block of \p MI first
+  /// before asking for the associated value with \p Reg using
+  /// \c getOperandAsValue
+  /// \see getOperandAsValue
+  llvm::Value &getOperandAsValue(const llvm::MachineInstr &MI,
+                                 llvm::MCRegister Reg,
+                                 llvm::Type *RegType = nullptr);
 
-  llvm::BasicBlock &getOperandAsBasicBlock(const llvm::MachineOperand &Op);
+  /// Materialize the value of \p Reg in <tt>MBB</tt>'s register value map;
+  /// The value will be materialized at the end of the IR basic block, before
+  /// the first terminator instruction
+  /// If \p OutRegType is given, appropriately converts the returned
+  /// value to match the <tt>OutRegType</tt>; Otherwise, the returned type will
+  /// have an integer type.
+  /// \note \p OutType's scalar type must be either integer, floating point,
+  /// or pointer
+  /// \note the scalar type of \p OutRegType must either be an int, float,
+  /// or a pointer
+  llvm::Value &getOperandAsValue(const llvm::MachineBasicBlock &MBB,
+                                 llvm::MCRegister Reg,
+                                 llvm::Type *OutRegType = nullptr);
 
-  llvm::Value &getRegisterOperand(const llvm::MachineInstr &MI,
-                                  llvm::MCRegister Reg,
-                                  llvm::Type *RegType = nullptr);
+  /// Materializes the value of the register identified by \p Key in the
+  /// <tt>MBB</tt>'s register value map. The value will be materialized using
+  /// the \p Builder
+  /// \see getOperandAsValue
+  llvm::Value &getOperandAsValue(const llvm::MachineBasicBlock &MBB,
+                                 const RegFileKey &Key,
+                                 llvm::IRBuilderBase &Builder,
+                                 llvm::Type *OutRegType = nullptr);
 
-  /// Search the file's cache for a stored super-register that fully
-  /// contains \p Slot. If found, bitcast to vector and extractelement the
-  /// requested 16-bit-aligned window.
-  llvm::Value *tryExtractFromSuperReg(
-      RegValueMap &State,
-      const std::tuple<llvm::MCRegister, unsigned, unsigned> &RegFileKey,
-      llvm::IRBuilderBase &Builder, llvm::Type *OutValueType);
+  /// Searchs a basic block's register \p State for a super register of the
+  /// register identified by \p RegFileKey; If found, bitcast to vector and
+  /// extractelement the register's value from its super register using the
+  /// \p Builder. Returns \c nullptr if no super register value was found in
+  /// \p State
+  /// If \p OutValueType is given, appropriately converts the returned
+  /// value to match the <tt>OutValueType</tt>; Otherwise, the returned type
+  /// will have an integer type.
+  /// Primarily used by \c getOperandAsValue
+  /// \note This function does not update the <tt>State</tt> map
+  llvm::Value *tryExtractFromSuperReg(RegValueMap &State,
+                                      const RegFileKey &RegFileKey,
+                                      llvm::IRBuilderBase &Builder,
+                                      llvm::Type *RegType);
 
-  /// Try to compose \p Slot from stored sub-register entries in the file's
-  /// cache. Builds a vector via insertelement for each half-window, then
-  /// bitcasts to the target integer type.
+  /// Same as \c tryExtractFromSuperReg except it tries to compose the
+  /// value associated with the \p Key by composing it from the sub-registers
+  /// already in the \p State
+  /// \note If at any time during the process, this function has to resort to
+  /// materializing new values by breaking down a register, it will update
+  /// the \p State to cache them
+  /// \see tryExtractFromSuperReg
   llvm::Value *tryComposeFromSubRegs(RegValueMap &State, const RegFileKey &Key,
                                      llvm::IRBuilderBase &Builder,
                                      llvm::Type *RegType = nullptr);
 
+  /// Same as \c tryComposeFromSubRegs except it breaks down \p KeyReg into
+  /// individual 16-bit element and materializes each using the
+  /// \c tryExtractFromSuperReg function. If a value is not found for any
+  /// of the sub registers, it either emits a PHI node to query them from
+  /// the predecessors at the end of the translation, or emits a
+  /// \c freeze(poison) value if the current block doesn't have any predecessors
+  /// \note Unlike \c tryComposeFromSubRegs and \c tryExtractFromSuperReg this
+  /// function will always return a value
   llvm::Value *tryComposeFromOverlappingRegs(
       RegValueMap &State, const llvm::MachineBasicBlock &MBB,
       const std::tuple<llvm::MCRegister, unsigned, unsigned> &KeyReg,
-      llvm::IRBuilderBase &Builder, llvm::Type *RegType);
+      llvm::IRBuilderBase &Builder, llvm::Type *RegType = nullptr);
 
-  /// Materialize the value of \p Reg in \p MBB.  Searches for an exact
-  /// match first, then a containing super-register, then composable
-  /// sub-registers, and finally falls back to predecessor PHI/ freeze(poison)
-  llvm::Value &getOperandAsValue(const llvm::MachineBasicBlock &MBB,
-                                 llvm::MCRegister Reg, llvm::Type *OutRegType);
+  void setRegOperandValue(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
+                          llvm::Value *Val);
 
-  llvm::Value &
-  getOperandAsValue(const llvm::MachineBasicBlock &MBB,
-                    const std::tuple<llvm::MCRegister, unsigned, unsigned> &Key,
-                    llvm::IRBuilderBase &Builder,
-                    llvm::Type *OutRegType = nullptr);
+  void setRegOperandValue(const llvm::MachineOperand &Op, llvm::Value *Val);
+
+  void setRegOperandValue(const llvm::MachineInstr &MI,
+                          llvm::AMDGPU::OpName OpName, llvm::Value *Val);
 
   /// Handle overlapping entries in the file's \c RegCache when a write of
   /// \p Slot is about to happen.
@@ -370,50 +444,7 @@ class MIRToIRTranslator {
   void invalidateOverlaps(RegValueMap &State, const RegFileKey &Slot,
                           llvm::MCRegister Reg, llvm::IRBuilderBase &Builder);
 
-  void setRegOperandValue(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
-                          llvm::Value *Val);
-
-  void setRegOperandValue(const llvm::MachineOperand &Op, llvm::Value *Val);
-
-  void setRegOperandValue(const llvm::MachineInstr &MI,
-                          llvm::AMDGPU::OpName OpName, llvm::Value *Val);
-
-  /// Returns the fall-through BasicBlock (next block after the current MI's
-  /// block). If there is no next block, returns a poison value.
-  llvm::BasicBlock *getNextBB(const llvm::MachineInstr &MI);
-
   void fixupPhis();
-
-  /// Used to get the final name of the value used for the physical register
-  std::string getRegValueName(llvm::MCRegister Reg) const {
-    return llvm::StringRef(TRI.getName(Reg)).lower() + "_val";
-  }
-
-  void initKernelEntryRegs(llvm::IRBuilderBase &Builder);
-
-  /// Seed the entry block's register cache from the function's
-  /// arguments (the standard device-function prototype). Called instead
-  /// of \c initKernelEntryRegs for non-kernel-entry functions.
-  void initDeviceFunctionEntryRegs(llvm::IRBuilderBase &Builder);
-
-  /// Initializes the register layout of the current function based on its
-  /// subtarget, and the number of SGPR and VGPRs it contains
-  ///
-  llvm::Error initRegFileLayouts();
-
-  /// Classify \p Reg into one of the modeled register files. Returns
-  /// \c std::nullopt if \p Reg is not file-backed (e.g. SCC, MODE, VCCZ,
-  /// EXECZ — those go through \c BlockRegState::OtherCache instead).
-  std::optional<llvm::MCRegister>
-  getBaseRegForRegFile(llvm::MCRegister Reg) const {
-    return std::get<0>(getRegFileSlot(Reg));
-  }
-
-  /// Resolve \p Reg to a \c RegFileKey (register base index + 16-bit-lane
-  /// offset + number of 16-bit halves). Returns \c std::nullopt for
-  /// non-file-backed registers. Performs GFX9- alias translation for
-  /// VCC/XNACK_MASK/ FLAT_SCR before encoding lookup.
-  RegFileKey getRegFileSlot(llvm::MCRegister Reg) const;
 
   /// True if \p Offset (in 16-bit-lane units) within \p File is a "special"
   /// slot — TTMP/M0/NULL/EXEC on every target plus VCC on GFX10+. These

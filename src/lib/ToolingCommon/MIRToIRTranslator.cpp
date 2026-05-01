@@ -245,9 +245,8 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
 }
 
 llvm::Value *MIRToIRTranslator::tryExtractFromSuperReg(
-    RegValueMap &State,
-    const std::tuple<llvm::MCRegister, unsigned, unsigned> &RegFileKey,
-    llvm::IRBuilderBase &Builder, llvm::Type *OutValueType) {
+    RegValueMap &State, const MIRToIRTranslator::RegFileKey &RegFileKey,
+    llvm::IRBuilderBase &Builder, llvm::Type *RegType) {
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] tryExtractFromSuperReg\n");
 
   llvm::MCRegister RegFileBase = std::get<0>(RegFileKey);
@@ -269,7 +268,7 @@ llvm::Value *MIRToIRTranslator::tryExtractFromSuperReg(
         SlotOffset + NumSlotHalves < RegFileIdxEnd)
       continue;
 
-    if (auto It = Entry.find(OutValueType); It != Entry.end())
+    if (auto It = Entry.find(RegType); It != Entry.end())
       return It->getSecond();
 
     /// View the stored value as <SlotNumHalves x i16> and extract the requested
@@ -279,8 +278,8 @@ llvm::Value *MIRToIRTranslator::tryExtractFromSuperReg(
     if (RegFileNumHalves == 1) {
       llvm::Value *V =
           Builder.CreateExtractElement(Vec, RegFileIdxStart - SlotOffset);
-      if (V->getType() != OutValueType)
-        V = Builder.CreateBitOrPointerCast(V, OutValueType);
+      if (V->getType() != RegType)
+        V = Builder.CreateBitOrPointerCast(V, RegType);
       return V;
     }
     auto *SubTy =
@@ -291,7 +290,7 @@ llvm::Value *MIRToIRTranslator::tryExtractFromSuperReg(
           Builder.CreateExtractElement(Vec, RegFileIdxStart - SlotOffset + I);
       SubVec = Builder.CreateInsertElement(SubVec, E, I);
     }
-    return Builder.CreateBitOrPointerCast(SubVec, OutValueType);
+    return Builder.CreateBitOrPointerCast(SubVec, RegType);
   }
   return nullptr;
 }
@@ -415,6 +414,7 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineBasicBlock &MBB,
   assert(BB && "MBB does not have an IR basic block");
 
   llvm::Instruction *TermInst = BB->getTerminator();
+
   llvm::InstSimplifyFolder CF{MF.getDataLayout()};
   llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
     annotateUniformIfNeeded(I, TRI, Reg);
@@ -426,12 +426,11 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineBasicBlock &MBB,
   llvm::IRBuilderBase Builder(BB->getContext(), CF, Inserter, {}, {});
   TermInst ? Builder.SetInsertPoint(TermInst) : Builder.SetInsertPoint(BB);
 
-  return getOperandAsValue(MBB, getRegFileSlot(Reg), Builder, OutRegType);
+  return getOperandAsValue(MBB, getRegFileKey(Reg), Builder, OutRegType);
 }
 
 llvm::Value &MIRToIRTranslator::getOperandAsValue(
-    const llvm::MachineBasicBlock &MBB,
-    const std::tuple<llvm::MCRegister, unsigned, unsigned> &Key,
+    const llvm::MachineBasicBlock &MBB, const RegFileKey &Key,
     llvm::IRBuilderBase &Builder, llvm::Type *OutRegType) {
   RegValueMap &State = VM[MBB];
   /// ---- Bounds check -------------------------------------------------
@@ -583,7 +582,7 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
   auto seedRegValue = [&](const llvm::MachineBasicBlock &MBB,
                           llvm::MCRegister Reg, llvm::Value *Val) {
     RegValueMap &State = VM[MBB];
-    State[getRegFileSlot(Reg)][Val->getType()] = Val;
+    State[getRegFileKey(Reg)][Val->getType()] = Val;
   };
 
   /// Seed a single preloaded register with \p Val.
@@ -856,7 +855,7 @@ bool MIRToIRTranslator::isTTMPAndBeyondSGPRRegion(llvm::MCRegister BaseReg,
 }
 
 MIRToIRTranslator::RegFileKey
-MIRToIRTranslator::getRegFileSlot(llvm::MCRegister Reg) const {
+MIRToIRTranslator::getRegFileKey(llvm::MCRegister Reg) const {
   llvm::MCRegister MCReg = llvm::AMDGPU::getMCReg(Reg, ST);
   if (MCReg == llvm::AMDGPU::MODE)
     return std::make_tuple(Reg, 0, 2);
@@ -1230,7 +1229,7 @@ void MIRToIRTranslator::initDeviceFunctionEntryRegs(
   /// gives \c VCC_LO on wave32 and the \c VCC pair on wave64.
   llvm::MCRegister VccReg = TRI.getVCC();
   if (VccReg) {
-    auto Slot = getRegFileSlot(VccReg);
+    auto Slot = getRegFileKey(VccReg);
     if (Slot) {
       uint32_t Key = makeFileRegKey(Slot->File, Slot->Offset, Slot->NumHalves);
       State.RegCache[Key][F.getArg(Args.VccIdx)->getType()] =
@@ -1332,9 +1331,9 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(const llvm::MachineInstr &MI,
   return getOperandAsValue(*TII.getNamedOperand(MI, OpName), OutType);
 }
 
-llvm::Value &MIRToIRTranslator::getRegisterOperand(const llvm::MachineInstr &MI,
-                                                   llvm::MCRegister Reg,
-                                                   llvm::Type *RegType) {
+llvm::Value &MIRToIRTranslator::getOperandAsValue(const llvm::MachineInstr &MI,
+                                                  llvm::MCRegister Reg,
+                                                  llvm::Type *RegType) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI does not have a machine basic block");
   return getOperandAsValue(*MBB, Reg, RegType);
@@ -1347,7 +1346,7 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineOperand &Op,
   case llvm::MachineOperand::MO_Register: {
     const llvm::MachineInstr *MI = Op.getParent();
     assert(MI && "Operand does not have a machine instruction");
-    return getRegisterOperand(*MI, Op.getReg(), OutType);
+    return getOperandAsValue(*MI, Op.getReg(), OutType);
   }
   case llvm::MachineOperand::MO_Immediate: {
     const llvm::MachineInstr *MI = Op.getParent();
@@ -1408,7 +1407,7 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
                  TRI.getName(Reg), MBB->getNumber(),
                  *Val->getType()->getScalarType(), *Val));
 
-  std::optional<RegFileSlotInfo> Slot = getRegFileSlot(Reg);
+  std::optional<RegFileSlotInfo> Slot = getRegFileKey(Reg);
 
   /// OtherCache write — no overlap logic, no file invalidation.
   if (!Slot) {
@@ -1520,7 +1519,7 @@ void MIRToIRTranslator::raiseMachineInstr(const llvm::MachineInstr &MI,
     InlineAsmEmitter->emitInlineAsm(
         Builder, MI,
         [&](llvm::MCRegister Reg) -> llvm::Value & {
-          return getRegisterOperand(MI, Reg);
+          return getOperandAsValue(MI, Reg);
         },
         [&](llvm::MCRegister Reg, llvm::Value &Val) {
           setRegOperandValue(MI, Reg, &Val);
