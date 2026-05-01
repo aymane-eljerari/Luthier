@@ -947,8 +947,9 @@ MIRToIRTranslator::getRegFileSlot(llvm::MCRegister Reg) const {
   return std::make_tuple(File, PhysRegOffset, RegSizeBits / RegGranule);
 }
 
-llvm::StringRef MIRToIRTranslator::getRegfileValueName(llvm::MCRegister Reg) {
-  switch (Reg) {
+llvm::StringRef
+MIRToIRTranslator::getRegfileValueName(llvm::MCRegister BaseReg) {
+  switch (BaseReg) {
   case llvm::AMDGPU::SGPR0:
     return "sgpr_file";
   case llvm::AMDGPU::VGPR0:

@@ -187,11 +187,19 @@ class MIRToIRTranslator {
                                          llvm::IRBuilderBase &Builder,
                                          MIRToIRTranslator &Translator);
 
+  /// Primary interface for raising machine instructions to LLVM IR in the
+  /// translator loop. If a semantic for the \p MI's opcode exists, the
+  /// appropriate specialization of raiseMachineInstr is dispatched; If not,
+  /// an inline assembly version of the instruction the appropriate number of
+  /// input and output operands are emitted
   void raiseMachineInstr(const llvm::MachineInstr &MI,
                          llvm::IRBuilderBase &Builder);
 
   llvm::MachineFunction &MF;
 
+  /// IR Inline assembly instruction emitter used to emit place holder
+  /// inline assembly IR instructions for machine instructions with no
+  /// semantics
   std::unique_ptr<MIInlineAsmEmitter> InlineAsmEmitter{};
 
   const llvm::SIRegisterInfo &TRI;
@@ -210,19 +218,26 @@ class MIRToIRTranslator {
   /// the output pointer size
   using ValueTypeMap = llvm::DenseMap<llvm::Type *, llvm::Value *>;
 
+  /// Register file key used to hash register values:
+  /// - First element: the base register of the register file
+  /// - Second element: the hardware index offset of the register
+  /// from the base (in half-word units)
+  /// - Third element: the size of the register (in half-word units)
   using RegFileKey = std::tuple<llvm::MCRegister, unsigned, unsigned>;
 
+  /// Register size granularity; Remains 16 until something changes in AMD
+  /// GPUs
   static constexpr unsigned RegGranule = 16;
 
-  /// Cache for registers
-  /// The location of each register is identified by a 16-bit-lane
-  /// offset within their associated register file
-  /// (SGPR/VGPR/AGPR/Hardware registers)
+  /// Cache for registers in a basic block
   using RegValueMap = llvm::DenseMap<RegFileKey, ValueTypeMap>;
 
   using BBStateMap =
       llvm::DenseMap<std::reference_wrapper<const llvm::MachineBasicBlock>,
                      RegValueMap>;
+
+  /// Total 16-bit-lane footprint of each register file.
+  llvm::SmallDenseMap<llvm::MCRegister, unsigned> RegFileSize{};
 
   /// Logical SGPR that aliases \c VCC_LO for applicable targets
   llvm::MCRegister VccLoSgpr{llvm::MCRegister::NoRegister};
@@ -251,9 +266,6 @@ class MIRToIRTranslator {
   /// targets
   unsigned SGPRStatusRegHWordOffsetStart = 0;
 
-  /// Total 16-bit-lane footprint of each register file.
-  llvm::SmallDenseMap<llvm::MCRegister, unsigned> RegFileSize{};
-
   struct ToBeFixedRegValuePhiInfo {
     const llvm::MachineBasicBlock *MBB;
     RegFileKey RegKey;
@@ -268,26 +280,36 @@ class MIRToIRTranslator {
   /// time a single register/file is read/written to
   BBStateMap VM{};
 
-  /// Provides the index of \p Reg w.r.t the base register of the register
+  /// Provides the DWORD index of \p Reg w.r.t the base of the register
   /// file \p Reg resides in
   unsigned getHardwareIdxOffsetFromBaseReg(llvm::MCRegister Reg) const;
 
   /// Maps the physical pseudo register to its hardware register
+  /// \note Use this instead of \c llvm::AMDGPU::getMCReg directly
   llvm::MCRegister getPhysReg(llvm::MCRegister Reg) const;
 
+  /// Provides the register's physical size
+  /// \note Use this instead of \c llvm::TargetRegisterInfo::getRegSizeInBits
   unsigned getPhysRegisterSize(llvm::MCRegister Reg) const;
 
-  static llvm::StringRef getRegfileValueName(llvm::MCRegister Reg);
+  /// Given the base register of the register file, returns the value name
+  /// for that register file; Primarily used for creating value entries
+  /// covering the entirety of the register file
+  static llvm::StringRef getRegfileValueName(llvm::MCRegister BaseReg);
 
+  /// Given a \p Reg prvoides the base register of the register file it
+  /// belongs to
   llvm::MCRegister getRegFileBaseReg(llvm::MCRegister Reg);
 
-  /// Retrieves and translates the named operand of type register and immediate
-  /// to a value and caches it for the current basic block
-  /// If \p RegType is specified, the returned value will be bitcasted to  ///
-  /// match the expected type. The returned value will also be truncated or
-  /// zero-extended to match the \p RegType's bit width.
-  /// If a pointer type is requested, a \c llvm::IntToPtrInst will be used
-  /// to convert a cached integer value to the requested pointer type
+  /// Retrieves and translates the named operand \p OpName to a value
+  /// and caches it for the \p MI's basic block
+  /// If \p OutType is given, truncates or zero-extends the returned
+  /// register to match its size and type; Otherwise, an int with the size of
+  /// the register or a 64-bit immediate is returned.
+  /// \note \p OutType's scalar type must be either integer, floating point,
+  /// or pointer
+  /// \note The named operand represented by \p OpName must be either a
+  /// register or an integer
   llvm::Value &getOperandAsValue(const llvm::MachineInstr &MI,
                                  llvm::AMDGPU::OpName OpName,
                                  llvm::Type *OutType = nullptr);
