@@ -575,6 +575,7 @@ static llvm::Value *buildInitialModeValue(const llvm::Function &F,
 /// for the few pre-loaded values that lack an intrinsic we fall back to a
 /// frozen poison placeholder.
 void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
+  /// TODO: preload kernel argument values
   const auto &Info = *MF.getInfo<llvm::SIMachineFunctionInfo>();
 
   using PV = llvm::AMDGPUFunctionArgInfo::PreloadedValue;

@@ -54,11 +54,11 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
                        llvm::IRBuilderBase &Builder,
                        MIRToIRTranslator &Translator);
 
-/// \brief Used by the \c CodeDiscoveryPass to translate lifted Machine IR
-/// instructions in a machine function trace to their equivalent LLVM IR and
-/// inserts the translated IR into the associated LLVM Function handle.
-/// The translated IR can then be used to query semantics-related information
-/// about the instructions inside the target module
+/// \brief Used by the \c CodeDiscoveryPass to translate Machine instructions
+/// in a machine function trace to LLVM IR and inserts the translated IR into
+/// the associated LLVM Function handle. The translated IR can then be used
+/// to query semantics-related information about the instructions inside
+/// the target module
 /// \details The translator performs a per-basic block translation of the
 /// machine function. Each basic block maintains a mapping between registers
 /// and a list of available LLVM values hashed based on their type. The map
@@ -68,7 +68,16 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
 /// initial values are populated according to the AMD GPU kernel initial
 /// state described by the AMDGPU backend documentation; Device (non-entry)
 /// function's entry basic blocks obtain their initial values from their
-/// arguments.
+/// arguments. Other basic blocks emit unresolved PHI nodes for any registers
+/// that have been used for the first time by an instruction. After all
+/// basic blocks have been translated, the PHI nodes will be then be resolved
+/// by connecting them to their incoming values in their predecessor blocks if
+/// they already exist, or making additional PHIs to request them from///
+/// predecessors further away. If making additional PHI nodes results in
+/// requesting an uninitialized value from the entry basic block, a
+/// \c freeze(poision) value is emitted to serve as a place holder.
+/// This process is performed until all unresolved PHI nodes have been
+/// resolved. \n
 /// Instead of directly using MC register enums to map registers to their
 /// associated set of values, This class instead uses the following three
 /// things to distinguish each register entry: 1. The base physical MC register
@@ -80,17 +89,23 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
 /// (which includes the entire register file itself). The hardware
 /// register index (opcode encoding) of each register can be queried from
 /// both LLVM's AMDGPU register records (see \c llvm::AMDGPU::getMCReg and
-/// \c llvm::SIRegisterInfo::getEncodingValue) and the AMD GPU public ISA docs.
+/// \c llvm::SIRegisterInfo::getEncodingValue) and the AMD GPU public ISA docs
+/// (see section named "Scalar ALU Operands").
 /// Possible register files include:
 /// - <b>User SGPR register file</b>, with \c SGPR0 as its base index.
 /// This file covers the entire number of SGPRs the kernel descriptor requests
 /// in its \c RSRC1 field via the `amdgpu-num-sgpr` function attribute.
-/// This file includes \c VCC, and on GFX9 and earlier targets,
-/// \c FLAT_SCR and \c XNACK_MASK register. The translator detects
-/// if a logical SGPR encoding was used to refer to where these special
-/// registers are stored in GFX9 and earlier targets and hases them to the
-/// same entry. The maximum size of this region at the time of
-/// writing is 108 DWORDs, ending right after \c VCC_HI
+/// Special registers \c VCC, and on GFX9 and earlier targets,
+/// \c FLAT_SCR and \c XNACK_MASK are placed at the end of this file, mimicing
+/// documented hardware behavior. This implies that these special registers
+/// can be addressed with both their special name (e.g. \c VCC) and their
+/// logical name (e.g. \c SGPR16), also mimicing how the hardware works.
+/// The translator's hash function detects if a logical SGPR encoding was used
+/// in a machine instruction to refer to where these special registers and
+/// aliases them to the same entry. The aliasing behavior has been removed in
+/// GFX10+, but \c VCC still remains in the same \c SGPR file.
+/// The maximum size of this region at the time of writing is 108 DWORDs,
+/// ending right after \c VCC_HI
 /// - <b>The Trap handler SGPR register file</b>, which starts from the
 /// first encoded trap handler register located right after \c VCC_HI
 /// (index 108) in all targets. On older targets, the base register of this
@@ -98,13 +113,13 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
 /// trap handler registers. This region usually ends right before index 124.
 /// - <b>\c EXEC mask, \c MO, and \c SGPR_NULL (if available on the target)
 /// register file</b>, starts from the last trap handler index (124) to
-/// the end of the \c EXEC_HI's encoding, which is 128.
+/// the end of the \c EXEC_HI's encoding, which is 128 (exclusive).
 /// - <b>Aperature register file</b>, which includes \c SRC_SHARED_BASE,
 /// \c SRC_SHARED_LIMIT, \c SRC_PRIVATE_BASE, \c SRC_PRIVATE_LIMIT, and \c
 /// (on GFX9 and GFX10) \c SRC_POPS_EXITING_WAVE_ID. On GFX8 and earlier
-/// targets, these registers are not available, hence their associated file
-/// must be zero. The hardware encoding range of this file is from 235 to 239,
-/// inclusive.
+/// targets, these registers are not available, hence this register file
+/// is empty on those targets. The hardware encoding range of this file is from
+/// 235 to 239, inclusive.
 /// - <b>Status register SGPR file</b>, which includes \c SRC_VCCZ, \c
 /// SRC_EXECZ, and \c SRC_SCC, ranging from hardware index of 251 to 253 on
 /// all targets, inclusive. These are modelled as 32-bit SGPR registers in the
@@ -125,52 +140,47 @@ void raiseMachineInstr(const llvm::MachineInstr &MI,
 /// introduced in GFX12+ (how to detect this is TBD), maximum number of
 /// addressable VGPRs for the sub target is assumed.
 /// - <b>AGPR register file</b>, with \c AGPR0 as its base register. On targets
-/// that support it, its size should be the same as the number of VGPRs///
-/// requested by the kernel.
-///
-/// The translator also takes care of materializing register values as the
-/// instruction semantics translator functions (i.e. \c raiseMachineInstr)
-/// requests them. The translator
-/// When a different-sized overlapping register is requested (sub-register
-/// or super-register), the tracker extracts or merges values on demand rather
-/// than eagerly splitting every write into register-unit granularity. Registers
-/// that overlap but are not strictly super or sub-registers (rare) will be
-/// broken down to reg units and then processed via the super reg logic.
-///
-/// On a write to register R, all overlapping entries (sub- and super-regs)
-/// are invalidated so that subsequent reads through a different alias will
-/// lazily recompute the value from R's entry. If a register being written only
-/// partially overlaps with a tracked value, only the overlapped part is
-/// invalidated.
-///
-/// If being used to translate an entire machine function, the tracker uses
-/// the function's prototype and calling convention to figure out the initial
-/// values for each register in the entry basic block (a process we also
-/// referred to as "seeding"). The function prototype must meet the following
-/// requirements:
-/// - Kernels and other entry functions shouldn't have any arguments in their
-/// prototype. Access to the kernel argument pointer, as well as other SGPR and
-/// VGPR registers initialized by the GPU will be instead materialized by
-/// emitting both LLVM and Luthier intrinsics at the beginning of the entry
-/// basic block, all before the translation process starts. For example,
+/// that support it, its size should be the same as the number of VGPRs
+/// requested by the kernel. \n
+/// The register files' formats are deduced primarily by looking at certain
+/// function attributes populated by the \c CodeDiscoveryPass as well as the
+/// features of the function's sub target. \n
+/// Following Luthier's machine function trace semantics, transfer of control
+/// from one trace function to another results in a call instruction that pass
+/// the entire register file of the caller to the callee as argument. The
+/// prototype of the callee can be queried via
+/// \c MIRToIRTranslator::getStandardDeviceFunctionType function.
+/// When passing device (i.e. non-entry) function to the translator the
+/// \p CodeDiscoveryPass must ensure the function's prototype matches the
+/// type returned by \c getStandardDeviceFunctionType, since the function's
+/// prototype cannot be changed later by the translator. Kernel and other
+/// entry functions don't have to follow this rule, as their initial/// register
+/// values are initialized in the body of the function according to the initial
+/// kernel state documented by the AMDGPU LLVM backend; For example, \c
 /// llvm.amdgcn.kernarg.segment.ptr() is used to initialize the SGPR pair's
-/// value holding the kernel argument buffer's address.
-/// - Any other non-entry functions must have all read/writable GPRs passed
-/// as an argument to the function. This includes VGPRs, SGPRs, AGPRs,
-/// Exec mask, SCC, VCC, M0, MODE, and FLAT_SCRATCH (on targets that support
-/// writing to it). EXECZ and VCCZ are exceptions, as they are indirectly
-/// calculated based on the values of EXEC and VCC, respectively. PC is not
-/// modeled by the IR translator. Read access to privileged or read-only
-/// registers are done via LLVM and Luthier intrinsics.
-///
-/// As the function prototype is very hard to change after a machine function is
-/// assigned ot it, it is the caller's responsibility to have counted all
-/// possible GPRs used by the function and adding them to its prototype. To do
-/// so, caller must take into account the value of the kernel descriptor or the
-/// AMD kernel code's fields to ensure a non-entry function's prototype is
-/// properly configured. If a non-entry function is invoked with dynamically
-/// allocated VGPRs, it must include the maximum possible number of VGPRs
-/// available to each wave.
+/// value holding the kernel argument buffer's address. \n The translator also
+/// takes care of materializing register values as the instruction semantics
+/// translator functions (i.e. \c raiseMachineInstr) requests them. The
+/// translator materializes sub-registers of register values via bitcasting the
+/// available register values into vector types and using the \c
+/// `extractelement` IR instruction to retrieve the requested sub-register. The
+/// same process is also done for when a super register of a requested register
+/// already has a value materialized in the value map. Registers that overlap
+/// but are not strictly super or sub-registers (rare) will be broken down to
+/// reg units and then processed via the super reg logic.
+/// \n
+/// On a write to a register, all overlapping entries (sub- and super-regs)
+/// are invalidated so that subsequent reads through a different alias will
+/// lazily recompute the value from the register's entry. If a register being
+/// written only partially overlaps with a tracked value, only the
+/// overlapped part is invalidated. \n
+/// As of right now, Luthier does not model read/write privilege of registers.
+/// Luthier also does not currently model VGPR indexing operand access
+/// used in GFX9.
+/// \note The initial basic block in the machine function must not have any
+/// predecessors. The \c CodeDiscoveryPass is in charge of detecting this
+/// issue and fixing it up in the discovered trace before passing the
+/// machine function for translation.
 class MIRToIRTranslator {
   template <uint16_t Opcode>
   friend void luthier::raiseMachineInstr(const llvm::MachineInstr &MI,
