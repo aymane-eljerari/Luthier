@@ -457,6 +457,10 @@ class MIRToIRTranslator {
   /// register value map to \p Val
   void setRegOperandValue(const llvm::MachineOperand &Op, llvm::Value *Val);
 
+  /// Sets the value associated with the \p Key in the register value map
+  /// associated with \p MBB to \p Val
+  /// \p Builder is used for invalidating stale values overlapping with
+  /// the \p Key
   void setRegOperandValue(const llvm::MachineBasicBlock &MBB,
                           const RegFileKey &Key, llvm::IRBuilderBase &Builder,
                           llvm::Value *Val);
@@ -486,18 +490,32 @@ class MIRToIRTranslator {
   /// has a single predecessor, it is changed to a direct value use
   void fixupPhis();
 
-  llvm::Value *getRegisterFile(const llvm::MachineInstr &MI,
-                               llvm::MCRegister Register,
-                               llvm::Type *LaneTy = nullptr);
-
+  /// Materializes the value associated with the register file of \p Reg
+  /// in the value register map of \p MBB
+  /// \p Builder is used to materialize needed instructions
+  /// \p LaneTy specifies the scalar type used to divide the register file  /// value in the returned vector type
   llvm::Value *getRegisterFile(const llvm::MachineBasicBlock &MBB,
                                llvm::MCRegister Reg,
                                llvm::IRBuilderBase &Builder,
                                llvm::Type *LaneTy = nullptr);
 
+  /// Materializes the value associated with the register file of \p Register
+  /// at \p MI's translation point
+  /// \p LaneTy specifies the scalar type used in the returned register
+  /// file vector
+  llvm::Value *getRegisterFile(const llvm::MachineInstr &MI,
+                               llvm::MCRegister Register,
+                               llvm::Type *LaneTy = nullptr);
+
+  /// Sets the entire register file associated with \p Reg at \p MI's
+  /// translation point to the new value \p NewVec
   void setRegisterFile(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
                        llvm::Value *NewVec);
 
+  /// Sets the entire register file associated with \p Reg in \p MBB's
+  /// register value map to \p Val
+  /// \p Builder is used to create any intermediate instructions
+  /// needed for the write
   void setRegisterFile(const llvm::MachineBasicBlock &MBB, llvm::MCRegister Reg,
                        llvm::IRBuilderBase &Builder, llvm::Value *Val);
 
@@ -512,6 +530,7 @@ public:
   /// correct prototype by the \p CodeDiscoveryPass
   llvm::FunctionType *getStandardDeviceFunctionType() const;
 
+  /// Main function for performing the IR translation
   void translate();
 };
 
