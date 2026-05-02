@@ -85,6 +85,24 @@ struct MockAMDGPULoaderInitialEntryPointParser
   }
 };
 
+struct MockAMDGPULoaderInitialExecutionPointParser
+    : public llvm::cl::parser<std::pair<uint64_t, std::string>> {
+  MockAMDGPULoaderInitialExecutionPointParser(llvm::cl::Option &O)
+      : llvm::cl::parser<std::pair<uint64_t, std::string>>(O) {}
+
+  // parse - Return true on error.
+  bool parse(llvm::cl::Option &O, llvm::StringRef ArgName,
+             llvm::StringRef ArgValue, std::pair<uint64_t, std::string> &Val) {
+    auto [CodeObjectIndexStr, Symbol] = ArgValue.split(':');
+    if (CodeObjectIndexStr.getAsInteger(0, Val.first)) {
+      return O.error("Failed to parse the code object index for " +
+                     llvm::Twine(Val.first) + ".");
+    }
+    Val.second = Symbol;
+    return false;
+  }
+};
+
 llvm::cl::opt<std::pair<uint64_t, std::variant<uint64_t, std::string>>, false,
               MockAMDGPULoaderInitialEntryPointParser>
     InitialEntryPoint{
@@ -97,8 +115,10 @@ llvm::cl::opt<std::pair<uint64_t, std::variant<uint64_t, std::string>>, false,
             "specified to be loaded into the mock loader."),
         llvm::cl::NotHidden, llvm::cl::cat(OptPluginOptions)};
 
-llvm::cl::opt<std::pair<uint64_t, std::string>> InitialExecutionPoint{
-    "initial-execution-point",
+llvm::cl::opt<std::pair<uint64_t, std::string>, false,
+              MockAMDGPULoaderInitialExecutionPointParser>
+    InitialExecutionPoint{
+        "initial-execution-point",
     llvm::cl::desc("The initial execution point of the lifting process. "
                    "Formatted as <code-object-index>:<mangled-symbol-name>. \n"
                    "Code objects are zero indexed w.r.t the order they are "
