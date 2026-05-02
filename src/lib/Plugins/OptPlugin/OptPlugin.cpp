@@ -213,7 +213,7 @@ llvmGetPassPluginInfo() {
       MAM.registerPass([&]() {
         return luthier::InitialExecutionPointAnalysis(
             [&](llvm::Module &M, llvm::ModuleAnalysisManager &AM)
-                -> llvm::amdhsa::kernel_descriptor_t {
+                -> const llvm::amdhsa::kernel_descriptor_t & {
               llvm::LLVMContext &Ctx = M.getContext();
               const auto &MockLoader =
                   AM.getResult<luthier::MockAMDGPULoaderAnalysis>(M)
