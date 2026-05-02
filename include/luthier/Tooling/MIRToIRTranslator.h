@@ -19,6 +19,7 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_MIR_TO_IR_TRANSLATOR_H
 #define LUTHIER_TOOLING_MIR_TO_IR_TRANSLATOR_H
+#include "luthier/Common/DenseMapInfo.h"
 #include "luthier/Tooling/MIInlineAsmEmitter.h"
 #include <GCNSubtarget.h>
 #include <SIInstrInfo.h>

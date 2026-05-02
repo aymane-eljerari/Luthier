@@ -146,7 +146,8 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       // First arg is a register def (e.g., VCC, EXEC, SCC)
       const auto *RegDef = llvm::dyn_cast<llvm::DefInit>(Dag->getArg(0));
       llvm::StringRef RegName = RegDef->getDef()->getName();
-      OS << "&Translator.getRegisterOperand(MI, llvm::AMDGPU::" << RegName << ")";
+      OS << "&Translator.getOperandAsValue(MI, llvm::AMDGPU::" << RegName
+         << ")";
     }
 
     // --- LLVM Operands ---
