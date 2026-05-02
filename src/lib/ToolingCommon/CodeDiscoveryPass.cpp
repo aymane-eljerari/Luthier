@@ -545,7 +545,8 @@ initLiftedDeviceFunctionEntry(uint64_t DeviceEntryPointAddr,
                               const MemoryAllocationAccessor &SegAccessor,
                               llvm::Module &TargetModule,
                               const llvm::Function &InitialExecutionPoint,
-                              llvm::FunctionAnalysisManager &FAM) {
+                              llvm::FunctionAnalysisManager &FAM,
+                              llvm::FunctionType *DevFuncTy) {
 
   llvm::LLVMContext &LLVMContext = TargetModule.getContext();
   auto SegmentOrErr = SegAccessor.getAllocationDescriptor(DeviceEntryPointAddr);
@@ -586,14 +587,15 @@ initLiftedDeviceFunctionEntry(uint64_t DeviceEntryPointAddr,
     FuncName = llvm::formatv("x{0:x}", DeviceEntryPointAddr);
   }
 
-  llvm::FunctionType *FunctionType = InitialExecutionPoint.getFunctionType();
+  assert(DevFuncTy != nullptr &&
+         "device function prototype has not been initialized");
 
   llvm::Function *F = llvm::Function::Create(
-      FunctionType, llvm::GlobalValue::PrivateLinkage, FuncName, TargetModule);
+      DevFuncTy, llvm::GlobalValue::PrivateLinkage, FuncName, TargetModule);
   F->setCallingConv(llvm::CallingConv::C);
   /// Inherit \c amdgpu-num-vgpr / \c amdgpu-num-sgpr from the initial
   /// execution point handle
-  assert(InitialExecutionPoint.getCallingConv() !=
+  assert(InitialExecutionPoint.getCallingConv() ==
              llvm::CallingConv::AMDGPU_KERNEL &&
          "initial execution point is not a kernel");
   unsigned NumVGPRs =
@@ -1240,6 +1242,8 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
 
   llvm::SmallDenseSet<EntryPoint> VisitedPointsOfEntry{};
 
+  llvm::FunctionType *DeviceFuncTy{nullptr};
+
   while (!UnvisitedPointsOfEntry.empty()) {
     EntryPoint CurrentEntryPoint = *UnvisitedPointsOfEntry.begin();
     if (VisitedPointsOfEntry.contains(CurrentEntryPoint))
@@ -1260,7 +1264,8 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
       } else {
         auto MFOrAndSymOrErr = initLiftedDeviceFunctionEntry(
             CurrentEntryPoint.getEntryPointAddress(), SegAccessor, TargetModule,
-            InitialExecPointMFAndSymbol->first.getFunction(), FAM);
+            InitialExecPointMFAndSymbol->first.getFunction(), FAM,
+            DeviceFuncTy);
         LUTHIER_CTX_EMIT_ON_ERROR(Ctx, MFOrAndSymOrErr.takeError());
         return *MFOrAndSymOrErr;
       }
@@ -1302,6 +1307,9 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
 
     LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
 
+    if (MF.getFunction().getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL)
+      DeviceFuncTy = Translator.getStandardDeviceFunctionType();
+
     Translator.translate();
 
     for (llvm::Instruction &I :
@@ -1324,7 +1332,7 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
       }
     }
 
-    llvm::InstCombinePass{}.run(MF.getFunction(), FAM);
+    // llvm::InstCombinePass{}.run(MF.getFunction(), FAM);
 
     llvm::TargetLibraryInfoImpl TLII(llvm::Triple(TM.getTargetTriple()));
     llvm::TargetLibraryInfo TLI(TLII, &MF.getFunction());

@@ -313,10 +313,6 @@ class MIRToIRTranslator {
     return llvm::StringRef(TRI.getName(Reg)).lower() + "_val";
   }
 
-  /// Given a \p Reg prvoides the base register of the register file it
-  /// belongs to
-  llvm::MCRegister getRegFileBaseReg(llvm::MCRegister Reg);
-
   /// Resolve \p Reg to a \c RegFileKey (register base index + 16-bit-lane
   /// offset + number of 16-bit halves). Performs GFX9- alias translation for
   /// <tt>VCC</tt>/<tt>XNACK_MASK</tt>/<tt>FLAT_SCR</tt> before encoding the

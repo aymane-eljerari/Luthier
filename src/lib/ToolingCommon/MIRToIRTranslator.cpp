@@ -18,7 +18,6 @@
 /// individual machine instructions to LLVM IR.
 //===----------------------------------------------------------------------===//
 #include "luthier/Tooling/MIRToIRTranslator.h"
-#include "luthier/Common/DenseMapInfo.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/Tooling/MIInlineAsmEmitter.h"
@@ -86,14 +85,11 @@ static void
 getRegisterFileArgOrder(const llvm::GCNSubtarget &ST,
                         llvm::SmallVector<llvm::MCRegister> &ABIRegFileIdx) {
   ABIRegFileIdx.push_back(llvm::AMDGPU::SGPR0);
-  ABIRegFileIdx.push_back(
-      llvm::AMDGPU::isGFX9Plus(ST)
-          ? llvm::AMDGPU::getMCReg(llvm::AMDGPU::TTMP0, ST)
-          : llvm::AMDGPU::getMCReg(llvm::AMDGPU::TBA_LO, ST));
-  ABIRegFileIdx.push_back(
-      llvm::AMDGPU::isNotGFX10Plus(ST)
-          ? llvm::AMDGPU::getMCReg(llvm::AMDGPU::M0, ST)
-          : llvm::AMDGPU::getMCReg(llvm::AMDGPU::SGPR_NULL, ST));
+  ABIRegFileIdx.push_back(llvm::AMDGPU::isGFX9Plus(ST) ? llvm::AMDGPU::TTMP0
+                                                       : llvm::AMDGPU::TBA_LO);
+  ABIRegFileIdx.push_back(llvm::AMDGPU::isNotGFX10Plus(ST)
+                              ? llvm::AMDGPU::M0
+                              : llvm::AMDGPU::SGPR_NULL);
   if (llvm::AMDGPU::isNotGFX9Plus(ST))
     ABIRegFileIdx.push_back(llvm::AMDGPU::SRC_SHARED_BASE);
   ABIRegFileIdx.push_back(llvm::AMDGPU::SRC_VCCZ);
@@ -619,7 +615,7 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
     if (!Reg)
       return;
     llvm::Value *Ptr = Builder.CreateIntrinsic(Builder.getPtrTy(4), IID, {},
-                                               nullptr, TRI.getName(Reg));
+                                               nullptr, getRegValueName(Reg));
 
     seed(Which, Ptr);
   };
@@ -636,9 +632,10 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
       return;
     unsigned Mask = ArgDesc->getMask();
     llvm::Value *Val =
-        Builder.CreateIntrinsic(RetTy, IID, {}, nullptr, TRI.getName(Reg));
+        Builder.CreateIntrinsic(RetTy, IID, {}, nullptr, getRegValueName(Reg));
     if (Mask != ~0u)
-      Val = Builder.CreateAnd(Val, Builder.getInt32(Mask), TRI.getName(Reg));
+      Val =
+          Builder.CreateAnd(Val, Builder.getInt32(Mask), getRegValueName(Reg));
     seed(Which, Val);
   };
 
@@ -783,13 +780,11 @@ llvm::Error MIRToIRTranslator::initRegFileLayouts() {
     return LUTHIER_MAKE_GENERIC_ERROR("amdgpu-num-vgpr must be a non-zero.");
   }
 
-  TTMPBaseReg = llvm::AMDGPU::isGFX9Plus(ST)
-                    ? llvm::AMDGPU::getMCReg(llvm::AMDGPU::TTMP0, ST)
-                    : llvm::AMDGPU::getMCReg(llvm::AMDGPU::TBA_LO, ST);
+  TTMPBaseReg =
+      llvm::AMDGPU::isGFX9Plus(ST) ? llvm::AMDGPU::TTMP0 : llvm::AMDGPU::TBA_LO;
 
-  ExecBaseReg = llvm::AMDGPU::isNotGFX10Plus(ST)
-                    ? getPhysReg(llvm::AMDGPU::M0)
-                    : getPhysReg(llvm::AMDGPU::SGPR_NULL);
+  ExecBaseReg = llvm::AMDGPU::isNotGFX10Plus(ST) ? llvm::AMDGPU::M0
+                                                 : llvm::AMDGPU::SGPR_NULL;
 
   unsigned NumApertureSregs = llvm::AMDGPU::isGFX9_GFX10(ST)  ? 10
                               : llvm::AMDGPU::isGFX11Plus(ST) ? 8
@@ -803,8 +798,8 @@ llvm::Error MIRToIRTranslator::initRegFileLayouts() {
   /// There are 4 slots in the exec mask reg file; We keep the SGPR null even
   /// on targets that don't support it
   RegFileSize[ExecBaseReg] = 2u * 4;
-  RegFileSize[getPhysReg(llvm::AMDGPU::SRC_VCCZ)] = 6;
-  RegFileSize[getPhysReg(llvm::AMDGPU::SRC_SHARED_BASE)] = NumApertureSregs;
+  RegFileSize[llvm::AMDGPU::SRC_VCCZ] = 6;
+  RegFileSize[llvm::AMDGPU::SRC_SHARED_BASE] = NumApertureSregs;
   RegFileSize[llvm::AMDGPU::VGPR0] = 2u * NumVGPRs;
   RegFileSize[llvm::AMDGPU::AGPR0] = ST.hasMAIInsts() ? 2u * NumVGPRs : 0u;
   RegFileSize[llvm::AMDGPU::MODE] = 1 << 7;
@@ -878,23 +873,23 @@ MIRToIRTranslator::getRegFileKey(llvm::MCRegister Reg) const {
       }
     }
     /// Take care of special SGPR registers
-    if (HwIdx >= RegFileSize.at(llvm::AMDGPU::SGPR0) / 2) {
+    else if (HwIdx >= RegFileSize.at(llvm::AMDGPU::SGPR0) / 2) {
       /// We sort the checks based on the frequency of the register files
       /// accessed
-      llvm::MCRegister VCCZPhysReg = getPhysReg(llvm::AMDGPU::SRC_VCCZ);
 
-      unsigned VCCZBaseIdx = TRI.getEncodingValue(VCCZPhysReg) &
+      unsigned VCCZBaseIdx =
+          TRI.getEncodingValue(getPhysReg(llvm::AMDGPU::SRC_VCCZ)) &
+          llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
+      unsigned ExecBaseIdx = TRI.getEncodingValue(getPhysReg(ExecBaseReg)) &
                              llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
-      unsigned ExecBaseIdx = TRI.getEncodingValue(ExecBaseReg) &
-                             llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
-      unsigned TTmpBaseIdx = TRI.getEncodingValue(TTMPBaseReg) &
+      unsigned TTmpBaseIdx = TRI.getEncodingValue(getPhysReg(TTMPBaseReg)) &
                              llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
       unsigned SharedBaseIdx =
           TRI.getEncodingValue(getPhysReg(llvm::AMDGPU::SRC_SHARED_BASE)) &
           llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
 
       if (HwIdx >= VCCZBaseIdx && HwIdx < VCCZBaseIdx + 6) {
-        BaseReg = VCCZPhysReg;
+        BaseReg = llvm::AMDGPU::SRC_VCCZ;
       } else if (HwIdx >= ExecBaseIdx && HwIdx < ExecBaseIdx + 4) {
         BaseReg = ExecBaseReg;
       } else if (HwIdx >= TTmpBaseIdx && HwIdx < TTmpBaseIdx + 16) {
@@ -941,25 +936,10 @@ std::string MIRToIRTranslator::getRegfileValueName(llvm::MCRegister BaseReg) {
   }
 }
 
-llvm::MCRegister MIRToIRTranslator::getRegFileBaseReg(llvm::MCRegister Reg) {
-  if (Reg == llvm::AMDGPU::MODE)
-    return Reg;
-  const llvm::TargetRegisterClass *RC = TRI.getPhysRegBaseClass(Reg);
-  assert(RC && "Must have register class here");
-  if (llvm::SIRegisterInfo::isSGPRClass(RC))
-    return llvm::AMDGPU::SGPR0;
-  else if (llvm::SIRegisterInfo::isVGPRClass(RC))
-    return llvm::AMDGPU::VGPR0;
-  else {
-    /// Check if the register
-    return llvm::AMDGPU::AGPR0;
-  }
-}
-
 llvm::Value *MIRToIRTranslator::getRegisterFile(
     const llvm::MachineBasicBlock &MBB, llvm::MCRegister Reg,
     llvm::IRBuilderBase &Builder, llvm::Type *LaneTy) {
-  llvm::MCRegister RegFileBaseReg = getRegFileBaseReg(Reg);
+  llvm::MCRegister RegFileBaseReg = std::get<0>(getRegFileKey(Reg));
   unsigned NumLanes16 = RegFileSize[RegFileBaseReg];
    RegFileKey MegaKey = std::make_tuple(RegFileBaseReg, 0, NumLanes16);
 
@@ -989,7 +969,7 @@ llvm::Value *MIRToIRTranslator::getRegisterFile(const llvm::MachineInstr &MI,
   assert(BB && "MBB has no IR basic block");
   llvm::Instruction *TermInst = BB->getTerminator();
 
-  llvm::MCRegister BaseReg = getRegFileBaseReg(Register);
+  llvm::MCRegister BaseReg = std::get<0>(getRegFileKey(Register));
 
   std::string ValueName = getRegfileValueName(BaseReg);
   llvm::InstSimplifyFolder CF{MF.getDataLayout()};
@@ -1015,7 +995,7 @@ void MIRToIRTranslator::setRegisterFile(const llvm::MachineInstr &MI,
   assert(BB && "MBB has no IR basic block");
   llvm::Instruction *TermInst = BB->getTerminator();
 
-  llvm::MCRegister BaseReg = getRegFileBaseReg(Reg);
+  llvm::MCRegister BaseReg = std::get<0>(getRegFileKey(Reg));
 
   std::string ValueName = getRegfileValueName(BaseReg);
   llvm::InstSimplifyFolder CF{MF.getDataLayout()};
@@ -1036,7 +1016,7 @@ void MIRToIRTranslator::setRegisterFile(const llvm::MachineBasicBlock &MBB,
                                         llvm::MCRegister Reg,
                                         llvm::IRBuilderBase &Builder,
                                         llvm::Value *Val) {
-  llvm::MCRegister RegFileBaseReg = getRegFileBaseReg(Reg);
+  llvm::MCRegister RegFileBaseReg = std::get<0>(getRegFileKey(Reg));
   unsigned NumLanes16 = RegFileSize[RegFileBaseReg];
   RegFileKey MegaKey = std::make_tuple(RegFileBaseReg, 0, NumLanes16);
 
@@ -1053,7 +1033,7 @@ llvm::FunctionType *MIRToIRTranslator::getStandardDeviceFunctionType() const {
   auto *I32 = llvm::Type::getInt32Ty(Ctx);
   for (llvm::MCRegister RegFileBase : FunctionCallArgOrder) {
     Fields.push_back(
-        llvm::FixedVectorType::get(I32, RegFileSize.at(RegFileBase)));
+        llvm::FixedVectorType::get(I32, RegFileSize.at(RegFileBase) / 2));
   }
 
   return llvm::FunctionType::get(llvm::Type::getVoidTy(Ctx), Fields,
@@ -1090,21 +1070,18 @@ void MIRToIRTranslator::emitIndirectTailCall(const llvm::MachineInstr &MI,
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI has no parent MBB");
   auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
-  llvm::Instruction *TermInst = BB->getTerminator();
-  llvm::IRBuilder Builder =
-      TermInst ? llvm::IRBuilder{TermInst} : llvm::IRBuilder{BB};
 
   llvm::FunctionType *FTy = getStandardDeviceFunctionType();
   llvm::SmallVector<llvm::Value *, 8> CallArgs(FunctionCallArgOrder.size(),
                                                nullptr);
 
   for (auto [Idx, RegFileBase] : llvm::enumerate(FunctionCallArgOrder)) {
-    CallArgs[Idx] = getRegisterFile(*MBB, RegFileBase, Builder);
+    CallArgs[Idx] = getRegisterFile(MI, RegFileBase);
   }
 
+  llvm::IRBuilder Builder{BB};
   llvm::Value *FuncPtr = Builder.CreateBitOrPointerCast(
-      Target, llvm::PointerType::get(BB->getContext(),
-                                     /*AddrSpace=*/0));
+      Target, Builder.getPtrTy(llvm::AMDGPUAS::GLOBAL_ADDRESS));
   llvm::CallInst *Call = Builder.CreateCall(FTy, FuncPtr, CallArgs);
   Call->setTailCallKind(llvm::CallInst::TCK_Tail);
 
@@ -1262,7 +1239,19 @@ void MIRToIRTranslator::fixupPhis() {
     for (const llvm::MachineBasicBlock *PredMBB : It->MBB->predecessors()) {
       auto *PredBB = const_cast<llvm::BasicBlock *>(PredMBB->getBasicBlock());
       if (!llvm::is_contained(It->Phi->blocks(), PredBB)) {
-        llvm::IRBuilder Builder{&*PredBB->begin()};
+        llvm::InstSimplifyFolder CF{MF.getDataLayout()};
+        llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
+          if (It->Phi->hasMetadata("amdgpu.uniform"))
+            I->setMetadata("amdgpu.uniform",
+                           llvm::MDNode::get(I->getContext(), {}));
+          I->setName(It->Phi->getName());
+          LLVM_DEBUG(
+              llvm::dbgs()
+              << "[MIRToIRTranslator] Inserting instruction to resolve phi: "
+              << *I << "\n");
+        });
+        llvm::IRBuilderBase Builder(It->Phi->getContext(), CF, Inserter, {},
+                                    {});
         It->Phi->addIncoming(&getOperandAsValue(*PredMBB, It->RegKey, Builder,
                                                 It->Phi->getType()),
                              PredBB);
@@ -1342,11 +1331,11 @@ void MIRToIRTranslator::translate() {
   auto *EntryBB = const_cast<llvm::BasicBlock *>(MF.front().getBasicBlock());
   assert(EntryBB && "Entry MBB has no IR basic block");
 
-  llvm::IRBuilder Builder{EntryBB};
+  llvm::IRBuilder EntryBuilder{EntryBB};
   if (F.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL)
-    initKernelEntryRegs(Builder);
+    initKernelEntryRegs(EntryBuilder);
   else
-    initDeviceFunctionEntryRegs(Builder);
+    initDeviceFunctionEntryRegs(EntryBuilder);
 
   /// Iterate over the MBBs and raise the machine instructions in each MBB to
   /// LLVM IR
@@ -1370,25 +1359,11 @@ void MIRToIRTranslator::translate() {
       Builder.SetInsertPoint(BB);
       raiseMachineInstr(MI, Builder);
     }
-    if (MBB.canFallThrough()) {
-      /// Call instructions are not intended to fall through; Instead, we create
-      /// a new function for it. Hence, at the IR level, the instruction
-      /// after call instructions are unreachable in the current function
-      if (MBB.back().isCall()) {
-        llvm::IRBuilder{const_cast<llvm::BasicBlock *>(MBB.getBasicBlock())}
-            .CreateUnreachable();
-      } else if (!MBB.back().isBranch()) {
-        auto NextBB =
-            const_cast<llvm::BasicBlock *>(MBB.getNextNode()->getBasicBlock());
+    if (MBB.canFallThrough() && !MBB.back().isBranch()) {
+      auto NextBB =
+          const_cast<llvm::BasicBlock *>(MBB.getNextNode()->getBasicBlock());
         llvm::IRBuilder{BB}.CreateBr(NextBB);
-      }
     }
-    /// Last-resort safety net: if the MI translation didn't emit a
-    /// terminator and the fall-through branch above didn't fire (e.g.
-    /// terminal MBB ending with a call whose semantic doesn't append
-    /// unreachable), add an unreachable so the IR remains well-formed.
-    if (BB->getTerminator() == nullptr)
-      llvm::IRBuilder{BB}.CreateUnreachable();
 
     /// TODO: Emit branches at the end of vector instructions to indicate
     /// they will not execute if the exec mask bit of the current thread is
