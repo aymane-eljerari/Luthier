@@ -134,9 +134,9 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       OS << ")";
     }
 
-    // --- IndirectTailCall <target> ---
-    else if (OpName == "IndirectTailCall") {
-      OS << "Translator.IndirectTailCall(MI, ";
+    // --- emitIndirectTailCall <target> ---
+    else if (OpName == "emitIndirectTailCall") {
+      OS << "Translator.emitIndirectTailCall(MI, ";
       emitSemanticStatement(OS, Dag->getArg(0), Loc);
       OS << ")";
     }
