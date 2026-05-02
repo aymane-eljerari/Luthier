@@ -586,9 +586,7 @@ initLiftedDeviceFunctionEntry(uint64_t DeviceEntryPointAddr,
     FuncName = llvm::formatv("x{0:x}", DeviceEntryPointAddr);
   }
 
-  llvm::Type *ReturnType = llvm::Type::getVoidTy(LLVMContext);
-  llvm::FunctionType *FunctionType =
-      llvm::FunctionType::get(ReturnType, {}, false);
+  llvm::FunctionType *FunctionType = InitialExecutionPoint.getFunctionType();
 
   llvm::Function *F = llvm::Function::Create(
       FunctionType, llvm::GlobalValue::PrivateLinkage, FuncName, TargetModule);
