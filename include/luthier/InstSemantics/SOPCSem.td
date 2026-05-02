@@ -38,8 +38,8 @@ foreach i = 0-5 in {
 
   def op#_sem : InstSISemantic<op> {
     let Semantic = [
-      (ImplicitDef SCC, (LLVMCmp cmpPred,
-        (GetNamedOperand $src0), (GetNamedOperand $src1)))
+      SetSCCImplicit<(LLVMCmp cmpPred,
+        (GetNamedOperand $src0), (GetNamedOperand $src1))>.ret
     ];
   }
 }
@@ -51,8 +51,8 @@ foreach i = 0-5 in {
 
   def op#_sem : InstSISemantic<op> {
     let Semantic = [
-      (ImplicitDef SCC, (LLVMCmp cmpPred,
-        (GetNamedOperand $src0), (GetNamedOperand $src1)))
+      SetSCCImplicit<(LLVMCmp cmpPred,
+        (GetNamedOperand $src0), (GetNamedOperand $src1))>.ret
     ];
   }
 }
@@ -74,8 +74,8 @@ foreach i = 0-5 in {
 //   rdna4-instruction-set-architecture.pdf, page 270.
 def S_CMP_EQ_U64_sem : InstSISemantic<S_CMP_EQ_U64> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpEQ,
-      (GetNamedOperand $src0), (GetNamedOperand $src1)))
+    SetSCCImplicit<(LLVMCmp LLVMICmpEQ,
+      (GetNamedOperand $src0), (GetNamedOperand $src1))>.ret
   ];
 }
 
@@ -83,8 +83,8 @@ def S_CMP_EQ_U64_sem : InstSISemantic<S_CMP_EQ_U64> {
 // Sources: same as S_CMP_EQ_U64.
 def S_CMP_LG_U64_sem : InstSISemantic<S_CMP_LG_U64> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpNE,
-      (GetNamedOperand $src0), (GetNamedOperand $src1)))
+    SetSCCImplicit<(LLVMCmp LLVMICmpNE,
+      (GetNamedOperand $src0), (GetNamedOperand $src1))>.ret
   ];
 }
 
@@ -106,12 +106,12 @@ def S_CMP_LG_U64_sem : InstSISemantic<S_CMP_LG_U64> {
 //   rdna4-instruction-set-architecture.pdf, page 269.
 def S_BITCMP0_B32_sem : InstSISemantic<S_BITCMP0_B32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpEQ,
+    SetSCCImplicit<(LLVMCmp LLVMICmpEQ,
       (LLVMAnd (LLVMLShr (GetNamedOperand $src0),
                           (LLVMAnd (GetNamedOperand $src1),
                                    (ConstantInt si_llvm_i32_ty, 31))),
                (ConstantInt si_llvm_i32_ty, 1)),
-      (ConstantInt si_llvm_i32_ty, 0)))
+      (ConstantInt si_llvm_i32_ty, 0))>.ret
   ];
 }
 
@@ -119,13 +119,13 @@ def S_BITCMP0_B32_sem : InstSISemantic<S_BITCMP0_B32> {
 // Sources: same as S_BITCMP0_B32.
 def S_BITCMP0_B64_sem : InstSISemantic<S_BITCMP0_B64> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpEQ,
+    SetSCCImplicit<(LLVMCmp LLVMICmpEQ,
       (LLVMAnd (LLVMLShr (GetNamedOperand $src0),
                           (LLVMZExt (LLVMAnd (GetNamedOperand $src1),
                                              (ConstantInt si_llvm_i32_ty, 63)),
                                     si_llvm_i64_ty)),
                (ConstantInt si_llvm_i64_ty, 1)),
-      (ConstantInt si_llvm_i64_ty, 0)))
+      (ConstantInt si_llvm_i64_ty, 0))>.ret
   ];
 }
 
@@ -133,12 +133,12 @@ def S_BITCMP0_B64_sem : InstSISemantic<S_BITCMP0_B64> {
 // Sources: same as S_BITCMP0_B32.
 def S_BITCMP1_B32_sem : InstSISemantic<S_BITCMP1_B32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpEQ,
+    SetSCCImplicit<(LLVMCmp LLVMICmpEQ,
       (LLVMAnd (LLVMLShr (GetNamedOperand $src0),
                           (LLVMAnd (GetNamedOperand $src1),
                                    (ConstantInt si_llvm_i32_ty, 31))),
                (ConstantInt si_llvm_i32_ty, 1)),
-      (ConstantInt si_llvm_i32_ty, 1)))
+      (ConstantInt si_llvm_i32_ty, 1))>.ret
   ];
 }
 
@@ -146,13 +146,13 @@ def S_BITCMP1_B32_sem : InstSISemantic<S_BITCMP1_B32> {
 // Sources: same as S_BITCMP0_B32.
 def S_BITCMP1_B64_sem : InstSISemantic<S_BITCMP1_B64> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpEQ,
+    SetSCCImplicit<(LLVMCmp LLVMICmpEQ,
       (LLVMAnd (LLVMLShr (GetNamedOperand $src0),
                           (LLVMZExt (LLVMAnd (GetNamedOperand $src1),
                                              (ConstantInt si_llvm_i32_ty, 63)),
                                     si_llvm_i64_ty)),
                (ConstantInt si_llvm_i64_ty, 1)),
-      (ConstantInt si_llvm_i64_ty, 1)))
+      (ConstantInt si_llvm_i64_ty, 1))>.ret
   ];
 }
 
@@ -172,9 +172,9 @@ foreach i = 0-5 in {
 
   def op#_sem : InstSISemantic<op> {
     let Semantic = [
-      (ImplicitDef SCC, (LLVMFCmp cmpPred,
+      SetSCCImplicit<(LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
-        (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty)))
+        (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty))>.ret,
     ];
   }
 }
@@ -187,9 +187,9 @@ foreach i = 0-5 in {
 
   def op#_sem : InstSISemantic<op> {
     let Semantic = [
-      (ImplicitDef SCC, (LLVMFCmp cmpPred,
+      SetSCCImplicit<(LLVMFCmp cmpPred,
         (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), si_llvm_half_ty),
-        (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty)))
+        (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty))>.ret
     ];
   }
 }
@@ -203,9 +203,9 @@ foreach i = 0-5 in {
 
   def op#_sem : InstSISemantic<op> {
     let Semantic = [
-      (ImplicitDef SCC, (LLVMFCmp cmpPred,
+      SetSCCImplicit<(LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
-        (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty)))
+        (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty))>.ret
     ];
   }
 }
@@ -218,9 +218,9 @@ foreach i = 0-5 in {
 
   def op#_sem : InstSISemantic<op> {
     let Semantic = [
-      (ImplicitDef SCC, (LLVMFCmp cmpPred,
+      SetSCCImplicit<(LLVMFCmp cmpPred,
         (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), si_llvm_half_ty),
-        (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty)))
+        (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty))>.ret
     ];
   }
 }
@@ -230,17 +230,17 @@ foreach i = 0-5 in {
 //   rdna4-instruction-set-architecture.pdf, page 272 (F32), page 273 (F16).
 def S_CMP_O_F32_sem : InstSISemantic<S_CMP_O_F32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMFCmp LLVMFCmpOLE,
+    SetSCCImplicit<(LLVMFCmp LLVMFCmpOLE,
       (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
-      (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty)))
+      (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty))>.ret
   ];
 }
 
 def S_CMP_O_F16_sem : InstSISemantic<S_CMP_O_F16> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMFCmp LLVMFCmpOLE,
+    SetSCCImplicit<(LLVMFCmp LLVMFCmpOLE,
       (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), si_llvm_half_ty),
-      (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty)))
+      (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty))>.ret
   ];
 }
 
@@ -249,16 +249,16 @@ def S_CMP_O_F16_sem : InstSISemantic<S_CMP_O_F16> {
 //   rdna4-instruction-set-architecture.pdf, page 273 (F32), page 273 (F16).
 def S_CMP_U_F32_sem : InstSISemantic<S_CMP_U_F32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMFCmp LLVMFCmpUNO,
+    SetSCCImplicit<(LLVMFCmp LLVMFCmpUNO,
       (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
-      (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty)))
+      (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty))>.ret
   ];
 }
 
 def S_CMP_U_F16_sem : InstSISemantic<S_CMP_U_F16> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMFCmp LLVMFCmpUNO,
+    SetSCCImplicit<(LLVMFCmp LLVMFCmpUNO,
       (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), si_llvm_half_ty),
-      (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty)))
+      (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty))>.ret
   ];
 }

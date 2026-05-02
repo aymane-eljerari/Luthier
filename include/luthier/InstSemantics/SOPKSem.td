@@ -33,7 +33,7 @@
 def S_ADDK_I32_sem : InstSISemantic<S_ADDK_I32> {
   let Semantic = [
     (DefVal $tmp_add, (LLVMAdd (GetNamedOperand $src0), (GetNamedOperand $simm16))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp_add), (ConstantInt si_llvm_i32_ty, 0x100000000))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpUGE, (GetVal $tmp_add), (ConstantInt si_llvm_i32_ty, 0x100000000))>.ret,
     (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp_add), si_llvm_i32_ty))
   ];
 }
@@ -52,7 +52,7 @@ def S_ADDK_I32_sem : InstSISemantic<S_ADDK_I32> {
 //   rdna4-instruction-set-architecture.pdf, page 176.
 def S_CMOVK_I32_sem : InstSISemantic<S_CMOVK_I32> {
   let Semantic = [
-    (DefVal $tmp, (LLVMSelect (ImplicitUse SCC), 
+    (DefVal $tmp, (LLVMSelect GetSCCImplicit.ret,
                             (GetNamedOperand $simm16), 
                             (GetNamedOperand $sdst))),
     (SetNamedOperand $sdst, (GetVal $tmp))
@@ -108,7 +108,7 @@ def S_MULK_I32_sem : InstSISemantic<S_MULK_I32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 115.
 def S_CMPK_EQ_I32_sem : InstSISemantic<S_CMPK_EQ_I32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpEQ, (GetNamedOperand $sdst), (GetNamedOperand $simm16)))
+    SetSCCImplicit<(LLVMCmp LLVMICmpEQ, (GetNamedOperand $sdst), (GetNamedOperand $simm16))>.ret
   ];
 }
 
@@ -124,7 +124,7 @@ def S_CMPK_EQ_I32_sem : InstSISemantic<S_CMPK_EQ_I32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 115.
 def S_CMPK_EQ_U32_sem : InstSISemantic<S_CMPK_EQ_U32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpEQ, (GetNamedOperand $sdst), (GetNamedOperand $simm16)))
+    SetSCCImplicit<(LLVMCmp LLVMICmpEQ, (GetNamedOperand $sdst), (GetNamedOperand $simm16))>.ret
   ];
 }
 
@@ -140,7 +140,7 @@ def S_CMPK_EQ_U32_sem : InstSISemantic<S_CMPK_EQ_U32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 115.
 def S_CMPK_GE_I32_sem : InstSISemantic<S_CMPK_GE_I32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpSGE, (GetNamedOperand $sdst), (GetNamedOperand $simm16)))
+    SetSCCImplicit<(LLVMCmp LLVMICmpSGE, (GetNamedOperand $sdst), (GetNamedOperand $simm16))>.ret
   ];
 }
 
@@ -156,7 +156,7 @@ def S_CMPK_GE_I32_sem : InstSISemantic<S_CMPK_GE_I32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 115.
 def S_CMPK_GE_U32_sem : InstSISemantic<S_CMPK_GE_U32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetNamedOperand $sdst), (GetNamedOperand $simm16)))
+    SetSCCImplicit<(LLVMCmp LLVMICmpUGE, (GetNamedOperand $sdst), (GetNamedOperand $simm16))>.ret
   ];
 }
 
@@ -172,7 +172,7 @@ def S_CMPK_GE_U32_sem : InstSISemantic<S_CMPK_GE_U32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 115.
 def S_CMPK_GT_I32_sem : InstSISemantic<S_CMPK_GT_I32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpSGT, (GetNamedOperand $sdst), (GetNamedOperand $simm16)))
+    SetSCCImplicit<(LLVMCmp LLVMICmpSGT, (GetNamedOperand $sdst), (GetNamedOperand $simm16))>.ret
   ];
 }
 
@@ -188,7 +188,7 @@ def S_CMPK_GT_I32_sem : InstSISemantic<S_CMPK_GT_I32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 115.
 def S_CMPK_GT_U32_sem : InstSISemantic<S_CMPK_GT_U32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGT, (GetNamedOperand $sdst), (GetNamedOperand $simm16)))
+     SetSCCImplicit<(LLVMCmp LLVMICmpUGT, (GetNamedOperand $sdst), (GetNamedOperand $simm16))>.ret
   ];
 }
 
@@ -204,7 +204,7 @@ def S_CMPK_GT_U32_sem : InstSISemantic<S_CMPK_GT_U32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 115.
 def S_CMPK_LE_I32_sem : InstSISemantic<S_CMPK_LE_I32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpSLE, (GetNamedOperand $sdst), (GetNamedOperand $simm16)))
+    SetSCCImplicit<(LLVMCmp LLVMICmpSLE, (GetNamedOperand $sdst), (GetNamedOperand $simm16))>.ret
   ];
 }
 
@@ -220,7 +220,7 @@ def S_CMPK_LE_I32_sem : InstSISemantic<S_CMPK_LE_I32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 115.
 def S_CMPK_LE_U32_sem : InstSISemantic<S_CMPK_LE_U32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpULE, (GetNamedOperand $sdst), (GetNamedOperand $simm16)))
+    SetSCCImplicit<(LLVMCmp LLVMICmpULE, (GetNamedOperand $sdst), (GetNamedOperand $simm16))>.ret
   ];
 }
 
@@ -236,7 +236,7 @@ def S_CMPK_LE_U32_sem : InstSISemantic<S_CMPK_LE_U32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 115.
 def S_CMPK_LG_I32_sem : InstSISemantic<S_CMPK_LG_I32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetNamedOperand $sdst), (GetNamedOperand $simm16)))
+    SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetNamedOperand $sdst), (GetNamedOperand $simm16))>.ret
   ];
 }
 
@@ -252,7 +252,7 @@ def S_CMPK_LG_I32_sem : InstSISemantic<S_CMPK_LG_I32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 115.
 def S_CMPK_LG_U32_sem : InstSISemantic<S_CMPK_LG_U32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetNamedOperand $sdst), (GetNamedOperand $simm16)))
+    SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetNamedOperand $sdst), (GetNamedOperand $simm16))>.ret
   ];
 }
 
@@ -268,7 +268,7 @@ def S_CMPK_LG_U32_sem : InstSISemantic<S_CMPK_LG_U32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 115.
 def S_CMPK_LT_I32_sem : InstSISemantic<S_CMPK_LT_I32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpSLT, (GetNamedOperand $sdst), (GetNamedOperand $simm16)))
+    SetSCCImplicit<(LLVMCmp LLVMICmpSLT, (GetNamedOperand $sdst), (GetNamedOperand $simm16))>.ret
   ];
 }
 
@@ -284,7 +284,7 @@ def S_CMPK_LT_I32_sem : InstSISemantic<S_CMPK_LT_I32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 115.
 def S_CMPK_LT_U32_sem : InstSISemantic<S_CMPK_LT_U32> {
   let Semantic = [
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpULT, (GetNamedOperand $sdst), (GetNamedOperand $simm16)))
+    SetSCCImplicit<(LLVMCmp LLVMICmpULT, (GetNamedOperand $sdst), (GetNamedOperand $simm16))>.ret
   ];
 }
 

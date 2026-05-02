@@ -41,8 +41,8 @@ def S_ABSDIFF_I32_sem : InstSISemantic<S_ABSDIFF_I32> {
       (LLVMSelect (LLVMCmp LLVMICmpSLT, (GetVal $diff), (ConstantInt si_llvm_i32_ty, 0)),
                   (LLVMSub (ConstantInt si_llvm_i32_ty, 0), (GetVal $diff)),
                   (GetVal $diff))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result),
-                                  (ConstantInt si_llvm_i32_ty, 0))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $result),
+                                  (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $result))
   ];
 }
@@ -64,7 +64,7 @@ def S_ADD_U32_sem : InstSISemantic<S_ADD_U32> {
      (DefVal $tmp,
        (LLVMAdd (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
                 (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
-     (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp), (ConstantInt si_llvm_i64_ty, 0x100000000))),
+     SetSCCImplicit<(LLVMCmp LLVMICmpUGE, (GetVal $tmp), (ConstantInt si_llvm_i64_ty, 0x100000000))>.ret,
      (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
    ];
 }
@@ -84,8 +84,8 @@ def S_ADD_U32_sem : InstSISemantic<S_ADD_U32> {
 def S_SUB_U32_sem : InstSISemantic<S_SUB_U32> {
   let Semantic = [
     (DefVal $tmp, (LLVMSub (GetNamedOperand $src0), (GetNamedOperand $src1))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGT, (GetNamedOperand $src1),
-                                       (GetNamedOperand $src0))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpUGT, (GetNamedOperand $src1),
+                                       (GetNamedOperand $src0))>.ret,
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -108,9 +108,8 @@ def S_ADD_I32_sem : InstSISemantic<S_ADD_I32> {
     (DefVal $src0_31, LLVMExtractValueConstIdx<(GetNamedOperand $src0), si_llvm_v32i1_ty, 31>.Op),
     (DefVal $src1_31, LLVMExtractValueConstIdx<(GetNamedOperand $src1), si_llvm_v32i1_ty, 31>.Op),
     (DefVal $sdst_31, LLVMExtractValueConstIdx<(GetNamedOperand $sdst), si_llvm_v32i1_ty, 31>.Op),
-    (ImplicitDef SCC, (LLVMAnd (LLVMCmp LLVMICmpEQ, (GetVal $src0_31), (GetVal $src1_31)),
-                               (LLVMCmp LLVMICmpNE, (GetVal $src0_31), (GetVal $sdst_31)))
-    ),
+    SetSCCImplicit<(LLVMAnd (LLVMCmp LLVMICmpEQ, (GetVal $src0_31), (GetVal $src1_31)),
+                               (LLVMCmp LLVMICmpNE, (GetVal $src0_31), (GetVal $sdst_31)))>.ret,
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -133,8 +132,8 @@ def S_SUB_I32_sem : InstSISemantic<S_SUB_I32> {
     (DefVal $src0_31, LLVMExtractValueConstIdx<(GetNamedOperand $src0), si_llvm_v32i1_ty, 31>.Op),
     (DefVal $src1_31, LLVMExtractValueConstIdx<(GetNamedOperand $src1), si_llvm_v32i1_ty, 31>.Op),
     (DefVal $sdst_31, LLVMExtractValueConstIdx<(GetNamedOperand $sdst), si_llvm_v32i1_ty, 31>.Op),
-    (ImplicitDef SCC, (LLVMAnd (LLVMCmp LLVMICmpNE, (GetVal $src0_31), (GetVal $src1_31)),
-                               (LLVMCmp LLVMICmpNE, (GetVal $src0_31), (GetVal $sdst_31)))),
+    SetSCCImplicit<(LLVMAnd (LLVMCmp LLVMICmpNE, (GetVal $src0_31), (GetVal $src1_31)),
+                               (LLVMCmp LLVMICmpNE, (GetVal $src0_31), (GetVal $sdst_31)))>.ret,
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -155,9 +154,9 @@ def S_ADDC_U32_sem : InstSISemantic<S_ADDC_U32> {
   let Semantic = [
     (DefVal $tmp, (LLVMAdd (LLVMAdd (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
                                     (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty)),
-                                    (LLVMZExt (ImplicitUse SCC), si_llvm_i64_ty))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp),
-                                       (ConstantInt si_llvm_i64_ty, 0x100000000))),
+                                    (LLVMZExt GetSCCImplicit.ret, si_llvm_i64_ty))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpUGE, (GetVal $tmp),
+                                       (ConstantInt si_llvm_i64_ty, 0x100000000))>.ret,
     (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
@@ -178,10 +177,10 @@ def S_SUBB_U32_sem : InstSISemantic<S_SUBB_U32> {
   let Semantic = [
     (DefVal $tmp, (LLVMSub (LLVMSub (GetNamedOperand $src0),
                                     (GetNamedOperand $src1)),
-                                    (LLVMZExt (ImplicitUse SCC), si_llvm_i32_ty))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGT, (LLVMAdd (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty),
-                                                (LLVMZExt (ImplicitUse SCC), si_llvm_i64_ty)),
-                                       (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty))),
+                                    (LLVMZExt GetSCCImplicit.ret, si_llvm_i32_ty))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpUGT, (LLVMAdd (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty),
+                                                (LLVMZExt GetSCCImplicit.ret, si_llvm_i64_ty)),
+                                       (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty))>.ret,
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
 }
@@ -204,8 +203,8 @@ def S_LSHL_B32_sem : InstSISemantic<S_LSHL_B32> {
     (DefVal $shifted, (LLVMShl (GetNamedOperand $src0),
                                 (LLVMAnd (GetNamedOperand $src1),
                                          (ConstantInt si_llvm_i32_ty, 31)))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
-                                      (ConstantInt si_llvm_i32_ty, 0))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $shifted),
+                                      (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $shifted))
   ];
 }
@@ -228,8 +227,8 @@ def S_LSHL_B64_sem : InstSISemantic<S_LSHL_B64> {
     (DefVal $shifted, (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
                                 (LLVMAnd (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty),
                                          (ConstantInt si_llvm_i64_ty, 63)))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
-                                      (ConstantInt si_llvm_i64_ty, 0))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $shifted),
+                                      (ConstantInt si_llvm_i64_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $shifted))
   ];
 }
@@ -252,8 +251,8 @@ def S_LSHR_B32_sem : InstSISemantic<S_LSHR_B32> {
     (DefVal $shifted, (LLVMLShr (GetNamedOperand $src0, si_llvm_i32_ty),
                                  (LLVMAnd (GetNamedOperand $src1, si_llvm_i32_ty),
                                           (ConstantInt si_llvm_i32_ty, 31)))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
-                                      (ConstantInt si_llvm_i32_ty, 0))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $shifted),
+                                      (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $shifted))
   ];
 }
@@ -276,8 +275,8 @@ def S_LSHR_B64_sem : InstSISemantic<S_LSHR_B64> {
     (DefVal $shifted, (LLVMLShr (GetNamedOperand $src0),
                                  (LLVMAnd (GetNamedOperand $src1),
                                           (ConstantInt si_llvm_i64_ty, 63)))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
-                                      (ConstantInt si_llvm_i64_ty, 0))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $shifted),
+                                      (ConstantInt si_llvm_i64_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $shifted))
   ];
 }
@@ -300,8 +299,8 @@ def S_ASHR_I32_sem : InstSISemantic<S_ASHR_I32> {
     (DefVal $shifted, (LLVMAShr (GetNamedOperand $src0),
                                  (LLVMAnd (GetNamedOperand $src1, si_llvm_i32_ty),
                                           (ConstantInt si_llvm_i32_ty, 31)))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
-                                      (ConstantInt si_llvm_i32_ty, 0))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $shifted),
+                                      (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $shifted))
   ];
 }
@@ -324,8 +323,8 @@ def S_ASHR_I64_sem : InstSISemantic<S_ASHR_I64> {
     (DefVal $shifted, (LLVMAShr (GetNamedOperand $src0),
                                 (LLVMAnd (GetNamedOperand $src1, si_llvm_i64_ty),
                                          (ConstantInt si_llvm_i64_ty, 63)))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $shifted),
-                                      (ConstantInt si_llvm_i64_ty, 0))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $shifted),
+                                      (ConstantInt si_llvm_i64_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $shifted))
   ];
 }
@@ -349,8 +348,8 @@ def S_LSHL1_ADD_U32_sem : InstSISemantic<S_LSHL1_ADD_U32> {
         (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
                  (ConstantInt si_llvm_i64_ty, 1)),
         (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp),
-                                  (ConstantInt si_llvm_i64_ty, 0x100000000))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpUGE, (GetVal $tmp),
+                                  (ConstantInt si_llvm_i64_ty, 0x100000000))>.ret,
     (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
@@ -374,8 +373,8 @@ def S_LSHL2_ADD_U32_sem : InstSISemantic<S_LSHL2_ADD_U32> {
         (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
                  (ConstantInt si_llvm_i64_ty, 2)),
         (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp),
-                                  (ConstantInt si_llvm_i64_ty, 0x100000000))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpUGE, (GetVal $tmp),
+                                  (ConstantInt si_llvm_i64_ty, 0x100000000))>.ret,
     (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
@@ -399,8 +398,8 @@ def S_LSHL3_ADD_U32_sem : InstSISemantic<S_LSHL3_ADD_U32> {
         (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
                  (ConstantInt si_llvm_i64_ty, 3)),
         (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp),
-                                  (ConstantInt si_llvm_i64_ty, 0x100000000))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpUGE, (GetVal $tmp),
+                                  (ConstantInt si_llvm_i64_ty, 0x100000000))>.ret,
     (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
@@ -424,8 +423,8 @@ def S_LSHL4_ADD_U32_sem : InstSISemantic<S_LSHL4_ADD_U32> {
         (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
                  (ConstantInt si_llvm_i64_ty, 4)),
         (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
-    (ImplicitDef SCC, (LLVMCmp LLVMICmpUGE, (GetVal $tmp),
-                                  (ConstantInt si_llvm_i64_ty, 0x100000000))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpUGE, (GetVal $tmp),
+                                  (ConstantInt si_llvm_i64_ty, 0x100000000))>.ret,
     (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
@@ -440,8 +439,8 @@ foreach i = 0-3 in {
 
   def op#_sem : InstSISemantic<op> {
     let Semantic = [
-      (ImplicitDef SCC, (LLVMCmp cmpSgn, (GetNamedOperand $src0), (GetNamedOperand $src1))),
-      (SetNamedOperand $sdst, (LLVMSelect (ImplicitUse SCC), (GetNamedOperand $src0), (GetNamedOperand $src1)))
+      SetSCCImplicit<(LLVMCmp cmpSgn, (GetNamedOperand $src0), (GetNamedOperand $src1))>.ret,
+      (SetNamedOperand $sdst, (LLVMSelect GetSCCImplicit.ret, (GetNamedOperand $src0), (GetNamedOperand $src1)))
     ];
   }
 }
@@ -465,7 +464,7 @@ foreach op = ["And", "Or", "Xor"] in {
         [(SetNamedOperand $sdst, (!cast<LLVMOp>("LLVM"#op)
           (GetNamedOperand $src0, !cast<SILLVMType>("si_llvm_i"#size#"_ty")),
           (GetNamedOperand $src1, !cast<SILLVMType>("si_llvm_i"#size#"_ty")))),
-         (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetNamedOperand $sdst), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0)))
+         SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetNamedOperand $sdst), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))>.ret
         ];
     }
   }
@@ -488,7 +487,7 @@ foreach op = ["And", "Or"] in {
     def S_#!toupper(op)#N2_B#size#_sem : InstSISemantic<!cast<InstSI>("S_"#!toupper(op)#"N2_B"#size)> {
       let Semantic = [
         (SetNamedOperand $sdst, (!cast<LLVMOp>("LLVM"#op) (GetNamedOperand $src0), LLVMNot<(GetNamedOperand $src1), !cast<SILLVMType>("si_llvm_i"#size#"_ty")>.ret)),
-        (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetNamedOperand $sdst), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0)))
+        SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetNamedOperand $sdst), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))>.ret
       ];
     }
   }
@@ -503,7 +502,7 @@ foreach size = [32, 64] in {
     let Semantic = [
       (DefVal $result, (LLVMXor (LLVMAnd (GetNamedOperand $src0), (GetNamedOperand $src1)),
                                  (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), -1))),
-      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))),
+      SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))>.ret,
       (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
@@ -518,7 +517,7 @@ foreach size = [32, 64] in {
     let Semantic = [
       (DefVal $result, (LLVMXor (LLVMOr (GetNamedOperand $src0), (GetNamedOperand $src1)),
                                  (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), -1))),
-      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))),
+      SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))>.ret,
       (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
@@ -533,7 +532,7 @@ foreach size = [32, 64] in {
     let Semantic = [
       (DefVal $result, (LLVMXor (LLVMXor (GetNamedOperand $src0), (GetNamedOperand $src1)),
                                  (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), -1))),
-      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))),
+      SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))>.ret,
       (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
@@ -634,7 +633,7 @@ def S_MUL_HI_I32_sem : InstSISemantic<S_MUL_HI_I32> {
 foreach size = [32, 64] in {
   def S_CSELECT_B#size#_sem : InstSISemantic<!cast<InstSI>("S_CSELECT_B"#size)> {
     let Semantic = [(SetNamedOperand $sdst,
-                    (LLVMSelect (ImplicitUse SCC), (GetNamedOperand $src0), (GetNamedOperand $src1)))];
+                    (LLVMSelect GetSCCImplicit.ret, (GetNamedOperand $src0), (GetNamedOperand $src1)))];
   }
 }
 
@@ -746,7 +745,7 @@ foreach size = [32, 64] in {
       (DefVal $mask, (LLVMSub (LLVMShl (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 1), (GetVal $bit_width)),
                                (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 1))),
       (DefVal $result, (LLVMAnd (GetVal $shifted), (GetVal $mask))),
-      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))),
+      SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))>.ret,
       (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
@@ -779,7 +778,7 @@ foreach size = [32, 64] in {
       (DefVal $sign_ext, (LLVMSExt (GetVal $sign_bit), !cast<SILLVMType>("si_llvm_i"#size#"_ty"))),
       (DefVal $result, (LLVMOr (LLVMAnd (GetVal $masked), (GetVal $mask)),
                               (LLVMAnd (GetVal $sign_ext), LLVMNot<(GetVal $mask), !cast<SILLVMType>("si_llvm_i"#size#"_ty")>.ret))),
-      (ImplicitDef SCC, (LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))),
+      SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt !cast<SILLVMType>("si_llvm_i"#size#"_ty"), 0))>.ret,
       (SetNamedOperand $sdst, (GetVal $result))
     ];
   }

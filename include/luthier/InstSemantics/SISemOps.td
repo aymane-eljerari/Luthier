@@ -178,6 +178,8 @@ def LLVMCall : LLVMOp<"CreateCall">;
 
 def LLVMUnreachable : LLVMOp<"CreateUnreachable">;
 
+def LLVMZExtOrTrunc : LLVMOp<"CreateZExtOrTrunc">;
+
 //------------------------------------------------------------------------------
 // AtomicRMW Operation Enum Values
 //------------------------------------------------------------------------------
@@ -591,6 +593,14 @@ class LLVMExtractBitsIntStartDagNumBits<dag val, SILLVMType inputType, bit isSig
   dag Op = (LLVMAnd (rightShiftOp val, (ConstantInt inputType, startIdx)),
                     (LLVMSub (LLVMShl (ConstantInt inputType, 1), numBits),
                                       (ConstantInt inputType, 1)));
+}
+
+class SetSCCImplicit<dag val> {
+  dag ret = (ImplicitDef SCC, (LLVMZExtOrTrunc val, si_llvm_i32_ty));
+}
+
+class GetSCCImplicit {
+  dag ret = (LLVMTrunc (ImplicitUse SCC), si_llvm_i1_ty);
 }
 
 //class LLVMExtractBitsDagStartIntNumBits<dag val, SILLVMType inputType, dag startIdx, int numBits = 1> {
