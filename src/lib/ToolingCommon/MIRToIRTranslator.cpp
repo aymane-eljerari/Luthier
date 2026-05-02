@@ -743,28 +743,6 @@ MIRToIRTranslator::MIRToIRTranslator(llvm::MachineFunction &MF,
   }
 }
 
-unsigned
-MIRToIRTranslator::getHardwareIdxOffsetFromBaseReg(llvm::MCRegister Reg) const {
-  if (Reg == llvm::AMDGPU::MODE)
-    return 0;
-
-  llvm::MCRegister MCReg = llvm::AMDGPU::getMCReg(Reg, ST);
-  unsigned Enc = TRI.getEncodingValue(MCReg);
-  unsigned HwIdx = Enc & llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
-
-  llvm::MCRegister BaseReg;
-  if (Enc & llvm::AMDGPU::HWEncoding::IS_AGPR)
-    BaseReg = llvm::AMDGPU::AGPR0;
-  else if (Enc & llvm::AMDGPU::HWEncoding::IS_VGPR)
-    BaseReg = llvm::AMDGPU::VGPR0;
-  else
-    BaseReg = llvm::AMDGPU::SGPR0;
-
-  unsigned BaseHwIdx =
-      TRI.getEncodingValue(BaseReg) & llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
-  return HwIdx - BaseHwIdx;
-}
-
 llvm::MCRegister MIRToIRTranslator::getPhysReg(llvm::MCRegister Reg) const {
   switch (Reg) {
   case llvm::AMDGPU::SCC:
@@ -777,6 +755,8 @@ llvm::MCRegister MIRToIRTranslator::getPhysReg(llvm::MCRegister Reg) const {
 unsigned MIRToIRTranslator::getPhysRegisterSize(llvm::MCRegister Reg) const {
   if (Reg == llvm::AMDGPU::MODE)
     return 32;
+  else if (Reg == llvm::AMDGPU::SCC)
+    return 32; /// Return SRC_SCC's size instead
   const llvm::TargetRegisterClass *RC = TRI.getMinimalPhysRegClass(Reg);
   if (RC) {
     return TRI.getRegSizeInBits(*RC);
@@ -796,13 +776,11 @@ llvm::Error MIRToIRTranslator::initRegFileLayouts() {
   unsigned NumSGPRs = F.getFnAttributeAsParsedInteger("amdgpu-num-sgpr");
   unsigned NumVGPRs = F.getFnAttributeAsParsedInteger("amdgpu-num-vgpr");
 
-  if (NumSGPRs == 0 || NumSGPRs % ST.getSGPREncodingGranule() != 0) {
-    return LUTHIER_MAKE_GENERIC_ERROR(
-        "amdgpu-num-sgpr must be a non-zero multiple of the SGPR granule");
+  if (NumSGPRs == 0) {
+    return LUTHIER_MAKE_GENERIC_ERROR("amdgpu-num-sgpr must be non-zero.");
   }
-  if (NumVGPRs != 0 || NumVGPRs % ST.getVGPREncodingGranule() != 0) {
-    return LUTHIER_MAKE_GENERIC_ERROR(
-        "amdgpu-num-vgpr must be a non-zero multiple of the VGPR granule");
+  if (NumVGPRs == 0) {
+    return LUTHIER_MAKE_GENERIC_ERROR("amdgpu-num-vgpr must be a non-zero.");
   }
 
   TTMPBaseReg = llvm::AMDGPU::isGFX9Plus(ST)
@@ -909,16 +887,21 @@ MIRToIRTranslator::getRegFileKey(llvm::MCRegister Reg) const {
                              llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
       unsigned ExecBaseIdx = TRI.getEncodingValue(ExecBaseReg) &
                              llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
+      unsigned TTmpBaseIdx = TRI.getEncodingValue(TTMPBaseReg) &
+                             llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
       unsigned SharedBaseIdx =
           TRI.getEncodingValue(getPhysReg(llvm::AMDGPU::SRC_SHARED_BASE)) &
           llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
 
-      if (HwIdx >= VCCZBaseIdx && HwIdx < 6) {
+      if (HwIdx >= VCCZBaseIdx && HwIdx < VCCZBaseIdx + 6) {
         BaseReg = VCCZPhysReg;
-      } else if (HwIdx >= ExecBaseIdx && HwIdx < 4) {
+      } else if (HwIdx >= ExecBaseIdx && HwIdx < ExecBaseIdx + 4) {
         BaseReg = ExecBaseReg;
+      } else if (HwIdx >= TTmpBaseIdx && HwIdx < TTmpBaseIdx + 16) {
+        BaseReg = TTMPBaseReg;
       } else if (llvm::AMDGPU::isGFX9Plus(ST) && HwIdx >= SharedBaseIdx &&
-                 RegFileSize.at(getPhysReg(llvm::AMDGPU::SRC_SHARED_BASE))) {
+                 SharedBaseIdx < RegFileSize.at(getPhysReg(
+                                     llvm::AMDGPU::SRC_SHARED_BASE))) {
         BaseReg = getPhysReg(llvm::AMDGPU::SRC_SHARED_BASE);
       } else
         llvm_unreachable("SGPR is not contained in any register file");
@@ -928,12 +911,9 @@ MIRToIRTranslator::getRegFileKey(llvm::MCRegister Reg) const {
   unsigned BaseHwIdx =
       TRI.getEncodingValue(BaseReg) & llvm::AMDGPU::HWEncoding::REG_IDX_MASK;
 
-  unsigned Offset = (HwIdx - BaseHwIdx) * 2;
+  unsigned Offset = (HwIdx - BaseHwIdx) * 2 + IsHi16;
 
-  const llvm::TargetRegisterClass *RC = TRI.getPhysRegBaseClass(MCReg);
-  assert(RC && "No register class associated with the register");
-
-  unsigned RegSizeBits = TRI.getRegSizeInBits(*RC);
+  unsigned RegSizeBits = getPhysRegisterSize(Reg);
 
   return std::make_tuple(BaseReg, Offset, RegSizeBits / RegGranule);
 }

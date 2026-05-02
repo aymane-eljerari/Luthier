@@ -294,10 +294,6 @@ class MIRToIRTranslator {
   /// time a single register/file is read/written to
   BBStateMap VM{};
 
-  /// Provides the DWORD index of \p Reg w.r.t the base of the register
-  /// file \p Reg resides in
-  unsigned getHardwareIdxOffsetFromBaseReg(llvm::MCRegister Reg) const;
-
   /// Maps the physical pseudo register to its hardware register
   /// \note Use this instead of \c llvm::AMDGPU::getMCReg directly
   llvm::MCRegister getPhysReg(llvm::MCRegister Reg) const;

@@ -531,7 +531,7 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
           llvm::amdhsa::COMPUTE_PGM_RSRC1_GRANULATED_WAVEFRONT_SGPR_COUNT);
       return (GranulatedWavefrontSGPRCount + 1) * ST.getSGPREncodingGranule();
     } else {
-      return ST.getAddressableNumSGPRs();
+      return ST.getAddressableNumSGPRs() + 2;
     }
   }();
   F->addFnAttr("amdgpu-num-sgpr", llvm::formatv("{0}", NextFreeSGPR).str());
