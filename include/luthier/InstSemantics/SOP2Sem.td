@@ -154,7 +154,7 @@ def S_ADDC_U32_sem : InstSISemantic<S_ADDC_U32> {
   let Semantic = [
     (DefVal $tmp, (LLVMAdd (LLVMAdd (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
                                     (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty)),
-                                    (LLVMZExt GetSCCImplicit.ret, si_llvm_i64_ty))),
+                                    (LLVMZExt GetSCCImplicit<>.ret, si_llvm_i64_ty))),
     SetSCCImplicit<(LLVMCmp LLVMICmpUGE, (GetVal $tmp),
                                        (ConstantInt si_llvm_i64_ty, 0x100000000))>.ret,
     (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
@@ -177,9 +177,9 @@ def S_SUBB_U32_sem : InstSISemantic<S_SUBB_U32> {
   let Semantic = [
     (DefVal $tmp, (LLVMSub (LLVMSub (GetNamedOperand $src0),
                                     (GetNamedOperand $src1)),
-                                    (LLVMZExt GetSCCImplicit.ret, si_llvm_i32_ty))),
+                                    (LLVMZExt GetSCCImplicit<>.ret, si_llvm_i32_ty))),
     SetSCCImplicit<(LLVMCmp LLVMICmpUGT, (LLVMAdd (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty),
-                                                (LLVMZExt GetSCCImplicit.ret, si_llvm_i64_ty)),
+                                                (LLVMZExt GetSCCImplicit<>.ret, si_llvm_i64_ty)),
                                        (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty))>.ret,
     (SetNamedOperand $sdst, (GetVal $tmp))
   ];
@@ -440,7 +440,7 @@ foreach i = 0-3 in {
   def op#_sem : InstSISemantic<op> {
     let Semantic = [
       SetSCCImplicit<(LLVMCmp cmpSgn, (GetNamedOperand $src0), (GetNamedOperand $src1))>.ret,
-      (SetNamedOperand $sdst, (LLVMSelect GetSCCImplicit.ret, (GetNamedOperand $src0), (GetNamedOperand $src1)))
+      (SetNamedOperand $sdst, (LLVMSelect GetSCCImplicit<>.ret, (GetNamedOperand $src0), (GetNamedOperand $src1)))
     ];
   }
 }
@@ -633,7 +633,7 @@ def S_MUL_HI_I32_sem : InstSISemantic<S_MUL_HI_I32> {
 foreach size = [32, 64] in {
   def S_CSELECT_B#size#_sem : InstSISemantic<!cast<InstSI>("S_CSELECT_B"#size)> {
     let Semantic = [(SetNamedOperand $sdst,
-                    (LLVMSelect GetSCCImplicit.ret, (GetNamedOperand $src0), (GetNamedOperand $src1)))];
+                    (LLVMSelect GetSCCImplicit<>.ret, (GetNamedOperand $src0), (GetNamedOperand $src1)))];
   }
 }
 

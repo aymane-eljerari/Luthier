@@ -437,7 +437,7 @@ def S_BRANCH_pad_s_nop_sem : InstSISemantic<S_BRANCH_pad_s_nop> {
 // Sources: same as S_BRANCH.
 def S_CBRANCH_SCC0_sem : InstSISemantic<S_CBRANCH_SCC0> {
   let Semantic = [
-    (LLVMCondBranch GetSCCImplicit.ret,
+    (LLVMCondBranch GetSCCImplicit<>.ret,
                    (GetNamedOperandAsBB $simm16),
                    (GetNextBB))
   ];
@@ -445,7 +445,7 @@ def S_CBRANCH_SCC0_sem : InstSISemantic<S_CBRANCH_SCC0> {
 
 def S_CBRANCH_SCC0_pad_s_nop_sem : InstSISemantic<S_CBRANCH_SCC0_pad_s_nop> {
   let Semantic = [
-    (LLVMCondBranch GetSCCImplicit.ret,
+    (LLVMCondBranch GetSCCImplicit<>.ret,
                    (GetNamedOperandAsBB $simm16),
                    (GetNextBB))
   ];
@@ -455,7 +455,7 @@ def S_CBRANCH_SCC0_pad_s_nop_sem : InstSISemantic<S_CBRANCH_SCC0_pad_s_nop> {
 // Sources: same as S_BRANCH.
 def S_CBRANCH_SCC1_sem : InstSISemantic<S_CBRANCH_SCC1> {
   let Semantic = [
-    (LLVMCondBranch GetSCCImplicit.ret,
+    (LLVMCondBranch GetSCCImplicit<>.ret,
                    (GetNamedOperandAsBB $simm16),
                    (GetNextBB))
   ];
@@ -463,7 +463,7 @@ def S_CBRANCH_SCC1_sem : InstSISemantic<S_CBRANCH_SCC1> {
 
 def S_CBRANCH_SCC1_pad_s_nop_sem : InstSISemantic<S_CBRANCH_SCC1_pad_s_nop> {
   let Semantic = [
-    (LLVMCondBranch GetSCCImplicit.ret,
+    (LLVMCondBranch GetSCCImplicit<>.ret,
                    (GetNamedOperandAsBB $simm16),
                    (GetNextBB))
   ];

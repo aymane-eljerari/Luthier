@@ -52,7 +52,7 @@ def S_ADDK_I32_sem : InstSISemantic<S_ADDK_I32> {
 //   rdna4-instruction-set-architecture.pdf, page 176.
 def S_CMOVK_I32_sem : InstSISemantic<S_CMOVK_I32> {
   let Semantic = [
-    (DefVal $tmp, (LLVMSelect GetSCCImplicit.ret,
+    (DefVal $tmp, (LLVMSelect GetSCCImplicit<>.ret,
                             (GetNamedOperand $simm16), 
                             (GetNamedOperand $sdst))),
     (SetNamedOperand $sdst, (GetVal $tmp))
