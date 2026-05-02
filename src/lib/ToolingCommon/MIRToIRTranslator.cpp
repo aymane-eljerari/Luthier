@@ -82,6 +82,26 @@ void inline annotateUniformIfNeeded(llvm::Instruction *I,
     I->setMetadata("amdgpu.uniform", llvm::MDNode::get(I->getContext(), {}));
 }
 
+static void
+getRegisterFileArgOrder(const llvm::GCNSubtarget &ST,
+                        llvm::SmallVector<llvm::MCRegister> &ABIRegFileIdx) {
+  ABIRegFileIdx.push_back(llvm::AMDGPU::SGPR0);
+  ABIRegFileIdx.push_back(
+      llvm::AMDGPU::isGFX9Plus(ST)
+          ? llvm::AMDGPU::getMCReg(llvm::AMDGPU::TTMP0, ST)
+          : llvm::AMDGPU::getMCReg(llvm::AMDGPU::TBA_LO, ST));
+  ABIRegFileIdx.push_back(
+      llvm::AMDGPU::isNotGFX10Plus(ST)
+          ? llvm::AMDGPU::getMCReg(llvm::AMDGPU::M0, ST)
+          : llvm::AMDGPU::getMCReg(llvm::AMDGPU::SGPR_NULL, ST));
+  if (llvm::AMDGPU::isNotGFX9Plus(ST))
+    ABIRegFileIdx.push_back(llvm::AMDGPU::SRC_SHARED_BASE);
+  ABIRegFileIdx.push_back(llvm::AMDGPU::SRC_VCCZ);
+  ABIRegFileIdx.push_back(llvm::AMDGPU::VGPR0);
+  if (ST.hasMAIInsts())
+    ABIRegFileIdx.push_back(llvm::AMDGPU::AGPR0);
+}
+
 /// Decode the "denormal-fp-math[-f32]" attribute value (e.g.
 /// "preserve-sign," or ",preserve-sign") into the AMDGPU \c FP_DENORM_*
 /// encoding used by the MODE register.
@@ -436,8 +456,7 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
   llvm::MCRegister Offset = std::get<1>(Key);
   llvm::MCRegister NumHalves = std::get<2>(Key);
   unsigned Allocated = RegFileSize[BaseReg];
-  bool IsTTMPAndLaterRegion = isTTMPAndBeyondSGPRRegion(BaseReg, Offset);
-  if (!IsTTMPAndLaterRegion && Offset + NumHalves > Allocated) {
+  if (Offset + NumHalves > Allocated) {
     assert(Offset != 0 &&
            "offset 0 is not in range of the register file allocation");
     Offset = 0;
@@ -797,6 +816,8 @@ llvm::Error MIRToIRTranslator::initRegFileLayouts() {
   unsigned NumApertureSregs = llvm::AMDGPU::isGFX9_GFX10(ST)  ? 10
                               : llvm::AMDGPU::isGFX11Plus(ST) ? 8
                                                               : 0;
+  getRegisterFileArgOrder(ST, FunctionCallArgOrder);
+
   RegFileSize[llvm::AMDGPU::SGPR0] = 2u * NumSGPRs;
   /// TTMP region has 16 register across all targets; If a new generation
   /// comes with a different encoding, this must be updated
@@ -928,10 +949,14 @@ std::string MIRToIRTranslator::getRegfileValueName(llvm::MCRegister BaseReg) {
   default:
     if (BaseReg == TTMPBaseReg)
       return "ttmp_file";
-    else if (BaseReg == TTM)
-    case TTMPBaseReg:
-      return "ttmp_file";
-
+    else if (BaseReg == ExecBaseReg)
+      return "exec_file";
+    else if (BaseReg == llvm::AMDGPU::SRC_SHARED_BASE)
+      return "apreture_file";
+    else if (BaseReg == llvm::AMDGPU::SRC_VCCZ)
+      return "vccz_file";
+    else
+      assert(BaseReg == llvm::AMDGPU::MODE && "Invalid register file base");
     return "hw_reg_file";
   }
 }
@@ -1038,108 +1063,46 @@ void MIRToIRTranslator::setRegisterFile(const llvm::MachineBasicBlock &MBB,
   setRegOperandValue(MBB, MegaKey, Builder, Val);
 }
 
-llvm::FunctionType *MIRToIRTranslator::getStandardDeviceFunctionType(
-    llvm::LLVMContext &Ctx, const llvm::GCNSubtarget &ST, unsigned NumVGPRs,
-    unsigned NumAGPRs) {
-  auto *I32 = llvm::Type::getInt32Ty(Ctx);
-  auto *I1 = llvm::Type::getInt1Ty(Ctx);
-  unsigned WaveBits = ST.isWave64() ? 64u : 32u;
-  auto *IWave = llvm::Type::getIntNTy(Ctx, WaveBits);
-  auto *SgprFileTy = llvm::FixedVectorType::get(I32, /*NumLanes=*/128);
-  auto *VgprFileTy = llvm::FixedVectorType::get(I32, NumVGPRs ? NumVGPRs : 1u);
-  llvm::SmallVector<llvm::Type *, 8> Fields = {SgprFileTy, VgprFileTy};
-  if (ST.hasMAIInsts())
-    Fields.push_back(llvm::FixedVectorType::get(I32, NumAGPRs ? NumAGPRs : 1u));
-  Fields.push_back(I1);    // SCC
-  Fields.push_back(IWave); // VCC
-  Fields.push_back(I1);    // VCCZ
-  auto *RetTy = llvm::StructType::get(Ctx, Fields);
-  return llvm::FunctionType::get(RetTy, Fields, /*isVarArg=*/false);
-}
-
 llvm::FunctionType *MIRToIRTranslator::getStandardDeviceFunctionType() const {
-  /// Reads \c amdgpu-num-vgpr from the function's attributes. Both the
-  /// kernel entry and discovered device functions carry it (the
-  /// CodeDiscoveryPass propagates it to device functions at creation
-  /// time). The fallback to addressable max only fires for unattached
-  /// functions, which shouldn't reach this path.
-  const llvm::Function &F = MF.getFunction();
-  unsigned NumVGPRs = F.getFnAttributeAsParsedInteger(
-      "amdgpu-num-vgpr", ST.getAddressableNumArchVGPRs());
-  unsigned NumAGPRs = ST.hasMAIInsts() ? NumVGPRs : 0u;
-  return getStandardDeviceFunctionType(F.getContext(), ST, NumVGPRs, NumAGPRs);
-}
+  llvm::Function &F = MF.getFunction();
+  if (F.getCallingConv() != llvm::CallingConv::AMDGPU_KERNEL)
+    return F.getFunctionType();
+  llvm::LLVMContext &Ctx = F.getContext();
+  llvm::SmallVector<llvm::Type *, 8> Fields;
+  Fields.reserve(FunctionCallArgOrder.size());
+  auto *I32 = llvm::Type::getInt32Ty(Ctx);
+  for (llvm::MCRegister RegFileBase : FunctionCallArgOrder) {
+    Fields.push_back(
+        llvm::FixedVectorType::get(I32, RegFileSize.at(RegFileBase)));
+  }
 
-namespace {
-struct StandardArgInfo {
-  unsigned SgprIdx = 0;
-  unsigned VgprIdx = 1;
-  std::optional<unsigned> AgprIdx;
-  unsigned SccIdx;
-  unsigned VccIdx;
-  unsigned VcczIdx;
-  unsigned NumArgs;
-};
-
-StandardArgInfo getStandardArgInfo(const llvm::GCNSubtarget &ST) {
-  StandardArgInfo Info;
-  unsigned Idx = 2;
-  if (ST.hasMAIInsts())
-    Info.AgprIdx = Idx++;
-  Info.SccIdx = Idx++;
-  Info.VccIdx = Idx++;
-  Info.VcczIdx = Idx++;
-  Info.NumArgs = Idx;
-  return Info;
+  return llvm::FunctionType::get(llvm::Type::getVoidTy(Ctx), Fields,
+                                 /*isVarArg=*/false);
 }
-} // namespace
 
 void MIRToIRTranslator::initDeviceFunctionEntryRegs(
     llvm::IRBuilderBase &Builder) {
   llvm::Function &F = const_cast<llvm::Function &>(MF.getFunction());
-  StandardArgInfo Args = getStandardArgInfo(ST);
-  assert(F.arg_size() == Args.NumArgs &&
+  assert(F.arg_size() == FunctionCallArgOrder.size() &&
          "device function does not match the standard prototype");
 
   const llvm::MachineBasicBlock &EntryMBB = MF.front();
   RegValueMap &State = VM[EntryMBB];
 
-  /// File mega-entries.
-  auto storeFileMega = [&](RegFileID File, llvm::Value *Arg) {
-    unsigned NumLanes32 = RegFileSize[static_cast<size_t>(File)] / 2u;
+  /// store register file entries
+  auto storeRegisterFile = [&](llvm::MCRegister BaseReg, llvm::Value *Arg) {
+    unsigned NumLanes32 = RegFileSize[BaseReg] / 2u;
     auto *VecTy = llvm::FixedVectorType::get(Builder.getInt32Ty(), NumLanes32);
     llvm::Value *V = Arg;
     if (V->getType() != VecTy)
-      V = Builder.CreateBitOrPointerCast(V, VecTy, getFileDebugName(File));
-    uint32_t Key =
-        makeFileRegKey(File, /*Offset=*/0u,
-                       /*NumHalves=*/RegFileSize[static_cast<size_t>(File)]);
-    State.RegCache[Key][VecTy] = V;
+      V = Builder.CreateBitOrPointerCast(V, VecTy,
+                                         getRegfileValueName(BaseReg));
+    State[std::make_tuple(BaseReg, 0, RegFileSize[BaseReg])][VecTy] = V;
   };
-  storeFileMega(RegFileID::SGPR, F.getArg(Args.SgprIdx));
-  storeFileMega(RegFileID::VGPR, F.getArg(Args.VgprIdx));
-  if (Args.AgprIdx)
-    storeFileMega(RegFileID::AGPR, F.getArg(*Args.AgprIdx));
 
-  /// SCC into OtherCache.
-  llvm::Value *SccArg = F.getArg(Args.SccIdx);
-  State.HWRegCache[llvm::AMDGPU::SCC][SccArg->getType()] = SccArg;
-
-  /// VCC into the SGPR file via setRegOperandValue. Using getVCC()
-  /// gives \c VCC_LO on wave32 and the \c VCC pair on wave64.
-  llvm::MCRegister VccReg = TRI.getVCC();
-  if (VccReg) {
-    auto Slot = getRegFileKey(VccReg);
-    if (Slot) {
-      uint32_t Key = makeFileRegKey(Slot->File, Slot->Offset, Slot->NumHalves);
-      State.RegCache[Key][F.getArg(Args.VccIdx)->getType()] =
-          F.getArg(Args.VccIdx);
-    }
+  for (auto [Idx, RegFileBase] : llvm::enumerate(FunctionCallArgOrder)) {
+    storeRegisterFile(RegFileBase, F.getArg(Idx));
   }
-  /// VCCZ has no MCRegister in the backend — for now just keep the
-  /// argument live in the IR via a no-op cast so it isn't pruned.
-  /// Future work: add a synthetic MCRegister to track it in OtherCache.
-  (void)F.getArg(Args.VcczIdx);
 }
 
 void MIRToIRTranslator::emitIndirectTailCall(const llvm::MachineInstr &MI,
@@ -1152,25 +1115,12 @@ void MIRToIRTranslator::emitIndirectTailCall(const llvm::MachineInstr &MI,
       TermInst ? llvm::IRBuilder{TermInst} : llvm::IRBuilder{BB};
 
   llvm::FunctionType *FTy = getStandardDeviceFunctionType();
-  StandardArgInfo Args = getStandardArgInfo(ST);
-  llvm::SmallVector<llvm::Value *, 8> CallArgs(Args.NumArgs, nullptr);
-  CallArgs[Args.SgprIdx] =
-      getRegisterFile(*MBB, RegFileID::SGPR, Builder, TODO);
-  CallArgs[Args.VgprIdx] =
-      getRegisterFile(*MBB, RegFileID::VGPR, Builder, TODO);
-  if (Args.AgprIdx)
-    CallArgs[*Args.AgprIdx] =
-        getRegisterFile(*MBB, RegFileID::AGPR, Builder, TODO);
-  CallArgs[Args.SccIdx] =
-      &getOperandAsValue(*MBB, llvm::AMDGPU::SCC, Builder.getInt1Ty());
-  llvm::MCRegister VccReg = TRI.getVCC();
-  unsigned WaveBits = ST.isWave64() ? 64u : 32u;
-  CallArgs[Args.VccIdx] =
-      VccReg ? &getOperandAsValue(*MBB, VccReg, Builder.getIntNTy(WaveBits))
-             : Builder.CreateFreeze(
-                   llvm::PoisonValue::get(Builder.getIntNTy(WaveBits)));
-  CallArgs[Args.VcczIdx] =
-      Builder.CreateFreeze(llvm::PoisonValue::get(Builder.getInt1Ty()));
+  llvm::SmallVector<llvm::Value *, 8> CallArgs(FunctionCallArgOrder.size(),
+                                               nullptr);
+
+  for (auto [Idx, RegFileBase] : llvm::enumerate(FunctionCallArgOrder)) {
+    CallArgs[Idx] = getRegisterFile(*MBB, RegFileBase, Builder);
+  }
 
   llvm::Value *FuncPtr = Builder.CreateBitOrPointerCast(
       Target, llvm::PointerType::get(BB->getContext(),
@@ -1178,14 +1128,8 @@ void MIRToIRTranslator::emitIndirectTailCall(const llvm::MachineInstr &MI,
   llvm::CallInst *Call = Builder.CreateCall(FTy, FuncPtr, CallArgs);
   Call->setTailCallKind(llvm::CallInst::TCK_Tail);
 
-  /// If the calling function shares the standard return type, forward
-  /// the call result; otherwise drop into unreachable so the IR is
-  /// well-formed regardless.
-  llvm::Function &F = const_cast<llvm::Function &>(MF.getFunction());
-  if (F.getReturnType() == FTy->getReturnType())
-    Builder.CreateRet(Call);
-  else
-    Builder.CreateUnreachable();
+  /// Create an unreachable instruction to end the control flow graph
+  Builder.CreateUnreachable();
 }
 
 llvm::Value &MIRToIRTranslator::getOperandAsValue(const llvm::MachineInstr &MI,
@@ -1283,31 +1227,32 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineOperand &Op,
   setRegOperandValue(*MI, Op.getReg(), Val);
 }
 
-llvm::Value &MIRToIRTranslator::setRegOperandValue(
-    const llvm::MachineBasicBlock &MBB, const RegFileKey &Key,
-    llvm::IRBuilderBase &Builder, llvm::Value *Val) {
+void MIRToIRTranslator::setRegOperandValue(const llvm::MachineBasicBlock &MBB,
+                                           const RegFileKey &Key,
+                                           llvm::IRBuilderBase &Builder,
+                                           llvm::Value *Val) {
 
   RegValueMap &State = VM[MBB];
+  llvm::MCRegister BaseReg = std::get<0>(Key);
+  unsigned Offset = std::get<1>(Key);
+  unsigned Size = std::get<2>(Key);
 
   /// Bounds check: silently drop writes that target an unallocated plain
   /// GPR slot. Specials (TTMP/M0/EXEC/NULL/VCC-on-GFX10+) bypass the
   /// check and are always written through.
-  unsigned Allocated = RegFileAllocated[static_cast<size_t>(Slot->File)];
-  bool IsTTMPAndLaterRegion =
-      isTTMPAndBeyondSGPRRegion(Slot->File, Slot->Offset);
-  if (!IsTTMPAndLaterRegion && Slot->Offset + Slot->NumHalves > Allocated) {
+  unsigned Allocated = RegFileSize[BaseReg];
+  if (Offset + Size > Allocated) {
     LLVM_DEBUG(llvm::dbgs()
                << "[MIRToIRTranslator] Dropping out-of-range write to "
-               << TRI.getName(Reg) << " (offset=" << Slot->Offset << " halves="
-               << Slot->NumHalves << " allocated=" << Allocated << ")\n");
+               << " (offset=" << Offset << " halves=" << Size
+               << " allocated=" << Allocated << ")\n");
     return;
   }
 
   /// Preserve non-overlapping portions of partially-overwritten
   /// super-registers, then erase fully-covered entries.
-  invalidateOverlaps(State, *Slot, Builder);
-  uint32_t Key = makeFileRegKey(Slot->File, Slot->Offset, Slot->NumHalves);
-  State.RegCache[Key][Val->getType()] = Val;
+  invalidateOverlaps(State, Key, Builder);
+  State[Key][Val->getType()] = Val;
 }
 
 void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
@@ -1337,9 +1282,10 @@ void MIRToIRTranslator::fixupPhis() {
     for (const llvm::MachineBasicBlock *PredMBB : It->MBB->predecessors()) {
       auto *PredBB = const_cast<llvm::BasicBlock *>(PredMBB->getBasicBlock());
       if (!llvm::is_contained(It->Phi->blocks(), PredBB)) {
-        It->Phi->addIncoming(
-            &getOperandAsValue(*PredMBB, It->RegKey, It->Phi->getType()),
-            PredBB);
+        llvm::IRBuilder Builder{&*PredBB->begin()};
+        It->Phi->addIncoming(&getOperandAsValue(*PredMBB, It->RegKey, Builder,
+                                                It->Phi->getType()),
+                             PredBB);
       }
     }
     if (It->Phi->getNumIncomingValues() == 1)
@@ -1412,15 +1358,15 @@ void MIRToIRTranslator::translate() {
   /// If this is a kernel entry function, seed the register tracker with the
   /// hardware pre-loaded SGPR/VGPR values. Otherwise the function is a
   /// device function with the standard prototype — seed from its arguments.
-  {
-    auto *EntryBB = const_cast<llvm::BasicBlock *>(MF.front().getBasicBlock());
-    assert(EntryBB && "Entry MBB has no IR basic block");
-    llvm::IRBuilder Builder{EntryBB};
-    if (F.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL)
-      initKernelEntryRegs(Builder);
-    else if (F.arg_size() == getStandardArgInfo(ST).NumArgs)
-      initDeviceFunctionEntryRegs(Builder);
-  }
+
+  auto *EntryBB = const_cast<llvm::BasicBlock *>(MF.front().getBasicBlock());
+  assert(EntryBB && "Entry MBB has no IR basic block");
+
+  llvm::IRBuilder Builder{EntryBB};
+  if (F.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL)
+    initKernelEntryRegs(Builder);
+  else
+    initDeviceFunctionEntryRegs(Builder);
 
   /// Iterate over the MBBs and raise the machine instructions in each MBB to
   /// LLVM IR
@@ -1449,9 +1395,8 @@ void MIRToIRTranslator::translate() {
       /// a new function for it. Hence, at the IR level, the instruction
       /// after call instructions are unreachable in the current function
       if (MBB.back().isCall()) {
-        llvm::IRBuilder Builder(
-            const_cast<llvm::BasicBlock *>(MBB.getBasicBlock()));
-        Builder.CreateUnreachable();
+        llvm::IRBuilder{const_cast<llvm::BasicBlock *>(MBB.getBasicBlock())}
+            .CreateUnreachable();
       } else if (!MBB.back().isBranch()) {
         auto NextBB =
             const_cast<llvm::BasicBlock *>(MBB.getNextNode()->getBasicBlock());

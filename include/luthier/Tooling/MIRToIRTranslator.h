@@ -246,6 +246,10 @@ class MIRToIRTranslator {
   /// Total 16-bit-lane footprint of each register file.
   llvm::SmallDenseMap<llvm::MCRegister, unsigned> RegFileSize{};
 
+  /// Indicates the index where each register file is placed in
+  /// the argument list in case of a function call
+  llvm::SmallVector<llvm::MCRegister> FunctionCallArgOrder{};
+
   /// Logical SGPR that aliases \c VCC_LO for applicable targets
   llvm::MCRegister VccLoSgpr{llvm::MCRegister::NoRegister};
 
@@ -330,6 +334,10 @@ class MIRToIRTranslator {
   /// Initializes the initial values in the entry basic block if it's
   /// determined that the function is a kernel
   void initKernelEntryRegs(llvm::IRBuilderBase &Builder);
+
+  /// Initializes the initial values in the entry basic block if it's
+  /// determined that the function is not a kernel
+  void initDeviceFunctionEntryRegs(llvm::IRBuilderBase &Builder);
 
   /// Retrieves the named operand \p OpName in \p MI, retrieves it as a
   /// \c llvm::MachineBasicBlock. It then returns the MBB's \c llvm::BasicBlock
@@ -449,10 +457,9 @@ class MIRToIRTranslator {
   /// register value map to \p Val
   void setRegOperandValue(const llvm::MachineOperand &Op, llvm::Value *Val);
 
-  llvm::Value &setRegOperandValue(const llvm::MachineBasicBlock &MBB,
-                                  const RegFileKey &Key,
-                                  llvm::IRBuilderBase &Builder,
-                                  llvm::Value *Val);
+  void setRegOperandValue(const llvm::MachineBasicBlock &MBB,
+                          const RegFileKey &Key, llvm::IRBuilderBase &Builder,
+                          llvm::Value *Val);
 
   /// Invalidates register value entries overlapping with \p RegKey before
   /// a write happens by \c setRegOperandValue
@@ -498,29 +505,12 @@ class MIRToIRTranslator {
   /// \c ret of the call's return value
   void emitIndirectTailCall(const llvm::MachineInstr &MI, llvm::Value *Target);
 
-  /// Build the function type used by all discovered device functions and
-  /// indirect call targets in this module. The signature is:
-  ///
-  ///   { <128 x i32>, <NumVGPRs x i32>, [<NumAGPRs x i32>,] i1, iWave, i1 }
-  ///   (<128 x i32>, <NumVGPRs x i32>, [<NumAGPRs x i32>,] i1, iWave, i1)
-  ///
-  /// where the i1 fields are SCC and VCCZ, the iWave field is VCC
-  /// (wave-size-wide), and the AGPR vector is only present on targets
-  /// with MAI support. The CodeDiscoveryPass uses this to give every
-  /// discovered device function the same shape so indirect targets can
-  /// be resolved via constant folding.
-  static llvm::FunctionType *
-  getStandardDeviceFunctionType(llvm::LLVMContext &Ctx,
-                                const llvm::GCNSubtarget &ST, unsigned NumVGPRs,
-                                unsigned NumAGPRs);
-
-  /// Convenience overload: uses the current MF's subtarget and the
-  /// allocation counts derived from \c amdgpu-num-vgpr (or the
-  /// addressable max as a fallback).
-  llvm::FunctionType *getStandardDeviceFunctionType() const;
-
 public:
   MIRToIRTranslator(llvm::MachineFunction &MF, llvm::Error &Err);
+
+  /// Provides the function type used to create new trace functions with the
+  /// correct prototype by the \p CodeDiscoveryPass
+  llvm::FunctionType *getStandardDeviceFunctionType() const;
 
   void translate();
 };
