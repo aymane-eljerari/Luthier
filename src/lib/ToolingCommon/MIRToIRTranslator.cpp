@@ -77,7 +77,7 @@ void inline annotateUniformIfNeeded(llvm::Instruction *I,
                                     llvm::MCRegister Reg) {
   if (const llvm::TargetRegisterClass *RC = TRI.getPhysRegBaseClass(Reg);
       RC && !llvm::SIRegisterInfo::isAGPRClass(RC) &&
-      llvm::SIRegisterInfo::isVGPRClass(RC))
+      !llvm::SIRegisterInfo::isVGPRClass(RC))
     I->setMetadata("amdgpu.uniform", llvm::MDNode::get(I->getContext(), {}));
 }
 
@@ -375,17 +375,36 @@ llvm::Value *MIRToIRTranslator::tryComposeFromOverlappingRegs(
   const uint32_t WStart = Offset;
   const uint32_t WEnd = Offset + NumHalves;
 
-  auto *VecTy = llvm::FixedVectorType::get(Builder.getInt16Ty(), NumHalves);
-  llvm::Value *Vec = llvm::PoisonValue::get(VecTy);
+  /// Look for any 16-bit subregs that are already materialized in the
+  /// current basic block; If so, opt to compose the value by materializing
+  /// the final value from 16-bit subreg values; Otherwise, just return nullptr
+  /// and ask for the previous basic block/freeze(poison)
+  llvm::SmallDenseMap<unsigned, llvm::Value *> SVs{};
+
   for (unsigned I = WStart; I < WEnd; ++I) {
     auto SubKey = std::make_tuple(BaseReg, I, 1);
     llvm::Value *SubVal{nullptr};
     if (auto It = State.find(SubKey); It != State.end()) {
       SubVal = getOrCreateIntOrPtrTypeForReg(It->second, Builder);
+      SVs[I] = SubVal;
     } else {
       SubVal =
           tryExtractFromSuperReg(State, SubKey, Builder, Builder.getInt16Ty());
-      if (!SubVal) {
+      if (SubVal) {
+        SVs[I] = SubVal;
+      }
+    }
+  }
+
+  if (!SVs.empty()) {
+    auto *VecTy = llvm::FixedVectorType::get(Builder.getInt16Ty(), NumHalves);
+    llvm::Value *Vec = llvm::PoisonValue::get(VecTy);
+    for (unsigned I = WStart; I < WEnd; ++I) {
+      llvm::Value *SubVal{nullptr};
+      auto SubKey = std::make_tuple(BaseReg, I, 1);
+      if (auto It = SVs.find(I); It != SVs.end())
+        SubVal = It->second;
+      else {
         if (!MBB.pred_empty()) {
           llvm::PHINode *PhiNode =
               Builder.CreatePHI(Builder.getInt16Ty(), MBB.pred_size());
@@ -396,16 +415,16 @@ llvm::Value *MIRToIRTranslator::tryComposeFromOverlappingRegs(
               llvm::PoisonValue::get(Builder.getInt16Ty()));
         }
       }
+      SubVal->setName(SubVal->getName() + llvm::formatv("_sub{0}_", I).str());
       State[SubKey][Builder.getInt16Ty()] = SubVal;
+      Vec = Builder.CreateInsertElement(Vec, SubVal, I - WStart);
     }
-
-    Vec = Builder.CreateInsertElement(Vec, SubVal, I - WStart);
+    unsigned RegSize = NumHalves * 16u;
+    if (!RegType)
+      RegType = Builder.getIntNTy(RegSize);
+    return Builder.CreateBitOrPointerCast(Vec, RegType);
   }
-
-  unsigned RegSize = NumHalves * 16u;
-  if (!RegType)
-    RegType = Builder.getIntNTy(RegSize);
-  return Builder.CreateBitOrPointerCast(Vec, RegType);
+  return nullptr;
 }
 
 llvm::Value &
@@ -489,6 +508,8 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
     return *V;
   }
 
+  // 4. Try composing from overlapping registers already materialized in the
+  // current file
   if (llvm::Value *V =
           tryComposeFromOverlappingRegs(State, MBB, Key, Builder, OutRegType)) {
     State[Key][OutRegType] = V;
@@ -631,11 +652,22 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
     if (!Reg)
       return;
     unsigned Mask = ArgDesc->getMask();
-    llvm::Value *Val =
-        Builder.CreateIntrinsic(RetTy, IID, {}, nullptr, getRegValueName(Reg));
-    if (Mask != ~0u)
-      Val =
-          Builder.CreateAnd(Val, Builder.getInt32(Mask), getRegValueName(Reg));
+    llvm::Value *Val = Builder.CreateIntrinsic(RetTy, IID, {}, nullptr);
+    /// If the input argument has a mask (e.g. in case of packed workitem ID),
+    /// construct the value from the mask first before materializing the final
+    /// register value; Otherwise, just assign the register name to the
+    /// intrinsic value
+    if (Mask != ~0u) {
+      unsigned NumRZeros = std::countr_zero(Mask);
+      unsigned MaskNoRZeros = Mask >> NumRZeros;
+      Val = Builder.CreateAnd(Val, Builder.getInt32(MaskNoRZeros));
+      if (NumRZeros)
+        Val = Builder.CreateShl(Val, Builder.getInt32(NumRZeros),
+                                getRegValueName(Reg));
+    } else {
+      Val->setName(getRegValueName(Reg));
+    }
+
     seed(Which, Val);
   };
 
@@ -873,7 +905,7 @@ MIRToIRTranslator::getRegFileKey(llvm::MCRegister Reg) const {
       }
     }
     /// Take care of special SGPR registers
-    else if (HwIdx >= RegFileSize.at(llvm::AMDGPU::SGPR0) / 2) {
+    if (HwIdx >= RegFileSize.at(llvm::AMDGPU::SGPR0) / 2) {
       /// We sort the checks based on the frequency of the register files
       /// accessed
 
@@ -1234,12 +1266,12 @@ void MIRToIRTranslator::fixupPhis() {
   /// predecessor to emit a new placeholder PHI (there, or in one of its
   /// own predecessors). Those get appended to \c ToBeFixedPhis while we
   /// iterate, so keep draining until the list is empty.
+  llvm::InstSimplifyFolder CF{MF.getDataLayout()};
   while (!ToBeFixedPhis.empty()) {
     auto It = ToBeFixedPhis.begin();
     for (const llvm::MachineBasicBlock *PredMBB : It->MBB->predecessors()) {
       auto *PredBB = const_cast<llvm::BasicBlock *>(PredMBB->getBasicBlock());
       if (!llvm::is_contained(It->Phi->blocks(), PredBB)) {
-        llvm::InstSimplifyFolder CF{MF.getDataLayout()};
         llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
           if (It->Phi->hasMetadata("amdgpu.uniform"))
             I->setMetadata("amdgpu.uniform",
@@ -1252,6 +1284,7 @@ void MIRToIRTranslator::fixupPhis() {
         });
         llvm::IRBuilderBase Builder(It->Phi->getContext(), CF, Inserter, {},
                                     {});
+        Builder.SetInsertPoint(&*PredBB->begin());
         It->Phi->addIncoming(&getOperandAsValue(*PredMBB, It->RegKey, Builder,
                                                 It->Phi->getType()),
                              PredBB);
