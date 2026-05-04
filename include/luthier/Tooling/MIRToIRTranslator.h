@@ -313,6 +313,10 @@ class MIRToIRTranslator {
     return llvm::StringRef(TRI.getName(Reg)).lower() + "_val";
   }
 
+  /// Used to get the value suffix for value extraction operations
+  std::string getSubValueSuffixName(unsigned SubValueStart,
+                                    unsigned NumSubVals);
+
   /// Resolve \p Reg to a \c RegFileKey (register base index + 16-bit-lane
   /// offset + number of 16-bit halves). Performs GFX9- alias translation for
   /// <tt>VCC</tt>/<tt>XNACK_MASK</tt>/<tt>FLAT_SCR</tt> before encoding the
@@ -408,7 +412,8 @@ class MIRToIRTranslator {
                                           llvm::Type &RegType);
 
   /// Helper: Extract a chunk from a source entry's ValueTypeMap
-  /// \param Vals the type to value map to materialize the value from
+  /// \param State the type to value map to materialize the value from
+  /// \param RegKey
   /// \param VecChunkSize the size of scalar type to break the initial value
   /// to
   /// \param Idx Index to extract the final element from the value
@@ -417,8 +422,10 @@ class MIRToIRTranslator {
   /// instructions for materializing the value
   /// \return the extracted value, as a scalar (the chunks will be merged
   /// together and bitcasted to a scalar value)
-  llvm::Value *extractChunkFromSource(ValueTypeMap &Vals, unsigned VecChunkSize,
-                                      unsigned Idx, unsigned NumChunks,
+  llvm::Value *extractChunkFromSource(RegValueMap &State,
+                                      const RegFileKey &RegKey,
+                                      unsigned VecChunkSize, unsigned Idx,
+                                      unsigned NumChunks,
                                       llvm::IRBuilderBase &Builder);
 
   /// Retrieves the register associated with the named destination operand
@@ -472,7 +479,8 @@ class MIRToIRTranslator {
   /// Materializes the value associated with the register file of \p Reg
   /// in the value register map of \p MBB
   /// \p Builder is used to materialize needed instructions
-  /// \p LaneTy specifies the scalar type used to divide the register file  /// value in the returned vector type
+  /// \p LaneTy specifies the scalar type used to divide the register file  ///
+  /// value in the returned vector type
   llvm::Value *getRegisterFile(const llvm::MachineBasicBlock &MBB,
                                llvm::MCRegister Reg,
                                llvm::IRBuilderBase &Builder,

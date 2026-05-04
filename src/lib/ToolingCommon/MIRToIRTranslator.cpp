@@ -133,6 +133,8 @@ static llvm::Value *getOrCreateIntOrPtrTypeForReg(
     auto &[T, V] = *ValueEntries.begin();
     llvm::Type *OutTy = Builder.getIntNTy(T->getPrimitiveSizeInBits());
     VecIntOrPtrVal = Builder.CreateBitOrPointerCast(V, OutTy);
+    if (ValueEntries[OutTy] != VecIntOrPtrVal)
+      VecIntOrPtrVal->setName(VecIntOrPtrVal->getName() + "_cast");
     ValueEntries[OutTy] = VecIntOrPtrVal;
   }
   return VecIntOrPtrVal;
@@ -256,22 +258,30 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
 }
 
 llvm::Value *MIRToIRTranslator::extractChunkFromSource(
-    ValueTypeMap &Vals, unsigned VecChunkSize, unsigned Idx, unsigned NumChunks,
-    llvm::IRBuilderBase &Builder) {
+    RegValueMap &State, const RegFileKey &RegKey, unsigned VecChunkSize,
+    unsigned Idx, unsigned NumChunks, llvm::IRBuilderBase &Builder) {
+  auto &RegValueMap = State[RegKey];
   // Breakdown the value to the requested chunk size
   llvm::Value *TheVec =
-      breakdownToVecTyFromAvailableValues(Vals, VecChunkSize, Builder);
+      breakdownToVecTyFromAvailableValues(RegValueMap, VecChunkSize, Builder);
 
   if (NumChunks == 1) {
-    return Builder.CreateExtractElement(TheVec, Idx);
+    llvm::Value *Val = Builder.CreateExtractElement(TheVec, Idx);
+    Val->setName(Val->getName() + getSubValueSuffixName(Idx, 1));
+    return Val;
   }
 
   // Build <NumChunks x ChunkSize> from the source
   auto *ChunkTy =
       llvm::FixedVectorType::get(Builder.getIntNTy(VecChunkSize), NumChunks);
   llvm::Value *Chunk = llvm::PoisonValue::get(ChunkTy);
+  unsigned VecChunkRegGranMul = VecChunkSize / RegGranule;
+  unsigned ChunkSizeInRegGran = NumChunks * VecChunkRegGranMul;
   for (uint32_t I = 0; I < NumChunks; ++I) {
     llvm::Value *E = Builder.CreateExtractElement(TheVec, Idx + I);
+    E->setName(E->getName() + getSubValueSuffixName(Idx, I));
+    State[std::make_tuple(std::get<0>(RegKey), I * VecChunkRegGranMul,
+                          ChunkSizeInRegGran)][E->getType()] = E;
     Chunk = Builder.CreateInsertElement(Chunk, E, I);
   }
   return Chunk;
@@ -294,7 +304,7 @@ llvm::Value *MIRToIRTranslator::materializeFromOverlapping(
   struct OverlapInfo {
     uint32_t SrcOffset;
     uint32_t SrcNumHalves;
-    ValueTypeMap *Vals;
+    RegFileKey RegKey;
     uint32_t OverlapStart;
     uint32_t OverlapEnd;
   };
@@ -308,7 +318,7 @@ llvm::Value *MIRToIRTranslator::materializeFromOverlapping(
     const uint32_t OStart = std::max(SOffset, WStart);
     const uint32_t OEnd = std::min(SEnd, WEnd);
     if (OStart < OEnd) {
-      Overlaps.push_back({SOffset, SEnd - SOffset, &Entry, OStart, OEnd});
+      Overlaps.push_back({SOffset, SEnd - SOffset, Key, OStart, OEnd});
     }
   }
 
@@ -419,11 +429,16 @@ llvm::Value *MIRToIRTranslator::materializeFromOverlapping(
 
   for (auto &C : OverlapChunks) {
     uint32_t ChunkNumHalves = C.ChunkEnd - C.ChunkStart;
-    llvm::Value *ChunkVal = extractChunkFromSource(
-        *C.Src->Vals, OptimalChunkSize, C.SrcChunkStart / OptimalChunkSize,
-        ChunkNumHalves / OptimalChunkSize, Builder);
+    RegFileKey SubRegKey =
+        std::make_tuple(BaseReg, C.SrcChunkStart, ChunkNumHalves);
+    llvm::Value *ChunkVal =
+        extractChunkFromSource(State, C.Src->RegKey, OptimalChunkSize,
+                               C.SrcChunkStart / OptimalChunkSize,
+                               ChunkNumHalves / OptimalChunkSize, Builder);
+    State[SubRegKey][ChunkVal->getType()] = ChunkVal;
     ChunkVal = Builder.CreateBitOrPointerCast(
         ChunkVal, Builder.getIntNTy(ChunkNumHalves / OptimalChunkSize));
+    State[SubRegKey][ChunkVal->getType()] = ChunkVal;
     Result = Builder.CreateInsertElement(Result, ChunkVal,
                                          C.ChunkStart / OptimalChunkSize);
   }
@@ -496,12 +511,14 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
       return *V->getSecond();
     llvm::Value *CastVal = getOrCreateIntOrPtrTypeForReg(VTM, Builder);
     llvm::Value *Out = Builder.CreateBitOrPointerCast(CastVal, OutRegType);
+    if (VTM[OutRegType] != Out) {
+      Out->setName(Out->getName() + "_cast");
+    }
     VTM[OutRegType] = Out;
     return *Out;
   }
 
-  // Materialize from overlapping registers (handles super-reg extraction,
-  // sub-reg composition, and overlapping register cases)
+  // Materialize from overlapping registers
   llvm::Value *V =
       materializeFromOverlapping(State, MBB, Key, Builder, *OutRegType);
   State[Key][OutRegType] = V;
@@ -839,6 +856,15 @@ llvm::Error MIRToIRTranslator::initRegFileLayouts() {
       FlatScrLoSgpr = reserveLoPair();
   }
   return llvm::Error::success();
+}
+
+std::string MIRToIRTranslator::getSubValueSuffixName(unsigned SubValueStart,
+                                                     unsigned NumSubVals) {
+  llvm::Twine T("sub");
+  for (unsigned I = SubValueStart; I < SubValueStart + NumSubVals; ++I) {
+    T.concat("_" + llvm::Twine(std::to_string(I)));
+  }
+  return T.str();
 }
 
 MIRToIRTranslator::RegFileKey
