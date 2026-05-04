@@ -374,7 +374,7 @@ llvm::Value *MIRToIRTranslator::materializeFromOverlapping(
 
   // Step 5: Handle uncovered chunks and add them to the coverage map
   struct NonOverlapChunkInfo {
-    llvm::Value *Val;
+    RegFileKey KeyReg;
     unsigned ChunkStart;
     uint32_t ChunkEnd;
   };
@@ -406,41 +406,54 @@ llvm::Value *MIRToIRTranslator::materializeFromOverlapping(
       DefaultVal = Phi;
     }
     State[NonOverlappingSubKey][ValTy] = DefaultVal;
-    NonOverlapChunks.push_back({DefaultVal, RangeStart, RangeEnd});
+    NonOverlapChunks.push_back({NonOverlappingSubKey, RangeStart, RangeEnd});
   }
 
-  unsigned OptimalChunkSize =
+  unsigned OptimalNumHalves =
       std::accumulate(OverlapChunks.begin(), OverlapChunks.end(),
                       OverlapChunks[0].ChunkEnd - OverlapChunks[0].ChunkStart,
                       [](unsigned A, OverlapChunkInfo &B) {
                         return std::gcd(A, B.ChunkEnd - B.ChunkStart);
                       });
+  OptimalNumHalves =
+      std::accumulate(NonOverlapChunks.begin(), NonOverlapChunks.end(),
+                      OptimalNumHalves, [](unsigned A, NonOverlapChunkInfo &B) {
+                        return std::gcd(A, B.ChunkEnd - B.ChunkStart);
+                      });
 
   // Step 5: Construct a vector type to materialize chunks
   auto *WorkingTy = llvm::FixedVectorType::get(
-      Builder.getIntNTy(OptimalChunkSize * 16u), NumHalves / OptimalChunkSize);
+      Builder.getIntNTy(OptimalNumHalves * RegGranule),
+      NumHalves / OptimalNumHalves);
   llvm::Value *Result = llvm::PoisonValue::get(WorkingTy);
+
+  unsigned OptimalChunkSizeInBits = RegGranule * OptimalNumHalves;
+
+  auto InsertChunkFn = [&](unsigned SrcChunkStart, unsigned ChunkStart,
+                           unsigned ChunkEnd, const RegFileKey &K) {
+    unsigned NumChunks = ChunkEnd - ChunkStart;
+    for (unsigned CI = 0; CI < NumChunks; CI += OptimalNumHalves) {
+      RegFileKey SubRegKey =
+          std::make_tuple(BaseReg, ChunkStart, OptimalNumHalves);
+      unsigned SrcElIdx = (SrcChunkStart + CI) / OptimalNumHalves;
+      unsigned DestElIdx = (ChunkStart + CI) / OptimalNumHalves;
+      llvm::Value *ChunkVal = extractChunkFromSource(
+          State, K, OptimalChunkSizeInBits, SrcElIdx, 1, Builder);
+      State[SubRegKey][ChunkVal->getType()] = ChunkVal;
+      ChunkVal = Builder.CreateBitOrPointerCast(
+          ChunkVal, Builder.getIntNTy(OptimalChunkSizeInBits));
+      State[SubRegKey][ChunkVal->getType()] = ChunkVal;
+      Result = Builder.CreateInsertElement(Result, ChunkVal, DestElIdx);
+    }
+  };
 
   // Step 6: Extract and insert chunks
   for (auto &C : NonOverlapChunks) {
-    Result = Builder.CreateInsertElement(Result, C.Val,
-                                         C.ChunkStart / OptimalChunkSize);
+    InsertChunkFn(0, C.ChunkStart, C.ChunkEnd, C.KeyReg);
   }
 
   for (auto &C : OverlapChunks) {
-    uint32_t ChunkNumHalves = C.ChunkEnd - C.ChunkStart;
-    RegFileKey SubRegKey =
-        std::make_tuple(BaseReg, C.SrcChunkStart, ChunkNumHalves);
-    llvm::Value *ChunkVal =
-        extractChunkFromSource(State, C.Src->RegKey, OptimalChunkSize,
-                               C.SrcChunkStart / OptimalChunkSize,
-                               ChunkNumHalves / OptimalChunkSize, Builder);
-    State[SubRegKey][ChunkVal->getType()] = ChunkVal;
-    ChunkVal = Builder.CreateBitOrPointerCast(
-        ChunkVal, Builder.getIntNTy(ChunkNumHalves / OptimalChunkSize));
-    State[SubRegKey][ChunkVal->getType()] = ChunkVal;
-    Result = Builder.CreateInsertElement(Result, ChunkVal,
-                                         C.ChunkStart / OptimalChunkSize);
+    InsertChunkFn(C.SrcChunkStart, C.ChunkStart, C.ChunkEnd, C.Src->RegKey);
   }
 
   // Step 7: Final bitcast to requested type
@@ -488,8 +501,8 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
   /// a0). Hardware semantics: each 32-bit slot of an OOR multi-slot read
   /// returns base-reg's value; writes are dropped.
   llvm::MCRegister BaseReg = std::get<0>(Key);
-  llvm::MCRegister Offset = std::get<1>(Key);
-  llvm::MCRegister NumHalves = std::get<2>(Key);
+  unsigned Offset = std::get<1>(Key);
+  unsigned NumHalves = std::get<2>(Key);
   unsigned Allocated = RegFileSize[BaseReg];
   if (Offset + NumHalves > Allocated) {
     assert(Offset != 0 &&
@@ -497,10 +510,8 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
     Offset = 0;
   }
 
-  llvm::Type *RegIntType = Builder.getIntNTy(std::get<2>(Key) * RegGranule);
-
   if (!OutRegType)
-    OutRegType = RegIntType;
+    OutRegType = Builder.getIntNTy(std::get<2>(Key) * RegGranule);
 
   /// ---- Normal file-keyed lookup -------------------------------------
 
@@ -860,7 +871,7 @@ llvm::Error MIRToIRTranslator::initRegFileLayouts() {
 
 std::string MIRToIRTranslator::getSubValueSuffixName(unsigned SubValueStart,
                                                      unsigned NumSubVals) {
-  llvm::Twine T("sub");
+  llvm::Twine T(".sub");
   for (unsigned I = SubValueStart; I < SubValueStart + NumSubVals; ++I) {
     T.concat("_" + llvm::Twine(std::to_string(I)));
   }
