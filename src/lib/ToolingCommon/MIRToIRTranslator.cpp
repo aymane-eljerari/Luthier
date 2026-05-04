@@ -255,176 +255,181 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
   }
 }
 
-llvm::Value *MIRToIRTranslator::tryExtractFromSuperReg(
-    RegValueMap &State, const MIRToIRTranslator::RegFileKey &RegFileKey,
-    llvm::IRBuilderBase &Builder, llvm::Type *RegType) {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] tryExtractFromSuperReg\n");
+llvm::Value *MIRToIRTranslator::extractChunkFromSource(
+    ValueTypeMap &Vals, unsigned VecChunkSize, unsigned Idx, unsigned NumChunks,
+    llvm::IRBuilderBase &Builder) {
+  // Breakdown the value to the requested chunk size
+  llvm::Value *TheVec =
+      breakdownToVecTyFromAvailableValues(Vals, VecChunkSize, Builder);
 
-  llvm::MCRegister RegFileBase = std::get<0>(RegFileKey);
-  const uint32_t RegFileIdxStart = std::get<1>(RegFileKey);
-  const uint32_t RegFileNumHalves = std::get<2>(RegFileKey);
-  const uint32_t RegFileIdxEnd = +RegFileIdxStart;
-
-  for (auto &[Key, Entry] : State) {
-    if (std::get<0>(Key) != RegFileBase)
-      continue;
-    const uint32_t SlotOffset = std::get<1>(Key);
-    const uint32_t NumSlotHalves = std::get<2>(Key);
-
-    /// Skip non-super register cases
-    if (NumSlotHalves <= RegFileNumHalves)
-      continue;
-
-    if (SlotOffset > RegFileIdxStart ||
-        SlotOffset + NumSlotHalves < RegFileIdxEnd)
-      continue;
-
-    if (auto It = Entry.find(RegType); It != Entry.end())
-      return It->getSecond();
-
-    /// View the stored value as <SlotNumHalves x i16> and extract the requested
-    /// half-window.
-    llvm::Value *Vec =
-        breakdownToVecTyFromAvailableValues(Entry, /*ElemWidth=*/16u, Builder);
-    if (RegFileNumHalves == 1) {
-      llvm::Value *V =
-          Builder.CreateExtractElement(Vec, RegFileIdxStart - SlotOffset);
-      if (V->getType() != RegType)
-        V = Builder.CreateBitOrPointerCast(V, RegType);
-      return V;
-    }
-    auto *SubTy =
-        llvm::FixedVectorType::get(Builder.getInt16Ty(), RegFileNumHalves);
-    llvm::Value *SubVec = llvm::PoisonValue::get(SubTy);
-    for (uint32_t I = 0; I < RegFileNumHalves; ++I) {
-      llvm::Value *E =
-          Builder.CreateExtractElement(Vec, RegFileIdxStart - SlotOffset + I);
-      SubVec = Builder.CreateInsertElement(SubVec, E, I);
-    }
-    return Builder.CreateBitOrPointerCast(SubVec, RegType);
+  if (NumChunks == 1) {
+    return Builder.CreateExtractElement(TheVec, Idx);
   }
-  return nullptr;
+
+  // Build <NumChunks x ChunkSize> from the source
+  auto *ChunkTy =
+      llvm::FixedVectorType::get(Builder.getIntNTy(VecChunkSize), NumChunks);
+  llvm::Value *Chunk = llvm::PoisonValue::get(ChunkTy);
+  for (uint32_t I = 0; I < NumChunks; ++I) {
+    llvm::Value *E = Builder.CreateExtractElement(TheVec, Idx + I);
+    Chunk = Builder.CreateInsertElement(Chunk, E, I);
+  }
+  return Chunk;
 }
 
-llvm::Value *MIRToIRTranslator::tryComposeFromSubRegs(
-    RegValueMap &State, const RegFileKey &KeyReg, llvm::IRBuilderBase &Builder,
-    llvm::Type *RegType) {
+llvm::Value *MIRToIRTranslator::materializeFromOverlapping(
+    RegValueMap &State, const llvm::MachineBasicBlock &MBB,
+    const RegFileKey &KeyReg, llvm::IRBuilderBase &Builder,
+    llvm::Type &RegType) {
+  LLVM_DEBUG(
+      llvm::dbgs() << "[MIRToIRTranslator] materializeFromOverlapping\n");
 
   llvm::MCRegister BaseReg = std::get<0>(KeyReg);
-  const uint32_t Offset = std::get<1>(KeyReg);
+  const uint32_t WStart = std::get<1>(KeyReg);
   const uint32_t NumHalves = std::get<2>(KeyReg);
+  /// Note: End is exclusive
+  const uint32_t WEnd = WStart + NumHalves;
 
-  const uint32_t WStart = Offset;
-  const uint32_t WEnd = Offset + NumHalves;
-
-  /// Collect all strict sub-region cache entries that fall fully within
-  /// the requested range.
-  struct SubPart {
-    uint32_t Offset;
-    uint32_t NumHalves;
+  // Step 1: Collect all overlapping entries
+  struct OverlapInfo {
+    uint32_t SrcOffset;
+    uint32_t SrcNumHalves;
     ValueTypeMap *Vals;
+    uint32_t OverlapStart;
+    uint32_t OverlapEnd;
   };
-  llvm::SmallVector<SubPart, 8> Parts;
-  uint32_t Covered = 0;
+
+  llvm::SmallVector<OverlapInfo, 8> Overlaps;
   for (auto &[Key, Entry] : State) {
     if (std::get<0>(Key) != BaseReg)
       continue;
     const uint32_t SOffset = std::get<1>(Key);
-    const uint32_t SHalves = std::get<2>(Key);
-    if (SHalves >= NumHalves)
-      continue;
-    if (SOffset < WStart || SOffset + SHalves > WEnd)
-      continue;
-    Parts.push_back({SOffset, SHalves, &Entry});
-    Covered += SHalves;
-  }
-
-  /// We don't try to deduplicate overlapping sub-regs here; if any two
-  /// disagree the regular invalidation flow already handled them. Bail
-  /// out unless the union of disjoint sub-ranges equals the requested
-  /// range — easiest sufficient condition: covered halves == requested.
-  if (Covered != NumHalves)
-    return nullptr;
-
-  unsigned RegSize = NumHalves * RegGranule;
-  if (!RegType)
-    RegType = Builder.getIntNTy(RegSize);
-
-  auto *VecTy = llvm::FixedVectorType::get(Builder.getInt16Ty(), NumHalves);
-  llvm::Value *Vec = llvm::PoisonValue::get(VecTy);
-  for (const SubPart &P : Parts) {
-    llvm::Value *PartVec = breakdownToVecTyFromAvailableValues(
-        *P.Vals, /*ElemWidth=*/16u, Builder);
-    for (uint32_t I = 0; I < P.NumHalves; ++I) {
-      llvm::Value *E = Builder.CreateExtractElement(PartVec, I);
-      Vec = Builder.CreateInsertElement(Vec, E, P.Offset - WStart + I);
+    const uint32_t SEnd = SOffset + std::get<2>(Key);
+    const uint32_t OStart = std::max(SOffset, WStart);
+    const uint32_t OEnd = std::min(SEnd, WEnd);
+    if (OStart < OEnd) {
+      Overlaps.push_back({SOffset, SEnd - SOffset, &Entry, OStart, OEnd});
     }
   }
-  State[KeyReg][VecTy] = Vec;
-  return Builder.CreateBitOrPointerCast(Vec, RegType);
-}
 
-llvm::Value *MIRToIRTranslator::tryComposeFromOverlappingRegs(
-    RegValueMap &State, const llvm::MachineBasicBlock &MBB,
-    const std::tuple<llvm::MCRegister, unsigned, unsigned> &KeyReg,
-    llvm::IRBuilderBase &Builder, llvm::Type *RegType) {
-  llvm::MCRegister BaseReg = std::get<0>(KeyReg);
-  const uint32_t Offset = std::get<1>(KeyReg);
-  const uint32_t NumHalves = std::get<2>(KeyReg);
-
-  const uint32_t WStart = Offset;
-  const uint32_t WEnd = Offset + NumHalves;
-
-  /// Look for any 16-bit subregs that are already materialized in the
-  /// current basic block; If so, opt to compose the value by materializing
-  /// the final value from 16-bit subreg values; Otherwise, just return nullptr
-  /// and ask for the previous basic block/freeze(poison)
-  llvm::SmallDenseMap<unsigned, llvm::Value *> SVs{};
-
-  for (unsigned I = WStart; I < WEnd; ++I) {
-    auto SubKey = std::make_tuple(BaseReg, I, 1);
-    llvm::Value *SubVal{nullptr};
-    if (auto It = State.find(SubKey); It != State.end()) {
-      SubVal = getOrCreateIntOrPtrTypeForReg(It->second, Builder);
-      SVs[I] = SubVal;
+  // Step 2: Handle no overlaps case
+  if (Overlaps.empty()) {
+    if (!MBB.pred_empty()) {
+      // Create PHI for entire register
+      llvm::PHINode *Phi = Builder.CreatePHI(&RegType, MBB.pred_size());
+      ToBeFixedPhis.emplace_back(&MBB, KeyReg, Phi);
+      State[KeyReg][&RegType] = Phi;
+      return Phi;
     } else {
-      SubVal =
-          tryExtractFromSuperReg(State, SubKey, Builder, Builder.getInt16Ty());
-      if (SubVal) {
-        SVs[I] = SubVal;
-      }
+      // Entry block - freeze(poison)
+      llvm::Value *InitVal =
+          Builder.CreateFreeze(llvm::PoisonValue::get(&RegType));
+      State[KeyReg][&RegType] = InitVal;
+      return InitVal;
     }
   }
 
-  if (!SVs.empty()) {
-    auto *VecTy = llvm::FixedVectorType::get(Builder.getInt16Ty(), NumHalves);
-    llvm::Value *Vec = llvm::PoisonValue::get(VecTy);
-    for (unsigned I = WStart; I < WEnd; ++I) {
-      llvm::Value *SubVal{nullptr};
-      auto SubKey = std::make_tuple(BaseReg, I, 1);
-      if (auto It = SVs.find(I); It != SVs.end())
-        SubVal = It->second;
-      else {
-        if (!MBB.pred_empty()) {
-          llvm::PHINode *PhiNode =
-              Builder.CreatePHI(Builder.getInt16Ty(), MBB.pred_size());
-          ToBeFixedPhis.emplace_back(&MBB, SubKey, PhiNode);
-          SubVal = PhiNode;
-        } else {
-          SubVal = Builder.CreateFreeze(
-              llvm::PoisonValue::get(Builder.getInt16Ty()));
-        }
+  // Step 3: Sort overlaps by the size of overlap with the target register
+  llvm::sort(Overlaps, [](const OverlapInfo &A, const OverlapInfo &B) {
+    return (A.OverlapEnd - A.OverlapStart) > (B.OverlapEnd - B.OverlapStart);
+  });
+
+  // Step 4: Build coverage map and identify overlapping chunks
+  llvm::BitVector Covered(WEnd - WStart, false);
+
+  struct OverlapChunkInfo {
+    OverlapInfo *Src;
+    uint32_t SrcChunkStart; // Position in source (in halves)
+    uint32_t ChunkStart; // Position in result (in halves, relative to WStart)
+    uint32_t ChunkEnd;   // End position in result (exclusive)
+  };
+  llvm::SmallVector<OverlapChunkInfo, 8> OverlapChunks;
+
+  for (OverlapInfo &Overlap : Overlaps) {
+    for (uint32_t H = Overlap.OverlapStart; H < Overlap.OverlapEnd;) {
+      if (Covered[H - WStart]) {
+        H++;
+        continue;
       }
-      SubVal->setName(SubVal->getName() + llvm::formatv("_sub{0}_", I).str());
-      State[SubKey][Builder.getInt16Ty()] = SubVal;
-      Vec = Builder.CreateInsertElement(Vec, SubVal, I - WStart);
+      uint32_t ChunkStart = H;
+      while (H < Overlap.OverlapEnd && !Covered[H - WStart]) {
+        Covered[H - WStart] = true;
+        H++;
+      }
+      uint32_t ChunkEnd = H;
+      OverlapChunks.push_back({&Overlap, ChunkStart - Overlap.SrcOffset,
+                               ChunkStart - WStart, ChunkEnd - WStart});
     }
-    unsigned RegSize = NumHalves * 16u;
-    if (!RegType)
-      RegType = Builder.getIntNTy(RegSize);
-    return Builder.CreateBitOrPointerCast(Vec, RegType);
   }
-  return nullptr;
+
+  // Step 5: Handle uncovered chunks and add them to the coverage map
+  struct NonOverlapChunkInfo {
+    llvm::Value *Val;
+    unsigned ChunkStart;
+    uint32_t ChunkEnd;
+  };
+  llvm::SmallVector<NonOverlapChunkInfo, 8> NonOverlapChunks;
+
+  for (uint32_t H = WStart; H < WEnd;) {
+    if (Covered[H - WStart]) {
+      H++;
+      continue;
+    }
+    uint32_t RangeStart = H;
+    while (H < WEnd && !Covered[H - WStart]) {
+      H++;
+    }
+    uint32_t RangeEnd = H;
+    uint32_t RangeNumHalves = RangeEnd - RangeStart;
+
+    llvm::Type *ValTy = Builder.getIntNTy(RangeNumHalves * 16u);
+    llvm::Value *DefaultVal = nullptr;
+    RegFileKey NonOverlappingSubKey =
+        std::make_tuple(BaseReg, RangeStart, RangeNumHalves);
+    if (MBB.pred_empty()) {
+      // Entry block - freeze(poison) for the missing value
+      DefaultVal = Builder.CreateFreeze(llvm::PoisonValue::get(ValTy));
+    } else {
+      // Has predecessors - create PHI for the missing value
+      llvm::PHINode *Phi = Builder.CreatePHI(ValTy, MBB.pred_size());
+      ToBeFixedPhis.emplace_back(&MBB, NonOverlappingSubKey, Phi);
+      DefaultVal = Phi;
+    }
+    State[NonOverlappingSubKey][ValTy] = DefaultVal;
+    NonOverlapChunks.push_back({DefaultVal, RangeStart, RangeEnd});
+  }
+
+  unsigned OptimalChunkSize =
+      std::accumulate(OverlapChunks.begin(), OverlapChunks.end(),
+                      OverlapChunks[0].ChunkEnd - OverlapChunks[0].ChunkStart,
+                      [](unsigned A, OverlapChunkInfo &B) {
+                        return std::gcd(A, B.ChunkEnd - B.ChunkStart);
+                      });
+
+  // Step 5: Construct a vector type to materialize chunks
+  auto *WorkingTy = llvm::FixedVectorType::get(
+      Builder.getIntNTy(OptimalChunkSize * 16u), NumHalves / OptimalChunkSize);
+  llvm::Value *Result = llvm::PoisonValue::get(WorkingTy);
+
+  // Step 6: Extract and insert chunks
+  for (auto &C : NonOverlapChunks) {
+    Result = Builder.CreateInsertElement(Result, C.Val,
+                                         C.ChunkStart / OptimalChunkSize);
+  }
+
+  for (auto &C : OverlapChunks) {
+    uint32_t ChunkNumHalves = C.ChunkEnd - C.ChunkStart;
+    llvm::Value *ChunkVal = extractChunkFromSource(
+        *C.Src->Vals, OptimalChunkSize, C.SrcChunkStart / OptimalChunkSize,
+        ChunkNumHalves / OptimalChunkSize, Builder);
+    ChunkVal = Builder.CreateBitOrPointerCast(
+        ChunkVal, Builder.getIntNTy(ChunkNumHalves / OptimalChunkSize));
+    Result = Builder.CreateInsertElement(Result, ChunkVal,
+                                         C.ChunkStart / OptimalChunkSize);
+  }
+
+  // Step 7: Final bitcast to requested type
+  return Builder.CreateBitOrPointerCast(Result, &RegType);
 }
 
 llvm::Value &
@@ -484,7 +489,7 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
 
   /// ---- Normal file-keyed lookup -------------------------------------
 
-  // 1. Exact match.
+  // Exact match.
   if (auto It = State.find(Key); It != State.end()) {
     auto &VTM = It->second;
     if (auto V = VTM.find(OutRegType); V != VTM.end())
@@ -495,38 +500,12 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
     return *Out;
   }
 
-  // 2. Extract from a stored super-register.
-  if (llvm::Value *V =
-          tryExtractFromSuperReg(State, Key, Builder, OutRegType)) {
-    State[Key][OutRegType] = V;
-    return *V;
-  }
-
-  // 3. Compose from stored sub-registers.
-  if (llvm::Value *V = tryComposeFromSubRegs(State, Key, Builder, OutRegType)) {
-    State[Key][OutRegType] = V;
-    return *V;
-  }
-
-  // 4. Try composing from overlapping registers already materialized in the
-  // current file
-  if (llvm::Value *V =
-          tryComposeFromOverlappingRegs(State, MBB, Key, Builder, OutRegType)) {
-    State[Key][OutRegType] = V;
-    return *V;
-  }
-
-  // 5. Predecessor PHI / poison fallback.
-  if (MBB.pred_empty()) {
-    llvm::Value *InitVal =
-        Builder.CreateFreeze(llvm::PoisonValue::get(OutRegType));
-    State[Key][OutRegType] = InitVal;
-    return *InitVal;
-  }
-  llvm::PHINode *Phi = Builder.CreatePHI(OutRegType, MBB.pred_size());
-  ToBeFixedPhis.emplace_back(&MBB, Key, Phi);
-  State[Key][OutRegType] = Phi;
-  return *Phi;
+  // Materialize from overlapping registers (handles super-reg extraction,
+  // sub-reg composition, and overlapping register cases)
+  llvm::Value *V =
+      materializeFromOverlapping(State, MBB, Key, Builder, *OutRegType);
+  State[Key][OutRegType] = V;
+  return *V;
 }
 
 /// Build the i32 MODE register value that mirrors the kernel-entry state

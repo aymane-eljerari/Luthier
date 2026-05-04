@@ -396,44 +396,30 @@ class MIRToIRTranslator {
                                  llvm::IRBuilderBase &Builder,
                                  llvm::Type *OutRegType = nullptr);
 
-  /// Searchs a basic block's register \p State for a super register of the
-  /// register identified by \p RegFileKey; If found, bitcast to vector and
-  /// extractelement the register's value from its super register using the
-  /// \p Builder. Returns \c nullptr if no super register value was found in
-  /// \p State
-  /// If \p OutValueType is given, appropriately converts the returned
-  /// value to match the <tt>OutValueType</tt>; Otherwise, the returned type
-  /// will have an integer type.
-  /// Primarily used by \c getOperandAsValue
-  /// \note This function does not update the <tt>State</tt> map
-  llvm::Value *tryExtractFromSuperReg(RegValueMap &State,
-                                      const RegFileKey &RegFileKey,
-                                      llvm::IRBuilderBase &Builder,
-                                      llvm::Type *RegType);
+  /// Materializes the value identified by \p KeyReg by looking at all
+  /// overlapping entries in \p State and optimally composing the value from
+  /// available defined registers. If a sub-value is not defined, emits a PHI
+  /// \p MBB has predecessors otherwise emits a \c freeze(poison) instruction
+  /// in its place
+  llvm::Value *materializeFromOverlapping(RegValueMap &State,
+                                          const llvm::MachineBasicBlock &MBB,
+                                          const RegFileKey &KeyReg,
+                                          llvm::IRBuilderBase &Builder,
+                                          llvm::Type &RegType);
 
-  /// Same as \c tryExtractFromSuperReg except it tries to compose the
-  /// value associated with the \p Key by composing it from the sub-registers
-  /// already in the \p State
-  /// \note If at any time during the process, this function has to resort to
-  /// materializing new values by breaking down a register, it will update
-  /// the \p State to cache them
-  /// \see tryExtractFromSuperReg
-  llvm::Value *tryComposeFromSubRegs(RegValueMap &State, const RegFileKey &Key,
-                                     llvm::IRBuilderBase &Builder,
-                                     llvm::Type *RegType = nullptr);
-
-  /// Same as \c tryComposeFromSubRegs except it breaks down \p KeyReg into
-  /// individual 16-bit element and materializes each using the
-  /// \c tryExtractFromSuperReg function. If a value is not found for any
-  /// of the sub registers, it either emits a PHI node to query them from
-  /// the predecessors at the end of the translation, or emits a
-  /// \c freeze(poison) value if the current block doesn't have any predecessors
-  /// \note Unlike \c tryComposeFromSubRegs and \c tryExtractFromSuperReg this
-  /// function will always return a value
-  llvm::Value *tryComposeFromOverlappingRegs(
-      RegValueMap &State, const llvm::MachineBasicBlock &MBB,
-      const std::tuple<llvm::MCRegister, unsigned, unsigned> &KeyReg,
-      llvm::IRBuilderBase &Builder, llvm::Type *RegType = nullptr);
+  /// Helper: Extract a chunk from a source entry's ValueTypeMap
+  /// \param Vals the type to value map to materialize the value from
+  /// \param VecChunkSize the size of scalar type to break the initial value
+  /// to
+  /// \param Idx Index to extract the final element from the value
+  /// \param NumChunks Number of elements to extract from the value
+  /// \param Builder the \c llvm::IRBuilderBase to use to emit any intermediate
+  /// instructions for materializing the value
+  /// \return the extracted value, as a scalar (the chunks will be merged
+  /// together and bitcasted to a scalar value)
+  llvm::Value *extractChunkFromSource(ValueTypeMap &Vals, unsigned VecChunkSize,
+                                      unsigned Idx, unsigned NumChunks,
+                                      llvm::IRBuilderBase &Builder);
 
   /// Retrieves the register associated with the named destination operand
   /// \p OpName in \p MI and sets its associated value in the register value
