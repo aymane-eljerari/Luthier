@@ -294,19 +294,6 @@ llvm::Value *MIRToIRTranslator::extractChunkFromSource(
   llvm::Value *TheVec =
       breakdownToVecTyFromAvailableValues(RegValueMap, VecChunkSize, Builder);
 
-  // TODO: Check if this is still needed
-  // If TheVec is already an instruction in the current block (e.g., a cached
-  // bitcast from a prior fixupPhis iteration that became the first non-PHI),
-  // the builder's insert point may be AT TheVec rather than after it.  Advance
-  // the insert point past TheVec so that extractelement instructions are
-  // emitted after the value they depend on.
-  if (auto *TheVecI = llvm::dyn_cast<llvm::Instruction>(TheVec)) {
-    if (Builder.GetInsertBlock() == TheVecI->getParent()) {
-      Builder.SetInsertPoint(TheVecI->getParent(),
-                             std::next(TheVecI->getIterator()));
-    }
-  }
-
   if (NumChunks == 1) {
     llvm::Value *Val = Builder.CreateExtractElement(TheVec, Idx);
     return Val;
