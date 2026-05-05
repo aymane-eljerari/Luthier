@@ -233,8 +233,8 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
     }
 
     /// Written ⊂ Stored: partial overwrite of a super-register. Preserve
-    /// the non-overlapping halves as i16 sub-entries so a later read can
-    /// re-compose.
+    /// the non-overlapping regions as the largest uniform chunk size that
+    /// divides both regions, so a later read can re-compose.
     if (SStart <= WStart && SEnd >= WEnd) {
       LLVM_DEBUG(llvm::dbgs()
                  << "  Partial overwrite (written ⊂ stored), preserving "
@@ -242,17 +242,33 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
                  << TRI.getName(std::get<0>(StoredKey)) << " offset=" << SStart
                  << " halves=" << SNumHalves << "\n");
 
-      llvm::Value *Vec = breakdownToVecTyFromAvailableValues(
-          Entry, /*ElemWidth=*/16u, Builder);
-      auto preserveHalf = [&](uint32_t H) {
-        LLVM_DEBUG(llvm::dbgs() << "  Preserving half at offset " << H << "\n");
-        llvm::Value *Elem = Builder.CreateExtractElement(Vec, H - SStart);
-        ToPreserve.push_back({H, /*NumHalves=*/1u, Elem});
+      // Compute optimal chunk size as GCD of the two preserved region sizes,
+      // the same approach used in \c materializeFromOverlapping
+      const uint32_t LeftSize = WStart - SStart; // may be 0
+      const uint32_t RightSize = SEnd - WEnd;    // may be 0
+      uint32_t OptHalves = LeftSize ? LeftSize : RightSize;
+      if (LeftSize && RightSize)
+        OptHalves = std::gcd(LeftSize, RightSize);
+
+      const unsigned ElemWidth = OptHalves * RegGranule;
+      llvm::Value *Vec =
+          breakdownToVecTyFromAvailableValues(Entry, ElemWidth, Builder);
+
+      auto preserveRegion = [&](uint32_t RegionStart, uint32_t RegionEnd) {
+        const uint32_t NumChunks = (RegionEnd - RegionStart) / OptHalves;
+        for (uint32_t CI = 0; CI < NumChunks; ++CI) {
+          uint32_t AbsOffset = RegionStart + CI * OptHalves;
+          uint32_t SrcIdx = (AbsOffset - SStart) / OptHalves;
+          LLVM_DEBUG(llvm::dbgs() << "  Preserving " << OptHalves
+                                  << " halves at offset " << AbsOffset << "\n");
+          llvm::Value *Elem = Builder.CreateExtractElement(Vec, SrcIdx);
+          ToPreserve.push_back({AbsOffset, OptHalves, Elem});
+        }
       };
-      for (uint32_t H = SStart; H < WStart; ++H)
-        preserveHalf(H);
-      for (uint32_t H = WEnd; H < SEnd; ++H)
-        preserveHalf(H);
+      if (LeftSize)
+        preserveRegion(SStart, WStart);
+      if (RightSize)
+        preserveRegion(WEnd, SEnd);
       ToErase.push_back(StoredKey);
       continue;
     }
