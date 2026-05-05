@@ -187,11 +187,11 @@ static llvm::Value *breakdownToVecTyFromAvailableValues(
 }
 
 void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
-                                           const RegFileKey &RegKey,
+                                           const RegFileKey &WrittenRegKey,
                                            llvm::IRBuilderBase &Builder) {
-  llvm::MCRegister BaseReg = std::get<0>(RegKey);
-  const unsigned WStart = std::get<1>(RegKey);
-  const unsigned WNumHalves = std::get<2>(RegKey);
+  llvm::MCRegister BaseReg = std::get<0>(WrittenRegKey);
+  const unsigned WStart = std::get<1>(WrittenRegKey);
+  const unsigned WNumHalves = std::get<2>(WrittenRegKey);
   const unsigned WEnd = WStart + WNumHalves;
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] invalidateOverlaps: "
                           << " @ file=" << TRI.getName(BaseReg) << " offset="
@@ -205,48 +205,48 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
   llvm::SmallVector<RegFileKey, 8> ToErase;
   llvm::SmallVector<Preserve, 4> ToPreserve;
 
-  for (auto &[Key, Entry] : State) {
-    if (std::get<0>(Key) != BaseReg)
+  for (auto &[StoredKey, Entry] : State) {
+    if (std::get<0>(StoredKey) != BaseReg)
       continue;
-    const uint32_t SOffset = std::get<1>(Key);
-    const uint32_t SHalves = std::get<2>(Key);
-    const uint32_t SEnd = SOffset + SHalves;
+    const uint32_t SStart = std::get<1>(StoredKey);
+    const uint32_t SNumHalves = std::get<2>(StoredKey);
+    const uint32_t SEnd = SStart + SNumHalves;
 
     /// No overlap.
-    if (SEnd <= WStart || SOffset >= WEnd)
+    if (SEnd <= WStart || SStart >= WEnd)
       continue;
 
     /// Skip the exact slot we're about to write — \c setRegOperandValue
     /// will overwrite it.
-    if (SOffset == WStart && SHalves == WNumHalves)
+    if (SStart == WStart && SNumHalves == WNumHalves)
       continue;
 
     /// Stored ⊂ Written: fully covered, drop it.
-    if (SOffset >= WStart && SEnd <= WEnd) {
-      ToErase.push_back(Key);
+    if (SStart >= WStart && SEnd <= WEnd) {
+      ToErase.push_back(StoredKey);
       continue;
     }
 
     /// Written ⊂ Stored: partial overwrite of a super-register. Preserve
     /// the non-overlapping halves as i16 sub-entries so a later read can
     /// re-compose.
-    if (SOffset <= WStart && SEnd >= WEnd) {
+    if (SStart <= WStart && SEnd >= WEnd) {
       llvm::Value *Vec = breakdownToVecTyFromAvailableValues(
           Entry, /*ElemWidth=*/16u, Builder);
       auto preserveHalf = [&](uint32_t H) {
-        llvm::Value *Elem = Builder.CreateExtractElement(Vec, H - SOffset);
+        llvm::Value *Elem = Builder.CreateExtractElement(Vec, H - SStart);
         ToPreserve.push_back({H, /*NumHalves=*/1u, Elem});
       };
-      for (uint32_t H = SOffset; H < WStart; ++H)
+      for (uint32_t H = SStart; H < WStart; ++H)
         preserveHalf(H);
       for (uint32_t H = WEnd; H < SEnd; ++H)
         preserveHalf(H);
-      ToErase.push_back(Key);
+      ToErase.push_back(StoredKey);
       continue;
     }
-    LLVM_DEBUG(llvm::dbgs() << "  partial-overlap erase at offset " << SOffset
-                            << " halves " << SHalves << "\n");
-    ToErase.push_back(Key);
+    LLVM_DEBUG(llvm::dbgs() << "  partial-overlap erase at offset " << SStart
+                            << " halves " << SNumHalves << "\n");
+    ToErase.push_back(StoredKey);
   }
 
   for (auto &K : ToErase)
@@ -875,7 +875,7 @@ std::string MIRToIRTranslator::getSubValueSuffixName(unsigned SubValueStart,
   for (unsigned I = SubValueStart; I < SubValueStart + NumSubVals; ++I) {
     T.concat("_" + llvm::Twine(std::to_string(I)));
   }
-  return T.str();
+  return T.concat(".").str();
 }
 
 MIRToIRTranslator::RegFileKey
@@ -1076,12 +1076,16 @@ llvm::FunctionType *MIRToIRTranslator::getStandardDeviceFunctionType() const {
   if (F.getCallingConv() != llvm::CallingConv::AMDGPU_KERNEL)
     return F.getFunctionType();
   llvm::LLVMContext &Ctx = F.getContext();
-  llvm::SmallVector<llvm::Type *, 8> Fields;
-  Fields.reserve(FunctionCallArgOrder.size());
-  auto *I32 = llvm::Type::getInt32Ty(Ctx);
+  std::vector<llvm::Type *> Fields;
+  unsigned TotalNumArgs = 0;
   for (llvm::MCRegister RegFileBase : FunctionCallArgOrder) {
-    Fields.push_back(
-        llvm::FixedVectorType::get(I32, RegFileSize.at(RegFileBase) / 2));
+    TotalNumArgs += RegFileSize.at(RegFileBase) / 2;
+  }
+
+  Fields.reserve(TotalNumArgs);
+  auto *I32 = llvm::Type::getInt32Ty(Ctx);
+  for (unsigned I = 0; I < TotalNumArgs; ++I) {
+    Fields.push_back(I32);
   }
 
   return llvm::FunctionType::get(llvm::Type::getVoidTy(Ctx), Fields,
@@ -1091,25 +1095,19 @@ llvm::FunctionType *MIRToIRTranslator::getStandardDeviceFunctionType() const {
 void MIRToIRTranslator::initDeviceFunctionEntryRegs(
     llvm::IRBuilderBase &Builder) {
   llvm::Function &F = const_cast<llvm::Function &>(MF.getFunction());
-  assert(F.arg_size() == FunctionCallArgOrder.size() &&
-         "device function does not match the standard prototype");
 
   const llvm::MachineBasicBlock &EntryMBB = MF.front();
   RegValueMap &State = VM[EntryMBB];
 
-  /// store register file entries
-  auto storeRegisterFile = [&](llvm::MCRegister BaseReg, llvm::Value *Arg) {
-    unsigned NumLanes32 = RegFileSize[BaseReg] / 2u;
-    auto *VecTy = llvm::FixedVectorType::get(Builder.getInt32Ty(), NumLanes32);
-    llvm::Value *V = Arg;
-    if (V->getType() != VecTy)
-      V = Builder.CreateBitOrPointerCast(V, VecTy,
-                                         getRegfileValueName(BaseReg));
-    State[std::make_tuple(BaseReg, 0, RegFileSize[BaseReg])][VecTy] = V;
-  };
-
-  for (auto [Idx, RegFileBase] : llvm::enumerate(FunctionCallArgOrder)) {
-    storeRegisterFile(RegFileBase, F.getArg(Idx));
+  unsigned CurrentArgPos = 0;
+  llvm::Type *I32 = Builder.getInt32Ty();
+  for (llvm::MCRegister RegFileBase : FunctionCallArgOrder) {
+    /// store register file entries
+    unsigned NumLanes32 = RegFileSize[RegFileBase] / 2u;
+    for (unsigned I = CurrentArgPos; I < CurrentArgPos + NumLanes32; ++I) {
+      State[std::make_tuple(RegFileBase, I, 2)][I32] = F.getArg(I);
+    }
+    CurrentArgPos += NumLanes32;
   }
 }
 
@@ -1119,17 +1117,34 @@ void MIRToIRTranslator::emitIndirectTailCall(const llvm::MachineInstr &MI,
   assert(MBB && "MI has no parent MBB");
   auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
 
-  llvm::FunctionType *FTy = getStandardDeviceFunctionType();
-  llvm::SmallVector<llvm::Value *, 8> CallArgs(FunctionCallArgOrder.size(),
-                                               nullptr);
-
-  for (auto [Idx, RegFileBase] : llvm::enumerate(FunctionCallArgOrder)) {
-    CallArgs[Idx] = getRegisterFile(MI, RegFileBase);
-  }
-
   llvm::IRBuilder Builder{BB};
   llvm::Value *FuncPtr = Builder.CreateBitOrPointerCast(
       Target, Builder.getPtrTy(llvm::AMDGPUAS::GLOBAL_ADDRESS));
+
+  llvm::FunctionType *FTy = getStandardDeviceFunctionType();
+  std::vector<llvm::Value *> CallArgs;
+  CallArgs.reserve(FTy->getNumParams());
+
+  unsigned CurrentParamIdx = 0;
+  for (llvm::MCRegister RegFileBase : FunctionCallArgOrder) {
+    unsigned NumLanes32 = RegFileSize[RegFileBase] / 2;
+    std::string ValueName = getRegValueName(RegFileBase);
+    for (unsigned PI = CurrentParamIdx; PI < CurrentParamIdx + NumLanes32;
+         ++PI) {
+      llvm::InstSimplifyFolder CF{MF.getDataLayout()};
+      llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
+        LLVM_DEBUG(llvm::dbgs()
+                   << "[MIRToIRTranslator] Inserting reg read instruction "
+                   << *I << "\n");
+        I->setName(ValueName + ".sub" + std::to_string(PI) + ".");
+      });
+      llvm::IRBuilderBase RegBuilder(BB->getContext(), CF, Inserter, {}, {});
+      CallArgs.push_back(&getOperandAsValue(
+          *MBB, std::make_tuple(RegFileBase, PI, 2), RegBuilder));
+    }
+    CurrentParamIdx += NumLanes32;
+  }
+
   llvm::CallInst *Call = Builder.CreateCall(FTy, FuncPtr, CallArgs);
   Call->setTailCallKind(llvm::CallInst::TCK_Tail);
 
@@ -1311,11 +1326,7 @@ void MIRToIRTranslator::fixupPhis() {
     ToBeFixedPhis.erase(It);
   }
 
-  /// File-level PHIs no longer exist as a separate fixup pass — the
-  /// mega-entry in \c RegCache is materialized on demand and the per-reg
-  /// PHI fixup above naturally resolves any sub-register reads against
-  /// it via \c tryExtractFromSuperReg.
-
+  /// Remove single edge
   for (llvm::PHINode *P : SingleValuePhis) {
     llvm::Value *V = P->getIncomingValue(0);
     P->replaceAllUsesWith(V);

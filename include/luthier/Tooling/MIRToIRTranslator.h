@@ -461,7 +461,7 @@ class MIRToIRTranslator {
   ///    preserve them as new sub-register entries.
   ///  - Stored = Reg (exact match): skip, since the \c setRegOperandValue
   ///  is going to overwrite the entry anyway
-  void invalidateOverlaps(RegValueMap &State, const RegFileKey &RegKey,
+  void invalidateOverlaps(RegValueMap &State, const RegFileKey &WrittenRegKey,
                           llvm::IRBuilderBase &Builder);
 
   /// Goes over the unresolved PHIs generated when materializing values during
