@@ -407,7 +407,7 @@ class MIRToIRTranslator {
   /// in its place
   llvm::Value *materializeFromOverlapping(RegValueMap &State,
                                           const llvm::MachineBasicBlock &MBB,
-                                          const RegFileKey &KeyReg,
+                                          const RegFileKey &ReadKeyReg,
                                           llvm::IRBuilderBase &Builder,
                                           llvm::Type &RegType);
 

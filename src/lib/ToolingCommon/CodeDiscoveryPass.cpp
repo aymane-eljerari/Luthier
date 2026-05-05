@@ -1390,20 +1390,51 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
           LLVM_DEBUG(
               llvm::dbgs()
               << "[CodeDiscoveryPass] Call instruction target not recovered\n");
-          TargetModule.addModuleFlag(llvm::Module::Warning,
-                                     "luthier.cg.not_recovered", false);
+          if (!TargetModule.getModuleFlag("luthier.cg.not_recovered"))
+            TargetModule.addModuleFlag(llvm::Module::Warning,
+                                       "luthier.cg.not_recovered", false);
         }
       } else if (TraceTermMI->isIndirectBranch()) {
         LLVM_DEBUG(
             llvm::dbgs()
             << "[CodeDiscoveryPass] Indirect branch target not recovered\n");
-        TargetModule.addModuleFlag(llvm::Module::Warning,
-                                   "luthier.cg.not_recovered", false);
+        if (!TargetModule.getModuleFlag("luthier.cg.not_recovered"))
+          TargetModule.addModuleFlag(llvm::Module::Warning,
+                                     "luthier.cg.not_recovered", false);
       }
     }
 
     UnvisitedPointsOfEntry.erase(CurrentEntryPoint);
     VisitedPointsOfEntry.insert(CurrentEntryPoint);
+  }
+
+  // Rewrite inttoptr(ConstantInt) call targets to direct Function* references
+  // so that LazyCallGraph can detect call edges between recovered functions.
+  {
+    llvm::DenseMap<uint64_t, llvm::Function *> AddrToFunc;
+    for (llvm::Function &F : TargetModule) {
+      auto EP = getFunctionEntryPoint(F);
+      if (!EP || F.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL)
+        continue;
+      AddrToFunc[EP->getRawAddress()] = &F;
+    }
+    for (llvm::Function &F : TargetModule) {
+      for (llvm::Instruction &I : llvm::instructions(F)) {
+        auto *CI = llvm::dyn_cast<llvm::CallInst>(&I);
+        if (!CI || CI->getCalledFunction())
+          continue;
+        auto *CE = llvm::dyn_cast<llvm::ConstantExpr>(CI->getCalledOperand());
+        if (!CE || CE->getOpcode() != llvm::Instruction::IntToPtr)
+          continue;
+        auto *AddrCI = llvm::dyn_cast<llvm::ConstantInt>(CE->getOperand(0));
+        if (!AddrCI)
+          continue;
+        auto It = AddrToFunc.find(AddrCI->getZExtValue());
+        if (It == AddrToFunc.end())
+          continue;
+        CI->setCalledOperand(It->second);
+      }
+    }
   }
 
   llvm::PreservedAnalyses PA = llvm::PreservedAnalyses::none();
