@@ -1,5 +1,5 @@
 //===-- IPPredicatedCFG.cpp -----------------------------------------------===//
-// Copyright 2022-2025 @ Northeastern University Computer Architecture Lab
+// Copyright 2022-2026 @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,128 +24,131 @@
 #include "luthier/Tooling/EntryPoint.h"
 #include "luthier/Tooling/FunctionAnnotations.h"
 #include "luthier/Tooling/InitialEntryPointAnalysis.h"
-#include "luthier/Tooling/PredicatedMachineFunction.h"
-#include "luthier/Tooling/TargetMachineInstrMDNode.h"
-#include <SIInstrInfo.h>
-#include <SIMachineFunctionInfo.h>
-#include <llvm/ADT/DenseSet.h>
-#include <llvm/CodeGen/LivePhysRegs.h>
+#include "luthier/Tooling/LuthierCallGraph.h"
+#include "luthier/Tooling/MIRConvenience.h"
+#include "luthier/Tooling/PredicatedMachineBasicBlock.h"
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/CodeGen/MachineFunction.h>
 #include <llvm/CodeGen/MachineFunctionAnalysis.h>
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Module.h>
 #include <llvm/Support/FormatVariadic.h>
 
 namespace luthier {
 
 void IPPredicatedCFG::print(llvm::raw_ostream &OS) const {
-  for (const auto &PredMF : *this) {
-    PredMF.print(OS);
-  }
+  for (const auto &PredMBB : *this)
+    PredMBB.print(OS, 0);
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-void IPPredicatedCFG::dump() const { return print(llvm::dbgs()); }
+void IPPredicatedCFG::dump() const { print(llvm::dbgs()); }
 #endif
 
 PredicatedMachineBasicBlock &
 IPPredicatedCFG::getPredMBB(const llvm::MachineInstr &MI) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI doesn't have a parent MBB");
-  const llvm::MachineFunction *MF = MBB->getParent();
-  assert(MF && "MI doesn't have a parent MF");
-  assert(contains(*MF) && "Queried an MF that's not in the IP Predicated CFG");
-  PredicatedMachineFunction &PredMF = this->operator[](*MF);
-  LinearMachineBasicBlock &PredMBB = PredMF.getScalarMBB(*MBB);
-  auto It = llvm::find_if(PredMBB, [&](const PredicatedMachineBasicBlock &P) {
-    return P.contains(MI);
-  });
-  assert(It != PredMBB.end() && "Failed to find the instruction's PredMBB even "
-                                "though its MBB and LinearMBB were found");
-  return *It;
+  auto It = MBBToPredMBB.find(*MBB);
+  assert(It != MBBToPredMBB.end() &&
+         "MBB not found in IPPredicatedCFG; was it built from this module?");
+  return It->second->getPredMBB();
 }
 
 llvm::Expected<std::unique_ptr<IPPredicatedCFG>>
 IPPredicatedCFG::getIPPredCFG(llvm::Module &M,
                               llvm::ModuleAnalysisManager &MAM) {
-
   llvm::FunctionAnalysisManager &FAM =
       MAM.getResult<llvm::FunctionAnalysisManagerModuleProxy>(M).getManager();
 
   auto Out = std::unique_ptr<IPPredicatedCFG>(new IPPredicatedCFG());
 
-  llvm::MachineFunction *EntryMF{nullptr};
+  // Reverse map from IR BasicBlock → MachineBasicBlock, used to look up
+  // which MBB owns a CallInst that appears in the LuthierCallGraph.
+  llvm::DenseMap<const llvm::BasicBlock *, llvm::MachineBasicBlock *> IRBBToMBB;
 
-  Out->PredMFs.reserve(M.size());
-  /// Populate the CFG
+  llvm::Function *EntryFunc = nullptr;
+
+  // ── Phase 1: create one PredMBBBuilder per MBB ──────────────────────────
   for (llvm::Function &F : M) {
     llvm::MachineFunction &MF =
         FAM.getResult<llvm::MachineFunctionAnalysis>(F).getMF();
-    if (F.hasFnAttribute(EntryPointAddrAttr)) {
-      if (EntryMF) {
-        return LUTHIER_MAKE_GENERIC_ERROR(
-            llvm::formatv("Functions {0} and {1} are both "
-                          "designated as initial entry points",
-                          F.getName(), EntryMF->getName()));
-      }
-      EntryMF = &MF;
+
+    if (F.hasFnAttribute(InitialEntryPointAttr)) {
+      if (EntryFunc)
+        return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+            "Functions {0} and {1} are both designated as initial entry points",
+            F.getName(), EntryFunc->getName()));
+      EntryFunc = &F;
     }
-    auto &PredMF =
-        *Out->PredMFs.emplace_back(PredMFBuilder::createPredMF(*Out, MF));
-    Out->MFToPredMF.insert({std::ref(MF), std::ref(PredMF)});
+
+    PredMBBBuilder *FirstBuilder = nullptr;
+    for (llvm::MachineBasicBlock &MBB : MF) {
+      auto &Builder = *Out->AllPredMBBs.emplace_back(
+          std::make_unique<PredMBBBuilder>(MBB, *Out, 0));
+      Out->MBBToPredMBB[MBB] = &Builder;
+      if (!FirstBuilder)
+        FirstBuilder = &Builder;
+      if (const llvm::BasicBlock *BB = MBB.getBasicBlock())
+        IRBBToMBB[BB] = &MBB;
+    }
+    if (FirstBuilder)
+      Out->MFToEntryPredMBB[&MF] = FirstBuilder;
   }
 
-  if (!EntryMF) {
+  if (!EntryFunc)
     return LUTHIER_MAKE_GENERIC_ERROR("Failed to find an entry function.");
+
+  {
+    llvm::MachineFunction &EntryMF =
+        FAM.getResult<llvm::MachineFunctionAnalysis>(*EntryFunc).getMF();
+    auto It = Out->MFToEntryPredMBB.find(&EntryMF);
+    assert(It != Out->MFToEntryPredMBB.end() && "Entry MF has no MBBs");
+    Out->EntryPredMBB = It->second;
   }
 
-  Out->EntryPredMF = &Out->MFToPredMF.at(*EntryMF).get();
-
-  /// Link the call and indirect jump instructions + sort the numbering of
-  /// all vector CFGs
-  for (std::unique_ptr<PredMFBuilder> &PredMF : Out->PredMFs) {
-    const llvm::MachineFunction &MF = PredMF->getPredMF().getMF();
-    bool IsEntry = MF.getFunction().hasFnAttribute(InitialEntryPointAttr);
-    for (std::unique_ptr<LinearMBBBuilder> &LinearMBB : *PredMF) {
-      for (std::unique_ptr<PredMBBBuilder> &PredMBBBuilder : *LinearMBB) {
-        if (auto &PredMBB = PredMBBBuilder->getPredMBB(); !PredMBB.empty()) {
-          const llvm::MachineInstr &LastMI = PredMBB.back();
-          if (LastMI.isCall() ||
-              (!IsEntry && LastMI.isReturn() &&
-               LastMI.getOpcode() != llvm::AMDGPU::S_ENDPGM)) {
-            auto *MD = TargetMachineInstrMDNode::getInstrMDNodeIfExists(LastMI);
-            if (!MD) {
-              return LUTHIER_MAKE_GENERIC_ERROR(
-                  "Failed to get the metadata associated with a call or "
-                  "return instruction");
-            }
-            llvm::SmallVector<llvm::Function *> Targets =
-                MD->getIndirectBranchAndCallTargets();
-            for (llvm::Function *Target : Targets) {
-              llvm::MachineFunction &TargetMF =
-                  FAM.getResult<llvm::MachineFunctionAnalysis>(*Target).getMF();
-              PredMFBuilder &TargetPredMF = Out->MFToPredMF.at(TargetMF);
-              auto &TargetBeginVecMBB = **(*TargetPredMF.begin())->begin();
-              PredMBBBuilder->addSuccessorBlock(TargetBeginVecMBB);
-            }
-          }
-        }
-      }
-    }
-  }
-  unsigned CurrentGlobalPredMBBIdx = 0;
-  for (std::unique_ptr<PredMFBuilder> &PredMF : Out->PredMFs) {
-    for (std::unique_ptr<LinearMBBBuilder> &LinearMBB : *PredMF) {
-      LinearMBB->pruneTrivialBlocks();
-      unsigned CurrentLocalPredMBBIdx = 0;
-      for (std::unique_ptr<PredMBBBuilder> &PredMBB : *LinearMBB) {
-        PredMBB->setGlobalIndex(CurrentGlobalPredMBBIdx);
-        PredMBB->setScalarIndex(CurrentLocalPredMBBIdx);
-        CurrentLocalPredMBBIdx++;
-        CurrentGlobalPredMBBIdx++;
-      }
+  // ── Phase 2: intra-procedural edges from MBB successor links ────────────
+  for (auto &Builder : Out->AllPredMBBs) {
+    llvm::MachineBasicBlock &MBB = Builder->getPredMBB().getMBB();
+    for (llvm::MachineBasicBlock *Succ : MBB.successors()) {
+      if (auto *SuccBuilder = Out->MBBToPredMBB.lookup(*Succ))
+        Builder->addSuccessorBlock(*SuccBuilder);
     }
   }
 
-  Out->NumVecMBBs = CurrentGlobalPredMBBIdx;
+  // ── Phase 3: inter-procedural edges from LuthierCallGraph ───────────────
+  auto &CG = MAM.getResult<LuthierCallGraphAnalysis>(M);
+
+  for (auto &[CI, Targets] : CG.CallTargets) {
+    auto *SrcMBB = IRBBToMBB.lookup(CI->getParent());
+    if (!SrcMBB)
+      continue;
+    auto *SrcBuilder = Out->MBBToPredMBB.lookup(*SrcMBB);
+    if (!SrcBuilder)
+      continue;
+    for (llvm::Function *Callee : Targets) {
+      llvm::MachineFunction &CalleeMF =
+          FAM.getResult<llvm::MachineFunctionAnalysis>(*Callee).getMF();
+      if (auto *EntryBuilder = Out->MFToEntryPredMBB.lookup(&CalleeMF))
+        SrcBuilder->addSuccessorBlock(*EntryBuilder);
+    }
+  }
+
+  for (llvm::CallInst *CI : CG.IncompleteCallSites) {
+    auto *SrcMBB = IRBBToMBB.lookup(CI->getParent());
+    if (!SrcMBB)
+      continue;
+    if (auto *SrcBuilder = Out->MBBToPredMBB.lookup(*SrcMBB))
+      SrcBuilder->setHasUnresolvedEdges(true);
+  }
+
+  // ── Phase 4: assign global indices ──────────────────────────────────────
+  unsigned Idx = 0;
+  for (auto &Builder : Out->AllPredMBBs)
+    Builder->setGlobalIndex(Idx++);
+  Out->NumPredMBBs = Idx;
+
   return Out;
 }
 
@@ -157,7 +160,8 @@ bool IPPredCFGAnalysis::Result::invalidate(
   auto PAC = PA.getChecker<IPPredCFGAnalysis>();
   return !PAC.preserved() &&
          !PAC.preservedSet<llvm::AllAnalysesOn<llvm::MachineFunction>>() &&
-         !PAC.preservedSet<llvm::CFGAnalyses>();
+         !PAC.preservedSet<llvm::CFGAnalyses>() &&
+         !PAC.preservedSet<llvm::AllAnalysesOn<llvm::Module>>();
 }
 
 IPPredCFGAnalysis::Result
