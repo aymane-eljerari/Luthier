@@ -304,6 +304,8 @@ public:
   [[nodiscard]] const PredicatedMachineBasicBlock &getPredMBB() const {
     return Out;
   }
+
+  void setGlobalIndex(unsigned i) { Out.GlobalIdx = i; }
 };
 
 inline PredicatedMachineBasicBlock::edge_iterator::reference
