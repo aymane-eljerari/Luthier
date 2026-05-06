@@ -1,5 +1,5 @@
 //===-- PredicatedMachineBasicBlock.cpp -----------------------------------===//
-// Copyright 2026 @ Northeastern University Computer Architecture Lab
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,6 @@
 #include "luthier/Tooling/PredicatedMachineBasicBlock.h"
 #include "luthier/LLVM/CodeGenHelpers.h"
 #include "luthier/Tooling/IPPredicatedCFG.h"
-#include "luthier/Tooling/LinearMachineBasicBlock.h"
-#include "luthier/Tooling/PredicatedMachineFunction.h"
 #include <SIInstrInfo.h>
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
 #include <llvm/Support/FormatVariadic.h>
@@ -28,243 +26,63 @@
 namespace luthier {
 
 std::string PredicatedMachineBasicBlock::getName() const {
-  const LinearMachineBasicBlock &SMBB = getParent();
-  const llvm::MachineFunction &MF = SMBB.getParent().getMF();
-  const llvm::MachineBasicBlock *MBB = getParent().getMBB();
-
-  return llvm::formatv("{0}.{1}",
-                       MBB ? MBB->getFullName() : MF.getName() + ".none",
-                       getGlobalNumber())
-      .str();
+  return llvm::formatv("{0}.{1}", MBB.getFullName(), GlobalIdx).str();
 }
 
 PredicatedMachineBasicBlock::iterator
 PredicatedMachineBasicBlock::getFirstNonDebugInstr(bool SkipPseudoOp) {
-  // Skip over begin-of-block dbg_value instructions.
   return skipDebugInstructionsForward(begin(), end(), SkipPseudoOp);
 }
 
 PredicatedMachineBasicBlock::iterator
 PredicatedMachineBasicBlock::getLastNonDebugInstr(bool SkipPseudoOp) {
-  // Skip over end-of-block dbg_value instructions.
   iterator B = begin(), I = end();
   while (I != B) {
     --I;
-    // Return instruction that starts a bundle.
     if (I->isDebugInstr() || I->isInsideBundle())
       continue;
     if (SkipPseudoOp && I->isPseudoProbe())
       continue;
     return I;
   }
-  // The block is all debug values.
   return end();
 }
 
 bool PredicatedMachineBasicBlock::doesLastInstrModifyPredicate() const {
   const llvm::TargetRegisterInfo *TRI =
-      getParent().getParent().getMF().getSubtarget().getRegisterInfo();
+      MBB.getParent()->getSubtarget().getRegisterInfo();
   return back().modifiesRegister(llvm::AMDGPU::EXEC, TRI);
 }
 
 void PredicatedMachineBasicBlock::print(llvm::raw_ostream &OS,
-                                        unsigned int Indent) const {
-  const auto &ST = getParent().getParent().getMF().getSubtarget();
-  const auto TII = ST.getInstrInfo();
-  OS.indent(Indent) << "Predicated MBB " << getName() << "\n";
+                                        unsigned Indent) const {
+  const auto &ST = MBB.getParent()->getSubtarget();
+  const auto *TII = ST.getInstrInfo();
+
+  if (HasUnresolvedEdges)
+    OS.indent(Indent) << "  (has unresolved edges)\n";
 
   OS.indent(Indent) << "Predecessors: [";
   llvm::interleave(
       Predecessors.begin(), Predecessors.end(),
-      [&](const PredMBBBuilder &MBB) {
-        OS << "MBB " << MBB.getPredMBB().getName();
-      },
+      [&](const PredMBBBuilder &B) { OS << B.getPredMBB().getName(); },
       [&]() { OS << ", "; });
   OS << "]\n";
 
-  if (!this->empty()) {
+  if (!empty()) {
     OS.indent(Indent) << "Instructions:\n";
-    for (const auto &MI : *this) {
+    for (const auto &MI : *this)
       MI.print(OS.indent(Indent + 2), true, false, false, true, TII);
-    }
   }
 
   OS.indent(Indent) << "Successors: [";
   llvm::interleave(
       Successors.begin(), Successors.end(),
-      [&](const PredMBBBuilder &MBB) {
-        OS << "MBB " << MBB.getPredMBB().getName();
-      },
+      [&](const PredMBBBuilder &B) { OS << B.getPredMBB().getName(); },
       [&]() { OS << ", "; });
   OS << "]\n";
 }
 
 void PredicatedMachineBasicBlock::dump() const { print(llvm::dbgs(), 0); }
-
-llvm::SmallVector<std::unique_ptr<PredMBBBuilder>, 6>
-PredMBBBuilder::BreakDownToPredicatedMBBs(LinearMachineBasicBlock &Parent,
-                                          llvm::MachineBasicBlock &MBB) {
-  llvm::MachineFunction *MF = MBB.getParent();
-  assert(MF && "MBB is not linked in a machine function");
-
-  const llvm::TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
-
-  llvm::SmallVector<std::unique_ptr<PredMBBBuilder>, 6> Out;
-
-  auto PredMBBAllocator =
-      [&](PredicatedMachineBasicBlock::PredicateValue EMV) -> PredMBBBuilder & {
-    Out.emplace_back(std::make_unique<PredMBBBuilder>(Parent, EMV));
-    return *Out.back();
-  };
-
-  // The current block being processed in the MBB
-  std::reference_wrapper<PredMBBBuilder> CurrentBlock =
-      PredMBBAllocator(PredicatedMachineBasicBlock::One);
-  // Set of PredMBBs that are waiting to be connected to the next non-taken
-  // block or joined into the next block that starts with a scalar instruction
-  llvm::SmallDenseSet<std::reference_wrapper<PredMBBBuilder>>
-      BlocksWithHangingEdges{
-          PredMBBAllocator(PredicatedMachineBasicBlock::ZeroOrOne)};
-
-  for (auto MI = MBB.begin(), PrevMI = MBB.end(), NextMI = ++MBB.begin();
-       MI != MBB.end();
-       PrevMI = MI, ++MI, NextMI = NextMI != MBB.end() ? ++NextMI : MBB.end()) {
-    // Include debug and pseudo probe instruction in the current block
-    // regardless of the predicate value
-    // TODO: Do pseudo instructions also need to be ignored here?
-    if (MI->isDebugInstr())
-      continue;
-    // Check if the MI is vector (i.e. not scalar nor lane access),
-    // whether it writes to the exec mask, and whether the last MI
-    // (if exists) was a scalar instruction
-
-    /// If the current instruction is a bundle, we count it as a vector
-    /// instruction if all instructions in the bundle are vector instructions
-    /// Bundles must either have all scalar/lane access instructions or all
-    /// vector instructions
-
-    auto QueryAllInBundle = [](llvm::MachineBasicBlock::iterator I,
-                               const auto &Query) {
-      llvm::MachineBasicBlock::instr_iterator InstrI = I.getInstrIterator();
-      if (InstrI->isBundle()) {
-        return llvm::all_of(
-            llvm::make_range(++InstrI, llvm::getBundleEnd(InstrI)), Query);
-      }
-      return Query(*InstrI);
-    };
-
-    assert(
-        QueryAllInBundle(MI,
-                         [](const llvm::MachineInstr &I) {
-                           return isVector(I) || I.isDebugInstr();
-                         }) ||
-        QueryAllInBundle(MI,
-                         [](const llvm::MachineInstr &I) {
-                           return isScalar(I) || isLaneAccess(I) ||
-                                  I.isDebugInstr();
-                         }) &&
-            "Instructions in a bundle must either be all vector or all scalar");
-
-    bool IsVector = QueryAllInBundle(MI, [](const llvm::MachineInstr &I) {
-      return isVector(I) || I.isDebugInstr();
-    });
-
-    bool WritesExecMask = MI->modifiesRegister(llvm::AMDGPU::EXEC, TRI);
-    bool IsFormerMIScalar =
-        PrevMI != MBB.instr_end() &&
-        QueryAllInBundle(PrevMI, [](const llvm::MachineInstr &I) {
-          return isScalar(I) || isLaneAccess(I) || I.isDebugInstr();
-        });
-    if (IsVector && (WritesExecMask || IsFormerMIScalar)) {
-      // If the current instruction is a vector inst, and if it writes
-      // to the exec mask or if the last instruction was a scalar inst,
-      // then we need to do a "split": Create a new VectorMBB to
-      // replace the current taken block and make the new block the successor
-      // of the current block, and then put the just-replaced taken block
-      // into the list of not-taken blocks that are yet to be connected
-      PredMBBBuilder &NewCurrentBlock =
-          PredMBBAllocator(PredicatedMachineBasicBlock::One);
-
-      NewCurrentBlock.addPredecessorBlock(CurrentBlock);
-      BlocksWithHangingEdges.insert(CurrentBlock);
-      CurrentBlock = NewCurrentBlock;
-
-      if (CurrentBlock.get().getPredMBB().empty())
-        CurrentBlock.get().Out.Instructions = {MI, NextMI};
-      else
-        CurrentBlock.get().Out.Instructions = {
-            CurrentBlock.get().Out.Instructions.begin(), MI};
-    } else if (!IsVector && (!IsFormerMIScalar || WritesExecMask)) {
-      // Otherwise, if we observe a scalar instruction, we have to do a "join"
-      // operation: Create a new PredMBB to replace the current taken block,
-      // and make it the successor of the current taken block. Also make
-      // all not taken blocks with hanging edges the predecessor of the new
-      // taken block, and then clear the not-taken set
-      PredMBBBuilder &NewCurrentBlock =
-          PredMBBAllocator(PredicatedMachineBasicBlock::ZeroOrOne);
-
-      NewCurrentBlock.addPredecessorBlock(CurrentBlock);
-      for (auto Block : BlocksWithHangingEdges) {
-        Block.get().addSuccessorBlock(NewCurrentBlock);
-      }
-      BlocksWithHangingEdges.clear();
-      CurrentBlock = NewCurrentBlock;
-    }
-    // Add the current instruction to the current taken block
-    if (CurrentBlock.get().getPredMBB().empty())
-      CurrentBlock.get().Out.Instructions = {MI, NextMI};
-    else
-      CurrentBlock.get().Out.Instructions = {
-          CurrentBlock.get().Out.Instructions.begin(), NextMI};
-  }
-
-  PredMBBBuilder &ExitVectorBlock =
-      PredMBBAllocator(PredicatedMachineBasicBlock::One);
-  PredMBBBuilder &ExitScalarBlock =
-      PredMBBAllocator(PredicatedMachineBasicBlock::ZeroOrOne);
-
-  // Connect the current taken block to the exit taken block of the current
-  // MBB
-  CurrentBlock.get().addSuccessorBlock(ExitVectorBlock);
-  // Connect all the non-taken blocks to the exit non-taken block of the
-  // current MBB if there are any left; Otherwise, connect the current
-  // taken block to the exit not taken block because it must have ended with
-  // a join (scalar instruction)
-  if (!BlocksWithHangingEdges.empty()) {
-    for (auto Block : BlocksWithHangingEdges) {
-      Block.get().addSuccessorBlock(ExitScalarBlock);
-    }
-  } else {
-    CurrentBlock.get().addSuccessorBlock(ExitScalarBlock);
-  }
-
-  /// Now that all predicated blocks are created, populate their internal
-  /// MI set to allow for fast lookup of their block
-  for (std::unique_ptr<PredMBBBuilder> &PredMBB : Out) {
-    for (const llvm::MachineInstr &MI : PredMBB->getPredMBB()) {
-      PredMBB->Out.MIsSet.insert(&MI);
-    }
-  }
-  return std::move(Out);
-}
-
-bool PredMBBBuilder::unlinkIfTrivialEmptyBlock() {
-  if (getPredMBB().empty() &&
-      (!getPredMBB().preds_empty() || getPredMBB().succs_size() == 1)) {
-    for (auto &Succ : Out.Successors) {
-      for (auto &Pred : Out.Predecessors) {
-        Succ.get().addPredecessorBlock(Pred);
-      }
-    }
-    for (auto &Succ : Out.Successors) {
-      removeSuccessorBlock(Succ);
-    }
-    for (auto &Pred : Out.Predecessors) {
-      removePredecessorBlock(Pred);
-    }
-    return true;
-  }
-  return false;
-}
 
 } // namespace luthier
