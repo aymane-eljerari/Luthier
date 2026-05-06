@@ -1619,8 +1619,7 @@ def S_CBRANCH_JOIN_sem : InstSISemantic<S_CBRANCH_JOIN> {
 
 def S_SWAPPC_B64_sem : InstSISemantic<S_SWAPPC_B64> {
   let Semantic = [
-    (SetNamedOperand $sdst, (LLVMAdd (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_getpc, []<dag>),
-                                     (ConstantInt si_llvm_i64_ty, 4))),
+    (SetNamedOperand $sdst, (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_getpc, []<dag>)),
     (IndirectTailCall (GetNamedOperand $src0))
   ];
 }
