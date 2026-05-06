@@ -60,6 +60,7 @@ add_library(LuthierToolingCommon OBJECT
         MIInlineAsmEmitter.cpp
         NewPMAsmPrinter.cpp
         FunctionAnnotations.cpp
+        LuthierCallGraph.cpp
         #        IPReachingRefAnalysis.cpp
         #        IPPredicatedLoopTraversal.cpp
         #        IPRegScavenger.cpp

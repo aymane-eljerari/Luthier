@@ -528,14 +528,15 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineBasicBlock &MBB,
 
   llvm::Instruction *TermInst = BB->getTerminator();
 
-  llvm::InstSimplifyFolder CF{MF.getDataLayout()};
-  llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
-    annotateUniformIfNeeded(I, TRI, Reg);
-    LLVM_DEBUG(llvm::dbgs()
-               << "[MIRToIRTranslator] Inserting reg read instruction " << *I
-               << "\n");
-  });
-  llvm::IRBuilderBase Builder(BB->getContext(), CF, Inserter, {}, {});
+  llvm::IRBuilder<llvm::InstSimplifyFolder, llvm::IRBuilderCallbackInserter>
+      Builder(BB->getContext(), llvm::InstSimplifyFolder{MF.getDataLayout()},
+              llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
+                annotateUniformIfNeeded(I, TRI, Reg);
+                LLVM_DEBUG(
+                    llvm::dbgs()
+                    << "[MIRToIRTranslator] Inserting reg read instruction "
+                    << *I << "\n");
+              }});
   TermInst ? Builder.SetInsertPoint(TermInst) : Builder.SetInsertPoint(BB);
 
   return getOperandAsValue(MBB, getRegFileKey(Reg), Builder, OutRegType);
@@ -1086,14 +1087,15 @@ llvm::Value *MIRToIRTranslator::getRegisterFile(const llvm::MachineInstr &MI,
   llvm::MCRegister BaseReg = std::get<0>(getRegFileKey(Register));
 
   std::string ValueName = getRegfileValueName(BaseReg);
-  llvm::InstSimplifyFolder CF{MF.getDataLayout()};
-  llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
-    annotateUniformIfNeeded(I, TRI, Register);
-    LLVM_DEBUG(llvm::dbgs()
-               << "[MIRToIRTranslator] Inserting read reg instruction " << *I
-               << "\n");
-  });
-  llvm::IRBuilderBase Builder(BB->getContext(), CF, Inserter, {}, {});
+  llvm::IRBuilder<llvm::InstSimplifyFolder, llvm::IRBuilderCallbackInserter>
+      Builder(BB->getContext(), llvm::InstSimplifyFolder{MF.getDataLayout()},
+              llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
+                annotateUniformIfNeeded(I, TRI, Register);
+                LLVM_DEBUG(
+                    llvm::dbgs()
+                    << "[MIRToIRTranslator] Inserting read reg instruction "
+                    << *I << "\n");
+              }});
   TermInst ? Builder.SetInsertPoint(TermInst) : Builder.SetInsertPoint(BB);
 
   return getRegisterFile(*MBB, Register, Builder, LaneTy);
@@ -1111,14 +1113,15 @@ void MIRToIRTranslator::setRegisterFile(const llvm::MachineInstr &MI,
   llvm::MCRegister BaseReg = std::get<0>(getRegFileKey(Reg));
 
   std::string ValueName = getRegfileValueName(BaseReg);
-  llvm::InstSimplifyFolder CF{MF.getDataLayout()};
-  llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
-    annotateUniformIfNeeded(I, TRI, Reg);
-    LLVM_DEBUG(llvm::dbgs()
-               << "[MIRToIRTranslator] Inserting read reg instruction " << *I
-               << "\n");
-  });
-  llvm::IRBuilderBase Builder(BB->getContext(), CF, Inserter, {}, {});
+  llvm::IRBuilder<llvm::InstSimplifyFolder, llvm::IRBuilderCallbackInserter>
+      Builder(BB->getContext(), llvm::InstSimplifyFolder{MF.getDataLayout()},
+              llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
+                annotateUniformIfNeeded(I, TRI, Reg);
+                LLVM_DEBUG(
+                    llvm::dbgs()
+                    << "[MIRToIRTranslator] Inserting read reg instruction "
+                    << *I << "\n");
+              }});
   TermInst ? Builder.SetInsertPoint(TermInst) : Builder.SetInsertPoint(BB);
 
   setRegisterFile(*MBB, Reg, Builder, NewVec);
@@ -1215,13 +1218,15 @@ void MIRToIRTranslator::emitIndirectTailCall(const llvm::MachineInstr &MI,
     unsigned NumLanes32 = RegFileSize[RegFileBase] / 2;
     std::string ValueName = getRegValueName(RegFileBase);
     for (unsigned PI = 0; PI < NumLanes32; ++PI) {
-      llvm::InstSimplifyFolder CF{MF.getDataLayout()};
-      llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
-        LLVM_DEBUG(llvm::dbgs()
-                   << "[MIRToIRTranslator] Inserting reg read instruction "
-                   << *I << "\n");
-      });
-      llvm::IRBuilderBase RegBuilder(BB->getContext(), CF, Inserter, {}, {});
+      llvm::IRBuilder<llvm::InstSimplifyFolder, llvm::IRBuilderCallbackInserter>
+          RegBuilder(BB->getContext(),
+                     llvm::InstSimplifyFolder{MF.getDataLayout()},
+                     llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
+                       LLVM_DEBUG(llvm::dbgs()
+                                  << "[MIRToIRTranslator] Inserting reg read "
+                                     "instruction "
+                                  << *I << "\n");
+                     }});
       // Must set an insert point so any materialized instructions are
       // anchored in BB rather than being orphaned (no-parent) instructions.
       RegBuilder.SetInsertPoint(BB);
@@ -1299,14 +1304,15 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
 
   llvm::Instruction *TermInst = BB->getTerminator();
   std::string ValueName = getRegValueName(Reg);
-  llvm::InstSimplifyFolder CF{MF.getDataLayout()};
-  llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
-    annotateUniformIfNeeded(I, TRI, Reg);
-    LLVM_DEBUG(llvm::dbgs()
-               << "[MIRToIRTranslator] Inserting reg write instruction " << *I
-               << "\n");
-  });
-  llvm::IRBuilderBase Builder(BB->getContext(), CF, Inserter, {}, {});
+  llvm::IRBuilder<llvm::InstSimplifyFolder, llvm::IRBuilderCallbackInserter>
+      Builder(BB->getContext(), llvm::InstSimplifyFolder{MF.getDataLayout()},
+              llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
+                annotateUniformIfNeeded(I, TRI, Reg);
+                LLVM_DEBUG(
+                    llvm::dbgs()
+                    << "[MIRToIRTranslator] Inserting reg write instruction "
+                    << *I << "\n");
+              }});
   TermInst ? Builder.SetInsertPoint(TermInst) : Builder.SetInsertPoint(BB);
 
   unsigned RegSize = getPhysRegisterSize(Reg);
@@ -1390,23 +1396,25 @@ void MIRToIRTranslator::fixupPhis() {
   /// predecessor to emit a new placeholder PHI (there, or in one of its
   /// own predecessors). Those get appended to \c ToBeFixedPhis while we
   /// iterate, so keep draining until the list is empty.
-  llvm::InstSimplifyFolder CF{MF.getDataLayout()};
   while (!ToBeFixedPhis.empty()) {
     auto It = ToBeFixedPhis.begin();
     for (const llvm::MachineBasicBlock *PredMBB : It->MBB->predecessors()) {
       auto *PredBB = const_cast<llvm::BasicBlock *>(PredMBB->getBasicBlock());
       if (!llvm::is_contained(It->Phi->blocks(), PredBB)) {
-        llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
-          if (It->Phi->hasMetadata("amdgpu.uniform"))
-            I->setMetadata("amdgpu.uniform",
-                           llvm::MDNode::get(I->getContext(), {}));
-          LLVM_DEBUG(
-              llvm::dbgs()
-              << "[MIRToIRTranslator] Inserting instruction to resolve phi: "
-              << *I << "\n");
-        });
-        llvm::IRBuilderBase Builder(It->Phi->getContext(), CF, Inserter, {},
-                                    {});
+        llvm::IRBuilder<llvm::InstSimplifyFolder,
+                        llvm::IRBuilderCallbackInserter>
+            Builder(It->Phi->getContext(),
+                    llvm::InstSimplifyFolder{MF.getDataLayout()},
+                    llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
+                      if (It->Phi->hasMetadata("amdgpu.uniform"))
+                        I->setMetadata("amdgpu.uniform",
+                                       llvm::MDNode::get(I->getContext(), {}));
+                      LLVM_DEBUG(
+                          llvm::dbgs()
+                          << "[MIRToIRTranslator] Inserting instruction to "
+                             "resolve phi: "
+                          << *I << "\n");
+                    }});
         // Insert just before the predecessor's terminator so all value-defining
         // instructions (asm calls, loads, etc.) already appear above this
         // point
@@ -1440,23 +1448,6 @@ void MIRToIRTranslator::fixupPhis() {
 void MIRToIRTranslator::raiseMachineInstr(const llvm::MachineInstr &MI,
                                           llvm::IRBuilderBase &Builder) {
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] raiseMachineInstr: " << MI);
-
-  // S_GETPC_B64: when the instruction address is known at translate-time, emit
-  // the PC value (= address of the next instruction) as a compile-time constant
-  // instead of an amdgcn.s.getpc intrinsic. This lets InstSimplifyFolder fold
-  // the downstream S_ADD_U32/S_ADDC_U32 arithmetic immediately, producing a
-  // constant call target for S_SWAPPC_B64 without needing a separate post-pass.
-  if (MI.getOpcode() == llvm::AMDGPU::S_GETPC_B64 ||
-      MI.getOpcode() == llvm::AMDGPU::S_GETPC_B64_pseudo) {
-    if (auto *PCMeta = TargetMachineInstrMDNode::getInstrMDNodeIfExists(MI)) {
-      if (auto Addr = PCMeta->getTraceInstrAddress()) {
-        setRegOperandValue(
-            MI, llvm::AMDGPU::OpName::sdst,
-            llvm::ConstantInt::get(Builder.getInt64Ty(), *Addr + 4));
-        return;
-      }
-    }
-  }
 
   switch (MI.getOpcode()) {
 
@@ -1521,15 +1512,17 @@ void MIRToIRTranslator::translate() {
     for (llvm::MachineInstr &MI : MBB) {
       LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Translating MI: ";
                  MI.print(llvm::dbgs()););
-      llvm::InstSimplifyFolder CF{MF.getDataLayout()};
-      llvm::IRBuilderCallbackInserter Inserter([&](llvm::Instruction *I) {
-        if (MI.getPCSections())
-          I->setMetadata(llvm::LLVMContext::MD_pcsections, MI.getPCSections());
-        LLVM_DEBUG(llvm::dbgs()
-                   << "[MIRToIRTranslator] Inserting translated instruction "
-                   << *I << "\n");
-      });
-      llvm::IRBuilderBase Builder(Ctx, CF, Inserter, {}, {});
+      llvm::IRBuilder<llvm::InstSimplifyFolder, llvm::IRBuilderCallbackInserter>
+          Builder(Ctx, llvm::InstSimplifyFolder{MF.getDataLayout()},
+                  llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
+                    if (MI.getPCSections())
+                      I->setMetadata(llvm::LLVMContext::MD_pcsections,
+                                     MI.getPCSections());
+                    LLVM_DEBUG(llvm::dbgs()
+                               << "[MIRToIRTranslator] Inserting translated "
+                                  "instruction "
+                               << *I << "\n");
+                  }});
       Builder.SetInsertPoint(BB);
       raiseMachineInstr(MI, Builder);
     }
