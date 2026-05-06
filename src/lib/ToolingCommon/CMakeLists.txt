@@ -27,7 +27,6 @@ add_library(LuthierToolingCommon OBJECT
         MemoryAllocationAccessor.cpp
         #        PhysicalRegAccessVirtualizationPass.cpp
         #        SVStorageAndLoadLocations.cpp
-        #        LRCallGraph.cpp
         #        IPPredicatedLiveness.cpp
         #        IntrinsicMIRLoweringPass.cpp
         #        InjectedPayloadPEIPass.cpp
