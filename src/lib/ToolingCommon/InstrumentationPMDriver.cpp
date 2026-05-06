@@ -164,9 +164,6 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
     Plugin.registerInstrumentationPassBuilderCallback(PB);
   }
   {
-    /// s_load
-    /// Injected payload -> C function takes no args/returns nothing
-    ///
     llvm::TimeTraceScope Scope("Instrumentation Module IR Optimization");
     SI.registerCallbacks(PIC, &IMAM);
     // Add the Intrinsic Lowering Info analysis pass
