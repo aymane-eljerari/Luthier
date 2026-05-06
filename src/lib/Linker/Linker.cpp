@@ -15,21 +15,19 @@
 //===----------------------------------------------------------------------===//
 /// \file Linker.cpp
 /// Implements linking of relocatable AMDGPU ELF objects into executable shared
-/// objects using LLD.
+/// objects by invoking ld.lld as a subprocess, avoiding the global cl::opt
+/// state reset that lld::lldMain causes when called in-process.
 //===----------------------------------------------------------------------===//
 #include "luthier/Linker/Linker.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
-#include <lld/Common/CommonLinkerContext.h>
-#include <lld/Common/Driver.h>
 #include <llvm/ADT/ScopeExit.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/Path.h>
+#include <llvm/Support/Program.h>
 #include <llvm/Support/TimeProfiler.h>
 #include <llvm/Support/raw_ostream.h>
-
-LLD_HAS_DRIVER(elf)
 
 namespace luthier::linker {
 
@@ -45,7 +43,6 @@ llvm::Error linkRelocatableToExecutable(llvm::ArrayRef<char> Code,
         llvm::formatv("Failed to create temporary directory: {0}",
                       EC.message()));
 
-  // RAII cleanup of the temp directory
   auto CleanupTmpDir = llvm::scope_exit(
       [&TmpDir]() { (void)llvm::sys::fs::remove_directories(TmpDir); });
 
@@ -63,35 +60,34 @@ llvm::Error linkRelocatableToExecutable(llvm::ArrayRef<char> Code,
     InputFile.write(Code.data(), Code.size());
   }
 
-  // Set up the output path
   llvm::SmallString<128> OutputPath(TmpDir);
   llvm::sys::path::append(OutputPath, "output.so");
 
-  // Construct LLD arguments
-  const char *LLDArgs[] = {"ld.lld",
-                           "-shared",
-                           "--threads=1",
-                           "--unresolved-symbols=ignore-all",
-                           "-o",
-                           OutputPath.c_str(),
-                           InputPath.c_str()};
-
-  // Capture LLD's stdout/stderr for diagnostics
-  std::string StdoutStr, StderrStr;
-  llvm::raw_string_ostream StdoutOS(StdoutStr), StderrOS(StderrStr);
-
-  // Invoke LLD
-  lld::Result LLDResult =
-      lld::lldMain(LLDArgs, StdoutOS, StderrOS, {{lld::Gnu, &lld::elf::link}});
-  lld::CommonLinkerContext::destroy();
-
-  if (LLDResult.retCode != 0)
+  // Locate ld.lld on PATH
+  auto LLDPathOrErr = llvm::sys::findProgramByName("ld.lld");
+  if (!LLDPathOrErr)
     return LUTHIER_MAKE_ERROR(
-        GenericLuthierError,
-        llvm::formatv("LLD linking failed (exit code {0}): {1}",
-                      LLDResult.retCode, StderrStr));
+        GenericLuthierError, llvm::formatv("Could not find ld.lld on PATH: {0}",
+                                           LLDPathOrErr.getError().message()));
 
-  // TODO: Add verbose logging of LLD's output
+  // Invoke ld.lld as a subprocess so it cannot reset the global cl::opt state
+  llvm::SmallVector<llvm::StringRef, 8> Args = {
+      *LLDPathOrErr, "-shared",  "--unresolved-symbols=ignore-all",
+      "-o",          OutputPath, InputPath,
+  };
+
+  std::string StderrStr;
+  llvm::raw_string_ostream StderrOS(StderrStr);
+  int RetCode = llvm::sys::ExecuteAndWait(*LLDPathOrErr, Args,
+                                          /*Env=*/std::nullopt,
+                                          /*Redirects=*/{},
+                                          /*SecondsToWait=*/0,
+                                          /*MemoryLimit=*/0,
+                                          /*ErrMsg=*/&StderrStr);
+  if (RetCode != 0)
+    return LUTHIER_MAKE_ERROR(
+        GenericLuthierError, llvm::formatv("ld.lld failed (exit code {0}): {1}",
+                                           RetCode, StderrStr));
 
   // Read the linked executable back into memory
   auto OutputBufOrErr = llvm::MemoryBuffer::getFile(OutputPath);

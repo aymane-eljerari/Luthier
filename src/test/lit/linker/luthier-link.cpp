@@ -37,7 +37,7 @@ static llvm::cl::opt<std::string>
                   llvm::cl::init("-"), llvm::cl::cat(LuthierLinkOptions));
 
 static llvm::cl::opt<std::string>
-    OutputFilename("o", llvm::cl::desc("Output filename"),
+    OutputFilename("output", llvm::cl::desc("Output filename"),
                    llvm::cl::value_desc("filename"), llvm::cl::init("-"),
                    llvm::cl::cat(LuthierLinkOptions));
 
@@ -58,11 +58,16 @@ int main(int Argc, char *Argv[]) {
 
   llvm::StringRef Buffer = BufferPtr->get()->getBuffer();
 
+  // Capture the output filename before linking: lld::lldMain resets the
+  // global cl::opt state, which would restore OutputFilename to its default
+  // "-" (stdout) if we read it after linking.
+  std::string OutPath = OutputFilename;
+
   llvm::SmallVector<char> Executable;
   LUTHIER_REPORT_FATAL_ON_ERROR(luthier::linker::linkRelocatableToExecutable(
       llvm::arrayRefFromStringRef<char>(Buffer), Executable));
 
-  auto OutFile = std::make_unique<llvm::ToolOutputFile>(OutputFilename, EC,
+  auto OutFile = std::make_unique<llvm::ToolOutputFile>(OutPath, EC,
                                                         llvm::sys::fs::OF_None);
   LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       !EC.operator bool(),

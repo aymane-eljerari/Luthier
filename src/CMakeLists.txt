@@ -11,8 +11,6 @@ find_package(hsa-runtime64 REQUIRED CONFIG)
 
 find_package(LLVM REQUIRED CONFIG)
 
-find_package(LLD REQUIRED CONFIG)
-
 include(LuthierFetchLLVMSrc)
 
 if (NOT IS_DIRECTORY ${LUTHIER_LLVM_SRC_DIR})

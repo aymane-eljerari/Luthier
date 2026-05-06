@@ -40,6 +40,7 @@
 // #include "luthier/Tooling/IPPredicatedCFG.h"
 // #include "luthier/Tooling/IPReachingDefAnalysis.h"
 #include "luthier/Tooling/InitialExecutionPointAnalysis.h"
+#include "luthier/Tooling/LuthierCallGraph.h"
 #include "luthier/Tooling/NewPMAsmPrinter.h"
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Plugins/PassPlugin.h>
@@ -269,6 +270,7 @@ llvmGetPassPluginInfo() {
                 *luthier::Loader)));
       });
       MAM.registerPass([]() { return luthier::CodeObjectManagerAnalysis(); });
+      MAM.registerPass([]() { return luthier::LuthierCallGraphAnalysis(); });
       // MAM.registerPass([]() { return luthier::LRCallGraphAnalysis(); });
       // MAM.registerPass([]() { return luthier::MMISlotIndexesAnalysis(); });
       // MAM.registerPass([]() {
@@ -313,6 +315,10 @@ llvmGetPassPluginInfo() {
           };
           if (Name == "luthier-code-discovery") {
             MPM.addPass(luthier::CodeDiscoveryPass());
+            return true;
+          }
+          if (Name == "luthier-callgraph-printer") {
+            MPM.addPass(luthier::LuthierCallGraphPrinter(llvm::outs()));
             return true;
           }
           // if (Name == "luthier-ip-vector-cfg-printer") {

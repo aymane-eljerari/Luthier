@@ -10,5 +10,4 @@ target_include_directories(LuthierLinker
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
         PRIVATE
         ${LLVM_INCLUDE_DIRS}
-        ${LLD_INCLUDE_DIRS}
 )
