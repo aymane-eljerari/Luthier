@@ -163,8 +163,9 @@ int llvm::compileModuleWithNewPM(
     // Construct a custom pass pipeline that starts after instruction
     // selection.
 
-    if (!MIR) {
-      WithColor::error(errs(), Arg0) << "-passes is for .mir file only.\n";
+    /// If the module is non-empty, MIR should also be non-empty too
+    if (M && !M->empty() && !MIR) {
+      WithColor::error(errs(), Arg0) << "-passes requires a .mir input file.\n";
       return 1;
     }
 

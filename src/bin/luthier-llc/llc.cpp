@@ -74,7 +74,7 @@ static codegen::RegisterSaveStatsFlag SSF;
 // and back-end code generation options are specified with the target machine.
 //
 static cl::opt<std::string>
-    InputFilename(cl::Positional, cl::desc("<input bitcode>"), cl::init("-"));
+    InputFilename(cl::Positional, cl::desc("<input bitcode>"), cl::init(""));
 
 static cl::list<std::string>
     InstPrinterOptions("M", cl::desc("InstPrinter options"));
@@ -314,7 +314,7 @@ static int compileModule(char **argv, SmallVectorImpl<PassPlugin> &,
 static std::unique_ptr<ToolOutputFile> GetOutputStream(Triple::OSType OS) {
   // If we don't yet have an output filename, make one.
   if (OutputFilename.empty()) {
-    if (InputFilename == "-")
+    if (InputFilename.empty() || InputFilename == "-")
       OutputFilename = "-";
     else {
       // If InputFilename ends in .bc or .ll, remove it.
@@ -598,8 +598,34 @@ static int compileModule(char **argv, SmallVectorImpl<PassPlugin> &PluginList,
   const Target *TheTarget = nullptr;
   std::unique_ptr<TargetMachine> Target;
 
+  // No input file: synthesize an empty module from -mtriple so that we
+  // can start from an empty module for tests that start from code discovery
+  if (InputFilename.empty()) {
+    if (TargetTriple.empty()) {
+      WithColor::error(errs(), argv[0])
+          << "no input file: -mtriple is required\n";
+      return 1;
+    }
+    TheTriple = Triple(Triple::normalize(TargetTriple));
+    std::string Error;
+    TheTarget =
+        TargetRegistry::lookupTarget(codegen::getMArch(), TheTriple, Error);
+    if (!TheTarget) {
+      WithColor::error(errs(), argv[0]) << Error << "\n";
+      return 1;
+    }
+    InitializeOptions(TheTriple);
+    Target = std::unique_ptr<TargetMachine>(TheTarget->createTargetMachine(
+        TheTriple, CPUStr, FeaturesStr, Options, RM, CM, OLvl));
+    assert(Target && "Could not allocate target machine!");
+    setPGOOptions(*Target);
+    M = std::make_unique<Module>("", Context);
+    M->setTargetTriple(TheTriple);
+    M->setDataLayout(Target->createDataLayout());
+  }
+
   // If user just wants to list available options, skip module loading
-  if (!SkipModule) {
+  else if (!SkipModule) {
     auto SetDataLayout = [&](StringRef DataLayoutTargetTriple,
                              StringRef OldDLStr) -> std::optional<std::string> {
       // If we are supposed to override the target triple, do so now.
