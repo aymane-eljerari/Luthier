@@ -17,3 +17,6 @@ lit_config.load_config(
 
 plugin_path = os.path.join("@CMAKE_BINARY_DIR@/lib", "LuthierOptPlugin.so")
 config.substitutions.append(('%luthier_opt', f"-load-pass-plugin={plugin_path}"))
+
+config.substitutions.append(('%luthier_split_test',
+    os.path.join("@CMAKE_BINARY_DIR@/bin", "luthier-split-test")))

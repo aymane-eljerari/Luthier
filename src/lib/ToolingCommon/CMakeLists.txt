@@ -47,7 +47,7 @@ add_library(LuthierToolingCommon OBJECT
         MetadataParserAnalysis.cpp
         #        IntrinsicProcessorRegistry.cpp
         #        IntrinsicProcessorsAnalysis.cpp
-        #        InstrumentationPMDriver.cpp
+        InstrumentationPMDriver.cpp
         MockLoadAMDGPUCodeObjects.cpp
         CodeObjectManagerAnalysis.cpp
         InitialEntryPointAnalysis.cpp

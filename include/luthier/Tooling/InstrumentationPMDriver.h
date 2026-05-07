@@ -1,5 +1,5 @@
 //===-- InstrumentationPMDriver.h -------------------------------*- C++ -*-===//
-// Copyright 2022-2025 @ Northeastern University Computer Architecture Lab
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,18 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-///
 /// \file InstrumentationPMDriver.h
-/// Describes the \c InstrumentationPMDriver which is a target module pass
-/// in charge of the high-level instrumentation process in Luthier.
+/// Describes the \c InstrumentationPMDriver, a target module pass
+/// in charge of driving the high-level instrumentation process in Luthier.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_APPLY_INSTRUMENTATION_PASS_H
 #define LUTHIER_TOOLING_APPLY_INSTRUMENTATION_PASS_H
 #include "luthier/Intrinsic/IntrinsicProcessor.h"
 #include "luthier/Plugins/LuthierPassPlugin.h"
+#include <llvm/IR/Module.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/Target/TargetMachine.h>
-#include <utility>
 
 namespace llvm {
 
@@ -44,10 +43,39 @@ struct InstrumentationPMDriverOptions {
           "For targets that support it , forces use of scratch instructions "
           "instead of buffer instructions to access scratch memory."),
       llvm::cl::NotHidden, llvm::cl::cat(InstrumentationPMDriverOptionsCat)};
+
   llvm::cl::opt<bool> EnableSIDebugLogging{
-      "enable-si-debug-logging", llvm::cl::init(false),
+      "instrumentation-si-logging", llvm::cl::init(false),
       "Enable/Disable debug logging of standard instrumentation in the "
       "instrumentation PM Driver."};
+
+  llvm::cl::opt<std::string> IModulePath{
+      "imodule-path", llvm::cl::init(""),
+      llvm::cl::desc("Path to the instrumentation module .mir/.ll/.bc file to "
+                     "load the instrumentation module's initial state from"),
+      llvm::cl::cat(InstrumentationPMDriverOptionsCat)};
+
+  llvm::cl::opt<std::string> IModuleIRPasses{
+      "imodule-ir-passes", llvm::cl::init(""),
+      llvm::cl::desc(
+          "If specified, provides a IR-level textual pass pipeline for the "
+          "instrumentation module which overrides the normal instrumentation "
+          "process"),
+      llvm::cl::cat(InstrumentationPMDriverOptionsCat)};
+
+  llvm::cl::opt<std::string> IModuleMIRPasses{
+      "imodule-mir-passes", llvm::cl::init(""),
+      llvm::cl::desc(
+          "If specified, provides a textual legacy pass pipeline for the "
+          "instrumentation module's codegen pipeline; Overrides the default"
+          "instrumentation codegen pipeline"),
+      llvm::cl::cat(InstrumentationPMDriverOptionsCat)};
+
+  llvm::cl::opt<std::string> IModuleOutput{
+      "imodule-output", llvm::cl::init(""),
+      llvm::cl::desc("Dump the final instrumentation module state to this "
+                     "file after all pipeline stages complete"),
+      llvm::cl::cat(InstrumentationPMDriverOptionsCat)};
 };
 
 class InstrumentationPMDriver

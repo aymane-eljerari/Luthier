@@ -23,7 +23,7 @@
 #include "luthier/Tooling/CodeObjectManagerAnalysis.h"
 #include "luthier/Tooling/InitialEntryPointAnalysis.h"
 #include "luthier/Tooling/InstructionTracesAnalysis.h"
-// #include "luthier/Tooling/InstrumentationPMDriver.h"
+#include "luthier/Tooling/InstrumentationPMDriver.h"
 // #include "luthier/Tooling/IntrinsicMIRLoweringPass.h"
 // #include "luthier/Tooling/LRCallgraph.h"
 // #include "luthier/Tooling/MMISlotIndexesAnalysis.h"
@@ -53,7 +53,7 @@ static llvm::cl::OptionCategory OptPluginOptions{"Luthier Opt Plugin Options"};
 
 static std::unique_ptr<MockAMDGPULoader> Loader{nullptr};
 
-// static InstrumentationPMDriverOptions InstrumentationPMOptions;
+static InstrumentationPMDriverOptions InstrumentationPMOptions;
 
 static amdgpu::hsamd::MetadataParser MetadataParser;
 
@@ -333,11 +333,11 @@ llvmGetPassPluginInfo() {
           //   MPM.addPass(luthier::ReachingDefPrinterPass(llvm::outs()));
           //   return true;
           // }
-          // if (Name == "luthier-apply-instrumentation") {
-          //   MPM.addPass(luthier::InstrumentationPMDriver(
-          //       luthier::InstrumentationPMOptions));
-          //   return true;
-          // }
+          if (Name == "luthier-apply-instrumentation") {
+            MPM.addPass(luthier::InstrumentationPMDriver(
+                luthier::InstrumentationPMOptions));
+            return true;
+          }
           if (Name == "luthier-load-hip-fat-binary-info-pass"){
             MPM.addPass(luthier::LoadHIPFATBinaryInfoPass());
             return true;

@@ -699,8 +699,13 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
       return;
     llvm::Value *Ptr =
         Builder.CreateIntrinsic(Builder.getPtrTy(4), IID, {}, nullptr);
-
+    // Store the pointer form for consumers that address through this register.
     seed(Which, Ptr);
+    // Also store the integer form: getPrimitiveSizeInBits() returns 0 for
+    // pointer types, which causes breakdownToVecTyFromAvailableValues to
+    // produce a zero-element vector if this register is later split.
+    unsigned BitWidth = getPhysRegisterSize(Reg);
+    seed(Which, Builder.CreatePtrToInt(Ptr, Builder.getIntNTy(BitWidth)));
   };
 
   /// Emit a scalar-returning intrinsic (i32 or i64).
