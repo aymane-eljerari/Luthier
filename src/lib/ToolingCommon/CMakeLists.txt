@@ -63,9 +63,7 @@ add_library(LuthierToolingCommon OBJECT
         #        IPReachingRefAnalysis.cpp
         #        IPPredicatedLoopTraversal.cpp
         #        IPRegScavenger.cpp
-        #        PredicatedMachineBasicBlock.cpp
-        #        LinearMachineBasicBlock.cpp
-        #        PredicatedMachineFunction.cpp
+        PredicatedMachineBasicBlock.cpp
 
 )
 
