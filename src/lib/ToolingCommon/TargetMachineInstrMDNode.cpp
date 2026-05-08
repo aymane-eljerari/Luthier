@@ -47,10 +47,9 @@ namespace luthier {
 enum TargetMachineInstrAnnotation : uint8_t {
   Tag = 0,
   TraceAddr = 1,
-  InjectedPayload = 2,
-  CanRelaxDirectBranch = 3,
-  IndirectBranchAndCallTargets = 4,
-  AreIndirectBranchAndCallTargetsResolved = 5,
+  CanRelaxDirectBranch = 2,
+  IndirectBranchAndCallTargets = 3,
+  AreIndirectBranchAndCallTargetsResolved = 4,
   LastMachineInstrAnnotation = IndirectBranchAndCallTargets
 };
 
@@ -66,10 +65,6 @@ template <> struct MachineInstrAnnotationInfo<Tag> {
 
 template <> struct MachineInstrAnnotationInfo<TraceAddr> {
   static constexpr auto MDName = "luthier.machine_instr.trace_addr";
-};
-
-template <> struct MachineInstrAnnotationInfo<InjectedPayload> {
-  static constexpr auto MDName = "luthier.machine_instr.injected_payload";
 };
 
 template <> struct MachineInstrAnnotationInfo<CanRelaxDirectBranch> {
@@ -222,41 +217,6 @@ std::optional<uint64_t> TargetMachineInstrMDNode::getTraceInstrAddress() const {
     }
   }
   return std::nullopt;
-}
-
-llvm::Error
-TargetMachineInstrMDNode::setInjectedPayload(llvm::Function &InjectedPayload) {
-  if (!InjectedPayload.hasFnAttribute(InjectedPayloadAttribute)) {
-    return LUTHIER_MAKE_GENERIC_ERROR(
-        llvm::formatv("Injected payload function doesn't have a {0} attribute",
-                      InjectedPayloadAttribute));
-  }
-  llvm::LLVMContext &Ctx = InjectedPayload.getContext();
-  auto [StringHeader, AuxConstList] =
-      getOrCreateMDEntry<TargetMachineInstrAnnotation::InjectedPayload>(Ctx,
-                                                                        *this);
-  llvm::MDBuilder MDB{Ctx};
-  llvm::ConstantAsMetadata *NewAddressMD = MDB.createConstant(&InjectedPayload);
-  if (AuxConstList.getNumOperands() >= 1) {
-    llvm::cast<MutableMDTuple>(AuxConstList).setOperand(0, NewAddressMD);
-  } else {
-    AuxConstList.push_back(NewAddressMD);
-  }
-  return llvm::Error::success();
-}
-
-llvm::Function *TargetMachineInstrMDNode::getInjectedPayloadIfExists() const {
-  auto TraceAddrHeaderAndEntry = getMDEntryIfExists<InjectedPayload>(*this);
-  if (!TraceAddrHeaderAndEntry.has_value())
-    return nullptr;
-  if (auto &ListMD = TraceAddrHeaderAndEntry->second;
-      ListMD.getNumOperands() >= 1) {
-    if (auto *F = llvm::mdconst::extract_or_null<llvm::Function>(
-            ListMD.getOperand(0))) {
-      return F;
-    }
-  }
-  return nullptr;
 }
 
 void TargetMachineInstrMDNode::setCanRelaxDirectBranch(llvm::LLVMContext &Ctx,

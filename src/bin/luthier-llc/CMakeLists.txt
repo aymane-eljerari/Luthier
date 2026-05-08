@@ -8,6 +8,7 @@ set(LLVM_LINK_COMPONENTS
         AllTargetsInfos
         Analysis
         AsmPrinter
+        BitReader
         CodeGen
         CodeGenTypes
         Core
@@ -38,6 +39,8 @@ add_llvm_tool(luthier-llc
         SUPPORT_PLUGINS
 )
 
-target_include_directories(luthier-llc PRIVATE ${LLVM_INCLUDE_DIRS})
+target_include_directories(luthier-llc PRIVATE ${LLVM_INCLUDE_DIRS} "${CMAKE_SOURCE_DIR}/include")
+
+target_link_libraries(luthier-llc PRIVATE LuthierTestFile LuthierCommon)
 
 export_executable_symbols_for_plugins(luthier-llc)

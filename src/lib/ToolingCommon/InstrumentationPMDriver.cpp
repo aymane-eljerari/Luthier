@@ -26,6 +26,7 @@
 // #include "luthier/Tooling/PatchLiftedRepresentationPass.h"
 // #include "luthier/Tooling/PhysRegsNotInLiveInsAnalysis.h"
 // #include "luthier/Tooling/ProcessIntrinsicsAtIRLevelPass.h"
+#include "luthier/TestFile/LuthierFile.h"
 #include "luthier/Tooling/WrapperAnalysisPasses.h"
 #include <AMDGPUTargetMachine.h>
 #include <llvm/Analysis/CGSCCPassManager.h>
@@ -195,14 +196,29 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
   std::unique_ptr<llvm::Module> IModule;
 
   if (!Options.IModulePath.empty()) {
-    auto LoadedOrErr =
-        loadIModuleFromFile(Options.IModulePath.getValue(), Context);
-    if (!LoadedOrErr) {
-      LUTHIER_CTX_EMIT_ON_ERROR(Context, LoadedOrErr.takeError());
-      return llvm::PreservedAnalyses::all();
+    llvm::StringRef IModPath = Options.IModulePath.getValue();
+    if (IModPath.ends_with(".luthier")) {
+      auto ParserOrErr = LuthierFileParser::create(IModPath);
+      if (!ParserOrErr) {
+        LUTHIER_CTX_EMIT_ON_ERROR(Context, ParserOrErr.takeError());
+        return llvm::PreservedAnalyses::all();
+      }
+      auto IModOrErr = ParserOrErr->loadIModule(Context, TargetAppM);
+      if (!IModOrErr) {
+        LUTHIER_CTX_EMIT_ON_ERROR(Context, IModOrErr.takeError());
+        return llvm::PreservedAnalyses::all();
+      }
+      IModule = std::move(IModOrErr->first);
+      IModuleMIRParser = std::move(IModOrErr->second);
+    } else {
+      auto LoadedOrErr = loadIModuleFromFile(IModPath, Context);
+      if (!LoadedOrErr) {
+        LUTHIER_CTX_EMIT_ON_ERROR(Context, LoadedOrErr.takeError());
+        return llvm::PreservedAnalyses::all();
+      }
+      IModule = std::move(LoadedOrErr->Module);
+      IModuleMIRParser = std::move(LoadedOrErr->MIRParser);
     }
-    IModule = std::move(LoadedOrErr->Module);
-    IModuleMIRParser = std::move(LoadedOrErr->MIRParser);
   } else {
     IModule = IModuleCreatorFn(Context);
   }
@@ -371,12 +387,15 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
       }
     }
     if (MustRunCodeGen) {
+      llvm::StringRef OutPath = Options.IModuleOutput;
+      bool IsLuthierOutput = OutPath.ends_with(".luthier");
+      bool MustDumpMIR = !OutPath.empty() && !IsLuthierOutput;
+
       std::unique_ptr<llvm::ToolOutputFile> OutFile;
-      bool MustDumpMIR = !Options.IModuleOutput.empty();
       if (MustDumpMIR) {
         std::error_code EC;
         OutFile = std::make_unique<llvm::ToolOutputFile>(
-            Options.IModuleOutput, EC, llvm::sys::fs::OF_Text);
+            OutPath, EC, llvm::sys::fs::OF_Text);
         if (EC) {
           LUTHIER_CTX_EMIT_ON_ERROR(
               Context, LUTHIER_MAKE_GENERIC_ERROR(
@@ -392,6 +411,14 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
       MIRModified = MIRLegacyPM->run(*IModule);
       if (MustDumpMIR)
         OutFile->keep();
+
+      if (IsLuthierOutput) {
+        if (auto Err = writeLuthierFile(OutPath, TargetAppM, *IModule)) {
+          LUTHIER_CTX_EMIT_ON_ERROR(Context, std::move(Err));
+          return IRStagePA.areAllPreserved() ? llvm::PreservedAnalyses::all()
+                                             : llvm::PreservedAnalyses::none();
+        }
+      }
     }
   }
   /// Conservatively invalidate all other target module passes even if only the

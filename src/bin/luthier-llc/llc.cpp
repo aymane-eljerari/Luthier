@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "NewPMDriver.h"
+#include "luthier/TestFile/LuthierFile.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/Statistic.h"
@@ -323,6 +324,8 @@ static std::unique_ptr<ToolOutputFile> GetOutputStream(Triple::OSType OS) {
         OutputFilename = std::string(IFN.drop_back(3));
       else if (IFN.ends_with(".mir"))
         OutputFilename = std::string(IFN.drop_back(4));
+      else if (IFN.ends_with(".luthier"))
+        OutputFilename = std::string(IFN.drop_back(8));
       else
         OutputFilename = std::string(IFN);
 
@@ -660,6 +663,17 @@ static int compileModule(char **argv, SmallVectorImpl<PassPlugin> &PluginList,
                                     setMIRFunctionAttributes);
       if (MIR)
         M = MIR->parseIRModule(SetDataLayout);
+    } else if (InputLanguage == "" &&
+               StringRef(InputFilename).ends_with(".luthier")) {
+      auto ParserOrErr = luthier::LuthierFileParser::create(InputFilename);
+      if (!ParserOrErr)
+        reportError(ParserOrErr.takeError(), InputFilename);
+      auto ResultOrErr = ParserOrErr->loadTargetModule(
+          Context, SetDataLayout, setMIRFunctionAttributes);
+      if (!ResultOrErr)
+        reportError(ResultOrErr.takeError(), InputFilename);
+      M = std::move(ResultOrErr->first);
+      MIR = std::move(ResultOrErr->second);
     } else {
       M = parseIRFile(InputFilename, Err, Context,
                       ParserCallbacks(SetDataLayout));

@@ -53,10 +53,6 @@ public:
     return getTraceInstrAddress().has_value();
   }
 
-  llvm::Error setInjectedPayload(llvm::Function &InjectedPayload);
-
-  [[nodiscard]] llvm::Function *getInjectedPayloadIfExists() const;
-
   void setCanRelaxDirectBranch(llvm::LLVMContext &Ctx, bool CanRelaxBranch);
 
   [[nodiscard]] bool canRelaxDirectBranch() const;

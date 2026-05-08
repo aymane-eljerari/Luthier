@@ -84,4 +84,4 @@ target_include_directories(LuthierToolingCommon
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 
-target_link_libraries(LuthierToolingCommon PRIVATE LuthierAMDGPU hip::host)
+target_link_libraries(LuthierToolingCommon PRIVATE LuthierAMDGPU)
