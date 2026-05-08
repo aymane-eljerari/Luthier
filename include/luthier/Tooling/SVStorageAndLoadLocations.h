@@ -25,7 +25,7 @@
 #include "luthier/HSA/LoadedCodeObject.h"
 #include "luthier/HSA/LoadedCodeObjectDeviceFunction.h"
 #include "luthier/HSA/LoadedCodeObjectKernel.h"
-#include "luthier/Tooling/IModuleIRGeneratorPass.h"
+#include "luthier/Tooling/InjectedPayloadAndInstPointAnalysis.h"
 #include "luthier/Tooling/MMISlotIndexesAnalysis.h"
 #include "luthier/Tooling/PrePostAmbleEmitter.h"
 #include "luthier/Tooling/StateValueArrayStorage.h"

@@ -19,7 +19,7 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/Tooling/SVStorageAndLoadLocations.h"
 #include "luthier/Common/LuthierError.h"
-#include "luthier/Tooling/IModuleIRGeneratorPass.h"
+#include "luthier/Tooling/InjectedPayloadAndInstPointAnalysis.h"
 #include "luthier/Tooling/LRCallgraph.h"
 #include "luthier/Tooling/MMISlotIndexesAnalysis.h"
 #include "luthier/Tooling/PhysRegsNotInLiveInsAnalysis.h"

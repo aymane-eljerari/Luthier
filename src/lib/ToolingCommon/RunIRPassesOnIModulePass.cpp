@@ -18,7 +18,7 @@
 /// This file implements the <tt>RunIRPassesOnIModulePass</tt>.
 //===----------------------------------------------------------------------===//
 #include "luthier/Tooling/RunIRPassesOnIModulePass.h"
-#include "luthier/Tooling/IModuleIRGeneratorPass.h"
+#include "luthier/Tooling/InjectedPayloadAndInstPointAnalysis.h"
 #include "luthier/Tooling/IntrinsicProcessorsAnalysis.h"
 #include "luthier/Tooling/PhysRegsNotInLiveInsAnalysis.h"
 #include "luthier/Tooling/ProcessIntrinsicsAtIRLevelPass.h"

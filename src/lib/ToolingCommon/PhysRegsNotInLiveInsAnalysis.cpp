@@ -21,7 +21,7 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/Tooling/PhysRegsNotInLiveInsAnalysis.h"
 #include "luthier/Tooling/IPVectorRegLiveness.h"
-#include "luthier/Tooling/IModuleIRGeneratorPass.h"
+#include "luthier/Tooling/InjectedPayloadAndInstPointAnalysis.h"
 #include "luthier/Tooling/WrapperAnalysisPasses.h"
 
 #include <llvm/CodeGen/TargetSubtargetInfo.h>

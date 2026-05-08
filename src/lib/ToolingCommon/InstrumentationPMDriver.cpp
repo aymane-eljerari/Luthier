@@ -19,7 +19,7 @@
 #include "luthier/Tooling/InstrumentationPMDriver.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
-// #include "luthier/Tooling/IModuleIRGeneratorPass.h"
+// #include "luthier/Tooling/InjectedPayloadAndInstPointAnalysis.h"
 // #include "luthier/Tooling/InjectedPayloadPEIPass.h"
 // #include "luthier/Tooling/IntrinsicMIRLoweringPass.h"
 // #include "luthier/Tooling/IntrinsicProcessorsAnalysis.h"

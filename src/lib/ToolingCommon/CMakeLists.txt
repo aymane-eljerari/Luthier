@@ -34,7 +34,6 @@ add_library(LuthierToolingCommon OBJECT
         #        StateValueArraySpecs.cpp
         #        IPPredicatedCFG.cpp
         #        StateValueArrayStorage.cpp
-        #        IModuleIRGeneratorPass.cpp
         #        RunIRPassesOnIModulePass.cpp
         #        MMISlotIndexesAnalysis.cpp
         #        ProcessIntrinsicsAtIRLevelPass.cpp
@@ -47,6 +46,7 @@ add_library(LuthierToolingCommon OBJECT
         MetadataParserAnalysis.cpp
         #        IntrinsicProcessorRegistry.cpp
         #        IntrinsicProcessorsAnalysis.cpp
+        InjectedPayloadAndInstPointAnalysis.cpp
         InstrumentationPMDriver.cpp
         MockLoadAMDGPUCodeObjects.cpp
         CodeObjectManagerAnalysis.cpp

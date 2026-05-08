@@ -19,7 +19,7 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/Tooling/PatchLiftedRepresentationPass.h"
 #include "luthier/LLVM/Cloning.h"
-#include "luthier/Tooling/IModuleIRGeneratorPass.h"
+#include "luthier/Tooling/InjectedPayloadAndInstPointAnalysis.h"
 #include "luthier/Tooling/WrapperAnalysisPasses.h"
 
 #include <SIInstrInfo.h>

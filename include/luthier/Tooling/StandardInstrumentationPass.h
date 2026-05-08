@@ -163,7 +163,7 @@ protected:
         return MDOrErr.takeError();
     }
 
-    PayloadFn.setMetadata("luthier.target_instr_point",
+    PayloadFn.setMetadata(TargetInstrPointAttr,
                           TargetMI.getPCSections());
     return llvm::Error::success();
   }

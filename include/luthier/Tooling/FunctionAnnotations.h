@@ -116,6 +116,9 @@ static constexpr const char *InjectedPayloadAttribute =
 static constexpr const char *InitialExecutionPointAttr =
     "luthier.function.initial_execution_point";
 
+static constexpr const char *TargetInstrPointAttr =
+    "luthier.target_instr_point";
+
 /// \brief If a tool contains an instrumentation hook it \b must
 /// use this macro once. Luthier hooks are annotated via the
 /// \p LUTHIER_HOOK_CREATE macro. \n

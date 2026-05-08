@@ -1,5 +1,5 @@
-//===-- IModuleIRGeneratorPass.h --------------------------------*- C++ -*-===//
-// Copyright 2022-2025 @ Northeastern University Computer Architecture Lab
+//===-- InjectedPayloadAndInstPointAnalysis.h -------------------*- C++ -*-===//
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,32 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-///
-/// \file
-/// This file describes Luthier's <tt>IModuleIRGeneratorPass</tt>,
-/// in charge of applying the \c InstrumentationTask to an instrumentation
-/// module loaded from a LLVM bitcode. It also describes the
-/// \c InjectedPayloadAndInstPoint which is the result of
-/// <tt>InstrumentationModuleIRGeneratorPass</tt>
+/// \file InjectedPayloadAndInstPointAnalysis.h
+/// This file describes the \c InjectedPayloadAndInstPointAnalysis which
+/// maps injected payload functions in the instrumentation module to their
+/// corresponding target \c MachineInstr instrumentation points.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_IMODULE_IR_GENERATION_PASS_H
-#define LUTHIER_TOOLING_IMODULE_IR_GENERATION_PASS_H
+#ifndef LUTHIER_TOOLING_INJECTED_PAYLOAD_AND_INST_POINT_ANALYSIS_H
+#define LUTHIER_TOOLING_INJECTED_PAYLOAD_AND_INST_POINT_ANALYSIS_H
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/CodeGen/MachineInstr.h>
 #include <llvm/IR/PassManager.h>
 
 namespace luthier {
 
-class InstrumentationTask;
-
 class InjectedPayloadAndInstPoint {
 private:
-  // A map to keep track of the injected payload functions inside the
-  // instrumentation module given the MI they will be patched into
+  /// A map to keep track of the injected payload functions inside the
+  /// instrumentation module given the MI they will be patched into
   llvm::DenseMap<llvm::MachineInstr *, llvm::Function *>
       AppMIToInjectedPayloadMap;
-  // An inverse mapping of the above DenseMap, relating each injected payload
-  // function to its target MI in the application
+  /// An inverse mapping of the above DenseMap, relating each injected payload
+  /// function to its target MI in the application
   llvm::DenseMap<llvm::Function *, llvm::MachineInstr *>
       InjectedPayloadToAppMIMap;
 
@@ -121,18 +116,7 @@ public:
 
   InjectedPayloadAndInstPointAnalysis() = default;
 
-  Result run(llvm::Module &M, llvm::ModuleAnalysisManager &);
-};
-
-class IModuleIRGeneratorPass
-    : public llvm::PassInfoMixin<IModuleIRGeneratorPass> {
-private:
-  // const InstrumentationTask &Task;
-
-public:
-  IModuleIRGeneratorPass() = default;
-
-  llvm::PreservedAnalyses run(llvm::Module &M, llvm::ModuleAnalysisManager &);
+  Result run(llvm::Module &IModule, llvm::ModuleAnalysisManager &);
 };
 
 } // namespace luthier
