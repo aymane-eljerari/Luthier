@@ -164,29 +164,29 @@ loadIModule(llvm::MemoryBufferRef Buffer, IModuleFormat Format,
   return std::make_pair(std::move(M), std::move(MIRParser));
 }
 
-llvm::Error dumpLuthierFile(llvm::StringRef OutputPath,
-                            llvm::Module &TargetModule, llvm::Module &IModule,
-                            llvm::MachineModuleInfo *IModuleMMI) {
+llvm::Error writeLuthierFile(llvm::raw_ostream &OS, llvm::Module &TargetModule,
+                             llvm::Module &IModule,
+                             llvm::MachineModuleInfo *IModuleMMI) {
   LuthierFile F;
 
   // Serialize the target module as IR text.
   {
-    llvm::raw_string_ostream OS(F.TargetModule.S);
-    TargetModule.print(OS, nullptr);
+    llvm::raw_string_ostream SS(F.TargetModule.S);
+    TargetModule.print(SS, nullptr);
   }
 
   // Serialize the instrumentation module: MIR if MMI was provided, IR
   // otherwise.
   if (IModuleMMI) {
     F.Format = IModuleFormat::MIR;
-    llvm::raw_string_ostream OS(F.InstrumentationModule.S);
-    llvm::printMIR(OS, IModule);
+    llvm::raw_string_ostream SS(F.InstrumentationModule.S);
+    llvm::printMIR(SS, IModule);
     for (const llvm::Function &Fn : IModule)
       if (auto *MF = IModuleMMI->getMachineFunction(Fn))
         llvm::printMIR(OS, *IModuleMMI, *MF);
   } else {
-    llvm::raw_string_ostream OS(F.InstrumentationModule.S);
-    IModule.print(OS, nullptr);
+    llvm::raw_string_ostream SS(F.InstrumentationModule.S);
+    IModule.print(SS, nullptr);
   }
 
   // Find MDNodes shared between both modules (same pointer = same LLVMContext
@@ -204,16 +204,8 @@ llvm::Error dumpLuthierFile(llvm::StringRef OutputPath,
       F.MDSlotMap.push_back({IModSlot, It->second});
   }
 
-  std::error_code EC;
-  auto OutFile = std::make_unique<llvm::ToolOutputFile>(OutputPath, EC,
-                                                        llvm::sys::fs::OF_Text);
-  if (EC)
-    return LUTHIER_MAKE_GENERIC_ERROR("Failed to open .luthier output file '" +
-                                      OutputPath.str() + "': " + EC.message());
-
-  llvm::yaml::Output Yout(OutFile->os());
+  llvm::yaml::Output Yout(OS);
   Yout << F;
-  OutFile->keep();
   return llvm::Error::success();
 }
 

@@ -167,17 +167,14 @@ loadIModule(llvm::MemoryBufferRef Buffer, IModuleFormat Format,
             const std::vector<MDSlotEntry> &MDSlotMap, llvm::LLVMContext &Ctx,
             llvm::Module &TargetModule);
 
-/// Serializes \p TargetModule and \p IModule as a .luthier YAML file at
-/// \p OutputPath, embedding a cross-module \c MDSlotMap so that
-/// \c loadLinkedLuthierFile can restore the inter-module MDNode links.
-///
-/// If \p IModuleMMI is non-null the instrumentation module is written as MIR
-/// (IR declarations followed by machine functions from \p IModuleMMI) and the
-/// \c Format field is set to \c MIR.  Otherwise the module is written as LLVM
-/// IR text and \c Format is omitted (defaults to \c IR on load).
-llvm::Error dumpLuthierFile(llvm::StringRef OutputPath,
-                            llvm::Module &TargetModule, llvm::Module &IModule,
-                            llvm::MachineModuleInfo *IModuleMMI = nullptr);
+/// Serializes \p TargetModule and \p IModule as a .luthier YAML file into
+/// the \p OS
+/// If \p IModuleMMI is specified the instrumentation module is written as MIR
+/// and its \c Format field is set to \c MIR; Otherwise the module is written
+/// as LLVM IR text
+llvm::Error writeLuthierFile(llvm::raw_ostream &OS, llvm::Module &TargetModule,
+                             llvm::Module &IModule,
+                             llvm::MachineModuleInfo *IModuleMMI = nullptr);
 
 } // namespace luthier
 
