@@ -98,10 +98,8 @@ public:
     return llvm::make_range(payload_mi_begin(), payload_mi_end());
   }
 
-  bool invalidate(llvm::Module &, const llvm::PreservedAnalyses &,
-                  llvm::ModuleAnalysisManager::Invalidator &) {
-    return false;
-  }
+  bool invalidate(llvm::Module &IModule, const llvm::PreservedAnalyses &PA,
+                  llvm::ModuleAnalysisManager::Invalidator &PAC);
 };
 
 class InjectedPayloadAndInstPointAnalysis

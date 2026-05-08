@@ -30,6 +30,17 @@
 
 namespace luthier {
 
+bool InjectedPayloadAndInstPoint::invalidate(
+    llvm::Module &IModule, const llvm::PreservedAnalyses &PA,
+    llvm::ModuleAnalysisManager::Invalidator &Inv) {
+  /// Invalidates this cached result whenever \c
+  /// InjectedPayloadAndInstPointAnalysis is not preserved — i.e., whenever a
+  /// pass adds or removes injected payload functions from the IModule.
+  auto PAC = PA.getChecker<InjectedPayloadAndInstPointAnalysis>();
+  return !PAC.preserved() &&
+         !PAC.preservedSet<llvm::AllAnalysesOn<llvm::Module>>();
+}
+
 llvm::AnalysisKey InjectedPayloadAndInstPointAnalysis::Key;
 
 InjectedPayloadAndInstPointAnalysis::Result
@@ -69,8 +80,7 @@ InjectedPayloadAndInstPointAnalysis::run(llvm::Module &IModule,
     llvm::MDNode *MD = F.getMetadata(TargetInstrPointAttr);
     if (!MD)
       continue;
-    auto It = PCSToMI.find(MD);
-    if (It != PCSToMI.end())
+    if (auto It = PCSToMI.find(MD); It != PCSToMI.end())
       Result.addEntry(*It->second, F);
   }
 
