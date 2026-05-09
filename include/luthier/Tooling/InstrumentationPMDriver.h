@@ -76,6 +76,14 @@ struct InstrumentationPMDriverOptions {
       llvm::cl::desc("Dump the final instrumentation module state to this "
                      "file after all pipeline stages complete"),
       llvm::cl::cat(InstrumentationPMDriverOptionsCat)};
+
+  llvm::cl::opt<unsigned> IModuleOptLevel{
+      "imodule-O",
+      llvm::cl::desc(
+          "Optimization level for the instrumentation module IR pipeline "
+          "(0=none, 1=less, 2=default, 3=aggressive); defaults to the "
+          "global -O level if not specified"),
+      llvm::cl::cat(InstrumentationPMDriverOptionsCat)};
 };
 
 class InstrumentationPMDriver

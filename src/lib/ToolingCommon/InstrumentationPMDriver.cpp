@@ -58,6 +58,19 @@ namespace luthier {
 
 namespace {
 
+llvm::OptimizationLevel optLevelFromUnsigned(unsigned Level) {
+  switch (Level) {
+  case 0:
+    return llvm::OptimizationLevel::O0;
+  case 1:
+    return llvm::OptimizationLevel::O1;
+  case 3:
+    return llvm::OptimizationLevel::O3;
+  default:
+    return llvm::OptimizationLevel::O2;
+  }
+}
+
 struct LoadedIModule {
   std::unique_ptr<llvm::Module> Module;
   std::unique_ptr<llvm::MIRParser> MIRParser; // non-null only for .mir inputs
@@ -291,13 +304,18 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
 
     if (IsIRPassPipelineNotSpecified) {
       // TODO: IR pipeline — uncomment when deps are available:
-      // PreIROptimizationCallback(IMPM);
-      // for (const auto &Plugin : PassPlugins)
-      //   Plugin.registerPreIROptimizationPasses(IMPM);
-      // IMPM.addPass(PB.buildPerModuleDefaultPipeline(OptimizationLevel::O3));
-      // PreIRIntrinsicLoweringCallback(IMPM);
-      // for (const auto &Plugin : PassPlugins)
-      //   Plugin.invokePreLuthierIRIntrinsicLoweringPassesCallback(IMPM);
+      PreIROptimizationCallback(IMPM);
+      for (const auto &Plugin : PassPlugins)
+        Plugin.registerPreIROptimizationPasses(IMPM);
+      unsigned OptLevelVal =
+          Options.IModuleOptLevel.getNumOccurrences() > 0
+              ? Options.IModuleOptLevel.getValue()
+              : static_cast<unsigned>(TargetAppTM.getOptLevel());
+      IMPM.addPass(
+          PB.buildPerModuleDefaultPipeline(optLevelFromUnsigned(OptLevelVal)));
+      PreIRIntrinsicLoweringCallback(IMPM);
+      for (const auto &Plugin : PassPlugins)
+        Plugin.invokePreLuthierIRIntrinsicLoweringPassesCallback(IMPM);
       // IMPM.addPass(ProcessIntrinsicsAtIRLevelPass(*ITM));
       // PostIRIntrinsicLoweringCallback(IMPM);
       // for (const auto &Plugin : PassPlugins)
