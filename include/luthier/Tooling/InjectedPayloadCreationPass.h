@@ -1,4 +1,4 @@
-//===-- StandardInstrumentationPass.h -----------------------------*-C++-*-===//
+//===-- InjectedPayloadCreationPass.h -----------------------------*-C++-*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,15 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file StandardInstrumentationPass.h
-/// Defines the \c StandardInstrumentationPass CRTP base class that manages
-/// injected payload function construction for instrumentation passes.
+/// \file InjectedPayloadCreationPass.h
+/// Defines the \c InjectedPayloadCreationPass CRTP base class that combines
+/// \c InstrumentationPass dispatch with helpers for constructing injected
+/// payload functions.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_STANDARD_INSTRUMENTATION_PASS_H
-#define LUTHIER_TOOLING_STANDARD_INSTRUMENTATION_PASS_H
+#ifndef LUTHIER_TOOLING_INJECTED_PAYLOAD_CREATION_PASS_H
+#define LUTHIER_TOOLING_INJECTED_PAYLOAD_CREATION_PASS_H
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/Intrinsic/IntrinsicCalls.h"
 #include "luthier/Tooling/FunctionAnnotations.h"
+#include "luthier/Tooling/InstrumentationPass.h"
 #include "luthier/Tooling/TargetMachineInstrMDNode.h"
 #include <llvm/ADT/STLFunctionalExtras.h>
 #include <llvm/ADT/Twine.h>
@@ -37,14 +39,14 @@
 
 namespace luthier {
 
-/// \brief CRTP base class for Luthier instrumentation passes that inject
-/// payloads before target <tt>llvm::MachineInstr</tt>s.
-///
-/// Each call to \c createInjectedPayload produces a fresh \c void() function
-/// in the IModule and immediately attaches \c !luthier.target_instr_point
-/// metadata linking it to \p TargetMI.  Multiple payload functions for the
-/// same MI are merged by a later pass
-template <typename Derived> class StandardInstrumentationPass {
+/// \brief CRTP base class for Luthier instrumentation passes that want
+/// to construct inject payloads before target <tt>llvm::MachineInstr</tt>s.
+/// This is usually the first pass run by tools in the instrumentation process
+/// The default granularity of walking the target module is
+/// <tt>MachineFunction</tt>
+template <typename Derived, typename TargetUnitT = llvm::MachineFunction>
+class InjectedPayloadCreationPass
+    : public InstrumentationPass<Derived, llvm::Module, TargetUnitT> {
 public:
   /// Describes a register argument passed to a hook: the register to read
   /// and the LLVM type to interpret it as.
@@ -58,18 +60,20 @@ public:
   using PayloadArg = std::variant<llvm::Value *, RegArg>;
 
 protected:
-  /// Creates a new injected-payload function in \p IModule for \p TargetMI.
+  /// \brief Creates a new injected-payload function in \p IModule for \p
+  /// TargetMI.
   ///
-  /// A single entry \c BasicBlock is created and an \c IRBuilderBase pointing
-  /// into it is passed to \p Build.  After \p Build returns, a \c ret void is
-  /// appended and \c assignToInject is called to mark the function and attach
+  /// \details A single entry \c BasicBlock is created and an \c IRBuilderBase
+  /// pointing into it is passed to \p Build.  After \p Build returns, a \c ret
+  /// void is appended and \c assignToInject is called to mark the function and
+  /// attach
   /// \c !luthier.target_instr_point metadata.
   ///
   /// Name collisions with existing payloads for the same MI are resolved
   /// automatically by LLVM (appending \c .1, \c .2, …).
   ///
   /// \returns the newly created function, or an error if \p Build or metadata
-  /// attachment fails.
+  /// attachment fails
   llvm::Expected<llvm::Function *> createInjectedPayload(
       llvm::Module &IModule, const llvm::MachineInstr &TargetMI,
       llvm::function_ref<llvm::Error(llvm::IRBuilderBase &)> Build) {
@@ -115,7 +119,7 @@ protected:
   /// Convenience overload: creates an injected-payload function for \p TargetMI
   /// that calls \p HookFn with \p Args
   /// \c RegArg entries in \p Args are lowered to \c luthier::readReg intrinsic
-  /// calls; \c Value* entries are forwarded directly.
+  /// calls; \c Value* entries are forwarded directly
   llvm::Error createInjectedPayload(llvm::Function &HookFn,
                                     const llvm::MachineInstr &TargetMI,
                                     llvm::ArrayRef<PayloadArg> Args = {}) {
@@ -144,7 +148,7 @@ protected:
     return llvm::Error::success();
   }
 
-  /// Marks the \p PayloadFn as an injected payload for \p TargetMI
+  /// Marks \p PayloadFn as an injected payload for \p TargetMI.
   /// \p PayloadFn must be \c void() with no arguments; an error is returned
   /// otherwise
   llvm::Error assignToInject(llvm::Function &PayloadFn,
@@ -163,8 +167,7 @@ protected:
         return MDOrErr.takeError();
     }
 
-    PayloadFn.setMetadata(TargetInstrPointAttr,
-                          TargetMI.getPCSections());
+    PayloadFn.setMetadata(TargetInstrPointAttr, TargetMI.getPCSections());
     return llvm::Error::success();
   }
 };
