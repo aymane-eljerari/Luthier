@@ -20,7 +20,9 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_INJECTED_PAYLOAD_AND_INST_POINT_ANALYSIS_H
 #define LUTHIER_TOOLING_INJECTED_PAYLOAD_AND_INST_POINT_ANALYSIS_H
+#include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/DenseMap.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/CodeGen/MachineInstr.h>
 #include <llvm/IR/PassManager.h>
 
@@ -28,12 +30,11 @@ namespace luthier {
 
 class InjectedPayloadAndInstPoint {
 private:
-  /// A map to keep track of the injected payload functions inside the
-  /// instrumentation module given the MI they will be patched into
-  llvm::DenseMap<llvm::MachineInstr *, llvm::Function *>
-      AppMIToInjectedPayloadMap;
-  /// An inverse mapping of the above DenseMap, relating each injected payload
-  /// function to its target MI in the application
+  /// Maps each target MI to the ordered list of injected payload functions
+  /// that will be patched before it
+  llvm::DenseMap<llvm::MachineInstr *, llvm::SmallVector<llvm::Function *, 2>>
+      AppMIToInjectedPayloadsMap;
+  /// Inverse map: each injected payload function to its single target MI
   llvm::DenseMap<llvm::Function *, llvm::MachineInstr *>
       InjectedPayloadToAppMIMap;
 
@@ -41,7 +42,7 @@ public:
   InjectedPayloadAndInstPoint() = default;
 
   void addEntry(llvm::MachineInstr &AppMI, llvm::Function &InjectedPayload) {
-    AppMIToInjectedPayloadMap.insert({&AppMI, &InjectedPayload});
+    AppMIToInjectedPayloadsMap[&AppMI].push_back(&InjectedPayload);
     InjectedPayloadToAppMIMap.insert({&InjectedPayload, &AppMI});
   }
 
@@ -58,28 +59,30 @@ public:
     return InjectedPayloadToAppMIMap.contains(&InjectedPayload);
   }
 
-  [[nodiscard]] llvm::Function *at(const llvm::MachineInstr &AppMI) const {
-    return AppMIToInjectedPayloadMap.at(&AppMI);
+  [[nodiscard]] llvm::ArrayRef<llvm::Function *>
+  at(const llvm::MachineInstr &AppMI) const {
+    return AppMIToInjectedPayloadsMap.at(&AppMI);
   }
 
   [[nodiscard]] bool contains(const llvm::MachineInstr &AppMI) const {
-    return AppMIToInjectedPayloadMap.contains(&AppMI);
+    return AppMIToInjectedPayloadsMap.contains(&AppMI);
   }
 
-  using mi_payload_const_iterator =
-      llvm::DenseMap<llvm::MachineInstr *, llvm::Function *>::const_iterator;
+  using mi_payloads_const_iterator =
+      llvm::DenseMap<llvm::MachineInstr *,
+                     llvm::SmallVector<llvm::Function *, 2>>::const_iterator;
 
-  [[nodiscard]] mi_payload_const_iterator mi_payload_begin() const {
-    return AppMIToInjectedPayloadMap.begin();
+  [[nodiscard]] mi_payloads_const_iterator mi_payloads_begin() const {
+    return AppMIToInjectedPayloadsMap.begin();
   }
 
-  [[nodiscard]] mi_payload_const_iterator mi_payload_end() const {
-    return AppMIToInjectedPayloadMap.end();
+  [[nodiscard]] mi_payloads_const_iterator mi_payloads_end() const {
+    return AppMIToInjectedPayloadsMap.end();
   }
 
-  [[nodiscard]] llvm::iterator_range<mi_payload_const_iterator>
-  mi_payload() const {
-    return llvm::make_range(mi_payload_begin(), mi_payload_end());
+  [[nodiscard]] llvm::iterator_range<mi_payloads_const_iterator>
+  mi_payloads() const {
+    return llvm::make_range(mi_payloads_begin(), mi_payloads_end());
   }
 
   using payload_mi_const_iterator =
