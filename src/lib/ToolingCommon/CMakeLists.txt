@@ -36,7 +36,7 @@ add_library(LuthierToolingCommon OBJECT
         #        StateValueArrayStorage.cpp
         #        RunIRPassesOnIModulePass.cpp
         #        MMISlotIndexesAnalysis.cpp
-        #        ProcessIntrinsicsAtIRLevelPass.cpp
+        ProcessIntrinsicsAtIRLevelPass.cpp
         #        PhysRegsNotInLiveInsAnalysis.cpp
         WrapperAnalysisPasses.cpp
         #        RunMIRPassesOnIModulePass.cpp
@@ -45,7 +45,7 @@ add_library(LuthierToolingCommon OBJECT
         MockAMDGPULoader.cpp
         MetadataParserAnalysis.cpp
         #        IntrinsicProcessorRegistry.cpp
-        #        IntrinsicProcessorsAnalysis.cpp
+        IntrinsicProcessorsAnalysis.cpp
         InjectedPayloadAndInstPointAnalysis.cpp
         InstrumentationPMDriver.cpp
         MockLoadAMDGPUCodeObjects.cpp

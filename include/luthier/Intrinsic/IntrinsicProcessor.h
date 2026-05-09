@@ -25,6 +25,7 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/InlineAsm.h>
+#include <llvm/IR/Metadata.h>
 #include <llvm/MC/MCRegister.h>
 #include <llvm/Support/Error.h>
 #include <string>
@@ -48,13 +49,19 @@ class CallInst;
 class GCNTargetMachine;
 
 class MachineInstrBuilder;
+
+class Metadata;
+
+class MDNode;
 } // namespace llvm
 
 namespace luthier {
 
-/// The header of the intrinsics's extra info in the PC sections of an
-/// instruction
-static constexpr auto IntrinsicExtraInfoHeader = "luthier.intrinsic.extra_info";
+/// Section-name prefix in the \c !pcsections MDNode attached to Luthier
+/// intrinsic placeholder inline-asm instructions. The intrinsic base name
+/// follows immediately after this prefix.
+static constexpr llvm::StringLiteral LuthierIntrinsicPCSectionPrefix{
+    "luthier.intrinsic: "};
 
 /// \brief A set of scalar value arguments Luthier's intrinsic lowering
 /// mechanism can ensure access to
@@ -179,9 +186,8 @@ private:
   /// How the argument values (if present) must be lowered to a
   /// \c llvm::Register
   llvm::SmallVector<ValueLoweringInfo, 4> Args{};
-  /// A list of <tt>llvm::Constant</tt>s passed as extra information to the MIR
-  /// lowering stage
-  llvm::SmallVector<llvm::Constant *> ExtraInfoValues{};
+  /// Metadata values forwarded to the MIR lowering stage as a payload MDNode
+  llvm::SmallVector<llvm::Metadata *> ExtraInfoValues{};
 
 public:
   /// Sets the inline asm constraint to \p Constraint for the given
@@ -205,13 +211,20 @@ public:
   /// \returns All arguments' \c IntrinsicValueLoweringInfo
   llvm::ArrayRef<ValueLoweringInfo> getArgsInfo() const { return Args; }
 
-  /// Adds \p Val as an extra value to be passed to the MIR lowering stage
-  void addExtraLoweringValue(llvm::Constant &Val) {
+  /// Adds \p Val as an extra metadata value to be forwarded to the MIR
+  /// lowering stage
+  void addExtraLoweringValue(llvm::Metadata &Val) {
     ExtraInfoValues.emplace_back(&Val);
   }
 
-  /// \returns The list of all extra lowering constants
-  llvm::ArrayRef<llvm::Constant *> getExtraLoweringValues() const {
+  /// Convenience overload: wraps \p Val in \c ConstantAsMetadata before
+  /// forwarding it to the MIR lowering stage
+  void addExtraLoweringValue(llvm::Constant &Val) {
+    ExtraInfoValues.emplace_back(llvm::ConstantAsMetadata::get(&Val));
+  }
+
+  /// \returns The list of all extra lowering metadata values
+  llvm::ArrayRef<llvm::Metadata *> getExtraLoweringValues() const {
     return ExtraInfoValues;
   }
 };
@@ -240,7 +253,7 @@ typedef std::function<llvm::Expected<IntrinsicIRLoweringInfo>(
 typedef std::function<llvm::Error(
     const llvm::MachineFunction &,
     llvm::ArrayRef<std::pair<llvm::InlineAsm::Flag, llvm::Register>>,
-    llvm::ArrayRef<llvm::Constant *>,
+    llvm::MDNode *,
     const std::function<llvm::MachineInstrBuilder(int)> &,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)> &,
     const std::function<llvm::Register(ScalarValueArgument)> &,

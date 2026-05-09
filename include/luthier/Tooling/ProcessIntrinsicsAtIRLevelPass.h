@@ -1,5 +1,5 @@
 //===-- ProcessIntrinsicsAtIRLevelPass.h ------------------------*- C++ -*-===//
-// Copyright 2022-2026 @ Northeastern University Computer Architecture Lab
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 /// \file ProcessIntrinsicsAtIRLevelPass.h
-/// This file describes the <tt>ProcessIntrinsicsAtIRLevelPass</tt>,
+/// Describes the <tt>ProcessIntrinsicsAtIRLevelPass</tt>,
 /// in charge of running the IR processing stage of Luthier intrinsics in
 /// the instrumentation module.
 //===----------------------------------------------------------------------===//
