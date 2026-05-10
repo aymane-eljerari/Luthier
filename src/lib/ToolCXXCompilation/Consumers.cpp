@@ -14,7 +14,7 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolingCXXCompilation/Consumers.h"
-#include "luthier/ToolingCXXCompilation/HostHandleSynthPlugin.h"
+#include "luthier/ToolingCXXCompilation/Annotations.h"
 #include "luthier/ToolingCXXCompilation/Mangling.h"
 #include <clang/AST/AST.h>
 #include <clang/AST/ASTConsumer.h>

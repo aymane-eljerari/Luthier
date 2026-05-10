@@ -14,7 +14,7 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolingCXXCompilation/Attributes.h"
-#include "luthier/ToolingCXXCompilation/HostHandleSynthPlugin.h"
+#include "luthier/ToolingCXXCompilation/Annotations.h"
 #include <clang/AST/Attr.h>
 #include <clang/AST/Decl.h>
 #include <clang/Sema/Sema.h>
