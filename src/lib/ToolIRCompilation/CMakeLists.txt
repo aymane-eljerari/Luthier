@@ -1,0 +1,18 @@
+add_library(LuthierToolIRCompilation OBJECT
+        EmbedIModuleOrchestratorPass.cpp
+        MarkAnnotationsPass.cpp
+        FinalizeHooksPass.cpp
+        FinalizeIntrinsicsPass.cpp
+        StripKernelsPass.cpp
+        ExternalizeGlobalsPass.cpp
+        LowerHIPDeviceIntrinsicsPass.cpp)
+
+target_compile_definitions(LuthierToolIRCompilation
+        PRIVATE ${LLVM_DEFINITIONS})
+
+target_include_directories(LuthierToolIRCompilation
+        PRIVATE
+        ${LLVM_INCLUDE_DIRS}
+        PUBLIC
+        "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>"
+        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")

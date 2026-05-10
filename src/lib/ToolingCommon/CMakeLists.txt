@@ -28,11 +28,11 @@ add_library(LuthierToolingCommon OBJECT
         #        PhysicalRegAccessVirtualizationPass.cpp
         #        SVStorageAndLoadLocations.cpp
         #        IPPredicatedLiveness.cpp
-        #        IntrinsicMIRLoweringPass.cpp
+        IntrinsicMIRLoweringPass.cpp
         #        InjectedPayloadPEIPass.cpp
         #        PrePostAmbleEmitter.cpp
-        #        StateValueArraySpecs.cpp
-        #        IPPredicatedCFG.cpp
+        StateValueArraySpecs.cpp
+        IPPredicatedCFG.cpp
         #        StateValueArrayStorage.cpp
         #        RunIRPassesOnIModulePass.cpp
         #        MMISlotIndexesAnalysis.cpp
@@ -44,7 +44,7 @@ add_library(LuthierToolingCommon OBJECT
         MIRConvenience.cpp
         MockAMDGPULoader.cpp
         MetadataParserAnalysis.cpp
-        #        IntrinsicProcessorRegistry.cpp
+        IntrinsicProcessorRegistry.cpp
         IntrinsicProcessorsAnalysis.cpp
         InjectedPayloadAndInstPointAnalysis.cpp
         InstrumentationPMDriver.cpp

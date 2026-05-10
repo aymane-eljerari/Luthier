@@ -11,14 +11,13 @@ find_package(hsa-runtime64 REQUIRED CONFIG)
 
 find_package(LLVM REQUIRED CONFIG)
 
+find_package(Clang REQUIRED CONFIG)
+
 include(LuthierFetchLLVMSrc)
 
 if (NOT IS_DIRECTORY ${LUTHIER_LLVM_SRC_DIR})
     luthier_fetch_llvm_src(${LLVM_INCLUDE_DIRS} LUTHIER_LLVM_SRC_DIR)
 endif ()
-
-# Get the include directory of amd_comgr
-get_target_property(amd_comgr_INCLUDE_DIRS amd_comgr INTERFACE_INCLUDE_DIRECTORIES)
 
 # Get the include directory of hsa-runtime64
 get_target_property(hsa-runtime64_INCLUDE_DIRS hsa-runtime64::hsa-runtime64 INTERFACE_INCLUDE_DIRECTORIES)
