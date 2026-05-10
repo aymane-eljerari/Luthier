@@ -1,5 +1,5 @@
 add_library(LuthierToolIRCompilation OBJECT
-        EmbedIModuleOrchestratorPass.cpp
+        CreateAndEmbedIModulePass.cpp
         MarkAnnotationsPass.cpp
         FinalizeHooksPass.cpp
         FinalizeIntrinsicsPass.cpp
