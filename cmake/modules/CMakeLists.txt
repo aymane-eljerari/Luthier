@@ -24,6 +24,13 @@ configure_file(
 install(FILES ${CMAKE_BINARY_DIR}/lib/cmake/luthier/LuthierAddCompilerPlugin.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/luthier)
 
+configure_file(
+        ${CMAKE_SOURCE_DIR}/cmake/modules/LuthierAddClangPlugin.cmake
+        ${CMAKE_BINARY_DIR}/lib/cmake/luthier/LuthierAddClangPlugin.cmake COPYONLY)
+
+install(FILES ${CMAKE_BINARY_DIR}/lib/cmake/luthier/LuthierAddClangPlugin.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/luthier)
+
 # Install Include directories
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include
         DESTINATION ${CMAKE_INSTALL_PREFIX})
@@ -33,7 +40,8 @@ install(DIRECTORY ${CMAKE_BINARY_DIR}/include
 
 # Install & Export Targets
 
-install(TARGETS LuthierAMDGPU LuthierTooling LuthierIModuleEmbedPlugin
+install(TARGETS LuthierAMDGPU LuthierTooling LuthierToolIRCompilationPlugin
+        LuthierToolCXXCompilationPlugin
         DESTINATION ${CMAKE_INSTALL_LIBDIR}
         EXPORT luthierTargets
         FILE_SET amdgpu_tablegen_incs DESTINATION

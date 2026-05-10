@@ -10,5 +10,6 @@ find_dependency(rocprofiler-sdk REQUIRED)
 # import the Luthier targets
 include("${_dir}/luthierTargets.cmake")
 
-# Import the compiler plugin macro
+# Import the plugin macros
 include("${_dir}/LuthierAddCompilerPlugin.cmake")
+include("${_dir}/LuthierAddClangPlugin.cmake")
