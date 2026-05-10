@@ -17,13 +17,13 @@
 /// LLVM pass plugin for registering Luthier's tool IR compilation passes to
 /// the compilation pipeline.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolingIRCompilation/EmbedIModuleOrchestratorPass.h"
+#include "luthier/ToolingIRCompilation/CreateAndEmbedIModulePass.h"
 #include "luthier/ToolingIRCompilation/ExternalizeGlobalsPass.h"
 #include "luthier/ToolingIRCompilation/FinalizeHooksPass.h"
 #include "luthier/ToolingIRCompilation/FinalizeIntrinsicsPass.h"
-#include "luthier/ToolingIRCompilation/LowerHIPDeviceIntrinsicsPass.h"
 #include "luthier/ToolingIRCompilation/MarkAnnotationsPass.h"
 #include "luthier/ToolingIRCompilation/StripKernelsPass.h"
+#include "luthier/ToolingIRCompilation/SubstituteAMDGCNIntrinsicsPass.h"
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Plugins/PassPlugin.h>
 
@@ -50,8 +50,8 @@ void registerEmbedIModulePasses(llvm::PassBuilder &PB) {
                tryParsePass<luthier::FinalizeIntrinsicsPass>(Name, MPM) ||
                tryParsePass<luthier::StripKernelsPass>(Name, MPM) ||
                tryParsePass<luthier::ExternalizeGlobalsPass>(Name, MPM) ||
-               tryParsePass<luthier::LowerHIPDeviceIntrinsicsPass>(Name, MPM) ||
-               tryParsePass<luthier::EmbedIModuleOrchestratorPass>(Name, MPM);
+               tryParsePass<luthier::SubstituteAMDGCNIntrinsicsPass>(Name, MPM) ||
+               tryParsePass<luthier::CreateAndEmbedIModulePass>(Name, MPM);
       });
 
   PB.registerOptimizerLastEPCallback(
@@ -60,7 +60,7 @@ void registerEmbedIModulePasses(llvm::PassBuilder &PB) {
          ,
          llvm::ThinOrFullLTOPhase
 #endif
-      ) { MPM.addPass(luthier::EmbedIModuleOrchestratorPass()); });
+      ) { MPM.addPass(luthier::CreateAndEmbedIModulePass()); });
 }
 
 } // namespace
