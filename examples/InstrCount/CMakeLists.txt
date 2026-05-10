@@ -10,6 +10,6 @@ add_library(LuthierInstrCount SHARED InstrCount.hip)
 
 set_property(TARGET LuthierInstrCount PROPERTY COMPILE_FLAGS "-fPIC")
 
-luthier_add_compiler_plugin(LuthierInstrCount LuthierIModuleEmbedPlugin)
+luthier_add_compiler_plugin(LuthierInstrCount LuthierToolIRCompilationPlugin)
 
 target_link_libraries(LuthierInstrCount PRIVATE LuthierTooling hip::device)

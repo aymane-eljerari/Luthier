@@ -9,6 +9,6 @@ find_package(LLVM REQUIRED)
 
 add_library(LuthierOpcodeHistogram SHARED OpcodeHistogram.hip)
 
-luthier_add_compiler_plugin(LuthierOpcodeHistogram LuthierIModuleEmbedPlugin)
+luthier_add_compiler_plugin(LuthierOpcodeHistogram LuthierToolIRCompilationPlugin)
 
 target_link_libraries(LuthierOpcodeHistogram PUBLIC LuthierTooling LLVMDemangle hip::device hip::host)

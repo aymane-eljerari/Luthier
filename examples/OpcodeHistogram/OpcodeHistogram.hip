@@ -109,13 +109,11 @@ LUTHIER_HOOK_ANNOTATE countOpcodeHistogramVector(bool CountWaveFrontLevel,
   }
 }
 
-LUTHIER_EXPORT_HOOK_HANDLE(countOpcodeHistogramVector);
 
 LUTHIER_HOOK_ANNOTATE countOpcodeHistogramScalar(int OpcodeNumber) {
   luthier::sAtomicAdd(&KernelHistogram[OpcodeNumber], 1UL);
 }
 
-LUTHIER_EXPORT_HOOK_HANDLE(countOpcodeHistogramScalar);
 
 static llvm::Error instrumentationLoop(InstrumentationTask &IT,
                                        LiftedRepresentation &LR) {

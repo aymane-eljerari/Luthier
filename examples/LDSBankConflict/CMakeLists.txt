@@ -9,6 +9,6 @@ find_package(LLVM REQUIRED)
 
 add_library(LuthierLDSBankConflict SHARED LDSBankConflict.hip)
 
-luthier_add_compiler_plugin(LuthierLDSBankConflict LuthierIModuleEmbedPlugin)
+luthier_add_compiler_plugin(LuthierLDSBankConflict LuthierToolIRCompilationPlugin)
 
 target_link_libraries(LuthierLDSBankConflict PUBLIC LuthierTooling LLVMDemangle hip::device hip::host)

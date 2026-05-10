@@ -72,14 +72,12 @@ LUTHIER_HOOK_ANNOTATE instrumentationHookUint32(const llvm::MCRegister Reg,
   luthier::writeReg(Reg, Val);
 }
 
-LUTHIER_EXPORT_HOOK_HANDLE(instrumentationHookUint32);
 
 LUTHIER_HOOK_ANNOTATE instrumentationHookUint64(const llvm::MCRegister Reg,
                                                 const uint64_t Val) {
   luthier::writeReg(Reg, Val);
 }
 
-LUTHIER_EXPORT_HOOK_HANDLE(instrumentationHookUint64);
 
 LUTHIER_HOOK_ANNOTATE instrumentationHook(const llvm::MCRegister Reg,
                                           const uint32_t Val) {
@@ -126,7 +124,6 @@ LUTHIER_HOOK_ANNOTATE instrumentationHook(const llvm::MCRegister Reg,
   //  }
 }
 
-LUTHIER_EXPORT_HOOK_HANDLE(instrumentationHook);
 
 static void
 atPacketDispatchCallback(const hsa_queue_t &Queue, uint64_t PacketIdx,

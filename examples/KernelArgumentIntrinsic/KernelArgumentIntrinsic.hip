@@ -78,7 +78,6 @@ MARK_LUTHIER_DEVICE_MODULE
 
 LUTHIER_HOOK_ANNOTATE accessKernelArg() { BlockCount = gridDim; }
 
-LUTHIER_EXPORT_HOOK_HANDLE(accessKernelArg);
 
 //===----------------------------------------------------------------------===//
 // Tool Callbacks

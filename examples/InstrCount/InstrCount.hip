@@ -116,13 +116,11 @@ LUTHIER_HOOK_ANNOTATE countInstructionsVector(bool CountWaveFrontLevel) {
   }
 }
 
-LUTHIER_EXPORT_HOOK_HANDLE(countInstructionsVector);
 
 LUTHIER_HOOK_ANNOTATE countInstructionsScalar() {
   (void)luthier::sAtomicAdd(&Counter, 1UL);
 }
 
-LUTHIER_EXPORT_HOOK_HANDLE(countInstructionsScalar);
 
 //===----------------------------------------------------------------------===//
 // Tool Callbacks

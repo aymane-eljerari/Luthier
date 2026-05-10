@@ -130,7 +130,6 @@ countUniqueBanksPerWarpSingleAddress(unsigned int M0, unsigned int VAddr,
   atomicAdd(&NumBankConflicts, 1.f / NumWorkItemsWithSameBankID);
 }
 
-LUTHIER_EXPORT_HOOK_HANDLE(countUniqueBanksPerWarpSingleAddress);
 
 ///
 /// \param M0
@@ -183,7 +182,6 @@ countUniqueBanksPerWarpDoubleAddress(unsigned int M0, unsigned int VAddr,
   atomicAdd(&NumBankConflicts, 1.f / NumWorkItemsWithSameBankID0);
   atomicAdd(&NumBankConflicts, 1.f / NumWorkItemsWithSameBankID1);
 }
-LUTHIER_EXPORT_HOOK_HANDLE(countUniqueBanksPerWarpDoubleAddress);
 
 LUTHIER_HOOK_ANNOTATE countUniqueBanksPerWarpDoubleAddressTwoSource32(
     unsigned int M0, unsigned int VAddr, uint16_t Offset0, uint16_t Offset1,
@@ -229,7 +227,6 @@ LUTHIER_HOOK_ANNOTATE countUniqueBanksPerWarpDoubleAddressTwoSource32(
   atomicAdd(&NumBankConflicts, 1.f / NumWorkItemsWithSameBankID0);
   atomicAdd(&NumBankConflicts, 1.f / NumWorkItemsWithSameBankID1);
 }
-LUTHIER_EXPORT_HOOK_HANDLE(countUniqueBanksPerWarpDoubleAddressTwoSource32);
 
 LUTHIER_HOOK_ANNOTATE countUniqueBanksPerWarpDoubleAddressTwoSource64(
     unsigned int M0, unsigned int VAddr, uint16_t Offset0, uint16_t Offset1,
@@ -276,7 +273,6 @@ LUTHIER_HOOK_ANNOTATE countUniqueBanksPerWarpDoubleAddressTwoSource64(
   atomicAdd(&NumBankConflicts, 1.f / NumWorkItemsWithSameBankID1);
 }
 
-LUTHIER_EXPORT_HOOK_HANDLE(countUniqueBanksPerWarpDoubleAddressTwoSource64);
 
 static llvm::Error instrumentSingleAddressDSOps(InstrumentationTask &IT,
                                                 llvm::LLVMContext &Ctx,
