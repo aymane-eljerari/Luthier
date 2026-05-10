@@ -34,13 +34,13 @@ implicitArgPtrIRProcessor(const llvm::Function &Intrinsic,
                           const llvm::GCNTargetMachine &TM);
 
 llvm::Error implicitArgPtrMIRProcessor(
-    const IntrinsicIRLoweringInfo &IRLoweringInfo,
+    const llvm::MachineFunction &MF,
     llvm::ArrayRef<std::pair<llvm::InlineAsm::Flag, llvm::Register>> Args,
+    llvm::MDNode *Payload,
     const std::function<llvm::MachineInstrBuilder(int)> &MIBuilder,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)>
         &VirtRegBuilder,
     const std::function<llvm::Register(ScalarValueArgument)> &KernArgAccessor,
-    const llvm::MachineFunction &MF,
     const std::function<llvm::Register(llvm::MCRegister)> &PhysRegAccessor,
     llvm::DenseMap<llvm::MCRegister, llvm::Register> &PhysRegsToBeOverwritten);
 

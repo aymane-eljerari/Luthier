@@ -52,13 +52,13 @@ implicitArgPtrIRProcessor(const llvm::Function &Intrinsic,
 }
 
 llvm::Error implicitArgPtrMIRProcessor(
-    const IntrinsicIRLoweringInfo &IRLoweringInfo,
+    const llvm::MachineFunction &MF,
     llvm::ArrayRef<std::pair<llvm::InlineAsm::Flag, llvm::Register>> Args,
+    llvm::MDNode *Payload,
     const std::function<llvm::MachineInstrBuilder(int)> &MIBuilder,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)>
         &VirtRegBuilder,
     const std::function<llvm::Register(ScalarValueArgument)> &KernArgAccessor,
-    const llvm::MachineFunction &MF,
     const std::function<llvm::Register(llvm::MCRegister)> &PhysRegAccessor,
     llvm::DenseMap<llvm::MCRegister, llvm::Register> &PhysRegsToBeOverwritten) {
   // There should be only a single virtual register involved in the operation
@@ -73,9 +73,9 @@ llvm::Error implicitArgPtrMIRProcessor(
       "The register argument of luthier::implicitArgPtr is not a definition."));
   llvm::Register Output = Args[0].second;
   // Get the kernel argument
-  llvm::Register KernArgSGPR = KernArgAccessor(KERNARG_SEGMENT_PTR);
+  llvm::Register KernArgSGPR = KernArgAccessor(KERNEL_ARG_PTR);
   // Get the offset of the hidden arg
-  llvm::Register HiddenOffsetSGPR = KernArgAccessor(HIDDEN_KERNARG_OFFSET);
+  llvm::Register HiddenOffsetSGPR = KernArgAccessor(IMPLICIT_ARG_OFFSET);
 
   llvm::Register FirstAddSGPR = VirtRegBuilder(&llvm::AMDGPU::SGPR_32RegClass);
 

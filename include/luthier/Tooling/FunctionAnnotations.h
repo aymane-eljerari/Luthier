@@ -152,18 +152,21 @@ static constexpr const char *TargetInstrPointAttr =
 #define MARK_LUTHIER_DEVICE_MODULE                                             \
   __attribute__((managed, used)) char LUTHIER_RESERVED_MANAGED_VAR = 0;
 
+/// \brief Tags a \c __device__ function to be accessed by the tool's
+/// host code
+#define LUTHIER_EXPORT_FUNCTION_HANDLE_ATTR                                    \
+  __attribute__((luthier_export_function_handle))
+
 #define LUTHIER_HOOK_ANNOTATE                                                  \
-  __attribute__((                                                              \
-      device, used,                                                            \
-      annotate(LUTHIER_STRINGIFY(LUTHIER_HOOK_ATTRIBUTE)))) extern "C" void
+  __attribute__((device, used,                                                 \
+                 annotate(LUTHIER_STRINGIFY(LUTHIER_HOOK_ATTRIBUTE))))         \
+  LUTHIER_EXPORT_FUNCTION_HANDLE_ATTR extern "C" void
 
-#define LUTHIER_EXPORT_HOOK_HANDLE(HookName)                                   \
-  __attribute__((global, used)) extern "C" void LUTHIER_CAT(                   \
-      LUTHIER_HOOK_HANDLE_PREFIX, HookName)(){};
-
-#define LUTHIER_GET_HOOK_HANDLE(HookName)                                      \
-  reinterpret_cast<const void *>(                                              \
-      LUTHIER_CAT(LUTHIER_HOOK_HANDLE_PREFIX, HookName))
+/// Marks a non-hook \c __device__ function as host-addressable. Use this
+/// when host code needs the address of a device function that is not a
+/// Luthier hook (e.g. a helper invoked indirectly).
+#define LUTHIER_HOST_VISIBLE_DEVICE_FN                                         \
+  __attribute__((device)) LUTHIER_EXPORT_FUNCTION_HANDLE_ATTR
 
 #define LUTHIER_ANNOTATE_VARIABLE(AnnotationString) \
 __attribute__((annotate(AnnotationString)))
