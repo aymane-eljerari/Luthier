@@ -20,44 +20,42 @@
 #include <clang/Sema/Sema.h>
 #include <clang/Sema/SemaDiagnostic.h>
 
-using namespace clang;
-
 namespace luthier {
 
 LuthierExportFunctionHandleAttrInfo::LuthierExportFunctionHandleAttrInfo() {
   static constexpr Spelling S[] = {
-      {ParsedAttr::AS_GNU, "luthier_export_function_handle"},
-      {ParsedAttr::AS_CXX11, "luthier::export_function_handle"},
-      {ParsedAttr::AS_C23, "luthier::export_function_handle"},
+      {clang::ParsedAttr::AS_GNU, "luthier_export_function_handle"},
+      {clang::ParsedAttr::AS_CXX11, "luthier::export_function_handle"},
+      {clang::ParsedAttr::AS_C23, "luthier::export_function_handle"},
   };
   Spellings = S;
 }
 
 bool LuthierExportFunctionHandleAttrInfo::diagAppertainsToDecl(
-    Sema &S, const ParsedAttr &Attr, const Decl *D) const {
-  if (!llvm::isa<FunctionDecl>(D)) {
-    S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
-        << Attr << Attr.isRegularKeywordAttribute() << ExpectedFunction;
+    clang::Sema &S, const clang::ParsedAttr &Attr, const clang::Decl *D) const {
+  if (!llvm::isa<clang::FunctionDecl>(D)) {
+    S.Diag(Attr.getLoc(), clang::diag::warn_attribute_wrong_decl_type)
+        << Attr << Attr.isRegularKeywordAttribute() << clang::ExpectedFunction;
     return false;
   }
   return true;
 }
 
-ParsedAttrInfo::AttrHandling
+clang::ParsedAttrInfo::AttrHandling
 LuthierExportFunctionHandleAttrInfo::handleDeclAttribute(
-    Sema &S, Decl *D, const ParsedAttr &Attr) const {
-  auto *FD = llvm::cast<FunctionDecl>(D);
-  ASTContext &Ctx = S.Context;
-  FD->addAttr(AnnotateAttr::Create(Ctx, ExportFunctionHandleMarker, nullptr, 0,
-                                   Attr.getRange()));
+    clang::Sema &S, clang::Decl *D, const clang::ParsedAttr &Attr) const {
+  auto *FD = llvm::cast<clang::FunctionDecl>(D);
+  clang::ASTContext &Ctx = S.Context;
+  FD->addAttr(clang::AnnotateAttr::Create(Ctx, ExportFunctionHandleMarker,
+                                          nullptr, 0, Attr.getRange()));
   // Promote the original __device__ function (or template) to
   // __host__ __device__ so host code can take its address. Sema then
   // accepts &deviceFn from host context (SameSide preference). The
   // consumer rewrites references to the synthesized kernel handle and
   // clears bodies in host mode so emission of host-side code skips
   // device-only intrinsics.
-  if (!FD->hasAttr<CUDAHostAttr>())
-    FD->addAttr(CUDAHostAttr::CreateImplicit(Ctx));
+  if (!FD->hasAttr<clang::CUDAHostAttr>())
+    FD->addAttr(clang::CUDAHostAttr::CreateImplicit(Ctx));
   return AttributeApplied;
 }
 
