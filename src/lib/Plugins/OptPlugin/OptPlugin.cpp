@@ -27,7 +27,8 @@
 // #include "luthier/Tooling/IntrinsicMIRLoweringPass.h"
 // #include "luthier/Tooling/LRCallgraph.h"
 // #include "luthier/Tooling/MMISlotIndexesAnalysis.h"
-#include "luthier/Tooling/EntryPoint.h"
+#include "luthier/Tooling/MachineFunctionEntryPoint.h"
+#include "luthier/Tooling/LoadHIPFATBinaryInfoPass.h"
 #include "luthier/Tooling/MemoryAllocationAccessor.h"
 #include "luthier/Tooling/MetadataParserAnalysis.h"
 #include "luthier/Tooling/MockAMDGPULoader.h"
@@ -252,6 +253,10 @@ llvmGetPassPluginInfo() {
           //       luthier::InstrumentationPMOptions));
           //   return true;
           // }
+          if (Name == "luthier-load-hip-fat-binary-info-pass"){
+            MPM.addPass(luthier::LoadHIPFATBinaryInfoPass());
+            return true;
+          }
           return false;
         });
   };

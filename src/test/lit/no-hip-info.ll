@@ -1,0 +1,13 @@
+; RUN: opt %luthier_opt -passes="luthier-load-hip-fat-binary-info-pass" %s -S | FileCheck %s 
+
+; CHECK: define i32 @add_numbers(i32 %0, i32 %1) {
+; CHECK-NEXT: entry:
+; CHECK-NEXT:   %2 = add i32 %0, %1
+; CHECK-NEXT:   ret i32 %2
+; CHECK-NEXT: }
+
+define i32 @add_numbers(i32 %0, i32 %1) {
+entry:
+  %2 = add i32 %0, %1
+  ret i32 %2
+}
