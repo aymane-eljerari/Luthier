@@ -167,8 +167,20 @@ static llvm::Value *breakdownToVecTyFromAvailableValues(
     llvm::DenseMap<llvm::Type *, llvm::Value *> &ValueEntries,
     unsigned ElemWidth, llvm::IRBuilderBase &Builder) {
   assert(!ValueEntries.empty() && "Empty value entry map");
-  unsigned TotalWidth =
-      ValueEntries.begin()->getFirst()->getPrimitiveSizeInBits();
+  // Pointer types report 0 from getPrimitiveSizeInBits without a DataLayout,
+  // so prefer a non-pointer entry to determine the register width. All
+  // entries map to the same register slot, so any non-zero primitive size
+  // is authoritative.
+  unsigned TotalWidth = 0;
+  for (auto &[T, V] : ValueEntries) {
+    unsigned Bits = T->getPrimitiveSizeInBits();
+    if (Bits != 0) {
+      TotalWidth = Bits;
+      break;
+    }
+  }
+  assert(TotalWidth != 0 &&
+         "ValueEntries has only pointer types; cannot determine width");
   assert(TotalWidth % ElemWidth == 0);
   unsigned NumElems = TotalWidth / ElemWidth;
   auto *VecTy =

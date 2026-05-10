@@ -1,5 +1,5 @@
 //===-- WriteExec.cpp -----------------------------------------------------===//
-// Copyright 2022-2025 @ Northeastern University Computer Architecture Lab
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,22 +41,22 @@ writeExecIRProcessor(const llvm::Function &Intrinsic,
                     User, User.arg_size())));
   luthier::IntrinsicIRLoweringInfo Out;
   // Set the output's constraint
-  Out.setReturnValueInfo(&User, "s");
+  Out.setReturnValueInfo(User, "s");
   // The first argument specifies the source register
   auto *SrcReg = User.getArgOperand(0);
-  Out.addArgInfo(SrcReg, "s");
+  Out.addArgInfo(*SrcReg, "s");
 
   return Out;
 }
 
 llvm::Error writeExecMIRProcessor(
-    const IntrinsicIRLoweringInfo &IRLoweringInfo,
+    const llvm::MachineFunction &MF,
     llvm::ArrayRef<std::pair<llvm::InlineAsm::Flag, llvm::Register>> Args,
+    llvm::MDNode *Payload,
     const std::function<llvm::MachineInstrBuilder(int)> &MIBuilder,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)>
         &VirtRegBuilder,
     const std::function<llvm::Register(ScalarValueArgument)> &,
-    const llvm::MachineFunction &MF,
     const std::function<llvm::Register(llvm::MCRegister)> &PhysRegAccessor,
     llvm::DenseMap<llvm::MCRegister, llvm::Register> &PhysRegsToBeOverwritten) {
   // There should be only a single virtual register involved in the operation

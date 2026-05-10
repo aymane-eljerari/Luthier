@@ -1,5 +1,5 @@
 //===-- SAtomicAdd.h - Luthier Scalar Atomic Add ----------------*- C++ -*-===//
-// Copyright 2022-2025 @ Northeastern University Computer Architecture Lab
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,13 +34,13 @@ sAtomicAddIRProcessor(const llvm::Function &Intrinsic,
                       const llvm::GCNTargetMachine &TM);
 
 llvm::Error sAtomicAddMIRProcessor(
-    const IntrinsicIRLoweringInfo &IRLoweringInfo,
+    const llvm::MachineFunction &MF,
     llvm::ArrayRef<std::pair<llvm::InlineAsm::Flag, llvm::Register>> Args,
+    llvm::MDNode *Payload,
     const std::function<llvm::MachineInstrBuilder(int)> &MIBuilder,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)>
         &VirtRegBuilder,
     const std::function<llvm::Register(ScalarValueArgument)> &,
-    const llvm::MachineFunction &MF,
     const std::function<llvm::Register(llvm::MCRegister)> &PhysRegAccessor,
     llvm::DenseMap<llvm::MCRegister, llvm::Register> &PhysRegsToBeOverwritten);
 

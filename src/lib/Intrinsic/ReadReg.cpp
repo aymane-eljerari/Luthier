@@ -1,5 +1,5 @@
 //===-- ReadReg.cpp -------------------------------------------------------===//
-// Copyright 2022-2025 @ Northeastern University Computer Architecture Lab
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,11 @@
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/Common/LuthierError.h"
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/Metadata.h>
+#include <llvm/IR/Type.h>
 #include <llvm/IR/User.h>
 #include <llvm/MC/MCRegister.h>
 
@@ -42,9 +45,9 @@ readRegIRProcessor(const llvm::Function &Intrinsic, const llvm::CallInst &User,
                     User, User.arg_size())));
 
   auto *TRI = TM.getSubtargetImpl(Intrinsic)->getRegisterInfo();
-  // The first argument specifies the MCRegister Enum that will be read
-  // The enum value should be constant; A different intrinsic should be used
-  // if reg indexing is needed at runtime
+  // The first argument specifies the MCRegister Enum that will be read.
+  // The enum value should be constant; a different intrinsic should be used
+  // if register indexing is needed at runtime.
   auto *Arg = llvm::dyn_cast<llvm::ConstantInt>(User.getArgOperand(0));
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       Arg != nullptr, "The first argument of the luthier::readReg intrinsic is "
@@ -73,21 +76,22 @@ readRegIRProcessor(const llvm::Function &Intrinsic, const llvm::CallInst &User,
                       Reg.id()));
 
   IntrinsicIRLoweringInfo Out;
-  // Set the output's constraint
-  Out.setReturnValueInfo(&User, Constraint);
-  // Save the MCReg to be encoded during MIR processing
-  Out.setLoweringData(Reg);
+  Out.setReturnValueInfo(User, Constraint);
+  // Forward the physical register enum value to the MIR lowering stage
+  Out.addExtraLoweringValue(*llvm::ConstantInt::get(
+      llvm::Type::getInt32Ty(Intrinsic.getContext()), Reg.id()));
 
   return Out;
 }
+
 llvm::Error readRegMIRProcessor(
-    const IntrinsicIRLoweringInfo &IRLoweringInfo,
+    const llvm::MachineFunction &MF,
     llvm::ArrayRef<std::pair<llvm::InlineAsm::Flag, llvm::Register>> Args,
+    llvm::MDNode *Payload,
     const std::function<llvm::MachineInstrBuilder(int)> &MIBuilder,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)>
         &VirtRegBuilder,
     const std::function<llvm::Register(ScalarValueArgument)> &,
-    const llvm::MachineFunction &MF,
     const std::function<llvm::Register(llvm::MCRegister)> &PhysRegAccessor,
     llvm::DenseMap<llvm::MCRegister, llvm::Register> &PhysRegsToBeOverwritten) {
   // There should be only a single virtual register involved in the operation
@@ -100,10 +104,22 @@ llvm::Error readRegMIRProcessor(
       Args[0].first.isRegDefKind(),
       "The register argument of luthier::readReg is not a definition."));
   llvm::Register Output = Args[0].second;
+
+  // Extract the source physical register from the forwarded payload MDNode
+  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+      Payload && Payload->getNumOperands() == 1,
+      "luthier::readReg MIR payload must contain exactly one operand"));
+  auto *RegMeta =
+      llvm::dyn_cast<llvm::ConstantAsMetadata>(Payload->getOperand(0));
+  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+      RegMeta != nullptr,
+      "luthier::readReg payload operand is not a ConstantAsMetadata"));
+  llvm::MCRegister Src(
+      llvm::cast<llvm::ConstantInt>(RegMeta->getValue())->getZExtValue());
+
   auto &ST = MF.getSubtarget<llvm::GCNSubtarget>();
   auto *TRI = ST.getRegisterInfo();
   auto &MRI = MF.getRegInfo();
-  auto Src = IRLoweringInfo.getLoweringData<llvm::MCRegister>();
   auto SrcRegSize = TRI->getRegSizeInBits(Src, MRI);
   uint64_t DestRegSize = TRI->getRegSizeInBits(Output, MRI);
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
@@ -118,7 +134,7 @@ llvm::Error readRegMIRProcessor(
     auto MergedReg = VirtRegBuilder(TRI->getPhysRegBaseClass(Src));
     (void)Builder.addReg(MergedReg, llvm::RegState::Define);
 
-    // Split the src reg into 32-bit regs, and merge them in the
+    // Split the src reg into 32-bit regs and merge them in the sequence
     size_t NumChannels = SrcRegSize / 32;
     for (int i = 0; i < NumChannels; i++) {
       auto SubIdx = llvm::SIRegisterInfo::getSubRegFromChannel(i);

@@ -1,5 +1,5 @@
 //===-- WriteReg.cpp ------------------------------------------------------===//
-// Copyright 2022-2025 @ Northeastern University Computer Architecture Lab
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,12 +19,16 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/Intrinsic/WriteReg.h"
 #include "AMDGPUTargetMachine.h"
+#include "GCNSubtarget.h"
 #include "SIRegisterInfo.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/Common/LuthierError.h"
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/Metadata.h>
+#include <llvm/IR/Type.h>
 #include <llvm/IR/User.h>
 #include <llvm/MC/MCRegister.h>
 
@@ -42,22 +46,18 @@ writeRegIRProcessor(const llvm::Function &Intrinsic, const llvm::CallInst &User,
                     User, User.arg_size())));
 
   luthier::IntrinsicIRLoweringInfo Out;
-  // The first argument specifies the MCRegister Enum that will be read
-  // The enum value should be constant; A different intrinsic should be used
-  // if reg indexing is needed at runtime
+  // The first argument specifies the destination MCRegister enum value.
   auto *DestRegEnum = llvm::dyn_cast<llvm::ConstantInt>(User.getArgOperand(0));
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       DestRegEnum != nullptr, "The first operand of the luthier::writeReg "
                               "intrinsic is not a constant int"));
-  // Get the MCRegister from the first argument's content
   llvm::MCRegister DestReg(DestRegEnum->getZExtValue());
-  // Check if the enum value is indeed a physical register
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       llvm::MCRegister::isPhysicalRegister(DestReg.id()),
       llvm::formatv("The first argument of the luthier::writeReg intrinsic {0} "
                     "is not an MC Physical Register.",
                     DestReg.id())));
-  // Get the type of the dest register and encode its inline asm constraint
+  // Determine the constraint for the destination register class
   auto *PhysRegClass = TRI->getPhysRegBaseClass(DestReg);
   std::string Constraint;
   if (llvm::SIRegisterInfo::isAGPRClass(PhysRegClass))
@@ -70,45 +70,49 @@ writeRegIRProcessor(const llvm::Function &Intrinsic, const llvm::CallInst &User,
     return llvm::make_error<GenericLuthierError>(llvm::formatv(
         "Unable to find a suitable register class for writing into {0}.",
         DestReg.id()));
-  // Set the output's constraint
-  Out.setReturnValueInfo(&User, Constraint);
+  Out.setReturnValueInfo(User, Constraint);
   // The second argument specifies the source register
   auto *SrcReg = User.getArgOperand(1);
-  Out.addArgInfo(SrcReg, Constraint);
-
-  // Save the MCReg to be encoded during MIR processing
-  Out.setLoweringData(DestReg);
-  // Tell intrinsic lowering that access to the physical
-  // destination is requested
-  Out.requestAccessToPhysicalRegister(DestReg);
+  Out.addArgInfo(*SrcReg, Constraint);
+  // Forward the physical destination register enum to the MIR stage
+  Out.addExtraLoweringValue(*llvm::ConstantInt::get(
+      llvm::Type::getInt32Ty(Intrinsic.getContext()), DestReg.id()));
 
   return Out;
 }
 
 llvm::Error writeRegMIRProcessor(
-    const IntrinsicIRLoweringInfo &IRLoweringInfo,
+    const llvm::MachineFunction &MF,
     llvm::ArrayRef<std::pair<llvm::InlineAsm::Flag, llvm::Register>> Args,
+    llvm::MDNode *Payload,
     const std::function<llvm::MachineInstrBuilder(int)> &MIBuilder,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)>
         &VirtRegBuilder,
     const std::function<llvm::Register(ScalarValueArgument)> &,
-    const llvm::MachineFunction &MF,
     const std::function<llvm::Register(llvm::MCRegister)> &PhysRegAccessor,
     llvm::DenseMap<llvm::MCRegister, llvm::Register> &PhysRegsToBeOverwritten) {
-  // There should be only a single virtual register involved in the operation
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       Args.size() == 1,
       llvm::formatv(
           "Expected only a single virtual register to be passed down to the "
           "MIR lowering stage of luthier::writeReg, instead got {0}",
           Args.size())));
-  // It should be of reg use kind
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       Args[0].first.isRegUseKind(),
       "The virtual register argument for luthier::writeReg is not a use."));
   llvm::Register InputReg = Args[0].second;
 
-  auto Dest = IRLoweringInfo.getLoweringData<llvm::MCRegister>();
+  // Extract the destination physical register from the payload
+  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+      Payload && Payload->getNumOperands() == 1,
+      "luthier::writeReg MIR payload must contain exactly one operand"));
+  auto *RegMeta =
+      llvm::dyn_cast<llvm::ConstantAsMetadata>(Payload->getOperand(0));
+  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+      RegMeta != nullptr,
+      "luthier::writeReg payload operand is not a ConstantAsMetadata"));
+  llvm::MCRegister Dest(
+      llvm::cast<llvm::ConstantInt>(RegMeta->getValue())->getZExtValue());
 
   auto &ST = MF.getSubtarget<llvm::GCNSubtarget>();
   auto *TRI = ST.getRegisterInfo();
@@ -116,16 +120,12 @@ llvm::Error writeRegMIRProcessor(
 
   uint64_t DestRegSize = TRI->getRegSizeInBits(Dest, MRI);
   uint64_t InputRegSize = TRI->getRegSizeInBits(InputReg, MRI);
-  // Check if both the input value and the destination reg have the same
-  // size; SCC is a special case where we accept the input reg to be 32
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       InputRegSize == DestRegSize || (DestRegSize == 1 && InputRegSize == 32),
       "The input register and the destination register of "
       "luthier::writeReg don't have the same size."));
 
   if (DestRegSize > 32) {
-    // Split the input reg into subregs, and set each subreg to replace the
-    // virtual register value of the physical reg
     size_t NumChannels = DestRegSize / 32;
     const llvm::TargetRegisterClass *InputRegClass = MRI.getRegClass(InputReg);
     for (int i = 0; i < NumChannels; i++) {
