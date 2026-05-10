@@ -18,5 +18,17 @@ lit_config.load_config(
 plugin_path = os.path.join("@CMAKE_BINARY_DIR@/lib", "LuthierOptPlugin.so")
 config.substitutions.append(('%luthier_opt', f"-load-pass-plugin={plugin_path}"))
 
+tool_ir_compilation_plugin_path = os.path.join("@CMAKE_BINARY_DIR@/lib",
+                                 "LuthierToolIRCompilationPlugin.so")
+config.substitutions.append(
+    ('%luthier_tool_ir_compilation_plugin_path', f"-load-pass-plugin={tool_ir_compilation_plugin_path}"))
+
+tool_cxx_compilation_plugin_path = os.path.join("@CMAKE_BINARY_DIR@/lib",
+                                       "LuthierToolCXXCompilationPlugin.so")
+config.substitutions.append(
+    ('%luthier_tool_cxx_compilation_plugin_path', tool_cxx_compilation_plugin_path))
+
+config.substitutions.append(('%clangxx', "@LLVM_TOOLS_BINARY_DIR@/clang++"))
+
 config.substitutions.append(('%luthier_split_test',
     os.path.join("@CMAKE_BINARY_DIR@/bin", "luthier-split-test")))

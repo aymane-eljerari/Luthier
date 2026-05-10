@@ -4,7 +4,7 @@ import lit.formats
 import lit.util
 
 config.name = "Luthier"
-config.suffixes = {".s", ".luthier", ".ll"}
+config.suffixes = {".s", ".luthier", ".ll", ".cpp"}
 config.test_format = lit.formats.ShTest(True)
 
 config.excludes = ["linker"]
