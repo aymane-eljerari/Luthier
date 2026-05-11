@@ -26,7 +26,7 @@
 // #include "luthier/ToolCodeGen/PatchLiftedRepresentationPass.h"
 // #include "luthier/ToolCodeGen/PhysRegsNotInLiveInsAnalysis.h"
 // #include "luthier/ToolCodeGen/ProcessIntrinsicsAtIRLevelPass.h"
-#include "luthier/TestFile/LuthierFile.h"
+#include "luthier/ToolCodeGenTesting/LuthierFile.h"
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
 #include <AMDGPUTargetMachine.h>
 #include <llvm/Analysis/CGSCCPassManager.h>

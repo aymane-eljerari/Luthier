@@ -42,18 +42,14 @@ add_library(LuthierToolCodeGen OBJECT
         #        RunMIRPassesOnIModulePass.cpp
         #        PatchLiftedRepresentationPass.cpp
         MIRConvenience.cpp
-        MockAMDGPULoader.cpp
         MetadataParserAnalysis.cpp
         IntrinsicProcessorRegistry.cpp
         IntrinsicProcessorsAnalysis.cpp
         InjectedPayloadAndInstPointAnalysis.cpp
         InstrumentationPMDriver.cpp
-        MockLoadAMDGPUCodeObjects.cpp
         CodeObjectManagerAnalysis.cpp
         InitialEntryPointAnalysis.cpp
         InitialExecutionPointAnalysis.cpp
-        AMDGPUMockLoaderPrinter.cpp
-        MockLoaderMemoryAccessor.cpp
         Metadata.cpp
         MIRToIRTranslator.cpp
         MIInlineAsmEmitter.cpp

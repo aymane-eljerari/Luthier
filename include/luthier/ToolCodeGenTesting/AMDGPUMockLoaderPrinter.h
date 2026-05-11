@@ -18,8 +18,8 @@
 /// code objects in the loader, identifies any segment that has an executable
 /// permission, disassembles their instructions, and prints them.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOL_CODE_GEN_AMDGPU_MOCK_LOADER_PRINTER_H
-#define LUTHIER_TOOL_CODE_GEN_AMDGPU_MOCK_LOADER_PRINTER_H
+#ifndef LUTHIER_TOOL_CODE_GEN_TESTING_AMDGPU_MOCK_LOADER_PRINTER_H
+#define LUTHIER_TOOL_CODE_GEN_TESTING_AMDGPU_MOCK_LOADER_PRINTER_H
 #include <llvm/IR/PassManager.h>
 
 namespace luthier {

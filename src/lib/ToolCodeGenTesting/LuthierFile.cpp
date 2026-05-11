@@ -16,7 +16,7 @@
 /// \file LuthierFile.cpp
 /// Implements \c LuthierFileParser and the \c writeLuthierFile helpers.
 //===----------------------------------------------------------------------===//
-#include "luthier/TestFile/LuthierFile.h"
+#include "luthier/ToolCodeGenTesting/LuthierFile.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/Bitcode/BitcodeReader.h>

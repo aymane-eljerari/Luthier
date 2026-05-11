@@ -1,5 +1,5 @@
 //===-- MockLoadAMDGPUCodeObjects.cpp -------------------------------------===//
-// Copyright 2026 @ Northeastern University Computer Architecture Lab
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 /// \file MockLoadAMDGPUCodeObjects.cpp
 /// Implements the \c MockLoadAMDGPUCodeObjects class.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolCodeGen/MockLoadAMDGPUCodeObjects.h"
+#include "luthier/ToolCodeGenTesting/MockLoadAMDGPUCodeObjects.h"
 #include "luthier/ToolCodeGen/CodeObjectManagerAnalysis.h"
 #include <llvm/IR/Module.h>
 

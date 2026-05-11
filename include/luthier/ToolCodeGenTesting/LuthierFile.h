@@ -18,8 +18,8 @@
 /// \c .luthier combined module files — together with the \c writeLuthierFile
 /// helper for serialization.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TESTFILE_LUTHIER_FILE_H
-#define LUTHIER_TESTFILE_LUTHIER_FILE_H
+#ifndef LUTHIER_TOOL_CODE_GEN_TESTING_LUTHIER_FILE_H
+#define LUTHIER_TOOL_CODE_GEN_TESTING_LUTHIER_FILE_H
 
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/CodeGen/MIRParser/MIRParser.h>

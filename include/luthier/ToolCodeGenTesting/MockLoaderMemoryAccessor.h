@@ -17,10 +17,10 @@
 /// Describes the \c MockLoaderMemoryAccessor which is the \c
 /// MemoryAllocationAccessor implementation for the <tt>AMDGPUMockLoader</tt>.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOL_CODE_GEN_COMMON_MOCK_LOADER_MEMORY_ACCESSOR_H
-#define LUTHIER_TOOL_CODE_GEN_COMMON_MOCK_LOADER_MEMORY_ACCESSOR_H
+#ifndef LUTHIER_TOOL_CODE_GEN_TESTING_COMMON_MOCK_LOADER_MEMORY_ACCESSOR_H
+#define LUTHIER_TOOL_CODE_GEN_TESTING_COMMON_MOCK_LOADER_MEMORY_ACCESSOR_H
 #include "luthier/ToolCodeGen/MemoryAllocationAccessor.h"
-#include "luthier/ToolCodeGen/MockAMDGPULoader.h"
+#include "luthier/ToolCodeGenTesting/MockAMDGPULoader.h"
 
 namespace luthier {
 

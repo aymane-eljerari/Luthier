@@ -7,6 +7,7 @@ set(LLVM_LINK_COMPONENTS
         AMDGPUUtils
         AllTargetsInfos
         Analysis
+        BinaryFormat
         AsmPrinter
         BitReader
         CodeGen
@@ -14,10 +15,12 @@ set(LLVM_LINK_COMPONENTS
         Core
         IRPrinter
         IRReader
+        Linker
         MC
         MCA
         MCDisassembler
         MIRParser
+        Object
         Passes
         Plugins
         Remarks
@@ -41,6 +44,13 @@ add_llvm_tool(luthier-llc
 
 target_include_directories(luthier-llc PRIVATE ${LLVM_INCLUDE_DIRS} "${CMAKE_SOURCE_DIR}/include")
 
-target_link_libraries(luthier-llc PRIVATE LuthierTestFile LuthierCommon)
+target_link_libraries(luthier-llc PRIVATE
+        LuthierToolCodeGenTesting
+        LuthierToolCodeGen
+        LuthierPassPlugin
+        LuthierIntrinsic
+        LuthierObject
+        LuthierLLVM
+        LuthierCommon)
 
 export_executable_symbols_for_plugins(luthier-llc)

@@ -1,5 +1,5 @@
 //===-- MockAMDGPULoader.cpp ------------------------------------*- C++ -*-===//
-// Copyright 2026 @ Northeastern University Computer Architecture Lab
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 /// Implements the \c MockAMDGPULoader and \c MockLoadedCodeObject
 /// classes.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolCodeGen/MockAMDGPULoader.h"
+#include "luthier/ToolCodeGenTesting/MockAMDGPULoader.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include <hsa/amd_hsa_kernel_code.h>

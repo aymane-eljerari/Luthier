@@ -1,5 +1,5 @@
 //===-- OptPlugin.cpp -----------------------------------------------------===//
-// Copyright 2025-2026 @ Northeastern University Computer Architecture Lab
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 /// Main file for the Luthier "opt" compiler plugin, which registers Luthier
 /// passes and their names with the new pass manager's pass builder when loaded.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolCodeGen/AMDGPUMockLoaderPrinter.h"
+#include "luthier/ToolCodeGenTesting/AMDGPUMockLoaderPrinter.h"
 #include "luthier/ToolCodeGen/CodeDiscoveryPass.h"
 #include "luthier/ToolCodeGen/CodeObjectManagerAnalysis.h"
 #include "luthier/ToolCodeGen/InitialEntryPointAnalysis.h"
@@ -27,12 +27,11 @@
 // #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
 // #include "luthier/ToolCodeGen/LRCallgraph.h"
 // #include "luthier/ToolCodeGen/MMISlotIndexesAnalysis.h"
-#include "luthier/ToolCodeGen/LoadHIPFATBinaryInfoPass.h"
 #include "luthier/ToolCodeGen/MemoryAllocationAccessor.h"
 #include "luthier/ToolCodeGen/MetadataParserAnalysis.h"
-#include "luthier/ToolCodeGen/MockAMDGPULoader.h"
-#include "luthier/ToolCodeGen/MockLoadAMDGPUCodeObjects.h"
-#include "luthier/ToolCodeGen/MockLoaderMemoryAccessor.h"
+#include "luthier/ToolCodeGenTesting/MockAMDGPULoader.h"
+#include "luthier/ToolCodeGenTesting/MockLoadAMDGPUCodeObjects.h"
+#include "luthier/ToolCodeGenTesting/MockLoaderMemoryAccessor.h"
 // #include "luthier/ToolCodeGen/PhysRegsNotInLiveInsAnalysis.h"
 // #include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
 // #include "luthier/ToolCodeGen/IPVectorRegLiveness.h"
@@ -336,10 +335,6 @@ llvmGetPassPluginInfo() {
           if (Name == "luthier-apply-instrumentation") {
             MPM.addPass(luthier::InstrumentationPMDriver(
                 luthier::InstrumentationPMOptions));
-            return true;
-          }
-          if (Name == "luthier-load-hip-fat-binary-info-pass"){
-            MPM.addPass(luthier::LoadHIPFATBinaryInfoPass());
             return true;
           }
           return false;

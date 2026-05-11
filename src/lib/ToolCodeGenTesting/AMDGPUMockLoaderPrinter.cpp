@@ -1,5 +1,5 @@
 //===-- AMDGPUMockLoaderPrinter.cpp ---------------------------------------===//
-// Copyright 2026 @ Northeastern University Computer Architecture Lab
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@
 /// \file MockLoadAMDGPUCodeObjects.cpp
 /// Implements the \c MockLoadAMDGPUCodeObjects class.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolCodeGen/AMDGPUMockLoaderPrinter.h"
+#include "luthier/ToolCodeGenTesting/AMDGPUMockLoaderPrinter.h"
 #include "luthier/Object/ObjectFileUtils.h"
-#include "luthier/ToolCodeGen/MockAMDGPULoader.h"
+#include "luthier/ToolCodeGenTesting/MockAMDGPULoader.h"
 #include <llvm/BinaryFormat/ELF.h>
 #include <llvm/IR/Module.h>
 #include <llvm/MC/MCAsmInfo.h>
