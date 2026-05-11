@@ -14,6 +14,7 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolingIRCompilation/SubstituteAMDGCNIntrinsicsPass.h"
+#include "luthier/Tooling/FunctionAnnotations.h"
 #include "luthier/Intrinsic/IntrinsicCalls.h"
 #include <initializer_list>
 #include <llvm/ADT/STLExtras.h>

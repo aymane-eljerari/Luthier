@@ -1,5 +1,5 @@
 //===-- LuthierPassPlugin.h -------------------------------------*- C++ -*-===//
-// Copyright 2026 @ Northeastern University Computer Architecture Lab
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 /// pass plugins can be used to augment the normal instrumentation process
 /// defined in the \c InstrumentationPMDriver target module pass.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_PLUGINS_PASS_PLUGIN_H
-#define LUTHIER_PLUGINS_PASS_PLUGIN_H
+#ifndef LUTHIER_PASS_PLUGINS_PASS_PLUGIN_H
+#define LUTHIER_PASS_PLUGINS_PASS_PLUGIN_H
 #include <llvm/ADT/StringRef.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/Support/Compiler.h>

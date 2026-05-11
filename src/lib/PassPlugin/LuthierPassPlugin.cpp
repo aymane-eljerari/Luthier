@@ -18,7 +18,7 @@
 /// Implements Luthier's legacy pass manager plugin for use with Luthier's llc
 /// fork.
 //===----------------------------------------------------------------------===//
-#include "luthier/Plugins/LuthierPassPlugin.h"
+#include "luthier/PassPlugin/LuthierPassPlugin.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include <llvm/IR/Module.h>
 

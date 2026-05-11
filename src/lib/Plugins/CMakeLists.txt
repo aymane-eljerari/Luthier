@@ -2,8 +2,6 @@ include(AddLLVM)
 
 add_subdirectory(ToolIRCompilationPlugin)
 add_subdirectory(ToolCXXCompilationPlugin)
-add_subdirectory(LoadHIPFATBinaryPlugin)
-add_subdirectory(LuthierPassPlugin)
 add_subdirectory(OptPlugin)
 
 include(LuthierAddCompilerPlugin)

@@ -21,6 +21,7 @@
 #include "luthier/ToolingIRCompilation/ExternalizeGlobalsPass.h"
 #include "luthier/ToolingIRCompilation/FinalizeHooksPass.h"
 #include "luthier/ToolingIRCompilation/FinalizeIntrinsicsPass.h"
+#include "luthier/ToolingIRCompilation/LoadHIPFATBinaryInfoPass.h"
 #include "luthier/ToolingIRCompilation/MarkAnnotationsPass.h"
 #include "luthier/ToolingIRCompilation/StripKernelsPass.h"
 #include "luthier/ToolingIRCompilation/SubstituteAMDGCNIntrinsicsPass.h"
@@ -51,9 +52,13 @@ void registerEmbedIModulePasses(llvm::PassBuilder &PB) {
                tryParsePass<luthier::StripKernelsPass>(Name, MPM) ||
                tryParsePass<luthier::ExternalizeGlobalsPass>(Name, MPM) ||
                tryParsePass<luthier::SubstituteAMDGCNIntrinsicsPass>(Name, MPM) ||
+               tryParsePass<luthier::LoadHIPFATBinaryInfoPass>(Name, MPM) ||
                tryParsePass<luthier::CreateAndEmbedIModulePass>(Name, MPM);
       });
 
+  // CreateAndEmbedIModulePass clones the AMD GCN device module, runs the
+  // worker passes on the clone, and embeds bitcode. It internally bails on
+  // non-AMD GCN modules, so registering at the optimizer-last EP is safe.
   PB.registerOptimizerLastEPCallback(
       [](llvm::ModulePassManager &MPM, llvm::OptimizationLevel
 #if LLVM_VERSION_MAJOR >= 20
@@ -61,6 +66,14 @@ void registerEmbedIModulePasses(llvm::PassBuilder &PB) {
          llvm::ThinOrFullLTOPhase
 #endif
       ) { MPM.addPass(luthier::CreateAndEmbedIModulePass()); });
+
+  // LoadHIPFATBinaryInfoPass rewrites the host-side __hip_register* calls.
+  // It internally bails on AMD GCN device modules, so we register at the
+  // pipeline-start EP and let it filter by triple.
+  PB.registerPipelineStartEPCallback(
+      [](llvm::ModulePassManager &MPM, llvm::OptimizationLevel) {
+        MPM.addPass(luthier::LoadHIPFATBinaryInfoPass());
+      });
 }
 
 } // namespace

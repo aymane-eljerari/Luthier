@@ -1,5 +1,5 @@
-//===-- LoadHIPFATBinaryInfo.cpp --------------------------------*- C++ -*-===//
-// Copyright 2026 @ Northeastern University Computer Architecture Lab
+//===-- LoadHIPFATBinaryInfoPass.cpp ----------------------------*- C++ -*-===//
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,13 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
+/// \file LoadHIPFATBinaryInfoPass.cpp
 /// This plugin removes all __hip_register functions from the IR and stores the
 /// information inside the annotated variables. This is done so we can delegate
 /// the registering of functions, fat bin wrappers, variables etc. to the Tool
 /// Executable Loader instead of using HIP for it, whcih has proven to be
 /// unreliable
 //===----------------------------------------------------------------------===//
-#include "luthier/Tooling/LoadHIPFATBinaryInfoPass.h"
+#include "luthier/ToolingIRCompilation/LoadHIPFATBinaryInfoPass.h"
 #include "luthier/Common/ErrorCheck.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>

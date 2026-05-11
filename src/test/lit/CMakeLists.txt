@@ -17,6 +17,4 @@ get_llvm_lit_path(
 add_custom_target(luthier-lit-tests COMMAND "${LIT_BASE_DIR}/${LIT_FILE_NAME}"
         "${CMAKE_CURRENT_BINARY_DIR}" -v)
 
-add_dependencies(luthier-lit-tests luthier-llc)
-
-add_subdirectory(linker)
+add_dependencies(luthier-lit-tests luthier-llc luthier-link)

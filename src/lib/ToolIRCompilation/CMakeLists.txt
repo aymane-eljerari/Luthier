@@ -5,7 +5,8 @@ add_library(LuthierToolIRCompilation OBJECT
         FinalizeIntrinsicsPass.cpp
         StripKernelsPass.cpp
         ExternalizeGlobalsPass.cpp
-        SubstituteAMDGCNIntrinsicsPass.cpp)
+        SubstituteAMDGCNIntrinsicsPass.cpp
+        LoadHIPFATBinaryInfoPass.cpp)
 
 target_compile_definitions(LuthierToolIRCompilation
         PRIVATE ${LLVM_DEFINITIONS})

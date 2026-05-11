@@ -1,4 +1,4 @@
-; RUN: opt %luthier_opt -passes="luthier-load-hip-fat-binary-info-pass" %s -S | FileCheck %s
+; RUN: opt %luthier_tool_ir_compilation_plugin_path -passes="luthier-load-hip-fat-binary-info-pass" %s -S | FileCheck %s
 
 target triple = "x86_64-unknown-linux-gnu"
 
@@ -45,6 +45,11 @@ declare dso_local ptr @__hipRegisterFatBinary(ptr)
 declare dso_local void @__hipUnregisterFatBinary(ptr)
 
 declare dso_local i32 @atexit(ptr)
+; CHECK-DAG: %"struct.luthier::HipFunctionInfo" = type { ptr, ptr }
+; CHECK-DAG: %"struct.luthier::HipManagedVarInfo" = type { ptr, ptr, ptr, i64, i32 }
+; CHECK-DAG: %"struct.luthier::HipDeviceVarInfo" = type { ptr, ptr }
+; CHECK-DAG: %"struct.luthier::HipTextureInfo" = type { ptr, ptr }
+; CHECK-DAG: %"struct.luthier::HipSurfaceInfo" = type { ptr, ptr }
 ; CHECK: @llvm.global.annotations = appending global [12 x { ptr, ptr, ptr, i32, ptr }] [{ ptr, ptr, ptr, i32, ptr } { ptr @HipFatBinaries, ptr @.str, ptr @.str.1, i32 63, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipFatBinariesSize, ptr @.str.2, ptr @.str.1, i32 65, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipFunctions, ptr @.str.3, ptr @.str.1, i32 67, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipFunctionsSize, ptr @.str.functions_size, ptr @.str.1, i32 69, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipDeviceVars, ptr @.str.4, ptr @.str.1, i32 71, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipDeviceVarsSize, ptr @.str.5, ptr @.str.1, i32 73, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipManagedVars, ptr @.str.6, ptr @.str.1, i32 75, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipManagedVarsSize, ptr @.str.7, ptr @.str.1, i32 77, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipTextureVars, ptr @.str.8, ptr @.str.1, i32 79, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipTextureVarsSize, ptr @.str.9, ptr @.str.1, i32 81, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipSurfaceVars, ptr @.str.10, ptr @.str.1, i32 83, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipSurfaceVarsSize, ptr @.str.11, ptr @.str.1, i32 85, ptr null }], section "llvm.metadata"
 ; CHECK: @llvm.compiler.used = appending global [13 x ptr] [ptr @HipFunctionsSize, ptr @HipFunctions, ptr @HipDeviceVars, ptr @HipFatBinaries, ptr @HipManagedVars, ptr @HipSurfaceVars, ptr @HipTextureVars, ptr @HipDeviceVarsSize, ptr @HipFatBinariesSize, ptr @HipManagedVarsSize, ptr @HipSurfaceVarsSize, ptr @HipTextureVarsSize, ptr @__hip_cuid_60997337ce9624a2]
 @llvm.global.annotations = appending global [12 x { ptr, ptr, ptr, i32, ptr }] [{ ptr, ptr, ptr, i32, ptr } { ptr @HipFatBinaries, ptr @.str, ptr @.str.1, i32 63, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipFatBinariesSize, ptr @.str.2, ptr @.str.1, i32 65, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipFunctions, ptr @.str.3, ptr @.str.1, i32 67, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipFunctionsSize, ptr @.str.functions_size, ptr @.str.1, i32 69, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipDeviceVars, ptr @.str.4, ptr @.str.1, i32 71, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipDeviceVarsSize, ptr @.str.5, ptr @.str.1, i32 73, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipManagedVars, ptr @.str.6, ptr @.str.1, i32 75, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipManagedVarsSize, ptr @.str.7, ptr @.str.1, i32 77, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipTextureVars, ptr @.str.8, ptr @.str.1, i32 79, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipTextureVarsSize, ptr @.str.9, ptr @.str.1, i32 81, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipSurfaceVars, ptr @.str.10, ptr @.str.1, i32 83, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipSurfaceVarsSize, ptr @.str.11, ptr @.str.1, i32 85, ptr null }], section "llvm.metadata"
@@ -74,26 +79,19 @@ declare dso_local i32 @atexit(ptr)
 @.str.10 = private unnamed_addr constant [36 x i8] c"luthier.loader.hip_surface_vars_ptr\00", section "llvm.metadata"
 @HipSurfaceVarsSize = dso_local global i64 0, align 8
 @.str.11 = private unnamed_addr constant [37 x i8] c"luthier.loader.hip_surface_vars_size\00", section "llvm.metadata"
-; --- VERIFY TYPE REGISTRATION ---
-; CHECK: %"struct.luthier::HipFunctionInfo" = type { ptr, ptr }
-; CHECK: %"struct.luthier::HipManagedVarInfo" = type { ptr, ptr, ptr, i64, i32 }
-; CHECK: %"struct.luthier::HipDeviceVarInfo" = type { ptr, ptr }
-; CHECK: %"struct.luthier::HipTextureInfo" = type { ptr, ptr }
-; CHECK: %"struct.luthier::HipSurfaceInfo" = type { ptr, ptr }
-
 ; --- VERIFY PROMOTED GLOBALS ---
-; CHECK: @HipFatBinaries = constant [1 x ptr] [ptr @__hip_fatbin_wrapper]
-; CHECK: @HipFunctions = constant [2 x %"struct.luthier::HipFunctionInfo"] [%"struct.luthier::HipFunctionInfo" { ptr @add_numbers_ptr, ptr @1 }, %"struct.luthier::HipFunctionInfo" { ptr @_Z16binomial_optionsiPK15HIP_vector_typeIfLj4EEPS0_, ptr @0 }]
-; CHECK: @HipManagedVars = constant [1 x %"struct.luthier::HipManagedVarInfo"] [%"struct.luthier::HipManagedVarInfo" { ptr @VarManaged, ptr @DummyManagedVariable, ptr @VarName, i64 0, i32 0 }]
-; CHECK: @HipDeviceVars = constant [1 x %"struct.luthier::HipDeviceVarInfo"] [%"struct.luthier::HipDeviceVarInfo" { ptr @DummyVar, ptr @VarName }]
-; CHECK: @HipTextureVars = constant [2 x %"struct.luthier::HipTextureInfo"] [%"struct.luthier::HipTextureInfo" { ptr @TextureAddr2, ptr @TexName2 }, %"struct.luthier::HipTextureInfo" { ptr @TextureAddr, ptr @TexName }]
-; CHECK: @HipSurfaceVars = constant [1 x %"struct.luthier::HipSurfaceInfo"] [%"struct.luthier::HipSurfaceInfo" { ptr @SurfaceAddr, ptr @SurName }]
-; CHECK: @HipFatBinariesSize = dso_local global i64 1, align 8
-; CHECK: @HipFunctionsSize = dso_local global i64 2, align 8
-; CHECK: @HipDeviceVarsSize = dso_local global i64 1, align 8
-; CHECK: @HipManagedVarsSize = dso_local global i64 1, align 8
-; CHECK: @HipTextureVarsSize = dso_local global i64 2, align 8
-; CHECK: @HipSurfaceVarsSize = dso_local global i64 1, align 8
+; CHECK-DAG: @HipFatBinaries = constant [1 x ptr] [ptr @__hip_fatbin_wrapper]
+; CHECK-DAG: @HipFunctions = constant [2 x %"struct.luthier::HipFunctionInfo"] [%"struct.luthier::HipFunctionInfo" { ptr @add_numbers_ptr, ptr @1 }, %"struct.luthier::HipFunctionInfo" { ptr @_Z16binomial_optionsiPK15HIP_vector_typeIfLj4EEPS0_, ptr @0 }]
+; CHECK-DAG: @HipManagedVars = constant [1 x %"struct.luthier::HipManagedVarInfo"] [%"struct.luthier::HipManagedVarInfo" { ptr @VarManaged, ptr @DummyManagedVariable, ptr @VarName, i64 0, i32 0 }]
+; CHECK-DAG: @HipDeviceVars = constant [1 x %"struct.luthier::HipDeviceVarInfo"] [%"struct.luthier::HipDeviceVarInfo" { ptr @DummyVar, ptr @VarName }]
+; CHECK-DAG: @HipTextureVars = constant [2 x %"struct.luthier::HipTextureInfo"] [%"struct.luthier::HipTextureInfo" { ptr @TextureAddr2, ptr @TexName2 }, %"struct.luthier::HipTextureInfo" { ptr @TextureAddr, ptr @TexName }]
+; CHECK-DAG: @HipSurfaceVars = constant [1 x %"struct.luthier::HipSurfaceInfo"] [%"struct.luthier::HipSurfaceInfo" { ptr @SurfaceAddr, ptr @SurName }]
+; CHECK-DAG: @HipFatBinariesSize = dso_local global i64 1, align 8
+; CHECK-DAG: @HipFunctionsSize = dso_local global i64 2, align 8
+; CHECK-DAG: @HipDeviceVarsSize = dso_local global i64 1, align 8
+; CHECK-DAG: @HipManagedVarsSize = dso_local global i64 1, align 8
+; CHECK-DAG: @HipTextureVarsSize = dso_local global i64 2, align 8
+; CHECK-DAG: @HipSurfaceVarsSize = dso_local global i64 1, align 8
 
 ; --- VERIFY CONSTRUCTOR MODIFICATION ---
 

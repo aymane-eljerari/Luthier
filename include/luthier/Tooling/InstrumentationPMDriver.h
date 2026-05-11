@@ -20,7 +20,7 @@
 #ifndef LUTHIER_TOOLING_APPLY_INSTRUMENTATION_PASS_H
 #define LUTHIER_TOOLING_APPLY_INSTRUMENTATION_PASS_H
 #include "luthier/Intrinsic/IntrinsicProcessor.h"
-#include "luthier/Plugins/LuthierPassPlugin.h"
+#include "luthier/PassPlugin/LuthierPassPlugin.h"
 #include <llvm/IR/Module.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/Target/TargetMachine.h>
