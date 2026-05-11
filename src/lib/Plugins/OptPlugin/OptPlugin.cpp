@@ -18,34 +18,34 @@
 /// Main file for the Luthier "opt" compiler plugin, which registers Luthier
 /// passes and their names with the new pass manager's pass builder when loaded.
 //===----------------------------------------------------------------------===//
-#include "luthier/Tooling/AMDGPUMockLoaderPrinter.h"
-#include "luthier/Tooling/CodeDiscoveryPass.h"
-#include "luthier/Tooling/CodeObjectManagerAnalysis.h"
-#include "luthier/Tooling/InitialEntryPointAnalysis.h"
-#include "luthier/Tooling/InstructionTracesAnalysis.h"
-#include "luthier/Tooling/InstrumentationPMDriver.h"
-// #include "luthier/Tooling/IntrinsicMIRLoweringPass.h"
-// #include "luthier/Tooling/LRCallgraph.h"
-// #include "luthier/Tooling/MMISlotIndexesAnalysis.h"
-#include "luthier/Tooling/LoadHIPFATBinaryInfoPass.h"
-#include "luthier/Tooling/MemoryAllocationAccessor.h"
-#include "luthier/Tooling/MetadataParserAnalysis.h"
-#include "luthier/Tooling/MockAMDGPULoader.h"
-#include "luthier/Tooling/MockLoadAMDGPUCodeObjects.h"
-#include "luthier/Tooling/MockLoaderMemoryAccessor.h"
-// #include "luthier/Tooling/PhysRegsNotInLiveInsAnalysis.h"
-// #include "luthier/Tooling/PrePostAmbleEmitter.h"
-// #include "luthier/Tooling/IPVectorRegLiveness.h"
-// #include "luthier/Tooling/SVStorageAndLoadLocations.h"
-// #include "luthier/Tooling/IPPredicatedCFG.h"
-// #include "luthier/Tooling/IPReachingDefAnalysis.h"
-#include "luthier/Tooling/InitialExecutionPointAnalysis.h"
-#include "luthier/Tooling/LuthierCallGraph.h"
-#include "luthier/Tooling/NewPMAsmPrinter.h"
+#include "luthier/ToolCodeGen/AMDGPUMockLoaderPrinter.h"
+#include "luthier/ToolCodeGen/CodeDiscoveryPass.h"
+#include "luthier/ToolCodeGen/CodeObjectManagerAnalysis.h"
+#include "luthier/ToolCodeGen/InitialEntryPointAnalysis.h"
+#include "luthier/ToolCodeGen/InstructionTracesAnalysis.h"
+#include "luthier/ToolCodeGen/InstrumentationPMDriver.h"
+// #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
+// #include "luthier/ToolCodeGen/LRCallgraph.h"
+// #include "luthier/ToolCodeGen/MMISlotIndexesAnalysis.h"
+#include "luthier/ToolCodeGen/LoadHIPFATBinaryInfoPass.h"
+#include "luthier/ToolCodeGen/MemoryAllocationAccessor.h"
+#include "luthier/ToolCodeGen/MetadataParserAnalysis.h"
+#include "luthier/ToolCodeGen/MockAMDGPULoader.h"
+#include "luthier/ToolCodeGen/MockLoadAMDGPUCodeObjects.h"
+#include "luthier/ToolCodeGen/MockLoaderMemoryAccessor.h"
+// #include "luthier/ToolCodeGen/PhysRegsNotInLiveInsAnalysis.h"
+// #include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
+// #include "luthier/ToolCodeGen/IPVectorRegLiveness.h"
+// #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
+// #include "luthier/ToolCodeGen/IPPredicatedCFG.h"
+// #include "luthier/ToolCodeGen/IPReachingDefAnalysis.h"
+#include "luthier/ToolCodeGen/InitialExecutionPointAnalysis.h"
+#include "luthier/ToolCodeGen/LuthierCallGraph.h"
+#include "luthier/ToolCodeGen/NewPMAsmPrinter.h"
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Plugins/PassPlugin.h>
 #include <llvm/Support/TargetSelect.h>
-// #include <luthier/Tooling/IndirectBranchResolverAnalysis.h>
+// #include <luthier/ToolCodeGen/IndirectBranchResolverAnalysis.h>
 
 namespace luthier {
 

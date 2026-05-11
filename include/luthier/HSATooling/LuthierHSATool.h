@@ -19,7 +19,7 @@
 #ifndef LUTHIER_TOOLING_LUTHIERHSATOOL_H
 #define LUTHIER_TOOLING_LUTHIERHSATOOL_H
 #include "luthier/HSATooling/ToolExecutableLoader.h"
-#include "luthier/Tooling/FunctionAnnotations.h"
+#include "luthier/ToolCodeGen/FunctionAnnotations.h"
 /// This Macro needs to be called in the static tool, with the name of the class
 /// inhereting from LuthierHSATool. Variables are marked as used so compiler
 /// doesn't delete them, since this info will be filled out by the

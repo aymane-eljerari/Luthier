@@ -17,7 +17,7 @@
 /// Implements the \c MarkAnnotationsPass class.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolingIRCompilation/MarkAnnotationsPass.h"
-#include "luthier/Tooling/FunctionAnnotations.h"
+#include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>

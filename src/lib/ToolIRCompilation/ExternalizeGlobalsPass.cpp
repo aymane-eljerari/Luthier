@@ -14,7 +14,7 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolingIRCompilation/ExternalizeGlobalsPass.h"
-#include "luthier/Tooling/FunctionAnnotations.h"
+#include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/IR/GlobalValue.h>
 #include <llvm/IR/GlobalVariable.h>

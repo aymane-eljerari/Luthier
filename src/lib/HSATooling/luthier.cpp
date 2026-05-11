@@ -25,8 +25,8 @@
 #include "luthier/HSATooling/ToolExecutableLoader.h"
 #include "luthier/Comgr/Comgr.h"
 #include "luthier/HSA/Instr.h"
-#include "luthier/Tooling/Context.h"
-#include "luthier/Tooling/InstrumentationTask.h"
+#include "luthier/ToolCodeGen/Context.h"
+#include "luthier/ToolCodeGen/InstrumentationTask.h"
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/ADT/StringRef.h>
 #include <optional>

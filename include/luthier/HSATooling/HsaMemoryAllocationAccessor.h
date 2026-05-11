@@ -20,7 +20,7 @@
 #ifndef LUTHIER_HSA_TOOLING_HSA_MEMORY_ALLOCATION_ACCESSOR_H
 #define LUTHIER_HSA_TOOLING_HSA_MEMORY_ALLOCATION_ACCESSOR_H
 #include "luthier/HSATooling/LoadedCodeObjectCache.h"
-#include "luthier/Tooling/MemoryAllocationAccessor.h"
+#include "luthier/ToolCodeGen/MemoryAllocationAccessor.h"
 
 namespace luthier {
 

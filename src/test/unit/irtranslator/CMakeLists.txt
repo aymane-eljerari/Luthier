@@ -7,7 +7,7 @@ add_executable(InstrSemanticFuzzer
   IRKernelGen.cpp
   MachineKernelBuilder.cpp
   FuzzerDriver.cpp
-  $<TARGET_OBJECTS:LuthierToolingCommon>
+  $<TARGET_OBJECTS:LuthierToolCodeGen>
   $<TARGET_OBJECTS:LuthierHSA>
 )
 

@@ -25,7 +25,7 @@
 #include "PacketMointor.h"
 #include "luthier/Common/Singleton.h"
 #include "luthier/Rocprofiler/ApiTableSnapshot.h"
-#include "luthier/Tooling/IntrinsicProcessorRegistry.h"
+#include "luthier/ToolCodeGen/IntrinsicProcessorRegistry.h"
 
 namespace luthier {
 class CodeGenerator;

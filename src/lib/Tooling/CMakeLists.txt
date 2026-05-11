@@ -4,9 +4,9 @@ add_library(LuthierTooling SHARED
         $<TARGET_OBJECTS:LuthierHSA>
         $<TARGET_OBJECTS:LuthierHIP>
         $<TARGET_OBJECTS:LuthierLLVM>
-        #        $<TARGET_OBJECTS:LuthierIntrinsic>
+        $<TARGET_OBJECTS:LuthierIntrinsic>
         $<TARGET_OBJECTS:LuthierCommon>
-        $<TARGET_OBJECTS:LuthierToolingCommon>
+        $<TARGET_OBJECTS:LuthierToolCodeGen>
         $<TARGET_OBJECTS:LuthierPassPlugin>
         $<TARGET_OBJECTS:LuthierHSATooling>
 )

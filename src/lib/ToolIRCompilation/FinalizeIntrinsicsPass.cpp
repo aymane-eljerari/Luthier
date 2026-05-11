@@ -14,7 +14,7 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolingIRCompilation/FinalizeIntrinsicsPass.h"
-#include "luthier/Tooling/FunctionAnnotations.h"
+#include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include <cstdlib>
 #include <cstring>
 #include <llvm/ADT/SmallVector.h>

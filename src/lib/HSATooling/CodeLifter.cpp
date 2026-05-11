@@ -31,7 +31,7 @@
 #include "luthier/HSA/hsa.h"
 #include "luthier/HSATooling/TargetManager.h"
 #include "luthier/LLVM/streams.h"
-#include "luthier/Tooling/LRCallgraph.h"
+#include "luthier/ToolCodeGen/LRCallgraph.h"
 #include <GCNSubtarget.h>
 #include <SIInstrInfo.h>
 #include <SIMachineFunctionInfo.h>

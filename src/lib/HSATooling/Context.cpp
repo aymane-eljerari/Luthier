@@ -33,7 +33,7 @@
 #include "luthier/LLVM/EagerManagedStatic.h"
 #include "luthier/LLVM/streams.h"
 #include "luthier/Rocprofiler/RocprofilerError.h"
-#include "luthier/Tooling/InstrumentationPMDriver.h"
+#include "luthier/ToolCodeGen/InstrumentationPMDriver.h"
 #include "luthier/luthier.h"
 #include <llvm/Support/Error.h>
 #include <llvm/Support/PrettyStackTrace.h>

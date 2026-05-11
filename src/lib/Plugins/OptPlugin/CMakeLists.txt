@@ -1,6 +1,6 @@
 add_llvm_pass_plugin(LuthierOptPlugin
         OptPlugin.cpp
-        $<TARGET_OBJECTS:LuthierToolingCommon>
+        $<TARGET_OBJECTS:LuthierToolCodeGen>
         $<TARGET_OBJECTS:LuthierCommon>
         $<TARGET_OBJECTS:LuthierObject>
         $<TARGET_OBJECTS:LuthierLLVM>

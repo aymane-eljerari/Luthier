@@ -17,7 +17,7 @@
 /// Implements the \c FinalizeHooksPass class.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolingIRCompilation/FinalizeHooksPass.h"
-#include "luthier/Tooling/FunctionAnnotations.h"
+#include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
