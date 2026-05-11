@@ -16,7 +16,7 @@
 /// \file StripKernelsPass.cpp
 /// Defines the \c StripKernelsPass class.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolingIRCompilation/StripKernelsPass.h"
+#include "luthier/ToolIRCompilation/StripKernelsPass.h"
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/IR/CallingConv.h>
 #include <llvm/IR/Function.h>

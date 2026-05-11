@@ -1,4 +1,4 @@
-//===-- MarkAnnotationsPass.h ------------------------------------*- C++-*-===//
+//===-- ExternalizeGlobalsPass.h ---------------------------------*- C++-*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,14 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file MarkAnnotationsPass.h
-/// Defines \c MarkAnnotationsPass which reads <tt>llvm.global.annotations</tt>,
-/// applies Luthier hook/intrinsic function attributes accordingly, and removes
-/// the annotation array along with <tt>llvm.used</tt> and
-/// <tt>llvm.compiler.used</tt>.
+/// \file ExternalizeGlobalsPass.h
+/// Defines \c ExternalizeGlobalsPass which:
+/// - Drops static managed variable initializers, as well as any metadata
+/// globals from the instrumentation module
+/// - Externalizes remaining globals (except \c
+/// __hip_cuid_*) so that they can be linked against the copy defined by the
+/// instrumentation module's code object.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_IR_COMPILATION_MARK_ANNOTATIONS_PASS_H
-#define LUTHIER_TOOLING_IR_COMPILATION_MARK_ANNOTATIONS_PASS_H
+#ifndef LUTHIER_TOOL_IR_COMPILATION_EXTERNALIZE_GLOBALS_PASS_H
+#define LUTHIER_TOOL_IR_COMPILATION_EXTERNALIZE_GLOBALS_PASS_H
 #include <llvm/IR/PassManager.h>
 
 namespace llvm {
@@ -29,15 +31,16 @@ class Module;
 
 namespace luthier {
 
-class MarkAnnotationsPass : public llvm::PassInfoMixin<MarkAnnotationsPass> {
+class ExternalizeGlobalsPass
+    : public llvm::PassInfoMixin<ExternalizeGlobalsPass> {
 public:
-  MarkAnnotationsPass() = default;
+  ExternalizeGlobalsPass() = default;
 
   llvm::PreservedAnalyses run(llvm::Module &M, llvm::ModuleAnalysisManager &AM);
 
   static bool isRequired() { return true; }
 
-  static llvm::StringRef name() { return "luthier-mark-annotations"; }
+  static llvm::StringRef name() { return "luthier-externalize-globals"; }
 };
 
 } // namespace luthier

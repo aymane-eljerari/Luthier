@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolingCXXCompilation/Attributes.h"
-#include "luthier/ToolingCXXCompilation/Annotations.h"
+#include "luthier/ToolCXXCompilation/Attributes.h"
+#include "luthier/ToolCXXCompilation/Annotations.h"
 #include <clang/AST/Attr.h>
 #include <clang/AST/Decl.h>
 #include <clang/Sema/Sema.h>

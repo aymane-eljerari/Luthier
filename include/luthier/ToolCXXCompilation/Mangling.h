@@ -16,8 +16,8 @@
 /// \file Mangling.h
 /// Defines helpers for custom mangling in the CXX compilation pipeline.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_CXX_COMPILATION_MANGLING_H
-#define LUTHIER_TOOLING_CXX_COMPILATION_MANGLING_H
+#ifndef LUTHIER_TOOL_CXX_COMPILATION_MANGLING_H
+#define LUTHIER_TOOL_CXX_COMPILATION_MANGLING_H
 #include <string>
 
 namespace clang {

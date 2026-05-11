@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolingIRCompilation/ExternalizeGlobalsPass.h"
+#include "luthier/ToolIRCompilation/ExternalizeGlobalsPass.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/IR/GlobalValue.h>

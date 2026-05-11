@@ -17,14 +17,14 @@
 /// LLVM pass plugin for registering Luthier's tool IR compilation passes to
 /// the compilation pipeline.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolingIRCompilation/CreateAndEmbedIModulePass.h"
-#include "luthier/ToolingIRCompilation/ExternalizeGlobalsPass.h"
-#include "luthier/ToolingIRCompilation/FinalizeHooksPass.h"
-#include "luthier/ToolingIRCompilation/FinalizeIntrinsicsPass.h"
-#include "luthier/ToolingIRCompilation/LoadHIPFATBinaryInfoPass.h"
-#include "luthier/ToolingIRCompilation/MarkAnnotationsPass.h"
-#include "luthier/ToolingIRCompilation/StripKernelsPass.h"
-#include "luthier/ToolingIRCompilation/SubstituteAMDGCNIntrinsicsPass.h"
+#include "luthier/ToolIRCompilation/CreateAndEmbedIModulePass.h"
+#include "luthier/ToolIRCompilation/ExternalizeGlobalsPass.h"
+#include "luthier/ToolIRCompilation/FinalizeHooksPass.h"
+#include "luthier/ToolIRCompilation/FinalizeIntrinsicsPass.h"
+#include "luthier/ToolIRCompilation/LoadHIPFATBinaryInfoPass.h"
+#include "luthier/ToolIRCompilation/MarkAnnotationsPass.h"
+#include "luthier/ToolIRCompilation/StripKernelsPass.h"
+#include "luthier/ToolIRCompilation/SubstituteAMDGCNIntrinsicsPass.h"
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Plugins/PassPlugin.h>
 

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolingIRCompilation/FinalizeIntrinsicsPass.h"
+#include "luthier/ToolIRCompilation/FinalizeIntrinsicsPass.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include <cstdlib>
 #include <cstring>

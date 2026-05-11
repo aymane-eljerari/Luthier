@@ -17,8 +17,8 @@
 /// Clang plugin for running frontend actions and attributes required for
 /// processing Luthier tool source code.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolingCXXCompilation/Attributes.h"
-#include "luthier/ToolingCXXCompilation/Consumers.h"
+#include "luthier/ToolCXXCompilation/Attributes.h"
+#include "luthier/ToolCXXCompilation/Consumers.h"
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/FrontendPluginRegistry.h>
 #include <memory>

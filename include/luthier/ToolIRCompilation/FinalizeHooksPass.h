@@ -1,4 +1,4 @@
-//===-- LoadHIPFATBinaryInfoPass.h --------------------------------*-C++-*-===//
+//===-- FinalizeHooksPass.h --------------------------------------*- C++-*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,35 +13,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file LoadHIPFATBinaryInfoPass.h
-/// Deletes \c __hip_register* host-side functions and stores the
-/// information they would have registered so Luthier's tool executable
-/// loader can consume it at runtime. The pass operates on host code; on
-/// AMD GCN device modules it is a no-op.
+/// \file FinalizeHooksPass.h
+/// Defines the \c FinalizeHooksPass which drops \c OptimizeNone / \c NoInline
+/// and adds \c AlwaysInline to each function carrying the Luthier hook function
+/// attribute.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_IR_COMPILATION_LOAD_HIP_FAT_BINARY_INFO_PASS_H
-#define LUTHIER_TOOLING_IR_COMPILATION_LOAD_HIP_FAT_BINARY_INFO_PASS_H
+#ifndef LUTHIER_TOOL_IR_COMPILATION_FINALIZE_HOOKS_PASS_H
+#define LUTHIER_TOOL_IR_COMPILATION_FINALIZE_HOOKS_PASS_H
 #include <llvm/IR/PassManager.h>
 
 namespace llvm {
 class Module;
-} // namespace llvm
+}
 
 namespace luthier {
 
-class LoadHIPFATBinaryInfoPass
-    : public llvm::PassInfoMixin<LoadHIPFATBinaryInfoPass> {
+class FinalizeHooksPass : public llvm::PassInfoMixin<FinalizeHooksPass> {
 public:
-  LoadHIPFATBinaryInfoPass() = default;
+  FinalizeHooksPass() = default;
 
-  llvm::PreservedAnalyses run(llvm::Module &M,
-                              llvm::ModuleAnalysisManager &MAM);
+  llvm::PreservedAnalyses run(llvm::Module &M, llvm::ModuleAnalysisManager &AM);
 
   static bool isRequired() { return true; }
 
-  static llvm::StringRef name() {
-    return "luthier-load-hip-fat-binary-info-pass";
-  }
+  static llvm::StringRef name() { return "luthier-finalize-hooks"; }
 };
 
 } // namespace luthier

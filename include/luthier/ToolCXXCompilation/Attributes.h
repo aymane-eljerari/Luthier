@@ -16,8 +16,8 @@
 /// \file Attributes.h
 /// Defines attributes used in Luthier's CXX tool compilation.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_CXX_COMPILATION_ATTRIBUTES_H
-#define LUTHIER_TOOLING_CXX_COMPILATION_ATTRIBUTES_H
+#ifndef LUTHIER_TOOL_CXX_COMPILATION_ATTRIBUTES_H
+#define LUTHIER_TOOL_CXX_COMPILATION_ATTRIBUTES_H
 #include "clang/Sema/ParsedAttr.h"
 
 namespace luthier {

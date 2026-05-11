@@ -16,8 +16,8 @@
 /// \file Consumers.h
 /// Defines <tt>clang::SemaConsumer</tt>s used in Luthier tool CXX compilation.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_CXX_COMPILATION_CONSUMERS_H
-#define LUTHIER_TOOLING_CXX_COMPILATION_CONSUMERS_H
+#ifndef LUTHIER_TOOL_CXX_COMPILATION_CONSUMERS_H
+#define LUTHIER_TOOL_CXX_COMPILATION_CONSUMERS_H
 #include <clang/AST/DeclGroup.h>
 #include <clang/Sema/SemaConsumer.h>
 #include <llvm/ADT/DenseMap.h>

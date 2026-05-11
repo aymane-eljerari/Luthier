@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolingCXXCompilation/Mangling.h"
-#include "luthier/ToolingCXXCompilation/Annotations.h"
+#include "luthier/ToolCXXCompilation/Mangling.h"
+#include "luthier/ToolCXXCompilation/Annotations.h"
 #include <cctype>
 #include <clang/AST/ASTContext.h>
 #include <clang/AST/Decl.h>

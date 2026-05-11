@@ -16,13 +16,13 @@
 /// \file CreateAndEmbedIModulePass.cpp
 /// Implements the \c CreateAndEmbedIModulePass class.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolingIRCompilation/CreateAndEmbedIModulePass.h"
-#include "luthier/ToolingIRCompilation/ExternalizeGlobalsPass.h"
-#include "luthier/ToolingIRCompilation/FinalizeHooksPass.h"
-#include "luthier/ToolingIRCompilation/FinalizeIntrinsicsPass.h"
-#include "luthier/ToolingIRCompilation/MarkAnnotationsPass.h"
-#include "luthier/ToolingIRCompilation/StripKernelsPass.h"
-#include "luthier/ToolingIRCompilation/SubstituteAMDGCNIntrinsicsPass.h"
+#include "luthier/ToolIRCompilation/CreateAndEmbedIModulePass.h"
+#include "luthier/ToolIRCompilation/ExternalizeGlobalsPass.h"
+#include "luthier/ToolIRCompilation/FinalizeHooksPass.h"
+#include "luthier/ToolIRCompilation/FinalizeIntrinsicsPass.h"
+#include "luthier/ToolIRCompilation/MarkAnnotationsPass.h"
+#include "luthier/ToolIRCompilation/StripKernelsPass.h"
+#include "luthier/ToolIRCompilation/SubstituteAMDGCNIntrinsicsPass.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Bitcode/BitcodeWriterPass.h>
 #include <llvm/IR/Module.h>

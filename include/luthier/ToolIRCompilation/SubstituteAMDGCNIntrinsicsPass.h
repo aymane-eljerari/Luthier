@@ -1,4 +1,4 @@
-//===-- CreateAndEmbedIModulePass.h ------------------------------*- C++-*-===//
+//===-- SubstituteAMDGCNIntrinsicsPass.h -------------------------*- C++-*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,13 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file CreateAndEmbedIModulePass.h
-/// Defines \c CreateAndEmbedIModulePass in charge of creating and processing
-/// the Luthier tool instrumentation \c llvm::Module and embedding its
-/// bitcode into the compiled device code object.
+/// \file SubstituteAMDGCNIntrinsicsPass.h
+/// Defines the \c SubstituteAMDGCNIntrinsicsPass which re-writes
+/// a set of amdgcn intrinsics that require special lowering in Luthier's
+/// code generation to instead use their luthier equivalent.
+/// Current rewrites:
+///   \c llvm.amdgcn.workgroup.id.{x,y,z} -> \c luthier::workgroupId{X,Y,Z}
+///   \c llvm.amdgcn.implicitarg.ptr     -> \c luthier::implicitArgPtr
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_IR_COMPILATION_ORCHESTRATOR_PASS_H
-#define LUTHIER_TOOLING_IR_COMPILATION_ORCHESTRATOR_PASS_H
+#ifndef LUTHIER_TOOL_IR_COMPILATION_SUBSTITUTE_AMDGCN_INTRINSICS_PASS_H
+#define LUTHIER_TOOL_IR_COMPILATION_SUBSTITUTE_AMDGCN_INTRINSICS_PASS_H
 #include <llvm/IR/PassManager.h>
 
 namespace llvm {
@@ -28,16 +31,18 @@ class Module;
 
 namespace luthier {
 
-class CreateAndEmbedIModulePass
-    : public llvm::PassInfoMixin<CreateAndEmbedIModulePass> {
+class SubstituteAMDGCNIntrinsicsPass
+    : public llvm::PassInfoMixin<SubstituteAMDGCNIntrinsicsPass> {
 public:
-  CreateAndEmbedIModulePass() = default;
+  SubstituteAMDGCNIntrinsicsPass() = default;
 
   llvm::PreservedAnalyses run(llvm::Module &M, llvm::ModuleAnalysisManager &AM);
 
   static bool isRequired() { return true; }
 
-  static llvm::StringRef name() { return "luthier-embed-imodule"; }
+  static llvm::StringRef name() {
+    return "luthier-substitute-amdgcn-intrinsics";
+  }
 };
 
 } // namespace luthier

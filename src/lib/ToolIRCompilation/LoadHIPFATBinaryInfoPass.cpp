@@ -20,7 +20,7 @@
 /// Executable Loader instead of using HIP for it, whcih has proven to be
 /// unreliable
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolingIRCompilation/LoadHIPFATBinaryInfoPass.h"
+#include "luthier/ToolIRCompilation/LoadHIPFATBinaryInfoPass.h"
 #include "luthier/Common/ErrorCheck.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>

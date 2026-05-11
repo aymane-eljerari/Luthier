@@ -1,4 +1,4 @@
-//===-- StripKernelsPass.h ---------------------------------------*- C++-*-===//
+//===-- MarkAnnotationsPass.h ------------------------------------*- C++-*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,14 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file StripKernelsPass.h
-/// Defines \c MarkAnnotationsPass which removes every function with
-/// AMDGPU_KERNEL calling convention from the instrumentation module. Hook
-/// handle kernels and any other kernels live in the host-side device code
-/// object only and are not needed in the embedded instrumentation module.
+/// \file MarkAnnotationsPass.h
+/// Defines \c MarkAnnotationsPass which reads <tt>llvm.global.annotations</tt>,
+/// applies Luthier hook/intrinsic function attributes accordingly, and removes
+/// the annotation array along with <tt>llvm.used</tt> and
+/// <tt>llvm.compiler.used</tt>.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_IR_COMPILATION_STRIP_KERNELS_PASS_H
-#define LUTHIER_TOOLING_IR_COMPILATION_STRIP_KERNELS_PASS_H
+#ifndef LUTHIER_TOOL_IR_COMPILATION_MARK_ANNOTATIONS_PASS_H
+#define LUTHIER_TOOL_IR_COMPILATION_MARK_ANNOTATIONS_PASS_H
 #include <llvm/IR/PassManager.h>
 
 namespace llvm {
@@ -29,15 +29,15 @@ class Module;
 
 namespace luthier {
 
-class StripKernelsPass : public llvm::PassInfoMixin<StripKernelsPass> {
+class MarkAnnotationsPass : public llvm::PassInfoMixin<MarkAnnotationsPass> {
 public:
-  StripKernelsPass() = default;
+  MarkAnnotationsPass() = default;
 
   llvm::PreservedAnalyses run(llvm::Module &M, llvm::ModuleAnalysisManager &AM);
 
   static bool isRequired() { return true; }
 
-  static llvm::StringRef name() { return "luthier-strip-kernels"; }
+  static llvm::StringRef name() { return "luthier-mark-annotations"; }
 };
 
 } // namespace luthier

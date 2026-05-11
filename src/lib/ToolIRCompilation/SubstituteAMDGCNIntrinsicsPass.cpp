@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolingIRCompilation/SubstituteAMDGCNIntrinsicsPass.h"
+#include "luthier/ToolIRCompilation/SubstituteAMDGCNIntrinsicsPass.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include "luthier/Intrinsic/IntrinsicCalls.h"
 #include <initializer_list>

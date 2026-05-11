@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolingCXXCompilation/Consumers.h"
-#include "luthier/ToolingCXXCompilation/Annotations.h"
-#include "luthier/ToolingCXXCompilation/Mangling.h"
+#include "luthier/ToolCXXCompilation/Consumers.h"
+#include "luthier/ToolCXXCompilation/Annotations.h"
+#include "luthier/ToolCXXCompilation/Mangling.h"
 #include <clang/AST/AST.h>
 #include <clang/AST/ASTConsumer.h>
 #include <clang/AST/Attr.h>

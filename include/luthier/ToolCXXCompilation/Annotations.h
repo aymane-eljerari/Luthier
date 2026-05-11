@@ -16,8 +16,8 @@
 /// \file Annotations.h
 /// Defines annotations used in Luthier CXX tool source code.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_CXX_COMPILATION_PLUGIN_H
-#define LUTHIER_TOOLING_CXX_COMPILATION_PLUGIN_H
+#ifndef LUTHIER_TOOL_CXX_COMPILATION_PLUGIN_H
+#define LUTHIER_TOOL_CXX_COMPILATION_PLUGIN_H
 #include <llvm/ADT/StringRef.h>
 
 namespace luthier {

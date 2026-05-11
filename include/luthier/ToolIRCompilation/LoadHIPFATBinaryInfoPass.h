@@ -1,4 +1,4 @@
-//===-- ExternalizeGlobalsPass.h ---------------------------------*- C++-*-===//
+//===-- LoadHIPFATBinaryInfoPass.h --------------------------------*-C++-*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,34 +13,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file ExternalizeGlobalsPass.h
-/// Defines \c ExternalizeGlobalsPass which:
-/// - Drops static managed variable initializers, as well as any metadata
-/// globals from the instrumentation module
-/// - Externalizes remaining globals (except \c
-/// __hip_cuid_*) so that they can be linked against the copy defined by the
-/// instrumentation module's code object.
+/// \file LoadHIPFATBinaryInfoPass.h
+/// Deletes \c __hip_register* host-side functions and stores the
+/// information they would have registered so Luthier's tool executable
+/// loader can consume it at runtime. The pass operates on host code; on
+/// AMD GCN device modules it is a no-op.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_IR_COMPILATION_EXTERNALIZE_GLOBALS_PASS_H
-#define LUTHIER_TOOLING_IR_COMPILATION_EXTERNALIZE_GLOBALS_PASS_H
+#ifndef LUTHIER_TOOL_IR_COMPILATION_LOAD_HIP_FAT_BINARY_INFO_PASS_H
+#define LUTHIER_TOOL_IR_COMPILATION_LOAD_HIP_FAT_BINARY_INFO_PASS_H
 #include <llvm/IR/PassManager.h>
 
 namespace llvm {
 class Module;
-}
+} // namespace llvm
 
 namespace luthier {
 
-class ExternalizeGlobalsPass
-    : public llvm::PassInfoMixin<ExternalizeGlobalsPass> {
+class LoadHIPFATBinaryInfoPass
+    : public llvm::PassInfoMixin<LoadHIPFATBinaryInfoPass> {
 public:
-  ExternalizeGlobalsPass() = default;
+  LoadHIPFATBinaryInfoPass() = default;
 
-  llvm::PreservedAnalyses run(llvm::Module &M, llvm::ModuleAnalysisManager &AM);
+  llvm::PreservedAnalyses run(llvm::Module &M,
+                              llvm::ModuleAnalysisManager &MAM);
 
   static bool isRequired() { return true; }
 
-  static llvm::StringRef name() { return "luthier-externalize-globals"; }
+  static llvm::StringRef name() {
+    return "luthier-load-hip-fat-binary-info-pass";
+  }
 };
 
 } // namespace luthier
