@@ -1,4 +1,4 @@
-//===-- OptPlugin.cpp -----------------------------------------------------===//
+//===-- ToolCodeGenPlugin.cpp ---------------------------------------------===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,17 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-///
-/// \file
+/// \file ToolCodeGenPlugin.cpp
 /// Main file for the Luthier "opt" compiler plugin, which registers Luthier
 /// passes and their names with the new pass manager's pass builder when loaded.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolCodeGenTesting/AMDGPUMockLoaderPrinter.h"
 #include "luthier/ToolCodeGen/CodeDiscoveryPass.h"
 #include "luthier/ToolCodeGen/CodeObjectManagerAnalysis.h"
 #include "luthier/ToolCodeGen/InitialEntryPointAnalysis.h"
 #include "luthier/ToolCodeGen/InstructionTracesAnalysis.h"
 #include "luthier/ToolCodeGen/InstrumentationPMDriver.h"
+#include "luthier/ToolCodeGenTesting/AMDGPUMockLoaderPrinter.h"
 // #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
 // #include "luthier/ToolCodeGen/LRCallgraph.h"
 // #include "luthier/ToolCodeGen/MMISlotIndexesAnalysis.h"
@@ -119,11 +118,12 @@ llvm::cl::opt<std::pair<uint64_t, std::string>, false,
               MockAMDGPULoaderInitialExecutionPointParser>
     InitialExecutionPoint{
         "initial-execution-point",
-    llvm::cl::desc("The initial execution point of the lifting process. "
-                   "Formatted as <code-object-index>:<mangled-symbol-name>. \n"
-                   "Code objects are zero indexed w.r.t the order they are "
-                   "specified to be loaded into the mock loader."),
-    llvm::cl::NotHidden, llvm::cl::cat(OptPluginOptions)};
+        llvm::cl::desc(
+            "The initial execution point of the lifting process. "
+            "Formatted as <code-object-index>:<mangled-symbol-name>. \n"
+            "Code objects are zero indexed w.r.t the order they are "
+            "specified to be loaded into the mock loader."),
+        llvm::cl::NotHidden, llvm::cl::cat(OptPluginOptions)};
 }; // namespace luthier
 
 extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo

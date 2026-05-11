@@ -15,8 +15,8 @@ lit_config.load_config(
       config, os.path.join(config.my_src_root, "lit.cfg.py"))
 
 
-plugin_path = os.path.join("@CMAKE_BINARY_DIR@/lib", "LuthierOptPlugin.so")
-config.substitutions.append(('%luthier_opt', f"-load-pass-plugin={plugin_path}"))
+plugin_path = os.path.join("@CMAKE_BINARY_DIR@/lib", "LuthierToolCodeGenPlugin.so")
+config.substitutions.append(('%luthier_tool_code_gen_plugin', f"-load-pass-plugin={plugin_path}"))
 
 tool_ir_compilation_plugin_path = os.path.join("@CMAKE_BINARY_DIR@/lib",
                                  "LuthierToolIRCompilationPlugin.so")

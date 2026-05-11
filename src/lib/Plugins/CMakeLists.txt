@@ -2,7 +2,7 @@ include(AddLLVM)
 
 add_subdirectory(ToolIRCompilationPlugin)
 add_subdirectory(ToolCXXCompilationPlugin)
-add_subdirectory(OptPlugin)
+add_subdirectory(ToolCodeGenPlugin)
 
 include(LuthierAddCompilerPlugin)
 include(LuthierAddClangPlugin)
