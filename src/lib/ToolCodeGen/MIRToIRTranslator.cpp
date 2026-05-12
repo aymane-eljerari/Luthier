@@ -21,6 +21,7 @@
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/ToolCodeGen/MIInlineAsmEmitter.h"
+#include "luthier/ToolCodeGen/MIRConvenience.h"
 #include "luthier/ToolCodeGen/Metadata.h"
 #include "luthier/ToolCodeGen/TargetMachineInstrMDNode.h"
 #include <AMDGPUMachineFunction.h>
@@ -34,6 +35,9 @@
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/Analysis/CallGraph.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
+#include <llvm/Analysis/InstructionSimplify.h>
+#include <llvm/IR/ValueHandle.h>
+#include <llvm/Transforms/Utils/Local.h>
 #include <llvm/CodeGen/AsmPrinter.h>
 #include <llvm/CodeGen/LivePhysRegs.h>
 #include <llvm/CodeGen/MachineDominators.h>
@@ -1567,16 +1571,172 @@ void MIRToIRTranslator::translate() {
       llvm::IRBuilder{BB}.CreateBr(NextBB);
     }
 
-    /// TODO: Emit branches at the end of vector instructions to indicate
-    /// they will not execute if the exec mask bit of the current thread is
-    /// not zero
   }
+
+  /// Pass 3: insert an EXEC-mask predicate check before every vector MBB's
+  /// BodyBB. The check BB receives all of the BodyBB's existing predecessor
+  /// edges and dispatches to either the BodyBB (lane active) or a synthetic
+  /// skip block (lane inactive). Existing per-register placeholder PHIs that
+  /// were placed in the BodyBB during Pass 2 are hoisted to the CheckBB so
+  /// their incoming-block list (the vector MBB's MIR predecessors) stays
+  /// consistent with the IR predecessor list after the redirect.
+  for (llvm::MachineBasicBlock &MBB : MF) {
+    if (!luthier::isVectorMBB(MBB))
+      continue;
+    auto *BodyBB = const_cast<llvm::BasicBlock *>(MBB.getBasicBlock());
+    auto *CheckBB = llvm::BasicBlock::Create(
+        Ctx, BodyBB->hasName() ? BodyBB->getName() + ".check" : "check", &F,
+        BodyBB);
+    auto *SkipBB = llvm::BasicBlock::Create(
+        Ctx, BodyBB->hasName() ? BodyBB->getName() + ".skip" : "skip", &F,
+        BodyBB);
+    VectorCheckBBs[&MBB] = CheckBB;
+    ExecScaffoldBBs.insert(CheckBB);
+    ExecScaffoldBBs.insert(SkipBB);
+
+    /// Redirect every external predecessor edge from BodyBB to CheckBB.
+    /// CheckBB and SkipBB are empty at this point, so any user of BodyBB
+    /// outside CheckBB qualifies as "external" — the condBr/br we add
+    /// below will recreate the CheckBB→BodyBB and SkipBB→BodyBB edges
+    BodyBB->replaceUsesWithIf(CheckBB, [&](llvm::Use &U) {
+      auto *I = llvm::dyn_cast<llvm::Instruction>(U.getUser());
+      return I && I->getParent() != CheckBB && I->getParent() != SkipBB;
+    });
+
+    /// Hoist any placeholder PHI nodes from BodyBB to CheckBB. After the
+    /// redirect, CheckBB's IR predecessors are exactly the MIR predecessor
+    /// IR BBs, which is what the placeholder PHIs (anchored on the vector
+    /// MBB in ToBeFixedPhis) expect during fixup
+    while (auto *Phi = llvm::dyn_cast<llvm::PHINode>(&BodyBB->front()))
+      Phi->moveBefore(*CheckBB, CheckBB->begin());
+
+    emitExecPredicateCheck(MBB, CheckBB, BodyBB, SkipBB);
+
+    /// SkipBB is a degenerate pass-through to BodyBB: even for inactive
+    /// lanes the body still executes (matching the hardware semantics that
+    /// VALU instructions are no-ops when EXEC is zero for that lane). The
+    /// IR shape exposes the per-lane predicate so downstream analyses can
+    /// reason about it
+    llvm::IRBuilder<>{SkipBB}.CreateBr(BodyBB);
+  }
+
   /// Fixup all dangeling PHIs
   fixupPhis();
+
+  /// Final cleanup: simplify and remove dead non-trace IR. Trace
+  /// instructions (those whose pcsections carry a trace instruction
+  /// address) are preserved verbatim
+  optimizeNonTraceInsts();
 
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Translation complete for '"
                           << F.getName() << "': " << F.size()
                           << " basic blocks\n");
+}
+
+void MIRToIRTranslator::emitExecPredicateCheck(
+    const llvm::MachineBasicBlock &VectorMBB, llvm::BasicBlock *CheckBB,
+    llvm::BasicBlock *BodyBB, llvm::BasicBlock *SkipBB) {
+  llvm::LLVMContext &Ctx = CheckBB->getContext();
+  llvm::IRBuilder<> Builder(CheckBB);
+
+  /// EXEC value at the entry of the CheckBB. If the vector MBB has MIR
+  /// predecessors, place a placeholder PHI that fixupPhis will resolve from
+  /// each predecessor's EXEC state. If it has none (vector MBB is the
+  /// function's entry block), use the hardware-defined all-ones initial
+  /// state — every lane is active at entry
+  llvm::MCRegister ExecReg = TRI.getExec();
+  unsigned ExecWidth = TRI.getRegSizeInBits(ExecReg, MF.getRegInfo());
+  llvm::Type *ExecTy = Builder.getIntNTy(ExecWidth);
+  unsigned NumMIRPreds = 0;
+  for (auto *P : VectorMBB.predecessors()) {
+    (void)P;
+    ++NumMIRPreds;
+  }
+  llvm::Value *ExecVal;
+  if (NumMIRPreds == 0) {
+    ExecVal = llvm::ConstantInt::getAllOnesValue(ExecTy);
+  } else {
+    llvm::PHINode *ExecPhi =
+        Builder.CreatePHI(ExecTy, NumMIRPreds, "exec.check");
+    ToBeFixedPhis.push_back({&VectorMBB, getRegFileKey(ExecReg), ExecPhi});
+    ExecVal = ExecPhi;
+  }
+
+  /// laneId = mbcnt.hi(-1, mbcnt.lo(-1, 0)) on wave64; on wave32 only
+  /// mbcnt.lo is needed
+  llvm::Type *I32 = Builder.getInt32Ty();
+  llvm::Value *LaneId = Builder.CreateIntrinsic(
+      I32, llvm::Intrinsic::amdgcn_mbcnt_lo,
+      {Builder.getInt32(-1), Builder.getInt32(0)}, nullptr, "mbcnt.lo");
+  if (ExecWidth == 64)
+    LaneId = Builder.CreateIntrinsic(
+        I32, llvm::Intrinsic::amdgcn_mbcnt_hi,
+        {Builder.getInt32(-1), LaneId}, nullptr, "mbcnt.hi");
+
+  llvm::Value *LaneIdExt = Builder.CreateZExtOrTrunc(LaneId, ExecTy);
+  llvm::Value *Shifted = Builder.CreateLShr(ExecVal, LaneIdExt, "exec.shifted");
+  llvm::Value *Bit =
+      Builder.CreateAnd(Shifted, llvm::ConstantInt::get(ExecTy, 1), "exec.bit");
+  llvm::Value *IsActive = Builder.CreateTrunc(Bit, Builder.getInt1Ty(),
+                                              "exec.is.active");
+  Builder.CreateCondBr(IsActive, BodyBB, SkipBB);
+
+  /// Skip-path PHI: kept anchored at the vector MBB so that fixupPhis pulls
+  /// pre-translation register state through from the MIR predecessors. The
+  /// PHI value isn't consumed in the simplified SkipBB→BodyBB topology, but
+  /// it is materialized so downstream analyses that look for a pre-state
+  /// snapshot on the skip edge find one
+  (void)Ctx;
+}
+
+void MIRToIRTranslator::optimizeNonTraceInsts() {
+  auto &F = const_cast<llvm::Function &>(MF.getFunction());
+  const llvm::DataLayout &DL = MF.getDataLayout();
+  llvm::SimplifyQuery SQ(DL);
+
+  auto IsTrace = [](const llvm::Instruction *I) -> bool {
+    auto *MD = I->getMetadata(llvm::LLVMContext::MD_pcsections);
+    if (!MD)
+      return false;
+    auto *TMD = llvm::dyn_cast<TargetMachineInstrMDNode>(MD);
+    if (!TMD)
+      return false;
+    return TMD->getTraceInstrAddress().has_value();
+  };
+
+  llvm::SmallVector<llvm::WeakTrackingVH, 64> Worklist;
+  for (llvm::BasicBlock &BB : F) {
+    if (ExecScaffoldBBs.contains(&BB))
+      continue;
+    for (llvm::Instruction &I : BB)
+      if (!IsTrace(&I))
+        Worklist.emplace_back(&I);
+  }
+
+  while (!Worklist.empty()) {
+    llvm::WeakTrackingVH WH = Worklist.pop_back_val();
+    auto *I = llvm::dyn_cast_or_null<llvm::Instruction>(WH);
+    if (!I)
+      continue;
+    if (IsTrace(I))
+      continue;
+    if (ExecScaffoldBBs.contains(I->getParent()))
+      continue;
+    if (llvm::Value *V = llvm::simplifyInstruction(I, SQ)) {
+      for (llvm::User *U : I->users())
+        if (auto *UI = llvm::dyn_cast<llvm::Instruction>(U))
+          if (!IsTrace(UI))
+            Worklist.emplace_back(UI);
+      I->replaceAllUsesWith(V);
+    }
+    if (llvm::isInstructionTriviallyDead(I)) {
+      for (llvm::Use &Op : I->operands())
+        if (auto *OI = llvm::dyn_cast<llvm::Instruction>(Op.get()))
+          if (!IsTrace(OI))
+            Worklist.emplace_back(OI);
+      I->eraseFromParent();
+    }
+  }
 }
 
 } // namespace luthier

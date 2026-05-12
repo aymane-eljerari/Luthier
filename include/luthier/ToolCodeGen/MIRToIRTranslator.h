@@ -24,6 +24,7 @@
 #include <GCNSubtarget.h>
 #include <SIInstrInfo.h>
 #include <llvm/ADT/DenseMap.h>
+#include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/CodeGen/MachineDominators.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Value.h>
@@ -293,6 +294,37 @@ class MIRToIRTranslator {
   /// Per-basic block register file value mapping; This is updated every
   /// time a single register/file is read/written to
   BBStateMap VM{};
+
+  /// For each vector MBB, the synthetic IR "check" basic block inserted
+  /// between the MBB's IR predecessors and its BodyBB. The check BB holds
+  /// the EXEC mask PHI, computes the per-lane active predicate, and branches
+  /// to either the BodyBB (lane active) or the synthetic skip block (lane
+  /// inactive). Membership in this map indicates the MBB is a vector MBB
+  llvm::DenseMap<const llvm::MachineBasicBlock *, llvm::BasicBlock *>
+      VectorCheckBBs{};
+
+  /// All synthetic IR basic blocks (CheckBB + SkipBB) emitted as part of
+  /// the EXEC mask predicate scaffolding. Instructions inside these blocks
+  /// are preserved verbatim by \c optimizeNonTraceInsts so that downstream
+  /// analyses can rely on the predicate IR pattern being intact
+  llvm::SmallPtrSet<const llvm::BasicBlock *, 8> ExecScaffoldBBs{};
+
+  /// Build the EXEC-mask per-lane active predicate in \p CheckBB and emit a
+  /// conditional branch to either \p BodyBB (active lane) or \p SkipBB
+  /// (inactive lane). The CheckBB receives a placeholder EXEC PHI that is
+  /// resolved by \c fixupPhis from \p VectorMBB's MIR predecessors
+  void emitExecPredicateCheck(const llvm::MachineBasicBlock &VectorMBB,
+                              llvm::BasicBlock *CheckBB,
+                              llvm::BasicBlock *BodyBB,
+                              llvm::BasicBlock *SkipBB);
+
+  /// After translation is complete, run a worklist-driven
+  /// \c llvm::simplifyInstruction + trivial-dead removal sweep over all
+  /// non-trace instructions in the translated function. Trace instructions
+  /// (those whose \c MD_pcsections metadata is a
+  /// \c TargetMachineInstrMDNode with a non-empty trace instruction
+  /// address) are preserved as-is
+  void optimizeNonTraceInsts();
 
   /// Maps the physical pseudo register to its hardware register
   /// \note Use this instead of \c llvm::AMDGPU::getMCReg directly

@@ -1,0 +1,39 @@
+// Minimal gfx908 target kernel — assembled by each test into a code object
+// used as -code-object-paths input. Not picked up by lit (note the .txt
+// suffix); referenced via the %target_stub substitution.
+	.amdgcn_target "amdgcn-amd-amdhsa--gfx908"
+	.amdhsa_code_object_version 6
+	.text
+	.globl	stub_kernel
+	.p2align	8
+	.type	stub_kernel,@function
+stub_kernel:
+	s_endpgm
+.Lfunc_end0:
+	.size stub_kernel, .Lfunc_end0-stub_kernel
+	.section	.rodata,"a",@progbits
+	.p2align	6, 0x0
+	.amdhsa_kernel stub_kernel
+		.amdhsa_next_free_vgpr 1
+		.amdhsa_next_free_sgpr 1
+	.end_amdhsa_kernel
+	.amdgpu_metadata
+---
+amdhsa.kernels:
+  - .agpr_count:     0
+    .group_segment_fixed_size: 0
+    .kernarg_segment_align: 8
+    .kernarg_segment_size: 0
+    .max_flat_workgroup_size: 1024
+    .name:           stub_kernel
+    .private_segment_fixed_size: 0
+    .sgpr_count:     16
+    .symbol:         stub_kernel.kd
+    .vgpr_count:     1
+    .wavefront_size: 64
+amdhsa.target:   amdgcn-amd-amdhsa--gfx908
+amdhsa.version:
+  - 1
+  - 2
+...
+	.end_amdgpu_metadata
