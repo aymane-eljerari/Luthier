@@ -50,7 +50,7 @@
 // VCC = S0.f <cmp> S1.f (ordered: both operands must not be NaN).
 foreach i = 0-5 in {
   defvar cmpName = ["EQ", "LG", "GT", "GE", "LT", "LE"][i];
-  defvar cmpPred = [SETOEQ, SETONE, SETOGT, SETOGE, SETOLT, SETOLE][i];
+  defvar cmpPred = [LLVMFCmpOEQ, LLVMFCmpONE, LLVMFCmpOGT, LLVMFCmpOGE, LLVMFCmpOLT, LLVMFCmpOLE][i];
 
   // V_CMP → VCC
   def V_CMP_#cmpName#_F32_e32_sem
@@ -124,7 +124,7 @@ foreach i = 0-5 in {
 // VCC = !(S0.f <cmp> S1.f) (unordered: true if either operand is NaN).
 foreach i = 0-5 in {
   defvar cmpName = ["NEQ", "NLG", "NGT", "NGE", "NLT", "NLE"][i];
-  defvar cmpPred = [SETUNE, SETUEQ, SETULE, SETULT, SETUGE, SETUGT][i];
+  defvar cmpPred = [LLVMFCmpUNE, LLVMFCmpUEQ, LLVMFCmpULE, LLVMFCmpULT, LLVMFCmpUGE, LLVMFCmpUGT][i];
 
   def V_CMP_#cmpName#_F32_e32_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_F32_e32")> {
@@ -192,7 +192,7 @@ foreach i = 0-5 in {
 // O = ordered (both not NaN), U = unordered (either is NaN)
 foreach i = 0-1 in {
   defvar cmpName = ["O", "U"][i];
-  defvar cmpPred = [SETO, SETUO][i];
+  defvar cmpPred = [LLVMFCmpORD, LLVMFCmpUNO][i];
 
   def V_CMP_#cmpName#_F32_e32_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_F32_e32")> {
@@ -298,7 +298,7 @@ foreach i = 0-1 in {
 // F64 ordered comparisons
 foreach i = 0-5 in {
   defvar cmpName = ["EQ", "LG", "GT", "GE", "LT", "LE"][i];
-  defvar cmpPred = [SETOEQ, SETONE, SETOGT, SETOGE, SETOLT, SETOLE][i];
+  defvar cmpPred = [LLVMFCmpOEQ, LLVMFCmpONE, LLVMFCmpOGT, LLVMFCmpOGE, LLVMFCmpOLT, LLVMFCmpOLE][i];
 
   def V_CMP_#cmpName#_F64_e32_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_F64_e32")> {
@@ -357,7 +357,7 @@ foreach i = 0-5 in {
 // F64 unordered comparisons
 foreach i = 0-5 in {
   defvar cmpName = ["NEQ", "NLG", "NGT", "NGE", "NLT", "NLE"][i];
-  defvar cmpPred = [SETUNE, SETUEQ, SETULE, SETULT, SETUGE, SETUGT][i];
+  defvar cmpPred = [LLVMFCmpUNE, LLVMFCmpUEQ, LLVMFCmpULE, LLVMFCmpULT, LLVMFCmpUGE, LLVMFCmpUGT][i];
 
   def V_CMP_#cmpName#_F64_e32_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_F64_e32")> {
@@ -464,7 +464,7 @@ foreach i = 0-3 in {
 // F16 ordered comparisons
 foreach i = 0-5 in {
   defvar cmpName = ["EQ", "LG", "GT", "GE", "LT", "LE"][i];
-  defvar cmpPred = [SETOEQ, SETONE, SETOGT, SETOGE, SETOLT, SETOLE][i];
+  defvar cmpPred = [LLVMFCmpOEQ, LLVMFCmpONE, LLVMFCmpOGT, LLVMFCmpOGE, LLVMFCmpOLT, LLVMFCmpOLE][i];
 
   foreach inst = ["V_CMP_"#cmpName#"_F16_e32",
                   "V_CMP_"#cmpName#"_F16_t16_e32"] in {
@@ -511,7 +511,7 @@ foreach i = 0-5 in {
 // F16 unordered comparisons
 foreach i = 0-5 in {
   defvar cmpName = ["NEQ", "NLG", "NGT", "NGE", "NLT", "NLE"][i];
-  defvar cmpPred = [SETUNE, SETUEQ, SETULE, SETULT, SETUGE, SETUGT][i];
+  defvar cmpPred = [LLVMFCmpUNE, LLVMFCmpUEQ, LLVMFCmpULE, LLVMFCmpULT, LLVMFCmpUGE, LLVMFCmpUGT][i];
 
   foreach inst = ["V_CMP_"#cmpName#"_F16_e32",
                   "V_CMP_"#cmpName#"_F16_t16_e32"] in {
@@ -632,7 +632,7 @@ foreach i = 0-7 in {
   def V_CMP_#cmpName#_I32_e32_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_I32_e32"), cmpSem>;
 
-  defvar cmpPredI32 = [SETEQ, SETNE, SETGT, SETGE, SETLT, SETLE, SETEQ, SETEQ][i];
+  defvar cmpPredI32 = [LLVMICmpEQ, LLVMICmpNE, LLVMICmpSGT, LLVMICmpSGE, LLVMICmpSLT, LLVMICmpSLE, LLVMICmpEQ, LLVMICmpEQ][i];
 
   def V_CMPX_#cmpName#_I32_e32_sem
     : InstSISemantic<!cast<InstSI>("V_CMPX_"#cmpName#"_I32_e32")> {
@@ -673,7 +673,7 @@ foreach i = 0-7 in {
   def V_CMP_#cmpName#_U32_e32_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_U32_e32"), cmpSem>;
 
-  defvar cmpPredU32 = [SETEQ, SETNE, SETUGT, SETUGE, SETULT, SETULE, SETEQ, SETEQ][i];
+  defvar cmpPredU32 = [LLVMICmpEQ, LLVMICmpNE, LLVMFCmpUGT, LLVMFCmpUGE, LLVMFCmpULT, LLVMFCmpULE, LLVMICmpEQ, LLVMICmpEQ][i];
 
   def V_CMPX_#cmpName#_U32_e32_sem
     : InstSISemantic<!cast<InstSI>("V_CMPX_"#cmpName#"_U32_e32")> {
@@ -713,7 +713,7 @@ foreach i = 0-7 in {
     !eq(i, 7) : [(ImplicitDef VCC, (ConstantTrue si_llvm_i1_ty))]
   );
 
-  defvar cmpPredI64 = [SETEQ, SETNE, SETGT, SETGE, SETLT, SETLE, SETEQ, SETEQ][i];
+  defvar cmpPredI64 = [LLVMICmpEQ, LLVMICmpNE, LLVMICmpSGT, LLVMICmpSGE, LLVMICmpSLT, LLVMICmpSLE, LLVMICmpEQ, LLVMICmpEQ][i];
 
   def V_CMP_#cmpName#_I64_e32_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_I64_e32"), i64SemSigned>;
@@ -736,7 +736,7 @@ foreach i = 0-7 in {
   }
 
   // U64 unsigned
-  defvar cmpPredU64 = [SETEQ, SETNE, SETUGT, SETUGE, SETULT, SETULE, SETEQ, SETEQ][i];
+  defvar cmpPredU64 = [LLVMICmpEQ, LLVMICmpNE, LLVMFCmpUGT, LLVMFCmpUGE, LLVMFCmpULT, LLVMFCmpULE, LLVMICmpEQ, LLVMICmpEQ][i];
 
   def V_CMP_#cmpName#_U64_e32_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_U64_e32")> {
