@@ -308,7 +308,6 @@ llvmGetPassPluginInfo() {
       });
       MAM.registerPass([]() { return luthier::CodeObjectManagerAnalysis(); });
       MAM.registerPass([]() { return luthier::LuthierCallGraphAnalysis(); });
-      // MAM.registerPass([]() { return luthier::LRCallGraphAnalysis(); });
       // MAM.registerPass([]() { return luthier::MMISlotIndexesAnalysis(); });
       // MAM.registerPass([]() {
       //   return luthier::LRStateValueStorageAndLoadLocationsAnalysis();
