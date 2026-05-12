@@ -92,9 +92,12 @@ StateValueArraySpecs::getSVASpecs(const llvm::Module &M,
       }
     };
 
+    // std::make_integer_sequence<T, N> produces [0, N-1]; the inclusive
+     // SCALAR_VALUE_ARGUMENT_LAST sentinel is the highest valid enumerator,
+     // so the count is LAST+1 to cover every SA in [FIRST, LAST].
     constexpr auto SVArgSequence =
         std::make_integer_sequence<SVArgUnderlyingType,
-                                   SCALAR_VALUE_ARGUMENT_LAST>{};
+                                   SCALAR_VALUE_ARGUMENT_LAST + 1>{};
 
     [&]<SVArgUnderlyingType... SVArgs>(
         std::integer_sequence<SVArgUnderlyingType, SVArgs...>) {
@@ -120,7 +123,7 @@ std::unique_ptr<StateValueArraySpecs> StateValueArraySpecs::setModuleSVASpec(
 
   constexpr auto SVArgSequence =
       std::make_integer_sequence<SVArgUnderlyingType,
-                                 SCALAR_VALUE_ARGUMENT_LAST>{};
+                                 SCALAR_VALUE_ARGUMENT_LAST + 1>{};
 
   [&]<SVArgUnderlyingType... SVArgs>(
       std::integer_sequence<SVArgUnderlyingType, SVArgs...>) {

@@ -56,9 +56,9 @@ llvm::Error writeExecMIRProcessor(
     const std::function<llvm::MachineInstrBuilder(int)> &MIBuilder,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)>
         &VirtRegBuilder,
-    const std::function<llvm::Register(ScalarValueArgument)> &,
-    const std::function<llvm::Register(llvm::MCRegister)> &PhysRegAccessor,
-    llvm::DenseMap<llvm::MCRegister, llvm::Register> &PhysRegsToBeOverwritten) {
+    const llvm::DenseMap<ScalarValueArgument, llvm::Register> &,
+    const llvm::DenseMap<llvm::MCRegister, llvm::Register> &,
+    llvm::DenseMap<llvm::MCRegister, llvm::Register> &) {
   // There should be only a single virtual register involved in the operation
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       Args.size() == 1, llvm::formatv("Number of virtual register arguments "

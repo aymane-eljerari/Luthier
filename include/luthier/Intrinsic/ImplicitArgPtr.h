@@ -40,9 +40,9 @@ llvm::Error implicitArgPtrMIRProcessor(
     const std::function<llvm::MachineInstrBuilder(int)> &MIBuilder,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)>
         &VirtRegBuilder,
-    const std::function<llvm::Register(ScalarValueArgument)> &KernArgAccessor,
-    const std::function<llvm::Register(llvm::MCRegister)> &PhysRegAccessor,
-    llvm::DenseMap<llvm::MCRegister, llvm::Register> &PhysRegsToBeOverwritten);
+    const llvm::DenseMap<ScalarValueArgument, llvm::Register> &,
+    const llvm::DenseMap<llvm::MCRegister, llvm::Register> &,
+    llvm::DenseMap<llvm::MCRegister, llvm::Register> &);
 
 } // namespace luthier
 

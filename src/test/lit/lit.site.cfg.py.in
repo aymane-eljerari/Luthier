@@ -32,3 +32,21 @@ config.substitutions.append(('%clangxx', "@LLVM_TOOLS_BINARY_DIR@/clang++"))
 
 config.substitutions.append(('%luthier_split_test',
     os.path.join("@CMAKE_BINARY_DIR@/bin", "luthier-split-test")))
+
+mock_injection_plugin_path = os.path.join("@CMAKE_BINARY_DIR@/lib",
+                                          "LuthierMockInjectionPlugin.so")
+# Both flags are needed: -load= pre-dlopens the shared object so its cl::opt
+# globals register before command-line parsing (otherwise pass-specific
+# options like -luthier-mock-inject-opcode are rejected as unknown);
+# -luthier-plugin= registers the plugin with InstrumentationPMDriver so it
+# can resolve mock pass names during pipeline parsing.
+config.substitutions.append(
+    ('%luthier_mock_injection_plugin',
+     f"-load={mock_injection_plugin_path} -luthier-plugin={mock_injection_plugin_path}"))
+
+config.substitutions.append(
+    ('%luthier_test_imodule_dir', "@CMAKE_BINARY_DIR@/test/imodule"))
+
+config.substitutions.append(
+    ('%intrinsic_mir_lowering_target_stub',
+     "@CMAKE_CURRENT_SOURCE_DIR@/intrinsic_mir_lowering/_target_stub.s.txt"))

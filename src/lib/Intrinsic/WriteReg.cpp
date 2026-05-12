@@ -77,6 +77,17 @@ writeRegIRProcessor(const llvm::Function &Intrinsic, const llvm::CallInst &User,
   // Forward the physical destination register enum to the MIR stage
   Out.addExtraLoweringValue(*llvm::ConstantInt::get(
       llvm::Type::getInt32Ty(Intrinsic.getContext()), DestReg.id()));
+  Out.getEffects().WrittenPhysRegs.push_back(DestReg);
+  // Sub-32-bit destinations are written via INSERT_SUBREG into the
+  // enclosing 32-bit super-register, which requires reading the
+  // super-register's current value. Declare that read so the driver
+  // pre-stages the channel value.
+  unsigned DestSizeBits = TRI->getRegSizeInBits(*PhysRegClass);
+  if (DestSizeBits < 32) {
+    const auto *SITRI = static_cast<const llvm::SIRegisterInfo *>(TRI);
+    llvm::MCRegister SuperReg = SITRI->get32BitRegister(DestReg);
+    Out.getEffects().ReadPhysRegs.push_back(SuperReg);
+  }
 
   return Out;
 }
@@ -88,19 +99,23 @@ llvm::Error writeRegMIRProcessor(
     const std::function<llvm::MachineInstrBuilder(int)> &MIBuilder,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)>
         &VirtRegBuilder,
-    const std::function<llvm::Register(ScalarValueArgument)> &,
-    const std::function<llvm::Register(llvm::MCRegister)> &PhysRegAccessor,
-    llvm::DenseMap<llvm::MCRegister, llvm::Register> &PhysRegsToBeOverwritten) {
+    const llvm::DenseMap<ScalarValueArgument, llvm::Register> &,
+    const llvm::DenseMap<llvm::MCRegister, llvm::Register> &ReadPhysRegVRegs,
+    llvm::DenseMap<llvm::MCRegister, llvm::Register> &WritePhysRegSlots) {
+  // The inline-asm placeholder for writeReg carries both a use (the input
+  // value) and a (dead) def produced by setReturnValueInfo on the IR side.
+  // We only care about the use here.
+  llvm::Register InputReg;
+  for (const auto &[Flag, Reg] : Args) {
+    if (Flag.isRegUseKind()) {
+      InputReg = Reg;
+      break;
+    }
+  }
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-      Args.size() == 1,
-      llvm::formatv(
-          "Expected only a single virtual register to be passed down to the "
-          "MIR lowering stage of luthier::writeReg, instead got {0}",
-          Args.size())));
-  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-      Args[0].first.isRegUseKind(),
-      "The virtual register argument for luthier::writeReg is not a use."));
-  llvm::Register InputReg = Args[0].second;
+      InputReg.isValid(),
+      "luthier::writeReg: no register-use operand found among inline-asm "
+      "args."));
 
   // Extract the destination physical register from the payload
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
@@ -128,27 +143,33 @@ llvm::Error writeRegMIRProcessor(
   if (DestRegSize > 32) {
     size_t NumChannels = DestRegSize / 32;
     const llvm::TargetRegisterClass *InputRegClass = MRI.getRegClass(InputReg);
-    for (int i = 0; i < NumChannels; i++) {
-      auto SubIdx = llvm::SIRegisterInfo::getSubRegFromChannel(i);
+    for (size_t I = 0; I < NumChannels; ++I) {
+      auto SubIdx = llvm::SIRegisterInfo::getSubRegFromChannel(I);
       auto InputSubRegClass = TRI->getSubRegisterClass(InputRegClass, SubIdx);
       auto SubReg = VirtRegBuilder(InputSubRegClass);
       MIBuilder(llvm::AMDGPU::COPY)
           .addReg(SubReg, llvm::RegState::Define)
           .addReg(InputReg, 0, SubIdx);
-      PhysRegsToBeOverwritten.insert({TRI->getSubReg(Dest, SubIdx), SubReg});
+      WritePhysRegSlots.insert({TRI->getSubReg(Dest, SubIdx), SubReg});
     }
   } else if (DestRegSize == 32 || DestRegSize == 1) {
-    PhysRegsToBeOverwritten.insert({Dest, InputReg});
+    WritePhysRegSlots.insert({Dest, InputReg});
   } else {
     auto SuperRegDest = TRI->get32BitRegister(Dest);
     auto SubIdx = TRI->getSubRegIndex(SuperRegDest, Dest);
+    auto SuperRegIt = ReadPhysRegVRegs.find(SuperRegDest);
+    LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+        SuperRegIt != ReadPhysRegVRegs.end(),
+        "luthier::writeReg: sub-32 destination's 32-bit super-register "
+        "missing from pre-staged read map (IR processor must declare it in "
+        "Effects.ReadPhysRegs)"));
     auto SuperRegVirt = VirtRegBuilder(TRI->getPhysRegBaseClass(SuperRegDest));
     MIBuilder(llvm::AMDGPU::INSERT_SUBREG)
         .addReg(SuperRegVirt, llvm::RegState::Define)
-        .addReg(PhysRegAccessor(SuperRegDest))
+        .addReg(SuperRegIt->second)
         .addReg(InputReg)
         .addImm(SubIdx);
-    PhysRegsToBeOverwritten.insert({SuperRegDest, SuperRegVirt});
+    WritePhysRegSlots.insert({SuperRegDest, SuperRegVirt});
   }
   return llvm::Error::success();
 }

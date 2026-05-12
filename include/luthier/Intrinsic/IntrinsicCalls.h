@@ -35,7 +35,7 @@ namespace luthier {
 /// \param ReturnType the return type of the intrinsic call instruction
 /// \param Args the arguments to the intrinsic function
 /// \return a \c llvm::CallInst to the intrinsic function
-llvm::CallInst *insertCallToIntrinsic(llvm::Module &M,
+inline llvm::CallInst *insertCallToIntrinsic(llvm::Module &M,
                                       llvm::IRBuilderBase &Builder,
                                       llvm::StringRef IntrinsicName,
                                       llvm::Type &ReturnType) {
@@ -71,7 +71,7 @@ llvm::CallInst *insertCallToIntrinsic(llvm::Module &M,
 /// \param Args the arguments to the intrinsic function
 /// \return a \c llvm::CallInst to the intrinsic function
 template <typename... IArgs>
-llvm::CallInst *insertCallToIntrinsic(llvm::Module &M,
+inline llvm::CallInst *insertCallToIntrinsic(llvm::Module &M,
                                       llvm::IRBuilderBase &Builder,
                                       llvm::StringRef IntrinsicName,
                                       llvm::Type &ReturnType, IArgs... Args) {

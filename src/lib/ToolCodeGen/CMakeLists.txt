@@ -25,7 +25,6 @@ add_library(LuthierToolCodeGen OBJECT
         CodeDiscoveryPass.cpp
         InstructionTracesAnalysis.cpp
         MemoryAllocationAccessor.cpp
-        #        PhysicalRegAccessVirtualizationPass.cpp
         #        SVStorageAndLoadLocations.cpp
         #        IPPredicatedLiveness.cpp
         IntrinsicMIRLoweringPass.cpp
@@ -37,15 +36,17 @@ add_library(LuthierToolCodeGen OBJECT
         #        RunIRPassesOnIModulePass.cpp
         #        MMISlotIndexesAnalysis.cpp
         ProcessIntrinsicsAtIRLevelPass.cpp
+        RemoveUnusedHooksPass.cpp
+        ForwardISAStateToCalleesPass.cpp
         #        PhysRegsNotInLiveInsAnalysis.cpp
         WrapperAnalysisPasses.cpp
-        #        RunMIRPassesOnIModulePass.cpp
         #        PatchLiftedRepresentationPass.cpp
         MIRConvenience.cpp
         MetadataParserAnalysis.cpp
         IntrinsicProcessorRegistry.cpp
         IntrinsicProcessorsAnalysis.cpp
         InjectedPayloadAndInstPointAnalysis.cpp
+        InjectedPayloadAccessedRegsAnalysis.cpp
         InstrumentationPMDriver.cpp
         CodeObjectManagerAnalysis.cpp
         InitialEntryPointAnalysis.cpp

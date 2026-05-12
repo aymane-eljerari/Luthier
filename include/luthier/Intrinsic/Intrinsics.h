@@ -20,6 +20,7 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_INTRINSIC_INTRINSICS_H
 #define LUTHIER_INTRINSIC_INTRINSICS_H
+#include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include <llvm/MC/MCRegister.h>
 
 namespace luthier {

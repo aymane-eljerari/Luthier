@@ -254,13 +254,18 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
                  << TRI.getName(std::get<0>(StoredKey)) << " offset=" << SStart
                  << " halves=" << SNumHalves << "\n");
 
-      // Compute optimal chunk size as GCD of the two preserved region sizes,
-      // the same approach used in \c materializeFromOverlapping
+      // Compute optimal chunk size as the GCD of the two preserved region
+      // sizes and the written region size. Including \c WNumHalves is
+      // required: the chunk size has to divide the full stored width
+      // (\c LeftSize + \c WNumHalves + \c RightSize), otherwise
+      // \c breakdownToVecTyFromAvailableValues cannot evenly partition the
+      // stored vector.
       const uint32_t LeftSize = WStart - SStart; // may be 0
       const uint32_t RightSize = SEnd - WEnd;    // may be 0
-      uint32_t OptHalves = LeftSize ? LeftSize : RightSize;
-      if (LeftSize && RightSize)
-        OptHalves = std::gcd(LeftSize, RightSize);
+      // std::gcd treats 0 as the identity, so this works whether LeftSize or
+      // RightSize is zero.
+      uint32_t OptHalves =
+          std::gcd(std::gcd(LeftSize, RightSize), WNumHalves);
 
       const unsigned ElemWidth = OptHalves * RegGranule;
       llvm::Value *Vec =
@@ -1288,8 +1293,20 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineOperand &Op,
     const llvm::MachineInstr *MI = Op.getParent();
     assert(MI && "Operand does not have a machine instruction");
     llvm::LLVMContext &Ctx = MF.getFunction().getContext();
-    return *llvm::ConstantInt::getSigned(
-        OutType ? OutType : llvm::IntegerType::getInt64Ty(Ctx), Op.getImm());
+    if (!OutType) {
+      // Default to the natural width of this operand slot. AMDGPU semantics
+      // routines (e.g. S_CMP_LT_U32) call \c getOperandAsValue without an
+      // explicit type for both the register and the immediate operands of a
+      // comparison; if the immediate defaults to i64 while the register
+      // defaults to the register's size (i32 for an SGPR), the resulting
+      // ICmp/binop sees mismatched operand types.
+      unsigned OpIdx = MI->getOperandNo(&Op);
+      // Use the opcode-based overload: the (MI, OpNo) overload routes
+      // immediate operands through getOpRegClass, which asserts on isReg.
+      unsigned SizeInBytes = TII.getOpSize(MI->getOpcode(), OpIdx);
+      OutType = llvm::IntegerType::get(Ctx, SizeInBytes * 8);
+    }
+    return *llvm::ConstantInt::getSigned(OutType, Op.getImm());
   }
   default:
     llvm_unreachable("Unhandled operand type");

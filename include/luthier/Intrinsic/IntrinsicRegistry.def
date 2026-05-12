@@ -31,6 +31,9 @@
 REGISTER_INTRINSIC("luthier::readReg",
                    readRegIRProcessor,
                    readRegMIRProcessor)
+REGISTER_INTRINSIC("luthier::readSVA",
+                   readSVAIRProcessor,
+                   readSVAMIRProcessor)
 REGISTER_INTRINSIC("luthier::writeReg",
                    writeRegIRProcessor,
                    writeRegMIRProcessor)

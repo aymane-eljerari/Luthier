@@ -80,6 +80,7 @@ readRegIRProcessor(const llvm::Function &Intrinsic, const llvm::CallInst &User,
   // Forward the physical register enum value to the MIR lowering stage
   Out.addExtraLoweringValue(*llvm::ConstantInt::get(
       llvm::Type::getInt32Ty(Intrinsic.getContext()), Reg.id()));
+  Out.getEffects().ReadPhysRegs.push_back(Reg);
 
   return Out;
 }
@@ -91,9 +92,9 @@ llvm::Error readRegMIRProcessor(
     const std::function<llvm::MachineInstrBuilder(int)> &MIBuilder,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)>
         &VirtRegBuilder,
-    const std::function<llvm::Register(ScalarValueArgument)> &,
-    const std::function<llvm::Register(llvm::MCRegister)> &PhysRegAccessor,
-    llvm::DenseMap<llvm::MCRegister, llvm::Register> &PhysRegsToBeOverwritten) {
+    const llvm::DenseMap<ScalarValueArgument, llvm::Register> &,
+    const llvm::DenseMap<llvm::MCRegister, llvm::Register> &ReadPhysRegVRegs,
+    llvm::DenseMap<llvm::MCRegister, llvm::Register> &) {
   // There should be only a single virtual register involved in the operation
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       Args.size() == 1, llvm::formatv("Number of virtual register arguments "
@@ -127,34 +128,49 @@ llvm::Error readRegMIRProcessor(
       "The input register and the destination register of "
       "luthier::readReg don't have the same size."));
 
-  if (SrcRegSize > 32) {
-    // First create a reg sequence MI
-    auto Builder = MIBuilder(llvm::AMDGPU::REG_SEQUENCE);
+  auto channelVReg = [&](llvm::MCRegister Channel) -> llvm::Register {
+    auto It = ReadPhysRegVRegs.find(Channel);
+    return It == ReadPhysRegVRegs.end() ? llvm::Register() : It->second;
+  };
 
+  if (SrcRegSize > 32) {
+    auto Builder = MIBuilder(llvm::AMDGPU::REG_SEQUENCE);
     auto MergedReg = VirtRegBuilder(TRI->getPhysRegBaseClass(Src));
     (void)Builder.addReg(MergedReg, llvm::RegState::Define);
 
-    // Split the src reg into 32-bit regs and merge them in the sequence
     size_t NumChannels = SrcRegSize / 32;
-    for (int i = 0; i < NumChannels; i++) {
-      auto SubIdx = llvm::SIRegisterInfo::getSubRegFromChannel(i);
-      auto Reg = TRI->getSubReg(Src, SubIdx);
-      (void)Builder.addReg(PhysRegAccessor(Reg)).addImm(SubIdx);
+    for (size_t I = 0; I < NumChannels; ++I) {
+      auto SubIdx = llvm::SIRegisterInfo::getSubRegFromChannel(I);
+      llvm::MCRegister ChannelReg = TRI->getSubReg(Src, SubIdx);
+      llvm::Register VReg = channelVReg(ChannelReg);
+      LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+          VReg.isValid(),
+          "luthier::readReg: channel missing from pre-staged read map (IR "
+          "processor failed to declare it in Effects.ReadPhysRegs)"));
+      (void)Builder.addReg(VReg).addImm(SubIdx);
     }
-    // Do the copy
     (void)MIBuilder(llvm::AMDGPU::COPY)
         .addReg(Output, llvm::RegState::Define)
         .addReg(MergedReg);
   } else if (SrcRegSize == 32 || SrcRegSize == 1) {
+    llvm::Register VReg = channelVReg(Src);
+    LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+        VReg.isValid(),
+        "luthier::readReg: channel missing from pre-staged read map"));
     (void)MIBuilder(llvm::AMDGPU::COPY)
         .addReg(Output, llvm::RegState::Define)
-        .addReg(PhysRegAccessor(Src));
+        .addReg(VReg);
   } else {
     auto SuperReg = TRI->get32BitRegister(Src);
     auto SubIdx = TRI->getSubRegIndex(SuperReg, Src);
+    llvm::Register VReg = channelVReg(SuperReg);
+    LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+        VReg.isValid(),
+        "luthier::readReg: super-register channel missing from pre-staged "
+        "read map (sub-32 read must declare its 32-bit super-reg)"));
     (void)MIBuilder(llvm::AMDGPU::COPY)
         .addReg(Output, llvm::RegState::Define)
-        .addReg(PhysRegAccessor(SuperReg), 0, SubIdx);
+        .addReg(VReg, 0, SubIdx);
   }
 
   return llvm::Error::success();

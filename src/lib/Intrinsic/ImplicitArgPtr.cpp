@@ -46,7 +46,10 @@ implicitArgPtrIRProcessor(const llvm::Function &Intrinsic,
   // The kernarg hidden address will be returned in an SGPR
   Out.setReturnValueInfo(User, "s");
   // We need access to the base of the kernel argument buffer, and the offset
-  // from where the hidden kernel argument starts
+  // from where the hidden kernel argument starts. Declare them up front so
+  // the MIR-lowering driver pre-stages the SVA vregs.
+  Out.getEffects().ReadSVAs.push_back(KERNEL_ARG_PTR);
+  Out.getEffects().ReadSVAs.push_back(IMPLICIT_ARG_OFFSET);
 
   return Out;
 }
@@ -58,9 +61,9 @@ llvm::Error implicitArgPtrMIRProcessor(
     const std::function<llvm::MachineInstrBuilder(int)> &MIBuilder,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)>
         &VirtRegBuilder,
-    const std::function<llvm::Register(ScalarValueArgument)> &KernArgAccessor,
-    const std::function<llvm::Register(llvm::MCRegister)> &PhysRegAccessor,
-    llvm::DenseMap<llvm::MCRegister, llvm::Register> &PhysRegsToBeOverwritten) {
+    const llvm::DenseMap<ScalarValueArgument, llvm::Register> &SVAVRegs,
+    const llvm::DenseMap<llvm::MCRegister, llvm::Register> &,
+    llvm::DenseMap<llvm::MCRegister, llvm::Register> &) {
   // There should be only a single virtual register involved in the operation
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       Args.size() == 1,
@@ -72,10 +75,14 @@ llvm::Error implicitArgPtrMIRProcessor(
       Args[0].first.isRegDefKind(),
       "The register argument of luthier::implicitArgPtr is not a definition."));
   llvm::Register Output = Args[0].second;
-  // Get the kernel argument
-  llvm::Register KernArgSGPR = KernArgAccessor(KERNEL_ARG_PTR);
-  // Get the offset of the hidden arg
-  llvm::Register HiddenOffsetSGPR = KernArgAccessor(IMPLICIT_ARG_OFFSET);
+  auto KernArgIt = SVAVRegs.find(KERNEL_ARG_PTR);
+  auto OffsetIt = SVAVRegs.find(IMPLICIT_ARG_OFFSET);
+  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+      KernArgIt != SVAVRegs.end() && OffsetIt != SVAVRegs.end(),
+      "luthier::implicitArgPtr: KERNEL_ARG_PTR / IMPLICIT_ARG_OFFSET missing "
+      "from pre-staged SVA map (IR processor must declare them)"));
+  llvm::Register KernArgSGPR = KernArgIt->second;
+  llvm::Register HiddenOffsetSGPR = OffsetIt->second;
 
   llvm::Register FirstAddSGPR = VirtRegBuilder(&llvm::AMDGPU::SGPR_32RegClass);
 

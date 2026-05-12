@@ -23,6 +23,7 @@
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringRef.h>
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/InlineAsm.h>
 #include <llvm/IR/Metadata.h>
@@ -57,11 +58,24 @@ class MDNode;
 
 namespace luthier {
 
-/// Section-name prefix in the \c !pcsections MDNode attached to Luthier
-/// intrinsic placeholder inline-asm instructions. The intrinsic base name
-/// follows immediately after this prefix.
-static constexpr llvm::StringLiteral LuthierIntrinsicPCSectionPrefix{
-    "luthier.intrinsic: "};
+/// Module-level named-MDNode holding the lookup table from a Luthier
+/// intrinsic placeholder's opaque key (used as the InlineAsm template
+/// string so it survives SelectionDAG ISel as the first
+/// \c MachineOperand of the resulting \c INLINEASM \c MachineInstr) to its
+/// intrinsic name and forwarded aux metadata. Each operand is a 3-element
+/// \c MDNode of the form
+/// \code !{!"<key>", !"<intrinsic_name>", <aux MDNode or empty MDNode>}
+/// \endcode
+static constexpr llvm::StringLiteral LuthierIntrinsicNamedMDName{
+    "luthier.intrinsic.placeholders"};
+
+/// Opaque-key prefix used as the InlineAsm template string of every Luthier
+/// intrinsic placeholder; the suffix is a monotonic per-call-signature
+/// counter assigned by \c ProcessIntrinsicsAtIRLevelPass. Two calls whose
+/// (intrinsic name, return type, argument types, constant argument values,
+/// aux MDNode contents) match share a key.
+static constexpr llvm::StringLiteral LuthierIntrinsicPlaceholderKeyPrefix{
+    "luthier.placeholder."};
 
 /// \brief A set of scalar value arguments Luthier's intrinsic lowering
 /// mechanism can ensure access to
@@ -154,6 +168,36 @@ template <> struct ScalarValueArgumentInfo<IMPLICIT_ARG_OFFSET> {
   static constexpr auto NamedMD = "luthier.sva.implicit_arg_offset";
 };
 
+/// \brief Describes the ISA-state effects of a single Luthier intrinsic at
+/// the placeholder layer (after the IR processing stage has replaced each
+/// intrinsic call with an inline-asm placeholder). Populated by each
+/// intrinsic's \c IRProcessor and serialized by
+/// \c ProcessIntrinsicsAtIRLevelPass into the
+/// \c !luthier.intrinsic.placeholders named-MD side channel
+///
+/// \c ForwardISAStateToCalleesPass uses this information to compute, per
+/// callee Function, the union of SVA scalar args read, phys-regs read, and
+/// phys-regs written transitively, and extends the callee's signature
+/// accordingly
+struct IntrinsicISAStateEffects {
+  /// Scalar value arguments this intrinsic reads.
+  llvm::SmallVector<ScalarValueArgument, 1> ReadSVAs;
+  /// Physical registers this intrinsic reads. Wide registers are allowed;
+  /// downstream consumers decompose into 32-bit channels via TRI.
+  llvm::SmallVector<llvm::MCRegister, 1> ReadPhysRegs;
+  /// Physical registers this intrinsic writes. Same channel-decomposition
+  /// note as above.
+  llvm::SmallVector<llvm::MCRegister, 1> WrittenPhysRegs;
+};
+
+/// Decode an effects MDNode produced by \c ProcessIntrinsicsAtIRLevelPass
+/// (shape: empty MDNode or 3-operand
+/// \c !{!{sva-i32s}, !{read-physreg-i32s}, !{written-physreg-i32s}}).
+/// An empty / malformed node decodes to a record with all three vectors
+/// empty (i.e. "no callee-visible ISA-state effects").
+IntrinsicISAStateEffects
+decodeIntrinsicISAStateEffects(const llvm::MDNode *EffNode);
+
 /// \brief Holds the result of the IR processing stage of an intrinsic IR call
 /// instruction, including how all non-constant values used/defined by a Luthier
 /// intrinsic use (i.e. its output and input arguments) must be lowered to
@@ -188,6 +232,10 @@ private:
   llvm::SmallVector<ValueLoweringInfo, 4> Args{};
   /// Metadata values forwarded to the MIR lowering stage as a payload MDNode
   llvm::SmallVector<llvm::Metadata *> ExtraInfoValues{};
+  /// ISA-state effects produced by this intrinsic. Populated by the IR
+  /// processor; consumed by \c ForwardISAStateToCalleesPass via the
+  /// serialized form in \c !luthier.intrinsic.placeholders .
+  IntrinsicISAStateEffects Effects{};
 
 public:
   /// Sets the inline asm constraint to \p Constraint for the given
@@ -227,6 +275,15 @@ public:
   llvm::ArrayRef<llvm::Metadata *> getExtraLoweringValues() const {
     return ExtraInfoValues;
   }
+
+  /// Direct access to the effects record so processors can populate it
+  /// inline with their existing \c setReturnValueInfo / \c addArgInfo /
+  /// \c addExtraLoweringValue calls.
+  IntrinsicISAStateEffects &getEffects() { return Effects; }
+
+  [[nodiscard]] const IntrinsicISAStateEffects &getEffects() const {
+    return Effects;
+  }
 };
 
 /// \brief describes a function used by each Luthier intrinsic to process
@@ -241,23 +298,46 @@ typedef std::function<llvm::Expected<IntrinsicIRLoweringInfo>(
     IntrinsicIRProcessorFunc;
 
 /// \brief describes a function type used for each intrinsic to generate
-/// <tt>llvm::MachineInstr</tt>s in place of its IR calls
-/// \details The MIR processor takes in the extra constant info generated
-/// by its \c IntrinsicIRProcessorFunc as well as the lowered registers and
-/// their inline assembly flags for its used/defined values. Convenience Lambdas
-/// for creating instructions at the place of emission, creating virtual
-/// registers from register classes, accessing scalar values and physical
-/// registers are also provided. A mapping between the physical registers from
-/// the original kernel that need to be overwritten and their new virtual
-/// register values can also be returned by the intrinsic MIR processor
+/// <tt>llvm::MachineInstr</tt>s in place of its IR calls.
+///
+/// \details Because each intrinsic declares its ISA-state effects up front
+/// (via \c IntrinsicIRLoweringInfo::Effects ), the driver pre-stages every
+/// scalar-arg and phys-reg value the processor might need and hands them in
+/// as ready-to-use virtual registers — no per-intrinsic callback dispatch
+/// required.
+///
+/// Parameters, in order:
+///  - \c MF : the enclosing MachineFunction (for queries on TRI/MRI/subtarget).
+///  - \c Args : the placeholder's inline-asm operands (flag + vreg pairs).
+///  - \c Aux : the placeholder's aux MDNode (\c SA enum, MCRegister id, etc.,
+///    interpreted per-intrinsic).
+///  - \c MIBuilder : creates a \c MachineInstrBuilder at the placeholder's
+///    program point. The processor uses it to emit the MIs that replace the
+///    placeholder.
+///  - \c VirtRegBuilder : allocates a fresh virtual register of a requested
+///    \c TargetRegisterClass for processor-internal intermediates.
+///  - \c SVAVRegs : map from each \c ScalarValueArgument the IR processor
+///    declared in \c Effects.ReadSVAs to a virtual register holding that
+///    SA's value at the placeholder's program point. The register is the
+///    SA's natural width (single SGPR for 1-lane SAs; REG_SEQUENCE'd wide
+///    SGPR for multi-lane SAs).
+///  - \c ReadPhysRegVRegs : map from each 32-bit channel that the IR
+///    processor's \c Effects.ReadPhysRegs decomposes into, to a virtual
+///    register tracking that channel's current value at the placeholder's
+///    program point (sourced via the driver's per-channel SSAUpdater).
+///  - \c WritePhysRegSlots : output map. For each 32-bit channel declared
+///    in \c Effects.WrittenPhysRegs the processor inserts an entry
+///    \c {channel, vreg-holding-new-value}. The driver records the new
+///    value with the per-channel SSAUpdater after the processor returns,
+///    so subsequent reads of that channel see it and the return-block
+///    restore COPYs back the right value.
 typedef std::function<llvm::Error(
     const llvm::MachineFunction &,
     llvm::ArrayRef<std::pair<llvm::InlineAsm::Flag, llvm::Register>>,
-    llvm::MDNode *,
-    const std::function<llvm::MachineInstrBuilder(int)> &,
+    llvm::MDNode *, const std::function<llvm::MachineInstrBuilder(int)> &,
     const std::function<llvm::Register(const llvm::TargetRegisterClass *)> &,
-    const std::function<llvm::Register(ScalarValueArgument)> &,
-    const std::function<llvm::Register(llvm::MCRegister)> &,
+    const llvm::DenseMap<ScalarValueArgument, llvm::Register> &,
+    const llvm::DenseMap<llvm::MCRegister, llvm::Register> &,
     llvm::DenseMap<llvm::MCRegister, llvm::Register> &)>
     IntrinsicMIRProcessorFunc;
 

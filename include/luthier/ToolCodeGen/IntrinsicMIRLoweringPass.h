@@ -20,6 +20,7 @@
 #ifndef LUTHIER_TOOL_CODE_GEN_INTRINSIC_MIR_LOWERING_PASS_H
 #define LUTHIER_TOOL_CODE_GEN_INTRINSIC_MIR_LOWERING_PASS_H
 #include "luthier/Intrinsic/IntrinsicProcessor.h"
+#include "luthier/ToolCodeGen/IntrinsicProcessorsAnalysis.h"
 #include "luthier/ToolCodeGen/LegacyPassSupport.h"
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/SmallVector.h>
@@ -64,6 +65,20 @@ public:
   };
 
 private:
+  // Forward-declared opaque type — definition is local to the .cpp.
+  struct PlaceholderLookupTable;
+
+  bool processMachineFunction(
+      llvm::MachineFunction &MF, bool IsInjectedPayload,
+      const IntrinsicsProcessorsAnalysis::Result &IntrinsicsProcessors,
+      const PlaceholderLookupTable &Placeholders,
+      llvm::SmallDenseSet<ScalarValueArgument> &ScalarArgumentsUsed,
+      PerFunctionSVAInfo &MFSVAInfo);
+
+  void materializeReadlanes(
+      llvm::DenseMap<llvm::MachineFunction *, PerFunctionSVAInfo> &SVAInfoByMF,
+      const StateValueArraySpecs &SVASpecs, bool &Changed);
+
   bool
   lowerIntrinsics(llvm::Module &IModule,
                   llvm::DenseMap<llvm::MachineFunction *, PerFunctionSVAInfo>

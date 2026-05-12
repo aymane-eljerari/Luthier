@@ -19,6 +19,12 @@
 #include "luthier/ToolCodeGen/InstrumentationPMDriver.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
+#include "luthier/ToolCodeGen/ForwardISAStateToCalleesPass.h"
+#include "luthier/ToolCodeGen/InjectedPayloadAccessedRegsAnalysis.h"
+#include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
+#include "luthier/ToolCodeGen/IntrinsicProcessorsAnalysis.h"
+#include "luthier/ToolCodeGen/ProcessIntrinsicsAtIRLevelPass.h"
+#include "luthier/ToolCodeGen/RemoveUnusedHooksPass.h"
 // #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
 // #include "luthier/ToolCodeGen/InjectedPayloadPEIPass.h"
 // #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
@@ -26,8 +32,8 @@
 // #include "luthier/ToolCodeGen/PatchLiftedRepresentationPass.h"
 // #include "luthier/ToolCodeGen/PhysRegsNotInLiveInsAnalysis.h"
 // #include "luthier/ToolCodeGen/ProcessIntrinsicsAtIRLevelPass.h"
-#include "luthier/ToolCodeGenTesting/LuthierFile.h"
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
+#include "luthier/ToolCodeGenTesting/LuthierFile.h"
 #include <AMDGPUTargetMachine.h>
 #include <llvm/Analysis/CGSCCPassManager.h>
 #include <llvm/Analysis/LoopAnalysisManager.h>
@@ -107,21 +113,32 @@ llvm::Expected<LoadedIModule> loadIModuleFromFile(llvm::StringRef Path,
       "': expected .mir, .ll, or .bc");
 }
 
-/// Parses a series of codegen pipeline passes specified in \p PipelineStr and
-/// adds them into the legacy \p PM
+/// Parses a series of codegen pipeline passes specified in \p PipelineStr
+/// and adds them directly to the legacy \p PM. For ModulePass-level passes with
+/// cross-level analysis dependencies (e.g. IntrinsicMIRLoweringPass
+/// depending on per-function MachineDominatorTree), direct PM.add() is
+/// required
 llvm::Error parseCodeGenPipeline(llvm::StringRef PipelineStr,
-                                 llvm::legacy::PassManager &PM) {
-
+                                 llvm::legacy::PassManager &PM,
+                                 llvm::TargetPassConfig &TPC) {
   llvm::PassRegistry &Registry = *llvm::PassRegistry::getPassRegistry();
   llvm::SmallVector<llvm::StringRef, 8> PassNames;
   PipelineStr.split(PassNames, ',', /*MaxSplit=*/-1, /*KeepEmpty=*/false);
   for (llvm::StringRef Name : PassNames) {
     Name = Name.trim();
+    /// Special handling for adding isel passes
+    if (Name == "isel") {
+      TPC.addISelPasses();
+      continue;
+    }
     const llvm::PassInfo *PI = Registry.getPassInfo(Name);
     if (!PI || !PI->getNormalCtor())
       return LUTHIER_MAKE_GENERIC_ERROR("Unknown or unregistered MIR pass '" +
                                         Name.str() + "'");
+    TPC.addMachinePrePasses();
     PM.add(PI->getNormalCtor()());
+    std::string Banner = std::string("After ") + std::string(PI->getPassName());
+    TPC.addMachinePostPasses(Banner);
   }
   return llvm::Error::success();
 }
@@ -153,10 +170,11 @@ InstrumentationPMDriver::InstrumentationPMDriver(
           std::move(AugmentTargetPassConfigCallback)) {
   llvm::PassRegistry *Registry = llvm::PassRegistry::getPassRegistry();
   initializeIModuleMAMWrapperPass(*Registry);
+  initializeIntrinsicMIRLoweringPass(*Registry);
+  initializeInjectedPayloadAccessedRegsAnalysis(*Registry);
+  initializeInjectedPayloadAccessedRegsPrinterPass(*Registry);
   // TODO: uncomment when production-pipeline dependencies are compiled in:
-  // initializePhysicalRegAccessVirtualizationPass(*Registry);
   // initializeInjectedPayloadPEIPass(*Registry);
-  // initializeIntrinsicMIRLoweringPass(*Registry);
 
   for (const auto &Plugin : PassPlugins) {
     Plugin.registerLegacyCodegenPassesCallback(*Registry);
@@ -274,13 +292,33 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
     Plugin.registerInstrumentationPassBuilderCallback(PB);
   }
 
+  /// Register passes for parsing
+  /// The parser is registered here to capture ITM correctly
+  PB.registerPipelineParsingCallback(
+      [&](llvm::StringRef Name, llvm::ModulePassManager &MPM,
+          llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
+        if (Name == "luthier-process-intrinsics-at-ir-level") {
+          MPM.addPass(ProcessIntrinsicsAtIRLevelPass(*ITM));
+          return true;
+        }
+        if (Name == "luthier-remove-unused-hooks") {
+          MPM.addPass(RemoveUnusedHooksPass());
+          return true;
+        }
+        if (Name == "luthier-forward-isa-state-to-callees") {
+          MPM.addPass(ForwardISAStateToCalleesPass(*ITM));
+          return true;
+        }
+        return false;
+      });
+
   SI.registerCallbacks(PIC, &IMAM);
 
   // TODO: re-enable when production-pipeline deps are compiled in:
   // IMAM.registerPass([&]() { return IntrinsicIRLoweringInfoMapAnalysis(); });
-  // IMAM.registerPass([&]() { return IntrinsicsProcessorsAnalysis(); });
   // IMAM.registerPass([&]() { return PhysRegsNotInLiveInsAnalysis(); });
   // IMAM.registerPass([&]() { return InjectedPayloadAndInstPointAnalysis(); });
+  IMAM.registerPass([&]() { return IntrinsicsProcessorsAnalysis(); });
 
   IMAM.registerPass(
       [&]() { return TargetAppModuleAndMAMAnalysis(TargetMAM, TargetAppM); });
@@ -303,14 +341,16 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
         IsIRPassPipelineNotSpecified || IsIRPipelineSpecifiedAndNotEmpty;
 
     if (IsIRPassPipelineNotSpecified) {
-      // TODO: IR pipeline — uncomment when deps are available:
-      PreIROptimizationCallback(IMPM);
-      for (const auto &Plugin : PassPlugins)
-        Plugin.registerPreIROptimizationPasses(IMPM);
       unsigned OptLevelVal =
           Options.IModuleOptLevel.getNumOccurrences() > 0
               ? Options.IModuleOptLevel.getValue()
               : static_cast<unsigned>(TargetAppTM.getOptLevel());
+      // TODO: IR pipeline — uncomment when deps are available:
+      PreIROptimizationCallback(IMPM);
+      for (const auto &Plugin : PassPlugins)
+        Plugin.registerPreIROptimizationPasses(IMPM);
+
+      IMPM.addPass(RemoveUnusedHooksPass());
       IMPM.addPass(
           PB.buildPerModuleDefaultPipeline(optLevelFromUnsigned(OptLevelVal)));
       PreIRIntrinsicLoweringCallback(IMPM);
@@ -361,6 +401,7 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
     TPC->setDisableVerify(true);
     MIRLegacyPM->add(TPC);
     MIRLegacyPM->add(MMIWP);
+    MIRLegacyPM->add(new IModuleMAMWrapperPass(&IMAM));
 
     bool MIRPassPipelineNotSpecified =
         Options.IModuleMIRPasses.getNumOccurrences() == 0;
@@ -398,8 +439,8 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
       // delete LegacyIPM;
     } else if (MIRPassPipelineSpecifiedAndNotEmpty) {
       llvm::Error ModifiedOrErr = parseCodeGenPipeline(
-          Options.IModuleMIRPasses.getValue(), *MIRLegacyPM);
-      if (!ModifiedOrErr) {
+          Options.IModuleMIRPasses.getValue(), *MIRLegacyPM, *TPC);
+      if (ModifiedOrErr) {
         LUTHIER_CTX_EMIT_ON_ERROR(Context, std::move(ModifiedOrErr));
         return IRStagePA;
       }
