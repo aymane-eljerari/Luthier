@@ -23,6 +23,7 @@
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include "luthier/ToolCodeGen/InitialEntryPointAnalysis.h"
 #include "luthier/ToolCodeGen/InstructionTracesAnalysis.h"
+#include "luthier/ToolCodeGen/MIRConvenience.h"
 #include "luthier/ToolCodeGen/MemoryAllocationAccessor.h"
 #include "luthier/ToolCodeGen/PseudoOpcodeAndRegMapper.h"
 #include "luthier/ToolCodeGen/TargetMachineInstrMDNode.h"
@@ -610,24 +611,7 @@ initLiftedDeviceFunctionEntry(uint64_t DeviceEntryPointAddr,
   return std::make_pair(std::ref(MF), FuncSymRef);
 }
 
-static bool shouldImplicitReadExec(const llvm::MachineInstr &MI) {
-  if (llvm::SIInstrInfo::isVALU(MI)) {
-    switch (MI.getOpcode()) {
-    case llvm::AMDGPU::V_READLANE_B32:
-    case llvm::AMDGPU::SI_RESTORE_S32_FROM_VGPR:
-    case llvm::AMDGPU::V_WRITELANE_B32:
-    case llvm::AMDGPU::SI_SPILL_S32_TO_VGPR:
-      return false;
-    default:
-      return true;
-    }
-  }
-
-  if (llvm::SIInstrInfo::isSALU(MI) || llvm::SIInstrInfo::isSMRD(MI))
-    return false;
-
-  return true;
-}
+// shouldImplicitReadExec is shared with other passes via MIRConvenience.h.
 
 /// Walks over the \p MCOperands and converts them to \c llvm::MachineOperand
 /// instances before adding them to the \c llvm::MachineInstr managed

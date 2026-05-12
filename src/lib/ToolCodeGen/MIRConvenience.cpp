@@ -19,10 +19,38 @@
 /// MIR instructions.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/MIRConvenience.h"
+#include <GCNSubtarget.h>
 #include <SIInstrInfo.h>
+#include <llvm/CodeGen/MachineFunction.h>
 #include <llvm/CodeGen/MachineInstrBuilder.h>
 
 namespace luthier {
+
+bool shouldImplicitReadExec(const llvm::MachineInstr &MI) {
+  if (llvm::SIInstrInfo::isVALU(MI)) {
+    switch (MI.getOpcode()) {
+    case llvm::AMDGPU::V_READLANE_B32:
+    case llvm::AMDGPU::SI_RESTORE_S32_FROM_VGPR:
+    case llvm::AMDGPU::V_WRITELANE_B32:
+    case llvm::AMDGPU::SI_SPILL_S32_TO_VGPR:
+      return false;
+    default:
+      return true;
+    }
+  }
+
+  if (llvm::SIInstrInfo::isSALU(MI) || llvm::SIInstrInfo::isSMRD(MI))
+    return false;
+
+  return true;
+}
+
+bool isVectorMBB(const llvm::MachineBasicBlock &MBB) {
+  auto It = MBB.getFirstNonDebugInstr();
+  if (It == MBB.end())
+    return false;
+  return shouldImplicitReadExec(*It);
+}
 
 void emitSGPRSwap(llvm::MachineBasicBlock::iterator InsertionPoint,
                   llvm::MCRegister SrcSGPR, llvm::MCRegister DestSGPR) {

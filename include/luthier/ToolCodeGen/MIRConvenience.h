@@ -30,6 +30,30 @@ class MCRegister;
 
 namespace luthier {
 
+namespace llvm_fwd {} // dummy for include order
+
+/// Returns true if \p MI implicitly reads the EXEC mask — i.e. it is a
+/// VALU (excluding the uniform read/write-lane family) or any
+/// non-scalar/non-SMRD instruction. Used as the canonical predicate for
+/// classifying MIs as vector (EXEC-dependent) vs scalar (uniform).
+///
+/// Mirrors the matching helper in \c CodeDiscoveryPass that drives its
+/// pure-scalar vs pure-vector MBB splitting. Promoted here so other
+/// passes (e.g. liveness) can ask the same question.
+bool shouldImplicitReadExec(const llvm::MachineInstr &MI);
+
+/// Returns true if \p MBB is a vector machine basic block (its instructions
+/// execute only on lanes selected by the current EXEC mask), false if it
+/// is scalar (its instructions are uniform / execute on all lanes
+/// regardless of EXEC).
+///
+/// Determined by asking \c shouldImplicitReadExec on the first
+/// non-debug instruction of \p MBB. \c CodeDiscoveryPass guarantees each
+/// MBB is pure-scalar or pure-vector, so the first instruction suffices.
+/// Empty MBBs return \c false (scalar — there are no instructions to
+/// read EXEC).
+bool isVectorMBB(const llvm::MachineBasicBlock &MBB);
+
 /// Swaps the value between \p ScrSGPR and \p DestSGPR by inserting 3
 /// <tt>S_XOR_B32</tt>s before \p InsertionPoint
 void emitSGPRSwap(llvm::MachineBasicBlock::iterator InsertionPoint,

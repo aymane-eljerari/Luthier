@@ -143,6 +143,13 @@ protected:
           return llvm::Error::success();
         });
 
+    if (FnOrErr) {
+      llvm::Function *PayloadFn = *FnOrErr;
+      if (HookFn.hasFnAttribute("target-cpu"))
+        PayloadFn->addFnAttr(HookFn.getFnAttribute("target-cpu"));
+      PayloadFn->addFnAttr("target-features", "+wavefrontsize64");
+    }
+
     if (!FnOrErr)
       return FnOrErr.takeError();
     return llvm::Error::success();

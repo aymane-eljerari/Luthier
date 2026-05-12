@@ -204,7 +204,12 @@ bool IntrinsicMIRLoweringPass::processMachineFunction(
 
   /// Returns or lazily creates the per-MF SVA VGPR placeholder, an
   /// IMPLICIT_DEF VGPR_32 in the entry block carrying
-  /// !pcsections !{!"luthier.sva_vgpr_placeholder"}.
+  /// !pcsections !{!"luthier.sva_vgpr_placeholder"}. A later (post-RA)
+  /// Luthier pass resolves this to the actual SVA VGPR and emits the
+  /// SI_SPILL_S32_TO_VGPR / SI_RESTORE_S32_FROM_VGPR pseudos that engage
+  /// the WWM machinery — those pseudos can only be safely emitted with
+  /// physical-register operands, so the wiring must happen after
+  /// register allocation rather than here.
   auto getOrCreateSVAVGPRPlaceholder = [&]() {
     if (MFSVAInfo.SVAVGPRPlaceholder.isValid())
       return MFSVAInfo.SVAVGPRPlaceholder;
@@ -693,8 +698,20 @@ void IntrinsicMIRLoweringPass::materializeReadlanes(
 
     const llvm::TargetInstrInfo *TII = MF->getSubtarget().getInstrInfo();
     llvm::MachineRegisterInfo &MRI = MF->getRegInfo();
-    llvm::Register SVAVGPRPlaceholder = SVAInfo.SVAVGPRPlaceholder;
 
+    // Emit a plain V_READLANE_B32 per pending readlane. We use the
+    // low-level instruction directly (not the SI_SPILL_S32_TO_VGPR /
+    // SI_RESTORE_S32_FROM_VGPR pseudos or the higher-level
+    // SI_SPILL_S<x>_RESTORE pseudos) because those pseudos can only be
+    // emitted safely with PHYSICAL-register operands; `SGPRSpillBuilder`
+    // and `SILowerSGPRSpills::run`'s loop body assert on vreg operands
+    // (the former via `getPhysRegBaseClass(vreg)`, the latter via
+    // `getNamedOperand(addr)` returning null for the low-level form).
+    //
+    // A future post-RA Luthier pass — the SVA preload pass — will replace
+    // these V_READLANE_B32 reads with SI_RESTORE_S32_FROM_VGPR keyed off
+    // the physical SVA VGPR, register that physreg in `WWMReservedRegs`,
+    // and emit SI_SPILL_S32_TO_VGPR preload writes at function entry.
     for (const PendingSVAReadlane &Entry : SVAInfo.Readlanes) {
       auto LaneIt = SVASpecs.findArgumentLane(Entry.SA);
       assert(LaneIt != SVASpecs.argument_lane_end() &&
@@ -708,10 +725,10 @@ void IntrinsicMIRLoweringPass::materializeReadlanes(
       llvm::MachineBasicBlock *DefMBB = ImplDef->getParent();
       llvm::MachineBasicBlock::iterator InsertPt = ImplDef->getIterator();
 
-      llvm::BuildMI(*DefMBB, InsertPt, llvm::MIMetadata(),
-                    TII->get(llvm::AMDGPU::V_READLANE_B32),
-                    Entry.SGPRPlaceholder)
-          .addReg(SVAVGPRPlaceholder)
+      (void)llvm::BuildMI(*DefMBB, InsertPt, llvm::MIMetadata(),
+                          TII->get(llvm::AMDGPU::V_READLANE_B32),
+                          Entry.SGPRPlaceholder)
+          .addReg(SVAInfo.SVAVGPRPlaceholder)
           .addImm(AbsLane);
 
       ImplDef->eraseFromParent();

@@ -20,7 +20,10 @@
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/ToolCodeGen/ForwardISAStateToCalleesPass.h"
+#include "luthier/ToolCodeGen/IPPredicatedLivenessIModulePass.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAccessedRegsAnalysis.h"
+#include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
+#include "luthier/ToolCodeGen/InjectedPayloadPreserveLiveRegsPass.h"
 #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
 #include "luthier/ToolCodeGen/IntrinsicProcessorsAnalysis.h"
 #include "luthier/ToolCodeGen/ProcessIntrinsicsAtIRLevelPass.h"
@@ -173,6 +176,8 @@ InstrumentationPMDriver::InstrumentationPMDriver(
   initializeIntrinsicMIRLoweringPass(*Registry);
   initializeInjectedPayloadAccessedRegsAnalysis(*Registry);
   initializeInjectedPayloadAccessedRegsPrinterPass(*Registry);
+  initializeIModuleIPPredicatedLivenessAnalysis(*Registry);
+  initializeInjectedPayloadPreserveLiveRegsPass(*Registry);
   // TODO: uncomment when production-pipeline dependencies are compiled in:
   // initializeInjectedPayloadPEIPass(*Registry);
 
@@ -317,7 +322,7 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
   // TODO: re-enable when production-pipeline deps are compiled in:
   // IMAM.registerPass([&]() { return IntrinsicIRLoweringInfoMapAnalysis(); });
   // IMAM.registerPass([&]() { return PhysRegsNotInLiveInsAnalysis(); });
-  // IMAM.registerPass([&]() { return InjectedPayloadAndInstPointAnalysis(); });
+  IMAM.registerPass([&]() { return InjectedPayloadAndInstPointAnalysis(); });
   IMAM.registerPass([&]() { return IntrinsicsProcessorsAnalysis(); });
 
   IMAM.registerPass(

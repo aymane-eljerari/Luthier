@@ -38,6 +38,8 @@ add_library(LuthierToolCodeGen OBJECT
         ProcessIntrinsicsAtIRLevelPass.cpp
         RemoveUnusedHooksPass.cpp
         ForwardISAStateToCalleesPass.cpp
+        IPPredicatedLivenessIModulePass.cpp
+        InjectedPayloadPreserveLiveRegsPass.cpp
         #        PhysRegsNotInLiveInsAnalysis.cpp
         WrapperAnalysisPasses.cpp
         #        PatchLiftedRepresentationPass.cpp

@@ -20,6 +20,7 @@
 #include "luthier/ToolCodeGen/CodeDiscoveryPass.h"
 #include "luthier/ToolCodeGen/CodeObjectManagerAnalysis.h"
 #include "luthier/ToolCodeGen/InitialEntryPointAnalysis.h"
+#include "luthier/ToolCodeGen/IPPredicatedCFG.h"
 #include "luthier/ToolCodeGen/InstructionTracesAnalysis.h"
 #include "luthier/ToolCodeGen/InstrumentationPMDriver.h"
 #include "luthier/ToolCodeGen/IntrinsicProcessorRegistry.h"
@@ -322,7 +323,7 @@ llvmGetPassPluginInfo() {
       // MAM.registerPass([]() { return luthier::IPVectorRegLivenessAnalysis();
       // }); MAM.registerPass(
       // []() { return luthier::IndirectBranchResolverAnalysis(); });
-      // MAM.registerPass([]() { return luthier::IPPredCFGAnalysis(); });
+      MAM.registerPass([]() { return luthier::IPPredCFGAnalysis(); });
       // MAM.registerPass([]() { return luthier::IPReachingDefAnalysis(); });
     });
     /// Register Luthier machine function analysis passes
