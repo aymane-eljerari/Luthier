@@ -52,7 +52,7 @@ foreach i = 0-5 in {
   def op#_sem : InstSISemantic<op> {
     let Semantic = [
       SetSCCImplicit<(LLVMCmp cmpPred,
-        (GetNamedOperand $src0), (GetNamedOperand $src1))>.ret
+        (GetNamedOperand $src0, si_llvm_i32_ty), (GetNamedOperand $src1, si_llvm_i32_ty))>.ret
     ];
   }
 }

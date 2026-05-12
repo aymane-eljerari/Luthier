@@ -306,9 +306,9 @@ def S_QUADMASK_B64_sem : InstSISemantic<S_QUADMASK_B64> {
 //   rdna4-instruction-set-architecture.pdf, page 239 (B32), page 240 (B64).
 def S_AND_SAVEEXEC_B32_sem : InstSISemantic<S_AND_SAVEEXEC_B32> {
   let Semantic = [
-    (DefVal $old_exec, (ImplicitUse EXEC)),
+    (DefVal $old_exec, (ImplicitUse EXEC_LO)),
     (DefVal $new_exec, (LLVMAnd (GetNamedOperand $src0), (GetVal $old_exec))),
-    (ImplicitDef EXEC, (GetVal $new_exec)),
+    (ImplicitDef EXEC_LO, (GetVal $new_exec)),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $new_exec), (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $old_exec))
   ];
@@ -337,9 +337,9 @@ def S_AND_SAVEEXEC_B64_sem : InstSISemantic<S_AND_SAVEEXEC_B64> {
 //   rdna4-instruction-set-architecture.pdf, page 240.
 def S_OR_SAVEEXEC_B32_sem : InstSISemantic<S_OR_SAVEEXEC_B32> {
   let Semantic = [
-    (DefVal $old_exec, (ImplicitUse EXEC)),
+    (DefVal $old_exec, (ImplicitUse EXEC_LO)),
     (DefVal $new_exec, (LLVMOr (GetNamedOperand $src0), (GetVal $old_exec))),
-    (ImplicitDef EXEC, (GetVal $new_exec)),
+    (ImplicitDef EXEC_LO, (GetVal $new_exec)),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $new_exec), (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $old_exec))
   ];
@@ -368,9 +368,9 @@ def S_OR_SAVEEXEC_B64_sem : InstSISemantic<S_OR_SAVEEXEC_B64> {
 //   rdna4-instruction-set-architecture.pdf, page 240 (B32), page 241 (B64).
 def S_XOR_SAVEEXEC_B32_sem : InstSISemantic<S_XOR_SAVEEXEC_B32> {
   let Semantic = [
-    (DefVal $old_exec, (ImplicitUse EXEC)),
+    (DefVal $old_exec, (ImplicitUse EXEC_LO)),
     (DefVal $new_exec, (LLVMXor (GetNamedOperand $src0), (GetVal $old_exec))),
-    (ImplicitDef EXEC, (GetVal $new_exec)),
+    (ImplicitDef EXEC_LO, (GetVal $new_exec)),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $new_exec), (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $old_exec))
   ];
@@ -399,9 +399,9 @@ def S_XOR_SAVEEXEC_B64_sem : InstSISemantic<S_XOR_SAVEEXEC_B64> {
 //   rdna4-instruction-set-architecture.pdf, page 241.
 def S_NAND_SAVEEXEC_B32_sem : InstSISemantic<S_NAND_SAVEEXEC_B32> {
   let Semantic = [
-    (DefVal $old_exec, (ImplicitUse EXEC)),
+    (DefVal $old_exec, (ImplicitUse EXEC_LO)),
     (DefVal $new_exec, (LLVMXor (LLVMAnd (GetNamedOperand $src0), (GetVal $old_exec)), (ConstantInt si_llvm_i32_ty, -1))),
-    (ImplicitDef EXEC, (GetVal $new_exec)),
+    (ImplicitDef EXEC_LO, (GetVal $new_exec)),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $new_exec), (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $old_exec))
   ];
@@ -430,9 +430,9 @@ def S_NAND_SAVEEXEC_B64_sem : InstSISemantic<S_NAND_SAVEEXEC_B64> {
 //   rdna4-instruction-set-architecture.pdf, page 242.
 def S_NOR_SAVEEXEC_B32_sem : InstSISemantic<S_NOR_SAVEEXEC_B32> {
   let Semantic = [
-    (DefVal $old_exec, (ImplicitUse EXEC)),
+    (DefVal $old_exec, (ImplicitUse EXEC_LO)),
     (DefVal $new_exec, (LLVMXor (LLVMOr (GetNamedOperand $src0), (GetVal $old_exec)), (ConstantInt si_llvm_i32_ty, -1))),
-    (ImplicitDef EXEC, (GetVal $new_exec)),
+    (ImplicitDef EXEC_LO, (GetVal $new_exec)),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $new_exec), (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $old_exec))
   ];
@@ -461,9 +461,9 @@ def S_NOR_SAVEEXEC_B64_sem : InstSISemantic<S_NOR_SAVEEXEC_B64> {
 //   rdna4-instruction-set-architecture.pdf, page 242.
 def S_XNOR_SAVEEXEC_B32_sem : InstSISemantic<S_XNOR_SAVEEXEC_B32> {
   let Semantic = [
-    (DefVal $old_exec, (ImplicitUse EXEC)),
+    (DefVal $old_exec, (ImplicitUse EXEC_LO)),
     (DefVal $new_exec, (LLVMXor (LLVMXor (GetNamedOperand $src0), (GetVal $old_exec)), (ConstantInt si_llvm_i32_ty, -1))),
-    (ImplicitDef EXEC, (GetVal $new_exec)),
+    (ImplicitDef EXEC_LO, (GetVal $new_exec)),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $new_exec), (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $old_exec))
   ];
@@ -493,9 +493,9 @@ def S_XNOR_SAVEEXEC_B64_sem : InstSISemantic<S_XNOR_SAVEEXEC_B64> {
 //   rdna4-instruction-set-architecture.pdf, page 243.
 def S_ANDN1_SAVEEXEC_B32_sem : InstSISemantic<S_ANDN1_SAVEEXEC_B32> {
   let Semantic = [
-    (DefVal $old_exec, (ImplicitUse EXEC)),
+    (DefVal $old_exec, (ImplicitUse EXEC_LO)),
     (DefVal $new_exec, (LLVMAnd (LLVMXor (GetNamedOperand $src0), (ConstantInt si_llvm_i32_ty, -1)), (GetVal $old_exec))),
-    (ImplicitDef EXEC, (GetVal $new_exec)),
+    (ImplicitDef EXEC_LO, (GetVal $new_exec)),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $new_exec), (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $old_exec))
   ];
@@ -528,7 +528,7 @@ def S_ANDN2_SAVEEXEC_B32_sem : InstSISemantic<S_ANDN2_SAVEEXEC_B32> {
   let Semantic = [
     (DefVal $old_exec, (ImplicitUse EXEC)),
     (DefVal $new_exec, (LLVMAnd (GetNamedOperand $src0), (LLVMXor (GetVal $old_exec), (ConstantInt si_llvm_i32_ty, -1)))),
-    (ImplicitDef EXEC, (GetVal $new_exec)),
+    (ImplicitDef EXEC_LO, (GetVal $new_exec)),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $new_exec), (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $old_exec))
   ];
@@ -560,7 +560,7 @@ def S_ORN1_SAVEEXEC_B32_sem : InstSISemantic<S_ORN1_SAVEEXEC_B32> {
   let Semantic = [
     (DefVal $old_exec, (ImplicitUse EXEC)),
     (DefVal $new_exec, (LLVMOr (LLVMXor (GetNamedOperand $src0), (ConstantInt si_llvm_i32_ty, -1)), (GetVal $old_exec))),
-    (ImplicitDef EXEC, (GetVal $new_exec)),
+    (ImplicitDef EXEC_LO, (GetVal $new_exec)),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $new_exec), (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $old_exec))
   ];
@@ -593,7 +593,7 @@ def S_ORN2_SAVEEXEC_B32_sem : InstSISemantic<S_ORN2_SAVEEXEC_B32> {
   let Semantic = [
     (DefVal $old_exec, (ImplicitUse EXEC)),
     (DefVal $new_exec, (LLVMOr (GetNamedOperand $src0), (LLVMXor (GetVal $old_exec), (ConstantInt si_llvm_i32_ty, -1)))),
-    (ImplicitDef EXEC, (GetVal $new_exec)),
+    (ImplicitDef EXEC_LO, (GetVal $new_exec)),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $new_exec), (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $old_exec))
   ];
@@ -1118,7 +1118,7 @@ def S_ANDN1_WREXEC_B32_sem : InstSISemantic<S_ANDN1_WREXEC_B32> {
     (DefVal $temp, (LLVMAnd (LLVMXor (GetNamedOperand $src0),
                                       (ConstantInt si_llvm_i32_ty, -1)),
                              (ImplicitUse EXEC))),
-    (ImplicitDef EXEC, (GetVal $temp)),
+    (ImplicitDef EXEC_LO, (GetVal $temp)),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $temp),
                                        (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $temp))
@@ -1160,7 +1160,7 @@ def S_ANDN2_WREXEC_B32_sem : InstSISemantic<S_ANDN2_WREXEC_B32> {
     (DefVal $temp, (LLVMAnd (GetNamedOperand $src0),
                     (LLVMXor (ImplicitUse EXEC),
                               (ConstantInt si_llvm_i32_ty, -1)))),
-    (ImplicitDef EXEC, (GetVal $temp)),
+    (ImplicitDef EXEC_LO, (GetVal $temp)),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $temp),
                                        (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $temp))
