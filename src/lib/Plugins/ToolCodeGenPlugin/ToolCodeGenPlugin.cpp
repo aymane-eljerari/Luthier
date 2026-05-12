@@ -22,6 +22,9 @@
 #include "luthier/ToolCodeGen/InitialEntryPointAnalysis.h"
 #include "luthier/ToolCodeGen/InstructionTracesAnalysis.h"
 #include "luthier/ToolCodeGen/InstrumentationPMDriver.h"
+#include "luthier/ToolCodeGen/IntrinsicProcessorRegistry.h"
+#include "luthier/ToolCodeGen/IntrinsicProcessorsAnalysis.h"
+#include "luthier/ToolCodeGen/ProcessIntrinsicsAtIRLevelPass.h"
 #include "luthier/ToolCodeGenTesting/AMDGPUMockLoaderPrinter.h"
 // #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
 // #include "luthier/ToolCodeGen/LRCallgraph.h"
@@ -40,6 +43,7 @@
 #include "luthier/ToolCodeGen/InitialExecutionPointAnalysis.h"
 #include "luthier/ToolCodeGen/LuthierCallGraph.h"
 #include "luthier/ToolCodeGen/NewPMAsmPrinter.h"
+#include <llvm/CodeGen/MIRPrinter.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Plugins/PassPlugin.h>
 #include <llvm/Support/TargetSelect.h>
@@ -56,6 +60,9 @@ static InstrumentationPMDriverOptions InstrumentationPMOptions;
 static amdgpu::hsamd::MetadataParser MetadataParser;
 
 static MockAMDGPULoaderAnalysisOptions MockLoaderOptions;
+
+/// Initialize the intrinsic processor registry here
+static IntrinsicProcessorRegistry IntrinsicProcessorRegistrySingleton;
 
 struct MockAMDGPULoaderInitialEntryPointParser
     : public llvm::cl::parser<
@@ -113,6 +120,37 @@ llvm::cl::opt<std::pair<uint64_t, std::variant<uint64_t, std::string>>, false,
             "Code objects are zero indexed w.r.t the order they are "
             "specified to be loaded into the mock loader."),
         llvm::cl::NotHidden, llvm::cl::cat(OptPluginOptions)};
+
+llvm::cl::list<std::string> LuthierPluginPaths{
+    "luthier-plugin",
+    llvm::cl::desc(
+        "Path to a Luthier pass plugin shared object to load and register "
+        "with the Instrumentation PM Driver. May be specified multiple "
+        "times."),
+    llvm::cl::cat(OptPluginOptions)};
+
+/// Maintains the loaded Luthier plugin handles
+static llvm::SmallVector<PassPlugin, 4> LoadedLuthierPlugins;
+
+/// Resolve every \c -luthier-plugin path to a \c PassPlugin, caching across
+/// invocations so they remain loaded. Errors during load is skipped
+static llvm::ArrayRef<PassPlugin> loadLuthierPluginsFromCLI() {
+  for (const std::string &Path : LuthierPluginPaths) {
+    PassPlugin *Already =
+        llvm::find_if(LoadedLuthierPlugins, [&](const PassPlugin &P) {
+          return P.getFilename() == Path;
+        });
+    if (Already != LoadedLuthierPlugins.end())
+      continue;
+    llvm::Expected<PassPlugin> LoadedPluginOrErr = PassPlugin::Load(Path);
+    if (auto Err = LoadedPluginOrErr.takeError())
+      llvm::errs() << "Failed to load plugin at path " << Path
+                   << " with error: " << llvm::toString(std::move(Err)) << "\n";
+
+    LoadedLuthierPlugins.push_back(std::move(*LoadedPluginOrErr));
+  }
+  return LoadedLuthierPlugins;
+}
 
 llvm::cl::opt<std::pair<uint64_t, std::string>, false,
               MockAMDGPULoaderInitialExecutionPointParser>
@@ -332,9 +370,19 @@ llvmGetPassPluginInfo() {
           //   MPM.addPass(luthier::ReachingDefPrinterPass(llvm::outs()));
           //   return true;
           // }
+          // Expose LLVM's PrintMIRPreparePass under a parseable name so users
+          // can compose a full module-MIR dump as
+          //   "print-mir-prepare,machine-function(print)"
+          if (Name == "print-mir-prepare") {
+            MPM.addPass(llvm::PrintMIRPreparePass(llvm::outs()));
+            return true;
+          }
           if (Name == "luthier-apply-instrumentation") {
+            /// Called here so that CLI options are guaranteed populated.
+            llvm::ArrayRef<luthier::PassPlugin> Plugins =
+                luthier::loadLuthierPluginsFromCLI();
             MPM.addPass(luthier::InstrumentationPMDriver(
-                luthier::InstrumentationPMOptions));
+                luthier::InstrumentationPMOptions, Plugins));
             return true;
           }
           return false;
