@@ -25,6 +25,7 @@
 #include "luthier/HSATooling/LoadedCodeObjectCache.h"
 #include "luthier/HSATooling/TargetManager.h"
 #include "luthier/Object/AMDGCNObjectFile.h"
+#include "llvm/Object/OffloadBundle.h"
 
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/ValueTracking.h>
@@ -33,8 +34,99 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
+#include <cstring>
+
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "luthier-tool-executable-manager"
+
+namespace {
+
+// In uncompressed mode
+constexpr char kOffloadBundleUncompressedMagicStr[] = "__CLANG_OFFLOAD_BUNDLE__";
+static constexpr size_t kOffloadBundleUncompressedMagicStrSize =
+		sizeof(kOffloadBundleUncompressedMagicStr);
+
+// In compressed mode
+constexpr char kOffloadBundleCompressedMagicStr[] = "CCOB";
+static constexpr size_t kOffloadBundleCompressedMagicStrSize =
+		sizeof(kOffloadBundleCompressedMagicStr);
+
+constexpr uint32_t HipFatMAGIC2 = 0x48495046;
+/// Use the same structure as the hipFatBinary
+
+struct HipFatBinary{
+	uint32_t magic;
+	uint32_t version;
+	void* binary;
+	void* dummy1;
+};
+
+bool IsCodeObjectUncompressed(const void* Image) {
+  return std::memcmp(Image,
+                     reinterpret_cast<const void*>(symbols::kOffloadBundleUncompressedMagicStr),
+                     sizeof(symbols::kOffloadBundleUncompressedMagicStr) - 1) == 0;
+}
+
+bool IsCodeObjectCompressed(const void* Image) {
+  return std::memcmp(Image,
+                     reinterpret_cast<const void*>(symbols::kOffloadBundleCompressedMagicStr),
+                     sizeof(symbols::kOffloadBundleCompressedMagicStr) - 1) == 0;
+}
+
+uint64_t CalculateFatBinarySize(const void* Image, bool& IsCompressed){
+	const char* HeaderPtr = static_cast<const char*>(Image);
+	if(IsCodeObjectCompressed(Image)){
+		IsCompressed = true;
+		/// Skip the magic
+		HeaderPtr += 4;
+		uint16_t Version = *reinterpret_cast<const uint16_t*>(HeaderPtr);
+		/// Version num consumed and compression method
+		HeaderPtr += 4;
+		if(Version == 2){
+			uint32_t TotalSize = *reinterpret_cast<const uint32_t*>(HeaderPtr);
+			return TotalSize;
+		}
+		else if(Version == 3)	
+			return *reinterpret_cast<const uint64_t*>(HeaderPtr);
+		else
+			return 0;
+	}
+	/// TODO: Add FatBin offsets here for reference and above
+	else if (IsCodeObjectUncompressed(Image)) {
+    // 1. Skip Magic String (24 bytes)
+    HeaderPtr += 24; 
+    
+    // 2. Read Number of Entries
+    uint64_t NumOfEntries = *reinterpret_cast<const uint64_t*>(HeaderPtr);
+    if (NumOfEntries == 0) return 32; // Magic(24) + Count(8)
+    HeaderPtr += 8;
+
+    // We track the furthest byte reached in the file to determine TotalSize
+    uint64_t FileTail = 0;
+
+    // 3. Walk the Metadata Table
+    for (uint64_t i = 0; i < NumOfEntries; ++i) {
+        // Read fields exactly as laid out in the "Bundled Code Object Layout"
+        uint64_t ObjOffset = *reinterpret_cast<const uint64_t*>(HeaderPtr);
+        uint64_t ObjSize   = *reinterpret_cast<const uint64_t*>(HeaderPtr + 8);
+        uint64_t IDLength  = *reinterpret_cast<const uint64_t*>(HeaderPtr + 16);
+
+        // Track the end of the actual binary data blobs
+        uint64_t EndOfCurrentBlob = ObjOffset + ObjSize;
+        if (EndOfCurrentBlob > FileTail) {
+            FileTail = EndOfCurrentBlob;
+        }
+        // Move HeaderPtr to the start of the next entry:
+        // Offset(8) + Size(8) + IDLength(8) + The ID String itself
+        HeaderPtr += (24 + IDLength);
+    }
+    // The total size is the end of the last code object found
+    return FileTail;
+	}	
+	// Was not expecting an ELF here
+	return 0;
+}
+} // namespace
 
 namespace luthier {
 
@@ -333,6 +425,78 @@ bool ToolExecutableLoader::isKernelInstrumented(
              *Kernel.getExecutableSymbol()) &&
          OriginalToInstrumentedKernelsMap.find(*Kernel.getExecutableSymbol())
              ->second.contains(Preset);
+}
+
+
+
+llvm::Error ToolExecutableLoader::RegisterFatBinary(const void* RawFatBinWrapper){
+	const HipFatBinary* FatBinWrapper = static_cast<HipFatBinary*>(RawFatBinWrapper);
+	LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+		FatBinWrapper->version == 1,
+		llvm::formatv("Cannot Register fat binary. Invalid version: {0}",
+									FatBinWrapper->version)));
+	LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+		FatBinWrapper->magic == HipFatMAGIC2,
+		llvm::formatv("Fat binary wrapper has {0} magic number instead of {1}",
+									FatBinWrapper->magic, HipFatMAGIC2)));
+	void* Binary = FatBinWrapper->binary;
+	bool IsCompressed = false;
+	uint64_t BinarySize = CalculateBinarySize(Binary, IsCompressed);
+	LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+		BinarySize == 0,
+		llvm::formatv("Fat binary is malformed or incorrect")));
+	if(IsCompressed && BinarySize == 32) return llvm::Error::success(); // No binaries to be processed???
+
+	const char* FatBinData = static_cast<const char*>(Binary);
+	std::unique_ptr<llvm::MemoryBuffer> RawBuffer = llvm::MemoryBuffer::getMemBuffer(
+			llvm::StringRef(FatBinData, BinarySize),
+			"Fat Binary Buffer",
+			/*RequiresNullTerminator=*/false
+	);
+
+	std::unique_ptr<llvm::MemoryBuffer> FinalDecompressedBuffer;
+	if (IsCompressed) {
+			auto DecompressedOrErr = llvm::object::CompressedOffloadBundle::decompress(*RawBuffer);
+			/// TODO: Update this
+			if (!DecompressedOrErr) {		
+					return DecompressedOrErr.takeError();
+			}
+			
+			// Ownership of the newly allocated, decompressed heap memory is moved here
+			FinalDecompressedBuffer = std::move(*DecompressedOrErr);
+	} else {
+			// If it's not compressed, just pass the raw wrapper right through.
+			// Zero allocations, zero copies.
+			FinalDecompressedBuffer = std::move(RawBuffer);
+	}
+
+	llvm::MemoryBufferRef FatBinRef = FinalDecompressedBuffer->getMemBufferRef();
+	auto FatBinBundleOrErr = llvm::object::OffloadBundleFatBin::create(FatBinRef, 0, "hip-fat-binary");
+	if(!FatBinBundleOrErr)
+		return FatBinBundleOrErr.takeError();
+	std::unique_ptr<llvm::object::OffloadBundleFatBin> FatBinBundle = std::move(*FatBinBundleOrErr); 
+	llvm::SmallVector<llvm::object::OffloadBundleEntry> FatBinEntries = FatBinBundle->GetEntries();
+	llvm::SmallVector<luthier::hsa::hsa_agent_t, 4> AvailableAgents;
+	/// FIXME: Change to hsa_agent_t-> vector<std::string(ISA name)
+	llvm::DenseMap<luthier::hsa::hsa_agent_t, llvm::SmallVector<luthier::hsa::hsa_isa_t, 4>> AgentSupportedISA;
+	/// Probably move this in TEL members
+	llvm::DenseMap<luthier::hsa::hsa_agent_t, llvm::SmallVector<luthier::hsa::hsa_executable_t, 4>> AgentLoadedExecutables;
+	auto Err = luthier::hsa::getGpuAgents(CoreApiSnapshot.getTable(), AvailableAgents);
+	if(Err != llvm::Error::success())
+		return Err;
+	
+	for(auto Agent : AvailableAgents){
+		auto Err = luthier::hsa::agentGetSupportedISAs(CoreApiSnapshot.getTable(), Agent, AgentSupportedISA[Agent]);
+		if(Err != llvm::Error::success())
+			return Err;
+	}
+	for(llvm::object::OffloadBundleEntry BundleEntry : FatBinEntries){
+		void* CO = FatBinData + BundleEntry.Offset;
+		size_t COSize = BundleEntry.Size;
+		for(auto Agent : AvailableAgents){
+			// Loop through AGENT IS
+		}
+	}
 }
 
 ToolExecutableLoader::~ToolExecutableLoader() {

@@ -153,6 +153,8 @@ public:
     return SIM;
   }
 
+  llvm::Error RegisterFatBinary(const void* RawFatBinWrapper);
+
   ~ToolExecutableLoader() override;
 
 private:
