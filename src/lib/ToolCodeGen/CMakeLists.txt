@@ -54,6 +54,7 @@ add_library(LuthierToolCodeGen OBJECT
         InitialExecutionPointAnalysis.cpp
         Metadata.cpp
         MIRToIRTranslator.cpp
+        RegValueMetadata.cpp
         MIInlineAsmEmitter.cpp
         NewPMAsmPrinter.cpp
         FunctionAnnotations.cpp

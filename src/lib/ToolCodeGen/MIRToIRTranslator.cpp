@@ -23,6 +23,7 @@
 #include "luthier/ToolCodeGen/MIInlineAsmEmitter.h"
 #include "luthier/ToolCodeGen/MIRConvenience.h"
 #include "luthier/ToolCodeGen/Metadata.h"
+#include "luthier/ToolCodeGen/RegValueMetadata.h"
 #include "luthier/ToolCodeGen/TargetMachineInstrMDNode.h"
 #include <AMDGPUMachineFunction.h>
 #include <GCNSubtarget.h>
@@ -690,7 +691,15 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
   auto seedRegValue = [&](const llvm::MachineBasicBlock &MBB,
                           llvm::MCRegister Reg, llvm::Value *Val) {
     RegValueMap &State = VM[MBB];
-    State[getRegFileKey(Reg)][Val->getType()] = Val;
+    RegFileKey Key = getRegFileKey(Reg);
+    State[Key][Val->getType()] = Val;
+    RegValueDesc Desc{std::get<0>(Key), std::get<1>(Key), std::get<2>(Key)};
+    std::string Name = formatRegValueDescName(Desc, TRI.getName(Reg));
+    if (auto *I = llvm::dyn_cast<llvm::Instruction>(Val))
+      attachRegValue(*I, Desc, Name);
+    else
+      addEntryRegMapping(const_cast<llvm::Function &>(MF.getFunction()), Val,
+                         Desc, Name);
   };
 
   /// Seed a single preloaded register with \p Val.
@@ -1289,11 +1298,14 @@ void MIRToIRTranslator::initDeviceFunctionEntryRegs(
   for (llvm::MCRegister RegFileBase : FunctionCallArgOrder) {
     /// store register file entries
     unsigned NumLanes32 = RegFileSize[RegFileBase] / 2u;
+    llvm::StringRef BaseName = TRI.getName(RegFileBase);
     for (unsigned I = 0; I < NumLanes32; ++I) {
       // Each 32-bit GPR spans 2 halves (RegGranule = 16 bits), so SGPR_N lives
       // at offset 2*N in the half-indexed register file.
-      State[std::make_tuple(RegFileBase, I * 2, 2)][I32] =
-          F.getArg(CurrentArgPos + I);
+      llvm::Argument *Arg = F.getArg(CurrentArgPos + I);
+      State[std::make_tuple(RegFileBase, I * 2, 2)][I32] = Arg;
+      RegValueDesc Desc{RegFileBase, I * 2u, 2u};
+      addEntryRegMapping(F, Arg, Desc, formatRegValueDescName(Desc, BaseName));
     }
     CurrentArgPos += NumLanes32;
   }
@@ -1512,6 +1524,20 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineBasicBlock &MBB,
   /// super-registers, then erase fully-covered entries.
   invalidateOverlaps(State, Key, Builder);
   State[Key][Val->getType()] = Val;
+
+  /// Tag the value with the (BaseReg, HalfWordOffset, NumHalves) it
+  /// represents so downstream passes can trace register provenance.
+  /// Instructions carry per-instruction \c !luthier.reg metadata;
+  /// non-Instruction values (function arguments / constants) flow into
+  /// the function-level \c !luthier.entry_reg_map slot.
+  RegValueDesc Desc{BaseReg, Offset, Size};
+  std::string Name = formatRegValueDescName(Desc, TRI.getName(BaseReg));
+  if (auto *I = llvm::dyn_cast<llvm::Instruction>(Val)) {
+    attachRegValue(*I, Desc, Name);
+  } else {
+    addEntryRegMapping(const_cast<llvm::Function &>(MF.getFunction()), Val,
+                       Desc, Name);
+  }
 }
 
 void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
@@ -2116,6 +2142,27 @@ void MIRToIRTranslator::optimizeNonTraceInsts() {
         if (auto *UI = llvm::dyn_cast<llvm::Instruction>(U))
           if (!IsTrace(UI))
             Worklist.emplace_back(UI);
+      /// Carry register-provenance tags from \p I onto its surviving
+      /// replacement so downstream passes can still trace which physical
+      /// register a folded value represents.
+      if (I->hasMetadata(RegValueMDKindName)) {
+        if (auto *RI = llvm::dyn_cast<llvm::Instruction>(V)) {
+          mergeRegValues(*RI, *I);
+        } else {
+          llvm::SmallVector<RegValueDesc, 2> Descs;
+          getRegValues(*I, Descs);
+          auto *MD = I->getMetadata(RegValueMDKindName);
+          auto &MF = F;
+          for (unsigned K = 0; K < Descs.size(); ++K) {
+            llvm::StringRef Name;
+            if (auto *Entry = llvm::dyn_cast<llvm::MDNode>(MD->getOperand(K)))
+              if (auto *S =
+                      llvm::dyn_cast<llvm::MDString>(Entry->getOperand(0)))
+                Name = S->getString();
+            addEntryRegMapping(MF, V, Descs[K], Name);
+          }
+        }
+      }
       I->replaceAllUsesWith(V);
     }
     if (llvm::isInstructionTriviallyDead(I)) {
