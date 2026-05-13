@@ -25,6 +25,7 @@
 #include "luthier/HSATooling/LoadedCodeObjectCache.h"
 #include "luthier/HSATooling/TargetManager.h"
 #include "luthier/Object/AMDGCNObjectFile.h"
+#include "luthier/Object/ObjectFileUtils.h"
 #include "llvm/Object/OffloadBundle.h"
 
 #include <llvm/ADT/SmallVector.h>
@@ -476,11 +477,11 @@ llvm::Error ToolExecutableLoader::RegisterFatBinary(const void* RawFatBinWrapper
 		return FatBinBundleOrErr.takeError();
 	std::unique_ptr<llvm::object::OffloadBundleFatBin> FatBinBundle = std::move(*FatBinBundleOrErr); 
 	llvm::SmallVector<llvm::object::OffloadBundleEntry> FatBinEntries = FatBinBundle->GetEntries();
-	llvm::SmallVector<luthier::hsa::hsa_agent_t, 4> AvailableAgents;
+	llvm::SmallVector<hsa_agent_t, 4> AvailableAgents;
 	/// FIXME: Change to hsa_agent_t-> vector<std::string(ISA name)
-	llvm::DenseMap<luthier::hsa::hsa_agent_t, llvm::SmallVector<luthier::hsa::hsa_isa_t, 4>> AgentSupportedISA;
+	llvm::DenseMap<hsa_agent_t, llvm::SmallVector<hsa_isa_t, 4>> AgentSupportedISA;
 	/// Probably move this in TEL members
-	llvm::DenseMap<luthier::hsa::hsa_agent_t, llvm::SmallVector<luthier::hsa::hsa_executable_t, 4>> AgentLoadedExecutables;
+	llvm::DenseMap<hsa_agent_t, llvm::SmallVector<hsa_executable_t, 4>> AgentLoadedExecutables;
 	auto Err = luthier::hsa::getGpuAgents(CoreApiSnapshot.getTable(), AvailableAgents);
 	if(Err != llvm::Error::success())
 		return Err;
@@ -491,10 +492,36 @@ llvm::Error ToolExecutableLoader::RegisterFatBinary(const void* RawFatBinWrapper
 			return Err;
 	}
 	for(llvm::object::OffloadBundleEntry BundleEntry : FatBinEntries){
-		void* CO = FatBinData + BundleEntry.Offset;
+		void* COData = FatBinData + BundleEntry.Offset;
 		size_t COSize = BundleEntry.Size;
+		std::unique_ptr<llvm::MemoryBuffer> COBufferRaw = llvm::MemoryBuffer::getMemBuffer(
+			llvm::StringRef(COData, COSize),
+			"CO object",
+			/*RequiresNullTerminator=*/false);
+		llvm::MemoryBufferRef COBufferRef = COBufferRaw->getMemBufferRef();
+		auto COErr = luthier::object::AMDGCNObjectFile::createAMDGCNObjectFile(COBufferRef);
+		if(!COErr){
+			return COErr.takeError();
+		}
+		std::unique_ptr<luthier::object::AMDGCNObjectFile> CO = std::move(*COErr);
+		auto TargetTupleOrErr = luthier::object::getObjectFileTargetTuple(*CO);
+		if(!TargetTupleOrErr){
+			TargetTupleOrErr.takeError();
+		}
+		std::tuple<llvm::Triple, llvm::StringRef, llvm::SubtargetFeatures> TargetTuple = std::move(*TupleOrErr);
+
+		// Pluck individual items out using their index (0, 1, 2)
+		llvm::Triple            Triple   = std::get<0>(TargetTuple);
+		llvm::StringRef         CpuName  = std::get<1>(TargetTuple);
+		llvm::SubtargetFeatures Features = std::get<2>(TargetTuple);
+
+		auto ISAOrErr = luthier::hsa::isaFromLLVM(CoreApiSnapshot.getTable(), Triple, CpuName, Features);
+		if(!ISAOrErr){
+			ISAOrErr.takeError();
+		}
+		hsa_isa_t CodeObjectISA = std::move(*ISAOrErr);
 		for(auto Agent : AvailableAgents){
-			// Loop through AGENT IS
+			// Loop through AGENT ISA and compare handles
 		}
 	}
 }
