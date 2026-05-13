@@ -1679,6 +1679,21 @@ def S_ADD_PC_I64_sem : InstSISemantic<S_ADD_PC_I64> {
   ];
 }
 
+//------------------------------------------------------------------------------
+// S_GET_SHADER_CYCLES_U64 (GFX12)
+//------------------------------------------------------------------------------
+
+// `$sdst = readcyclecounter()`. The LLVM AMDGPU tablegen pattern is
+// `(set i64:$sdst, (readcyclecounter))`, mapping the op to the core
+// `@llvm.readcyclecounter` intrinsic. No translator changes needed —
+// the intrinsic is non-overloaded, returns i64, takes no arguments.
+def S_GET_SHADER_CYCLES_U64_sem : InstSISemantic<S_GET_SHADER_CYCLES_U64> {
+  let Semantic = [
+    (SetNamedOperand $sdst,
+      (LLVMIntrinsic si_llvm_i64_ty, int_readcyclecounter, []<dag>))
+  ];
+}
+
 // S_RFE_B64 / S_RFE_RESTORE_B64 — "Return From Exception". These return from a
 // trap handler by reloading the saved PC (and, for RESTORE, also restoring
 // EXEC) and clearing the wave's PRIV bit. Modeling them faithfully requires

@@ -563,3 +563,147 @@ def S_CALL_B64_sem : InstSISemantic<S_CALL_B64> {
     (DirectCall (GetNamedOperandAsFunction $simm16))
   ];
 }
+
+//==============================================================================
+// S_SUBVECTOR_LOOP_BEGIN / S_SUBVECTOR_LOOP_END — wave64 subvector iteration
+//==============================================================================
+// RDNA2/RDNA3 wave64 idiom: split a wave64 body into two wave32 passes (low
+// then high lanes) for cache locality. EXEC and `$sdst` together encode the
+// state machine; the ISA itself says "internally it is equivalent to an
+// S_CBRANCH with extra math" — no hidden subvector state.
+//
+// We model the dataflow only — every `$sdst` write and EXEC mutation flows
+// through a three-way `select` chain matching the ISA pseudocode. The actual
+// branch to `$simm16` is not modeled; the MIR-level branch is preserved as
+// the trace and the IR-level CFG is left to the underlying MBB structure
+// (same approach used for S_CBRANCH_G/I_FORK).
+//
+// Wave32 caveat: ISA says these are "well-defined but pointless" on wave32
+// because `EXEC_HI` is always 0 there. Our model assumes EXEC is i64; on
+// wave32 the lift still emits the math, but the conditions trivialize so
+// the optimizer collapses the chain.
+//
+// Sources:
+//   rdna2-shader-instruction-set-architecture.pdf — section 12.2 (SOPK opcodes).
+//   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf — equivalent.
+
+//------------------------------------------------------------------------------
+// S_SUBVECTOR_LOOP_BEGIN $sdst, $simm16:
+//   if (EXEC == 0):                 jump LABEL
+//   elif (EXEC_LO == 0):            $sdst = EXEC_LO       # = 0
+//   else:                           $sdst = EXEC_HI ; EXEC_HI = 0
+//------------------------------------------------------------------------------
+def S_SUBVECTOR_LOOP_BEGIN_sem : InstSISemantic<S_SUBVECTOR_LOOP_BEGIN> {
+  let Semantic = [
+    (DefVal $exec, (ImplicitUse EXEC)),
+    (DefVal $exec_lo64,
+      (LLVMAnd (GetVal $exec),
+               (ConstantInt si_llvm_i64_ty, 0xFFFFFFFF))),
+    (DefVal $exec_hi64,
+      (LLVMLShr (GetVal $exec),
+                (ConstantInt si_llvm_i64_ty, 32))),
+    (DefVal $exec_lo, (LLVMTrunc (GetVal $exec_lo64), si_llvm_i32_ty)),
+    (DefVal $exec_hi, (LLVMTrunc (GetVal $exec_hi64), si_llvm_i32_ty)),
+
+    (DefVal $exec_full_zero,
+      (LLVMCmp LLVMICmpEQ, (GetVal $exec),
+                            (ConstantInt si_llvm_i64_ty, 0))),
+    (DefVal $exec_lo_zero,
+      (LLVMCmp LLVMICmpEQ, (GetVal $exec_lo),
+                            (ConstantInt si_llvm_i32_ty, 0))),
+
+    // $sdst := full_zero ? old_sdst : (lo_zero ? EXEC_LO : EXEC_HI)
+    (DefVal $sdst_old, (GetNamedOperand $sdst)),
+    (DefVal $sdst_inner,
+      (LLVMSelect (GetVal $exec_lo_zero),
+                  (GetVal $exec_lo), (GetVal $exec_hi))),
+    (SetNamedOperand $sdst,
+      (LLVMSelect (GetVal $exec_full_zero),
+                  (GetVal $sdst_old), (GetVal $sdst_inner))),
+
+    // EXEC_HI := full_zero ? EXEC_HI : (lo_zero ? EXEC_HI : 0)
+    // Equivalently: zero EXEC_HI only when both halves are nonzero.
+    (DefVal $hi_keep,
+      (LLVMOr (GetVal $exec_full_zero), (GetVal $exec_lo_zero))),
+    (DefVal $new_exec_hi,
+      (LLVMSelect (GetVal $hi_keep),
+                  (GetVal $exec_hi),
+                  (ConstantInt si_llvm_i32_ty, 0))),
+    (DefVal $new_exec_hi64,
+      (LLVMShl (LLVMZExt (GetVal $new_exec_hi), si_llvm_i64_ty),
+               (ConstantInt si_llvm_i64_ty, 32))),
+    (ImplicitDef EXEC,
+      (LLVMOr (GetVal $exec_lo64), (GetVal $new_exec_hi64)))
+  ];
+}
+
+//------------------------------------------------------------------------------
+// S_SUBVECTOR_LOOP_END $sdst, $simm16:
+//   if (EXEC_HI != 0):              EXEC_LO = $sdst        # exit from high pass
+//   elif ($sdst == 0):              nop                    # done
+//   else:                           EXEC_HI = $sdst ;      # start second pass
+//                                   $sdst = EXEC_LO ;
+//                                   EXEC_LO = 0 ;
+//                                   jump LABEL
+//------------------------------------------------------------------------------
+def S_SUBVECTOR_LOOP_END_sem : InstSISemantic<S_SUBVECTOR_LOOP_END> {
+  let Semantic = [
+    (DefVal $exec, (ImplicitUse EXEC)),
+    (DefVal $exec_lo64,
+      (LLVMAnd (GetVal $exec),
+               (ConstantInt si_llvm_i64_ty, 0xFFFFFFFF))),
+    (DefVal $exec_hi64,
+      (LLVMLShr (GetVal $exec),
+                (ConstantInt si_llvm_i64_ty, 32))),
+    (DefVal $exec_lo, (LLVMTrunc (GetVal $exec_lo64), si_llvm_i32_ty)),
+    (DefVal $exec_hi, (LLVMTrunc (GetVal $exec_hi64), si_llvm_i32_ty)),
+
+    (DefVal $exec_hi_nonzero,
+      (LLVMCmp LLVMICmpNE, (GetVal $exec_hi),
+                            (ConstantInt si_llvm_i32_ty, 0))),
+    (DefVal $sdst_old, (GetNamedOperand $sdst)),
+    (DefVal $sdst_zero,
+      (LLVMCmp LLVMICmpEQ, (GetVal $sdst_old),
+                            (ConstantInt si_llvm_i32_ty, 0))),
+
+    // new EXEC_LO:
+    //   exec_hi_nonzero ? $sdst : (sdst_zero ? EXEC_LO : 0)
+    (DefVal $new_exec_lo_inner,
+      (LLVMSelect (GetVal $sdst_zero),
+                  (GetVal $exec_lo),
+                  (ConstantInt si_llvm_i32_ty, 0))),
+    (DefVal $new_exec_lo,
+      (LLVMSelect (GetVal $exec_hi_nonzero),
+                  (GetVal $sdst_old),
+                  (GetVal $new_exec_lo_inner))),
+
+    // new EXEC_HI:
+    //   exec_hi_nonzero ? EXEC_HI : (sdst_zero ? EXEC_HI : $sdst)
+    (DefVal $new_exec_hi_inner,
+      (LLVMSelect (GetVal $sdst_zero),
+                  (GetVal $exec_hi),
+                  (GetVal $sdst_old))),
+    (DefVal $new_exec_hi,
+      (LLVMSelect (GetVal $exec_hi_nonzero),
+                  (GetVal $exec_hi),
+                  (GetVal $new_exec_hi_inner))),
+
+    (DefVal $new_exec_lo64, (LLVMZExt (GetVal $new_exec_lo), si_llvm_i64_ty)),
+    (DefVal $new_exec_hi64,
+      (LLVMShl (LLVMZExt (GetVal $new_exec_hi), si_llvm_i64_ty),
+               (ConstantInt si_llvm_i64_ty, 32))),
+    (ImplicitDef EXEC,
+      (LLVMOr (GetVal $new_exec_lo64), (GetVal $new_exec_hi64))),
+
+    // new $sdst:
+    //   exec_hi_nonzero ? old_sdst : (sdst_zero ? old_sdst : EXEC_LO)
+    (DefVal $new_sdst_inner,
+      (LLVMSelect (GetVal $sdst_zero),
+                  (GetVal $sdst_old),
+                  (GetVal $exec_lo))),
+    (SetNamedOperand $sdst,
+      (LLVMSelect (GetVal $exec_hi_nonzero),
+                  (GetVal $sdst_old),
+                  (GetVal $new_sdst_inner)))
+  ];
+}
