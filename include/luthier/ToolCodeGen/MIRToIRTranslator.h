@@ -326,6 +326,52 @@ class MIRToIRTranslator {
   /// address) are preserved as-is
   void optimizeNonTraceInsts();
 
+  /// True iff a VALU MI's named-register access should be wrapped with
+  /// the conditional indexed-VGPR-access expansion: subtarget supports
+  /// \c FeatureVGPRIndexMode (GFX9 family), MI is a VALU instruction,
+  /// and \p Reg is a VGPR. SGPR / AGPR / special-register operands and
+  /// non-VALU instructions take the direct path.
+  bool shouldEmitGPRIndexAccess(const llvm::MachineInstr &MI,
+                                llvm::MCRegister Reg) const;
+
+  /// Emit IR for an indexed VGPR read: returns the value of
+  /// \c VGPR[Reg + (gpr_idx_en ? M0[7:0] : 0)] as \p OutType.
+  /// `gpr_idx_en` is the bit-27 field of MODE; M0[7:0] is the index.
+  /// When MODE.GPR_IDX_EN folds to 0 at the call site (e.g. after the
+  /// kernel-entry MODE constant flows through \c foldHwregIntrinsics),
+  /// the indexed branch becomes dead and the optimizer collapses the
+  /// select to the direct read.
+  llvm::Value &emitIndexedVGPRSrc(const llvm::MachineInstr &MI,
+                                  llvm::MCRegister Reg,
+                                  llvm::Type *OutType);
+
+  /// Emit IR for an indexed VGPR write:
+  /// \c VGPR[Reg + (gpr_idx_en ? M0[7:0] : 0)] = Val. Implemented by
+  /// reading the register-file slice starting at \p Reg, inserting
+  /// \p Val at the conditional index, and writing the slice back. The
+  /// slice scope means the write touches the register-tracking state
+  /// for every VGPR in the slice; the read+insert+write trio preserves
+  /// values for all but the targeted index.
+  void emitIndexedVGPRDst(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
+                          llvm::Value *Val);
+
+  /// Rewrite each call to \c @llvm.amdgcn.s.getreg.i32 or
+  /// \c @llvm.amdgcn.s.setreg.i32 whose hwreg encoding is a compile-time
+  /// constant naming a register the translator tracks (currently only
+  /// \c AMDGPU::MODE) into a direct read/write of that register's
+  /// tracked SSA value with explicit bitfield extract/insert logic.
+  ///
+  /// Run before \c optimizeNonTraceInsts so the constant kernel-entry
+  /// MODE value (assembled by \c buildInitialModeValue) flows through
+  /// the bitfield ops and lets \c simplifyInstruction fold them. The
+  /// replacement instructions inherit the original call's pcsections
+  /// metadata so trace vs. non-trace status is preserved.
+  ///
+  /// Calls whose hwreg ID does not map to a tracked register (STATUS,
+  /// TRAPSTS, HW_ID, etc. — none of these have AMDGPU register enum
+  /// entries today) are left as opaque intrinsic calls.
+  void foldHwregIntrinsics();
+
   /// Maps the physical pseudo register to its hardware register
   /// \note Use this instead of \c llvm::AMDGPU::getMCReg directly
   llvm::MCRegister getPhysReg(llvm::MCRegister Reg) const;

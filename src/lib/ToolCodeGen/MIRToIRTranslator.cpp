@@ -1080,10 +1080,17 @@ llvm::Value *MIRToIRTranslator::getRegisterFile(
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] getRegisterFile: MBB "
                           << MBB.getNumber() << " reg=" << TRI.getName(Reg)
                           << "\n");
-  // Slice the register file starting at `Reg`'s offset within its base file:
-  // for an indexed read of `Reg[M0]`, only entries at or after `Reg` are
-  // reachable. This shrinks the vector materialized by `getOperandAsValue`
-  // from the full file (e.g. 108 SGPRs) to just `Reg..end`.
+  /// Always materialize the FULL register file (offset=0..total) under a
+  /// single canonical key, then return a shufflevector of just the
+  /// requested slice. Earlier versions materialized each slice under its
+  /// own key, which polluted `RegValueMap` with mismatched-width entries
+  /// (e.g. `<7 x i32>` for a slice from `v0` vs `<5 x i32>` for a slice
+  /// from `v2`) and tripped the width-divisibility check in
+  /// `breakdownToVecTyFromAvailableValues` when one query needed to
+  /// rebuild from another's cached value. With a single full-file key,
+  /// every consumer shares the same cache entry; the slice returned to
+  /// the caller is a cheap `shufflevector` lane-pick the optimizer
+  /// folds away when the index is constant.
   auto Key = getRegFileKey(Reg);
   llvm::MCRegister RegFileBaseReg = std::get<0>(Key);
   unsigned StartHalves = std::get<1>(Key);
@@ -1092,9 +1099,6 @@ llvm::Value *MIRToIRTranslator::getRegisterFile(
          "register file is not modeled for the current target");
   assert(StartHalves <= TotalHalves &&
          "register offset exceeds file size");
-  unsigned SliceHalves = TotalHalves - StartHalves;
-  RegFileKey SliceKey =
-      std::make_tuple(RegFileBaseReg, StartHalves, SliceHalves);
 
   if (!LaneTy)
     LaneTy = Builder.getInt32Ty();
@@ -1104,11 +1108,22 @@ llvm::Value *MIRToIRTranslator::getRegisterFile(
   unsigned LaneSize = LaneTy->getPrimitiveSizeInBits();
   assert(LaneSize % RegGranule == 0 && "Lane size is not divisible by 16");
 
-  unsigned NumRegFileLanes = SliceHalves * RegGranule / LaneSize;
+  unsigned FullNumLanes = TotalHalves * RegGranule / LaneSize;
+  auto *FullVecTy = llvm::FixedVectorType::get(LaneTy, FullNumLanes);
+  RegFileKey FullKey = std::make_tuple(RegFileBaseReg, 0u, TotalHalves);
+  llvm::Value *FullVec =
+      &getOperandAsValue(MBB, FullKey, Builder, FullVecTy);
 
-  auto *VecTy = llvm::FixedVectorType::get(LaneTy, NumRegFileLanes);
+  unsigned StartLane = StartHalves * RegGranule / LaneSize;
+  unsigned SliceNumLanes = FullNumLanes - StartLane;
+  if (StartLane == 0)
+    return FullVec;
 
-  return &getOperandAsValue(MBB, SliceKey, Builder, VecTy);
+  llvm::SmallVector<int, 32> Mask;
+  Mask.reserve(SliceNumLanes);
+  for (unsigned I = 0; I < SliceNumLanes; ++I)
+    Mask.push_back(static_cast<int>(StartLane + I));
+  return Builder.CreateShuffleVector(FullVec, Mask);
 }
 
 llvm::Value *MIRToIRTranslator::getRegisterFile(const llvm::MachineInstr &MI,
@@ -1186,16 +1201,45 @@ void MIRToIRTranslator::setRegisterFile(const llvm::MachineBasicBlock &MBB,
                                         llvm::MCRegister Reg,
                                         llvm::IRBuilderBase &Builder,
                                         llvm::Value *Val) {
-  // Symmetric with getRegisterFile: write the slice [Reg..end-of-file].
+  /// Symmetric with `getRegisterFile`: write the FULL file under the
+  /// canonical (BaseReg, 0, TotalHalves) key. `Val` is a vector covering
+  /// the slice `[Reg..end]`; splice its lanes back into the full file
+  /// via insertelement at the appropriate absolute lane indices.
   auto Key = getRegFileKey(Reg);
   llvm::MCRegister RegFileBaseReg = std::get<0>(Key);
   unsigned StartHalves = std::get<1>(Key);
   unsigned TotalHalves = RegFileSize[RegFileBaseReg];
-  unsigned SliceHalves = TotalHalves - StartHalves;
-  RegFileKey SliceKey =
-      std::make_tuple(RegFileBaseReg, StartHalves, SliceHalves);
+  assert(StartHalves <= TotalHalves &&
+         "register offset exceeds file size");
 
-  setRegOperandValue(MBB, SliceKey, Builder, Val);
+  auto *SliceVecTy = llvm::cast<llvm::FixedVectorType>(Val->getType());
+  llvm::Type *LaneTy = SliceVecTy->getElementType();
+  unsigned LaneSize = LaneTy->getPrimitiveSizeInBits();
+  unsigned FullNumLanes = TotalHalves * RegGranule / LaneSize;
+  auto *FullVecTy = llvm::FixedVectorType::get(LaneTy, FullNumLanes);
+  RegFileKey FullKey = std::make_tuple(RegFileBaseReg, 0u, TotalHalves);
+
+  llvm::Value *NewFull;
+  unsigned StartLane = StartHalves * RegGranule / LaneSize;
+  if (StartLane == 0 && SliceVecTy->getNumElements() == FullNumLanes) {
+    /// Slice spans the whole file — caller already produced the full
+    /// vector, no splicing needed.
+    NewFull = Val;
+  } else {
+    /// Read the current full file, then insertelement each slice lane
+    /// at its absolute position. Adjacent insertelements collapse
+    /// cleanly under InstCombine when many lanes are unchanged.
+    llvm::Value *OldFull =
+        &getOperandAsValue(MBB, FullKey, Builder, FullVecTy);
+    NewFull = OldFull;
+    unsigned SliceLanes = SliceVecTy->getNumElements();
+    for (unsigned I = 0; I < SliceLanes; ++I) {
+      llvm::Value *Lane = Builder.CreateExtractElement(Val, I);
+      NewFull = Builder.CreateInsertElement(NewFull, Lane, StartLane + I);
+    }
+  }
+
+  setRegOperandValue(MBB, FullKey, Builder, NewFull);
 }
 
 llvm::FunctionType *MIRToIRTranslator::getStandardDeviceFunctionType() const {
@@ -1324,6 +1368,8 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(const llvm::MachineInstr &MI,
                                                   llvm::Type *RegType) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI does not have a machine basic block");
+  if (shouldEmitGPRIndexAccess(MI, Reg))
+    return emitIndexedVGPRSrc(MI, Reg, RegType);
   return getOperandAsValue(*MBB, Reg, RegType);
 }
 
@@ -1389,6 +1435,11 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
   assert(Val && "Val is nullptr");
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI has no parent MBB");
+
+  if (shouldEmitGPRIndexAccess(MI, Reg)) {
+    emitIndexedVGPRDst(MI, Reg, Val);
+    return;
+  }
 
   auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
   assert(BB && "MBB has no IR basic block");
@@ -1680,6 +1731,12 @@ void MIRToIRTranslator::translate() {
   /// Fixup all dangeling PHIs
   fixupPhis();
 
+  /// Rewrite @llvm.amdgcn.s.{get,set}reg with a constant hwreg encoding
+  /// naming a tracked register (MODE today) into direct read/write of
+  /// the tracked SSA value with explicit bitfield ops, so the kernel-
+  /// entry MODE constant flows through to the optimizer.
+  foldHwregIntrinsics();
+
   /// Final cleanup: simplify and remove dead non-trace IR. Trace
   /// instructions (those whose pcsections carry a trace instruction
   /// address) are preserved verbatim
@@ -1744,6 +1801,281 @@ void MIRToIRTranslator::emitExecPredicateCheck(
   /// it is materialized so downstream analyses that look for a pre-state
   /// snapshot on the skip edge find one
   (void)Ctx;
+}
+
+bool MIRToIRTranslator::shouldEmitGPRIndexAccess(const llvm::MachineInstr &MI,
+                                                  llvm::MCRegister Reg) const {
+  if (!ST.hasVGPRIndexMode())
+    return false;
+  if (!llvm::SIInstrInfo::isVALU(MI))
+    return false;
+  /// Limit Phase B's first cut to 32-bit single-VGPR operands. For
+  /// wider VGPR operands (e.g. v_*_b64 reading a pair) the indexed
+  /// read would need to extract two adjacent lanes — left as future
+  /// work; meanwhile those fall through to the direct path.
+  if (getPhysRegisterSize(Reg) != 32)
+    return false;
+  return TRI.isVGPR(MF.getRegInfo(), Reg);
+}
+
+llvm::Value &
+MIRToIRTranslator::emitIndexedVGPRSrc(const llvm::MachineInstr &MI,
+                                       llvm::MCRegister Reg,
+                                       llvm::Type *OutType) {
+  const llvm::MachineBasicBlock *MBB = MI.getParent();
+  assert(MBB && "MI has no parent MBB");
+  auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
+  assert(BB && "MBB has no IR basic block");
+  llvm::Instruction *TermInst = BB->getTerminator();
+
+  llvm::IRBuilder<llvm::InstSimplifyFolder, llvm::IRBuilderCallbackInserter>
+      Builder(BB->getContext(), llvm::InstSimplifyFolder{MF.getDataLayout()},
+              llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
+                annotateUniformIfNeeded(I, TRI, Reg);
+              }});
+  TermInst ? Builder.SetInsertPoint(TermInst) : Builder.SetInsertPoint(BB);
+
+  llvm::Type *I32 = Builder.getInt32Ty();
+  if (!OutType)
+    OutType = I32;
+
+  /// MODE.GPR_IDX_EN is bit 27. M0[7:0] is the index.
+  llvm::Value *Mode =
+      &getOperandAsValue(*MBB, llvm::AMDGPU::MODE, I32);
+  llvm::Value *EnBit = Builder.CreateAnd(
+      Builder.CreateLShr(Mode, llvm::ConstantInt::get(I32, 27)),
+      llvm::ConstantInt::get(I32, 1));
+  llvm::Value *En = Builder.CreateTrunc(EnBit, Builder.getInt1Ty());
+
+  llvm::Value *M0 =
+      &getOperandAsValue(*MBB, llvm::AMDGPU::M0, I32);
+  llvm::Value *Idx =
+      Builder.CreateAnd(M0, llvm::ConstantInt::get(I32, 0xFF));
+
+  /// Per-slot select chain across the VGPR file from Reg to end-of-file:
+  /// start with the direct read (`Reg + 0`) and, for each subsequent
+  /// slot k, fold in `select(En && Idx==k, slot_k, acc)`. This avoids
+  /// materializing a full-file vector via `getRegisterFile`, which would
+  /// trip width-alignment assertions in the tracker's invalidation path
+  /// for VGPR allocations whose total halves don't divide every cached
+  /// query width. When En folds to 0 every per-slot select collapses to
+  /// `acc` and the final result reduces to the direct read.
+  auto Key = getRegFileKey(Reg);
+  llvm::MCRegister BaseReg = std::get<0>(Key);
+  unsigned BaseHalves = std::get<1>(Key);
+  unsigned TotalHalves = RegFileSize[BaseReg];
+  assert(BaseHalves <= TotalHalves &&
+         "Base offset exceeds file allocation");
+
+  /// Direct read at base register — first slot of the chain.
+  llvm::Value *Acc = &getOperandAsValue(*MBB, Reg, OutType);
+  llvm::Value *AccI32 = Acc;
+  if (AccI32->getType() != I32)
+    AccI32 = Builder.CreateBitOrPointerCast(AccI32, I32);
+
+  unsigned NumSlots = (TotalHalves - BaseHalves) / 2;
+  for (unsigned k = 1; k < NumSlots; ++k) {
+    RegFileKey SlotKey =
+        std::make_tuple(BaseReg, BaseHalves + 2 * k, 2u);
+    llvm::Value *Slot = &getOperandAsValue(*MBB, SlotKey, Builder, I32);
+    llvm::Value *KEq =
+        Builder.CreateICmpEQ(Idx, llvm::ConstantInt::get(I32, k));
+    llvm::Value *Pick = Builder.CreateAnd(En, KEq);
+    AccI32 = Builder.CreateSelect(Pick, Slot, AccI32);
+  }
+  if (AccI32->getType() != OutType)
+    AccI32 = Builder.CreateBitOrPointerCast(AccI32, OutType);
+  return *AccI32;
+}
+
+void MIRToIRTranslator::emitIndexedVGPRDst(const llvm::MachineInstr &MI,
+                                            llvm::MCRegister Reg,
+                                            llvm::Value *Val) {
+  const llvm::MachineBasicBlock *MBB = MI.getParent();
+  assert(MBB && "MI has no parent MBB");
+  auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
+  assert(BB && "MBB has no IR basic block");
+  llvm::Instruction *TermInst = BB->getTerminator();
+
+  llvm::IRBuilder<llvm::InstSimplifyFolder, llvm::IRBuilderCallbackInserter>
+      Builder(BB->getContext(), llvm::InstSimplifyFolder{MF.getDataLayout()},
+              llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
+                annotateUniformIfNeeded(I, TRI, Reg);
+              }});
+  TermInst ? Builder.SetInsertPoint(TermInst) : Builder.SetInsertPoint(BB);
+
+  llvm::Type *I32 = Builder.getInt32Ty();
+  llvm::Value *Mode =
+      &getOperandAsValue(*MBB, llvm::AMDGPU::MODE, I32);
+  llvm::Value *EnBit = Builder.CreateAnd(
+      Builder.CreateLShr(Mode, llvm::ConstantInt::get(I32, 27)),
+      llvm::ConstantInt::get(I32, 1));
+  llvm::Value *En = Builder.CreateTrunc(EnBit, Builder.getInt1Ty());
+
+  llvm::Value *M0 =
+      &getOperandAsValue(*MBB, llvm::AMDGPU::M0, I32);
+  llvm::Value *Idx =
+      Builder.CreateAnd(M0, llvm::ConstantInt::get(I32, 0xFF));
+  /// final_idx = en ? Idx : 0
+  llvm::Value *FinalIdx =
+      Builder.CreateSelect(En, Idx, llvm::ConstantInt::get(I32, 0));
+
+  llvm::Value *ValI32 = Val;
+  if (ValI32->getType() != I32)
+    ValI32 = Builder.CreateBitOrPointerCast(ValI32, I32);
+
+  /// Per-slot conditional write across the VGPR file from Reg to the end
+  /// of the allocated VGPR space:
+  ///
+  ///   for k in [0, NumSlots):
+  ///     slot_k = (FinalIdx == k) ? Val : slot_k_old
+  ///
+  /// Each setRegOperandValue invalidates only the single slot's overlap
+  /// (the existing per-slot path), avoiding the slice-wide invalidation
+  /// in `setRegisterFile` that trips `breakdownToVecTyFromAvailableValues`
+  /// when mixed-width VGPR entries are already in the tracker. When
+  /// FinalIdx folds to 0 (the common case: MODE.GPR_IDX_EN=0), every
+  /// slot k>0's select collapses to old_k and DCE removes those writes
+  /// after `optimizeNonTraceInsts`; slot 0's select collapses to Val,
+  /// matching the direct write path.
+  auto Key = getRegFileKey(Reg);
+  llvm::MCRegister BaseReg = std::get<0>(Key);
+  unsigned BaseHalves = std::get<1>(Key);
+  unsigned TotalHalves = RegFileSize[BaseReg];
+  assert(BaseHalves <= TotalHalves &&
+         "Base offset exceeds file allocation");
+  /// 32-bit slots: each occupies 2 halves.
+  unsigned NumSlots = (TotalHalves - BaseHalves) / 2;
+  for (unsigned k = 0; k < NumSlots; ++k) {
+    RegFileKey SlotKey =
+        std::make_tuple(BaseReg, BaseHalves + 2 * k, 2u);
+    llvm::Value *OldVal = &getOperandAsValue(*MBB, SlotKey, Builder, I32);
+    llvm::Value *Cond = Builder.CreateICmpEQ(
+        FinalIdx, llvm::ConstantInt::get(I32, k));
+    llvm::Value *NewVal = Builder.CreateSelect(Cond, ValI32, OldVal);
+    setRegOperandValue(*MBB, SlotKey, Builder, NewVal);
+  }
+}
+
+/// Maps an AMDGPU hwreg ID (the ID field of an `s_getreg`/`s_setreg`
+/// 16-bit encoding) to the MCRegister we track in the register-value map.
+/// Returns std::nullopt for IDs the translator does not model — those
+/// calls stay as opaque intrinsics. AMDGPU only exposes a register enum
+/// entry for MODE; STATUS / TRAPSTS / HW_ID / etc. have no MCRegister
+/// counterpart and so cannot be folded today.
+static std::optional<llvm::MCRegister> mapHwregIDToReg(unsigned Id) {
+  switch (Id) {
+  case llvm::AMDGPU::Hwreg::ID_MODE:
+    return llvm::MCRegister(llvm::AMDGPU::MODE);
+  default:
+    return std::nullopt;
+  }
+}
+
+/// Decode a constant hwreg encoding into (ID, offset, width).
+struct DecodedHwreg {
+  unsigned Id;
+  unsigned Offset;
+  unsigned Width;
+};
+static DecodedHwreg decodeHwregEncoding(uint64_t Enc) {
+  /// Encoding layout (see SIDefines.h):
+  ///   bits 0..5    : ID       (6 bits)
+  ///   bits 6..10   : offset   (5 bits)
+  ///   bits 11..15  : size - 1 (5 bits, stored as size-1; decoded width
+  ///                  = stored value + 1).
+  unsigned Id = static_cast<unsigned>(Enc & 0x3F);
+  unsigned Offset = static_cast<unsigned>((Enc >> 6) & 0x1F);
+  unsigned Width = static_cast<unsigned>(((Enc >> 11) & 0x1F) + 1);
+  return {Id, Offset, Width};
+}
+
+void MIRToIRTranslator::foldHwregIntrinsics() {
+  auto &F = const_cast<llvm::Function &>(MF.getFunction());
+
+  /// MBB lookup: each translated BB is tagged with its source MBB via
+  /// `MBB.getBasicBlock()`. Build the reverse map once.
+  llvm::DenseMap<const llvm::BasicBlock *, const llvm::MachineBasicBlock *>
+      BBToMBB;
+  for (const llvm::MachineBasicBlock &MBB : MF)
+    if (const auto *BB = MBB.getBasicBlock())
+      BBToMBB[BB] = &MBB;
+
+  llvm::SmallVector<llvm::CallInst *, 16> Worklist;
+  for (llvm::BasicBlock &BB : F) {
+    for (llvm::Instruction &I : BB) {
+      auto *Call = llvm::dyn_cast<llvm::CallInst>(&I);
+      if (!Call)
+        continue;
+      llvm::Intrinsic::ID IID = Call->getIntrinsicID();
+      if (IID == llvm::Intrinsic::amdgcn_s_getreg ||
+          IID == llvm::Intrinsic::amdgcn_s_setreg)
+        Worklist.push_back(Call);
+    }
+  }
+
+  for (llvm::CallInst *Call : Worklist) {
+    /// hwreg encoding is arg 0 (i32 constant).
+    auto *EncC = llvm::dyn_cast<llvm::ConstantInt>(Call->getArgOperand(0));
+    if (!EncC)
+      continue;
+    DecodedHwreg D = decodeHwregEncoding(EncC->getZExtValue());
+    std::optional<llvm::MCRegister> RegOpt = mapHwregIDToReg(D.Id);
+    if (!RegOpt)
+      continue;
+    llvm::MCRegister HwReg = *RegOpt;
+
+    const llvm::BasicBlock *BB = Call->getParent();
+    auto It = BBToMBB.find(BB);
+    if (It == BBToMBB.end())
+      continue;
+    const llvm::MachineBasicBlock &MBB = *It->second;
+
+    llvm::MDNode *PCS = Call->getMetadata(llvm::LLVMContext::MD_pcsections);
+    llvm::IRBuilder<llvm::InstSimplifyFolder, llvm::IRBuilderCallbackInserter>
+        Builder(F.getContext(), llvm::InstSimplifyFolder{MF.getDataLayout()},
+                llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
+                  if (PCS)
+                    I->setMetadata(llvm::LLVMContext::MD_pcsections, PCS);
+                }});
+    Builder.SetInsertPoint(Call);
+
+    /// Materialize the current value of the tracked register at this BB
+    /// boundary as an i32. The register-tracking machinery may need to
+    /// emit PHIs to plumb the value from predecessors.
+    auto Key = getRegFileKey(HwReg);
+    llvm::Value *RegVal = &getOperandAsValue(
+        MBB, Key, Builder, llvm::Type::getInt32Ty(F.getContext()));
+
+    llvm::Intrinsic::ID IID = Call->getIntrinsicID();
+
+    uint32_t FieldMask =
+        (D.Width >= 32 ? ~0u : ((1u << D.Width) - 1u));
+
+    if (IID == llvm::Intrinsic::amdgcn_s_getreg) {
+      /// result = (reg_val >> offset) & field_mask
+      llvm::Value *Shifted = Builder.CreateLShr(
+          RegVal, llvm::ConstantInt::get(Builder.getInt32Ty(), D.Offset));
+      llvm::Value *Masked = Builder.CreateAnd(
+          Shifted, llvm::ConstantInt::get(Builder.getInt32Ty(), FieldMask));
+      Call->replaceAllUsesWith(Masked);
+      Call->eraseFromParent();
+    } else {
+      /// new_reg_val = (reg_val & ~(field_mask << offset))
+      ///             | ((src & field_mask) << offset)
+      llvm::Value *Src = Call->getArgOperand(1);
+      uint32_t SlotMask = FieldMask << D.Offset;
+      llvm::Value *Cleared = Builder.CreateAnd(
+          RegVal, llvm::ConstantInt::get(Builder.getInt32Ty(), ~SlotMask));
+      llvm::Value *Field = Builder.CreateAnd(
+          Src, llvm::ConstantInt::get(Builder.getInt32Ty(), FieldMask));
+      llvm::Value *Shifted = Builder.CreateShl(
+          Field, llvm::ConstantInt::get(Builder.getInt32Ty(), D.Offset));
+      llvm::Value *NewReg = Builder.CreateOr(Cleared, Shifted);
+      setRegOperandValue(MBB, Key, Builder, NewReg);
+      Call->eraseFromParent();
+    }
+  }
 }
 
 void MIRToIRTranslator::optimizeNonTraceInsts() {

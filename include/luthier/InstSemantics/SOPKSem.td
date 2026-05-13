@@ -305,8 +305,14 @@ def S_CMPK_LT_U32_sem : InstSISemantic<S_CMPK_LT_U32> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 212.
 //   rdna4-instruction-set-architecture.pdf, page 176.
 def S_GETREG_B32_sem : InstSISemantic<S_GETREG_B32> {
+  // `int_amdgcn_s_getreg` returns i32 with an immediate hwreg encoding arg;
+  // `LLVMUnaryIntrinsic` calls `IRBuilder::CreateUnaryIntrinsic`, which
+  // asserts on non-overloaded intrinsics that need explicit result types.
+  // Use the explicit `LLVMIntrinsic` form to pass the return type.
   let Semantic = [
-    (SetNamedOperand $sdst, (LLVMUnaryIntrinsic int_amdgcn_s_getreg, (GetNamedOperand $simm16)))
+    (SetNamedOperand $sdst,
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_s_getreg,
+                     [(GetNamedOperand $simm16)]<dag>))
   ];
 }
 
@@ -327,8 +333,12 @@ def S_GETREG_B32_sem : InstSISemantic<S_GETREG_B32> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 213.
 //   rdna4-instruction-set-architecture.pdf, page 176.
 def S_SETREG_B32_sem : InstSISemantic<S_SETREG_B32> {
+  // Same caveat as S_GETREG_B32: use the explicit `LLVMIntrinsic` form so
+  // the void return type and the two arguments are passed correctly.
   let Semantic = [
-    (LLVMBinaryIntrinsic int_amdgcn_s_setreg, (GetNamedOperand $simm16), (GetNamedOperand $sdst))
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_setreg,
+                   [(GetNamedOperand $simm16),
+                    (GetNamedOperand $sdst)]<dag>)
   ];
 }
 
