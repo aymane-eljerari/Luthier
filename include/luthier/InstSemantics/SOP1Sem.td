@@ -1640,6 +1640,27 @@ def S_SETPC_B64_return_sem : InstSISemantic<S_SETPC_B64_return> {
   ];
 }
 
+//------------------------------------------------------------------------------
+// S_ADD_PC_I64 (GFX12)
+//------------------------------------------------------------------------------
+
+// `S_ADD_PC_I64 $src0` adds the 64-bit signed value `$src0` to the program
+// counter — an indirect branch whose target is `pc + src0`. The TableGen
+// record (SOP1_1_REGIMM64) marks it `isBranch=1, isIndirectBranch=1,
+// isBarrier=1, isTerminator=1`. Sources: amd-instinct-cdna4-instruction-set-
+// architecture.pdf, rdna4-instruction-set-architecture.pdf.
+//
+// IR model: read the current PC via `int_amdgcn_s_getpc`, add `$src0`, then
+// `IndirectTailCall` to the resulting address (the same primitive used for
+// S_SETPC_B64 and the direct-call PC-write half of S_SWAPPC_B64).
+def S_ADD_PC_I64_sem : InstSISemantic<S_ADD_PC_I64> {
+  let Semantic = [
+    (IndirectTailCall
+      (LLVMAdd (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_getpc, []<dag>),
+               (GetNamedOperand $src0)))
+  ];
+}
+
 // S_RFE_B64 / S_RFE_RESTORE_B64 — "Return From Exception". These return from a
 // trap handler by reloading the saved PC (and, for RESTORE, also restoring
 // EXEC) and clearing the wave's PRIV bit. Modeling them faithfully requires
