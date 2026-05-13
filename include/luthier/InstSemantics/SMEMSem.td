@@ -4587,3 +4587,127 @@ def S_ATC_PROBE_BUFFER_IMM_sem : InstSISemantic<S_ATC_PROBE_BUFFER_IMM>;
 def S_ATC_PROBE_BUFFER_SGPR_sem : InstSISemantic<S_ATC_PROBE_BUFFER_SGPR>;
 def S_ATC_PROBE_BUFFER_SGPR_IMM_sem : InstSISemantic<S_ATC_PROBE_BUFFER_SGPR_IMM>;
 def S_ATC_PROBE_BUFFER_SGPR_OPT_IMM_sem : InstSISemantic<S_ATC_PROBE_BUFFER_SGPR_OPT_IMM>;
+
+//==============================================================================
+// SMEM Wide Scalar Load — _ec (early-clobber) variants  (Phase 5)
+//==============================================================================
+// `_ec` variants are register-allocator hints (the destination is marked
+// early-clobber so the allocator does not overlap it with sources). The IR
+// semantics are identical to the non-_ec form; we delegate by replicating the
+// load directly.
+
+foreach widthIdx = 0-4 in {
+  defvar W = ["2", "3", "4", "8", "16"][widthIdx];
+  defvar VT = [si_llvm_v2i32_ty, si_llvm_v3i32_ty, si_llvm_v4i32_ty,
+                si_llvm_v8i32_ty, si_llvm_v16i32_ty][widthIdx];
+
+  def !cast<InstSI>("S_LOAD_DWORDX"#W#"_IMM_ec")#_sem
+    : InstSISemantic<!cast<InstSI>("S_LOAD_DWORDX"#W#"_IMM_ec")> {
+    let Semantic = [
+      (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
+                                       (GetNamedOperand $offset))),
+      (DefVal $tmp, (LLVMLoad VT, (GetVal $tmp_addr))),
+      (SetNamedOperand $sdst, (GetVal $tmp))
+    ];
+  }
+  def !cast<InstSI>("S_LOAD_DWORDX"#W#"_SGPR_ec")#_sem
+    : InstSISemantic<!cast<InstSI>("S_LOAD_DWORDX"#W#"_SGPR_ec")> {
+    let Semantic = [
+      (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
+                                       (GetNamedOperand $soffset))),
+      (DefVal $tmp, (LLVMLoad VT, (GetVal $tmp_addr))),
+      (SetNamedOperand $sdst, (GetVal $tmp))
+    ];
+  }
+  def !cast<InstSI>("S_LOAD_DWORDX"#W#"_SGPR_IMM_ec")#_sem
+    : InstSISemantic<!cast<InstSI>("S_LOAD_DWORDX"#W#"_SGPR_IMM_ec")> {
+    let Semantic = [
+      (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $sbase), global_ptr_ty),
+                                       (LLVMAdd (GetNamedOperand $offset),
+                                                  (GetNamedOperand $soffset)))),
+      (DefVal $tmp, (LLVMLoad VT, (GetVal $tmp_addr))),
+      (SetNamedOperand $sdst, (GetVal $tmp))
+    ];
+  }
+}
+
+//==============================================================================
+// S_BUFFER_LOAD wide — _ec (early-clobber) variants  (Phase 5)
+//==============================================================================
+foreach widthIdx = 0-4 in {
+  defvar W = ["2", "3", "4", "8", "16"][widthIdx];
+  defvar VT = [si_llvm_v2i32_ty, si_llvm_v3i32_ty, si_llvm_v4i32_ty,
+                si_llvm_v8i32_ty, si_llvm_v16i32_ty][widthIdx];
+
+  def !cast<InstSI>("S_BUFFER_LOAD_DWORDX"#W#"_IMM_ec")#_sem
+    : InstSISemantic<!cast<InstSI>("S_BUFFER_LOAD_DWORDX"#W#"_IMM_ec")> {
+    let Semantic = [
+      (SetNamedOperand $sdst,
+        (LLVMIntrinsic VT, int_amdgcn_s_buffer_load,
+                       [(GetNamedOperand $sbase), (GetNamedOperand $offset),
+                        (ConstantInt si_llvm_i32_ty, 0)]))
+    ];
+  }
+  def !cast<InstSI>("S_BUFFER_LOAD_DWORDX"#W#"_SGPR_ec")#_sem
+    : InstSISemantic<!cast<InstSI>("S_BUFFER_LOAD_DWORDX"#W#"_SGPR_ec")> {
+    let Semantic = [
+      (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset),
+                                        (GetNamedOperand $soffset))),
+      (SetNamedOperand $sdst,
+        (LLVMIntrinsic VT, int_amdgcn_s_buffer_load,
+                       [(GetNamedOperand $sbase), (GetVal $total_offset),
+                        (ConstantInt si_llvm_i32_ty, 0)]))
+    ];
+  }
+  def !cast<InstSI>("S_BUFFER_LOAD_DWORDX"#W#"_SGPR_IMM_ec")#_sem
+    : InstSISemantic<!cast<InstSI>("S_BUFFER_LOAD_DWORDX"#W#"_SGPR_IMM_ec")> {
+    let Semantic = [
+      (DefVal $total_offset, (LLVMAdd (GetNamedOperand $offset),
+                                        (GetNamedOperand $soffset))),
+      (SetNamedOperand $sdst,
+        (LLVMIntrinsic VT, int_amdgcn_s_buffer_load,
+                       [(GetNamedOperand $sbase), (GetVal $total_offset),
+                        (ConstantInt si_llvm_i32_ty, 0)]))
+    ];
+  }
+}
+
+//==============================================================================
+// S_SCRATCH_LOAD — _ec variants (Phase 5)  
+//==============================================================================
+// S_SCRATCH_LOAD_DWORDX{2,4} have no base form in current LLVM either —
+// add them via a single block. SADDR addressing reads from addrspace(5).
+
+foreach widthIdx = 0-1 in {
+  defvar W = ["2", "4"][widthIdx];
+  defvar VT = [si_llvm_v2i32_ty, si_llvm_v4i32_ty][widthIdx];
+
+  def !cast<InstSI>("S_SCRATCH_LOAD_DWORDX"#W#"_IMM_ec")#_sem
+    : InstSISemantic<!cast<InstSI>("S_SCRATCH_LOAD_DWORDX"#W#"_IMM_ec")> {
+    let Semantic = [
+      (DefVal $tmp_addr, (LLVMPtrAdd
+                            (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
+                            (GetNamedOperand $offset))),
+      (SetNamedOperand $sdst, (LLVMLoad VT, (GetVal $tmp_addr)))
+    ];
+  }
+  def !cast<InstSI>("S_SCRATCH_LOAD_DWORDX"#W#"_SGPR_ec")#_sem
+    : InstSISemantic<!cast<InstSI>("S_SCRATCH_LOAD_DWORDX"#W#"_SGPR_ec")> {
+    let Semantic = [
+      (DefVal $tmp_addr, (LLVMPtrAdd
+                            (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
+                            (GetNamedOperand $soffset))),
+      (SetNamedOperand $sdst, (LLVMLoad VT, (GetVal $tmp_addr)))
+    ];
+  }
+  def !cast<InstSI>("S_SCRATCH_LOAD_DWORDX"#W#"_SGPR_IMM_ec")#_sem
+    : InstSISemantic<!cast<InstSI>("S_SCRATCH_LOAD_DWORDX"#W#"_SGPR_IMM_ec")> {
+    let Semantic = [
+      (DefVal $tmp_addr, (LLVMPtrAdd
+                            (LLVMIntToPtr (GetNamedOperand $sbase), scratch_ptr_ty),
+                            (LLVMAdd (GetNamedOperand $offset),
+                                       (GetNamedOperand $soffset)))),
+      (SetNamedOperand $sdst, (LLVMLoad VT, (GetVal $tmp_addr)))
+    ];
+  }
+}

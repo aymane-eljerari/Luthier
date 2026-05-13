@@ -2153,3 +2153,840 @@ def DS_BPERMUTE_FI_B32_sem : InstSISemantic<DS_BPERMUTE_FI_B32> {
 //------------------------------------------------------------------------------
 
 // DS_CONDXCHG32_RTN_B64: Conditional 32-bit exchange on 64-bit pair.
+//==============================================================================
+// DS _agpr variants (Phase 5)
+// AGPR destination forms of existing DS atomics. Same IR semantics as the
+// VGPR variant — replicated verbatim from the corresponding base record.
+//==============================================================================
+
+// _agpr alias of DS_ADD_RTN_F32
+def DS_ADD_RTN_F32_agpr_sem : InstSISemantic<DS_ADD_RTN_F32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMBitCast (LLVMFAdd (LLVMBitCast (GetVal $old), si_llvm_float_ty),
+                                       (LLVMBitCast (GetNamedOperand $data), si_llvm_float_ty)),
+                             si_llvm_i32_ty),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_ADD_RTN_F64
+def DS_ADD_RTN_F64_agpr_sem : InstSISemantic<DS_ADD_RTN_F64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMBitCast (LLVMFAdd (LLVMBitCast (GetVal $old), si_llvm_double_ty),
+                                       (LLVMBitCast (GetNamedOperand $data), si_llvm_double_ty)),
+                             si_llvm_i64_ty),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_ADD_RTN_U32
+def DS_ADD_RTN_U32_agpr_sem : InstSISemantic<DS_ADD_RTN_U32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMAdd (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_ADD_RTN_U64
+def DS_ADD_RTN_U64_agpr_sem : InstSISemantic<DS_ADD_RTN_U64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMAdd (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_AND_RTN_B32
+def DS_AND_RTN_B32_agpr_sem : InstSISemantic<DS_AND_RTN_B32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMAnd (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_AND_RTN_B64
+def DS_AND_RTN_B64_agpr_sem : InstSISemantic<DS_AND_RTN_B64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMAnd (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_BPERMUTE_B32
+def DS_BPERMUTE_B32_agpr_sem : InstSISemantic<DS_BPERMUTE_B32_agpr> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_ds_bpermute, [(GetNamedOperand $addr), (GetNamedOperand $src0)]))
+  ];
+}
+
+// _agpr alias of DS_CMPSTORE_B32
+def DS_CMPSTORE_B32_agpr_sem : InstSISemantic<DS_CMPSTORE_B32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data0)),
+                            (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
+  ];
+}
+
+// _agpr alias of DS_CMPSTORE_B64
+def DS_CMPSTORE_B64_agpr_sem : InstSISemantic<DS_CMPSTORE_B64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data0)),
+                            (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
+  ];
+}
+
+// _agpr alias of DS_CMPSTORE_F32
+def DS_CMPSTORE_F32_agpr_sem : InstSISemantic<DS_CMPSTORE_F32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
+                  (LLVMBitCast (GetVal $old), si_llvm_float_ty),
+                  (LLVMBitCast (GetNamedOperand $data0), si_llvm_float_ty)),
+                (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
+  ];
+}
+
+// _agpr alias of DS_CMPSTORE_F64
+def DS_CMPSTORE_F64_agpr_sem : InstSISemantic<DS_CMPSTORE_F64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
+                  (LLVMBitCast (GetVal $old), si_llvm_double_ty),
+                  (LLVMBitCast (GetNamedOperand $data0), si_llvm_double_ty)),
+                (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
+  ];
+}
+
+// _agpr alias of DS_CMPSTORE_RTN_B32
+def DS_CMPSTORE_RTN_B32_agpr_sem : InstSISemantic<DS_CMPSTORE_RTN_B32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data0)),
+                            (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_CMPSTORE_RTN_B64
+def DS_CMPSTORE_RTN_B64_agpr_sem : InstSISemantic<DS_CMPSTORE_RTN_B64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data0)),
+                            (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_CMPSTORE_RTN_F32
+def DS_CMPSTORE_RTN_F32_agpr_sem : InstSISemantic<DS_CMPSTORE_RTN_F32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
+                  (LLVMBitCast (GetVal $old), si_llvm_float_ty),
+                  (LLVMBitCast (GetNamedOperand $data0), si_llvm_float_ty)),
+                (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_CMPSTORE_RTN_F64
+def DS_CMPSTORE_RTN_F64_agpr_sem : InstSISemantic<DS_CMPSTORE_RTN_F64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
+                  (LLVMBitCast (GetVal $old), si_llvm_double_ty),
+                  (LLVMBitCast (GetNamedOperand $data0), si_llvm_double_ty)),
+                (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_CMPST_B32
+def DS_CMPST_B32_agpr_sem : InstSISemantic<DS_CMPST_B32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data0)),
+                            (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
+  ];
+}
+
+// _agpr alias of DS_CMPST_B64
+def DS_CMPST_B64_agpr_sem : InstSISemantic<DS_CMPST_B64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data0)),
+                            (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
+  ];
+}
+
+// _agpr alias of DS_CMPST_F32
+def DS_CMPST_F32_agpr_sem : InstSISemantic<DS_CMPST_F32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
+                  (LLVMBitCast (GetVal $old), si_llvm_float_ty),
+                  (LLVMBitCast (GetNamedOperand $data0), si_llvm_float_ty)),
+                (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
+  ];
+}
+
+// _agpr alias of DS_CMPST_F64
+def DS_CMPST_F64_agpr_sem : InstSISemantic<DS_CMPST_F64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
+                  (LLVMBitCast (GetVal $old), si_llvm_double_ty),
+                  (LLVMBitCast (GetNamedOperand $data0), si_llvm_double_ty)),
+                (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
+  ];
+}
+
+// _agpr alias of DS_CMPST_RTN_B32
+def DS_CMPST_RTN_B32_agpr_sem : InstSISemantic<DS_CMPST_RTN_B32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data0)),
+                            (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_CMPST_RTN_B64
+def DS_CMPST_RTN_B64_agpr_sem : InstSISemantic<DS_CMPST_RTN_B64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data0)),
+                            (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_CMPST_RTN_F32
+def DS_CMPST_RTN_F32_agpr_sem : InstSISemantic<DS_CMPST_RTN_F32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
+                  (LLVMBitCast (GetVal $old), si_llvm_float_ty),
+                  (LLVMBitCast (GetNamedOperand $data0), si_llvm_float_ty)),
+                (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_CMPST_RTN_F64
+def DS_CMPST_RTN_F64_agpr_sem : InstSISemantic<DS_CMPST_RTN_F64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
+                  (LLVMBitCast (GetVal $old), si_llvm_double_ty),
+                  (LLVMBitCast (GetNamedOperand $data0), si_llvm_double_ty)),
+                (GetNamedOperand $data1), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_CONDXCHG32_RTN_B64
+def DS_CONDXCHG32_RTN_B64_agpr_sem : InstSISemantic<DS_CONDXCHG32_RTN_B64_agpr> {
+  let Semantic = [];
+}
+
+// _agpr alias of DS_COND_SUB_RTN_U32
+def DS_COND_SUB_RTN_U32_agpr_sem : InstSISemantic<DS_COND_SUB_RTN_U32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $old), (GetNamedOperand $data)),
+                            (LLVMSub (GetVal $old), (GetNamedOperand $data)),
+                            (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_DEC_RTN_U32
+def DS_DEC_RTN_U32_agpr_sem : InstSISemantic<DS_DEC_RTN_U32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $old), (ConstantInt si_llvm_i32_ty, 0)),
+                                    (LLVMCmp LLVMICmpUGT, (GetVal $old), (GetNamedOperand $data))),
+                            (GetNamedOperand $data),
+                            (LLVMSub (GetVal $old), (ConstantInt si_llvm_i32_ty, 1))),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_DEC_RTN_U64
+def DS_DEC_RTN_U64_agpr_sem : InstSISemantic<DS_DEC_RTN_U64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $old), (ConstantInt si_llvm_i64_ty, 0)),
+                                    (LLVMCmp LLVMICmpUGT, (GetVal $old), (GetNamedOperand $data))),
+                            (GetNamedOperand $data),
+                            (LLVMSub (GetVal $old), (ConstantInt si_llvm_i64_ty, 1))),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_INC_RTN_U32
+def DS_INC_RTN_U32_agpr_sem : InstSISemantic<DS_INC_RTN_U32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $old), (GetNamedOperand $data)),
+                            (ConstantInt si_llvm_i32_ty, 0),
+                            (LLVMAdd (GetVal $old), (ConstantInt si_llvm_i32_ty, 1))),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_INC_RTN_U64
+def DS_INC_RTN_U64_agpr_sem : InstSISemantic<DS_INC_RTN_U64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $old), (GetNamedOperand $data)),
+                            (ConstantInt si_llvm_i64_ty, 0),
+                            (LLVMAdd (GetVal $old), (ConstantInt si_llvm_i64_ty, 1))),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MAX_RTN_F32
+def DS_MAX_RTN_F32_agpr_sem : InstSISemantic<DS_MAX_RTN_F32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMBitCast (LLVMSelect (LLVMFCmp LLVMFCmpOGT,
+                  (LLVMBitCast (GetVal $old), si_llvm_float_ty),
+                  (LLVMBitCast (GetNamedOperand $data), si_llvm_float_ty)),
+                (LLVMBitCast (GetVal $old), si_llvm_float_ty),
+                (LLVMBitCast (GetNamedOperand $data), si_llvm_float_ty)), si_llvm_i32_ty),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MAX_RTN_F64
+def DS_MAX_RTN_F64_agpr_sem : InstSISemantic<DS_MAX_RTN_F64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMBitCast (LLVMSelect (LLVMFCmp LLVMFCmpOGT,
+                  (LLVMBitCast (GetVal $old), si_llvm_double_ty),
+                  (LLVMBitCast (GetNamedOperand $data), si_llvm_double_ty)),
+                (LLVMBitCast (GetVal $old), si_llvm_double_ty),
+                (LLVMBitCast (GetNamedOperand $data), si_llvm_double_ty)), si_llvm_i64_ty),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MAX_RTN_I32
+def DS_MAX_RTN_I32_agpr_sem : InstSISemantic<DS_MAX_RTN_I32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpSGT, (GetVal $old), (GetNamedOperand $data)),
+                            (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MAX_RTN_I64
+def DS_MAX_RTN_I64_agpr_sem : InstSISemantic<DS_MAX_RTN_I64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpSGT, (GetVal $old), (GetNamedOperand $data)),
+                            (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MAX_RTN_U32
+def DS_MAX_RTN_U32_agpr_sem : InstSISemantic<DS_MAX_RTN_U32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $old), (GetNamedOperand $data)),
+                            (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MAX_RTN_U64
+def DS_MAX_RTN_U64_agpr_sem : InstSISemantic<DS_MAX_RTN_U64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $old), (GetNamedOperand $data)),
+                            (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MIN_RTN_F32
+def DS_MIN_RTN_F32_agpr_sem : InstSISemantic<DS_MIN_RTN_F32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMBitCast (LLVMSelect (LLVMFCmp LLVMFCmpOLT,
+                  (LLVMBitCast (GetVal $old), si_llvm_float_ty),
+                  (LLVMBitCast (GetNamedOperand $data), si_llvm_float_ty)),
+                (LLVMBitCast (GetVal $old), si_llvm_float_ty),
+                (LLVMBitCast (GetNamedOperand $data), si_llvm_float_ty)), si_llvm_i32_ty),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MIN_RTN_F64
+def DS_MIN_RTN_F64_agpr_sem : InstSISemantic<DS_MIN_RTN_F64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMBitCast (LLVMSelect (LLVMFCmp LLVMFCmpOLT,
+                  (LLVMBitCast (GetVal $old), si_llvm_double_ty),
+                  (LLVMBitCast (GetNamedOperand $data), si_llvm_double_ty)),
+                (LLVMBitCast (GetVal $old), si_llvm_double_ty),
+                (LLVMBitCast (GetNamedOperand $data), si_llvm_double_ty)), si_llvm_i64_ty),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MIN_RTN_I32
+def DS_MIN_RTN_I32_agpr_sem : InstSISemantic<DS_MIN_RTN_I32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpSLT, (GetVal $old), (GetNamedOperand $data)),
+                            (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MIN_RTN_I64
+def DS_MIN_RTN_I64_agpr_sem : InstSISemantic<DS_MIN_RTN_I64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpSLT, (GetVal $old), (GetNamedOperand $data)),
+                            (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MIN_RTN_U32
+def DS_MIN_RTN_U32_agpr_sem : InstSISemantic<DS_MIN_RTN_U32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpULT, (GetVal $old), (GetNamedOperand $data)),
+                            (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MIN_RTN_U64
+def DS_MIN_RTN_U64_agpr_sem : InstSISemantic<DS_MIN_RTN_U64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpULT, (GetVal $old), (GetNamedOperand $data)),
+                            (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MSKOR_B32
+def DS_MSKOR_B32_agpr_sem : InstSISemantic<DS_MSKOR_B32_agpr> {
+  let Semantic = [
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMOr (LLVMAnd (GetVal $tmp),
+                                  (LLVMXor (GetNamedOperand $data0), (ConstantInt si_llvm_i32_ty, -1))),
+                        (GetNamedOperand $data1)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
+  ];
+}
+
+// _agpr alias of DS_MSKOR_B64
+def DS_MSKOR_B64_agpr_sem : InstSISemantic<DS_MSKOR_B64_agpr> {
+  let Semantic = [
+    (DefVal $tmp, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMOr (LLVMAnd (GetVal $tmp),
+                                  (LLVMXor (GetNamedOperand $data0), (ConstantInt si_llvm_i64_ty, -1))),
+                        (GetNamedOperand $data1)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
+  ];
+}
+
+// _agpr alias of DS_MSKOR_RTN_B32
+def DS_MSKOR_RTN_B32_agpr_sem : InstSISemantic<DS_MSKOR_RTN_B32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMOr (LLVMAnd (GetVal $old),
+                                  (LLVMXor (GetNamedOperand $data0), (ConstantInt si_llvm_i32_ty, -1))),
+                        (GetNamedOperand $data1)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_MSKOR_RTN_B64
+def DS_MSKOR_RTN_B64_agpr_sem : InstSISemantic<DS_MSKOR_RTN_B64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMOr (LLVMAnd (GetVal $old),
+                                  (LLVMXor (GetNamedOperand $data0), (ConstantInt si_llvm_i64_ty, -1))),
+                        (GetNamedOperand $data1)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_OR_RTN_B32
+def DS_OR_RTN_B32_agpr_sem : InstSISemantic<DS_OR_RTN_B32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMOr (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_OR_RTN_B64
+def DS_OR_RTN_B64_agpr_sem : InstSISemantic<DS_OR_RTN_B64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMOr (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_PERMUTE_B32
+def DS_PERMUTE_B32_agpr_sem : InstSISemantic<DS_PERMUTE_B32_agpr> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_ds_permute, [(GetNamedOperand $addr), (GetNamedOperand $src0)]))
+  ];
+}
+
+// _agpr alias of DS_PK_ADD_RTN_BF16
+def DS_PK_ADD_RTN_BF16_agpr_sem : InstSISemantic<DS_PK_ADD_RTN_BF16_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (DefVal $mem_v2bf16, (LLVMBitCast (GetVal $old), si_llvm_v2bf16_ty)),
+    (DefVal $data_v2bf16, (LLVMBitCast (GetNamedOperand $data), si_llvm_v2bf16_ty)),
+    (DefVal $result, (LLVMFAdd (GetVal $mem_v2bf16), (GetVal $data_v2bf16))),
+    (LLVMStore (LLVMBitCast (GetVal $result), si_llvm_i32_ty),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_PK_ADD_RTN_F16
+def DS_PK_ADD_RTN_F16_agpr_sem : InstSISemantic<DS_PK_ADD_RTN_F16_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (DefVal $mem_v2f16, (LLVMBitCast (GetVal $old), si_llvm_v2f16_ty)),
+    (DefVal $data_v2f16, (LLVMBitCast (GetNamedOperand $data), si_llvm_v2f16_ty)),
+    (DefVal $result, (LLVMFAdd (GetVal $mem_v2f16), (GetVal $data_v2f16))),
+    (LLVMStore (LLVMBitCast (GetVal $result), si_llvm_i32_ty),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_RSUB_RTN_U32
+def DS_RSUB_RTN_U32_agpr_sem : InstSISemantic<DS_RSUB_RTN_U32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSub (GetNamedOperand $data), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_RSUB_RTN_U64
+def DS_RSUB_RTN_U64_agpr_sem : InstSISemantic<DS_RSUB_RTN_U64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSub (GetNamedOperand $data), (GetVal $old)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_SUB_CLAMP_RTN_U32
+def DS_SUB_CLAMP_RTN_U32_agpr_sem : InstSISemantic<DS_SUB_CLAMP_RTN_U32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpULT, (GetVal $old), (GetNamedOperand $data)),
+                            (ConstantInt si_llvm_i32_ty, 0),
+                            (LLVMSub (GetVal $old), (GetNamedOperand $data))),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_SUB_RTN_U32
+def DS_SUB_RTN_U32_agpr_sem : InstSISemantic<DS_SUB_RTN_U32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSub (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_SUB_RTN_U64
+def DS_SUB_RTN_U64_agpr_sem : InstSISemantic<DS_SUB_RTN_U64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMSub (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_WRAP_RTN_B32
+def DS_WRAP_RTN_B32_agpr_sem : InstSISemantic<DS_WRAP_RTN_B32_agpr> {
+  let Semantic = [];
+}
+
+// _agpr alias of DS_WRITE2ST64_B32
+def DS_WRITE2ST64_B32_agpr_sem : InstSISemantic<DS_WRITE2ST64_B32_agpr> {
+  let Semantic = [
+    (DefVal $base, (LLVMIntToPtr (GetNamedOperand $addr), local_ptr_ty)),
+    (DefVal $addr0, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset0), (ConstantInt si_llvm_i32_ty, 256)))),
+    (DefVal $addr1, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset1), (ConstantInt si_llvm_i32_ty, 256)))),
+    (LLVMStore (GetNamedOperand $data0), (GetVal $addr0)),
+    (LLVMStore (GetNamedOperand $data1), (GetVal $addr1))
+  ];
+}
+
+// _agpr alias of DS_WRITE2ST64_B64
+def DS_WRITE2ST64_B64_agpr_sem : InstSISemantic<DS_WRITE2ST64_B64_agpr> {
+  let Semantic = [
+    (DefVal $base, (LLVMIntToPtr (GetNamedOperand $addr), local_ptr_ty)),
+    (DefVal $addr0, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset0), (ConstantInt si_llvm_i32_ty, 512)))),
+    (DefVal $addr1, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset1), (ConstantInt si_llvm_i32_ty, 512)))),
+    (LLVMStore (GetNamedOperand $data0), (GetVal $addr0)),
+    (LLVMStore (GetNamedOperand $data1), (GetVal $addr1))
+  ];
+}
+
+// _agpr alias of DS_WRITE2_B32
+def DS_WRITE2_B32_agpr_sem : InstSISemantic<DS_WRITE2_B32_agpr> {
+  let Semantic = [
+    (DefVal $base, (LLVMIntToPtr (GetNamedOperand $addr), local_ptr_ty)),
+    (DefVal $addr0, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset0), (ConstantInt si_llvm_i32_ty, 4)))),
+    (DefVal $addr1, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset1), (ConstantInt si_llvm_i32_ty, 4)))),
+    (LLVMStore (GetNamedOperand $data0), (GetVal $addr0)),
+    (LLVMStore (GetNamedOperand $data1), (GetVal $addr1))
+  ];
+}
+
+// _agpr alias of DS_WRITE2_B64
+def DS_WRITE2_B64_agpr_sem : InstSISemantic<DS_WRITE2_B64_agpr> {
+  let Semantic = [
+    (DefVal $base, (LLVMIntToPtr (GetNamedOperand $addr), local_ptr_ty)),
+    (DefVal $addr0, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset0), (ConstantInt si_llvm_i32_ty, 8)))),
+    (DefVal $addr1, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset1), (ConstantInt si_llvm_i32_ty, 8)))),
+    (LLVMStore (GetNamedOperand $data0), (GetVal $addr0)),
+    (LLVMStore (GetNamedOperand $data1), (GetVal $addr1))
+  ];
+}
+
+// _agpr alias of DS_WRXCHG2ST64_RTN_B32
+def DS_WRXCHG2ST64_RTN_B32_agpr_sem : InstSISemantic<DS_WRXCHG2ST64_RTN_B32_agpr> {
+  let Semantic = [
+    (DefVal $base, (LLVMIntToPtr (GetNamedOperand $addr), local_ptr_ty)),
+    (DefVal $addr0, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset0), (ConstantInt si_llvm_i32_ty, 256)))),
+    (DefVal $addr1, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset1), (ConstantInt si_llvm_i32_ty, 256)))),
+    (DefVal $old0, (LLVMLoad si_llvm_i32_ty, (GetVal $addr0))),
+    (LLVMStore (GetNamedOperand $data0), (GetVal $addr0)),
+    (DefVal $old1, (LLVMLoad si_llvm_i32_ty, (GetVal $addr1))),
+    (LLVMStore (GetNamedOperand $data1), (GetVal $addr1)),
+    (DefVal $result, (LLVMInsertElement
+      (LLVMInsertElement (PoisionVal si_llvm_v2i32_ty), (GetVal $old0), (ConstantInt si_llvm_i32_ty, 0)),
+      (GetVal $old1), (ConstantInt si_llvm_i32_ty, 1))),
+    (SetNamedOperand $vdst, (GetVal $result))
+  ];
+}
+
+// _agpr alias of DS_WRXCHG2ST64_RTN_B64
+def DS_WRXCHG2ST64_RTN_B64_agpr_sem : InstSISemantic<DS_WRXCHG2ST64_RTN_B64_agpr> {
+  let Semantic = [
+    (DefVal $base, (LLVMIntToPtr (GetNamedOperand $addr), local_ptr_ty)),
+    (DefVal $addr0, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset0), (ConstantInt si_llvm_i32_ty, 512)))),
+    (DefVal $addr1, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset1), (ConstantInt si_llvm_i32_ty, 512)))),
+    (DefVal $old0, (LLVMLoad si_llvm_i64_ty, (GetVal $addr0))),
+    (LLVMStore (GetNamedOperand $data0), (GetVal $addr0)),
+    (DefVal $old1, (LLVMLoad si_llvm_i64_ty, (GetVal $addr1))),
+    (LLVMStore (GetNamedOperand $data1), (GetVal $addr1)),
+    (DefVal $result, (LLVMInsertElement
+      (LLVMInsertElement (PoisionVal si_llvm_v2i64_ty), (GetVal $old0), (ConstantInt si_llvm_i32_ty, 0)),
+      (GetVal $old1), (ConstantInt si_llvm_i32_ty, 1))),
+    (SetNamedOperand $vdst, (GetVal $result))
+  ];
+}
+
+// _agpr alias of DS_WRXCHG2_RTN_B32
+def DS_WRXCHG2_RTN_B32_agpr_sem : InstSISemantic<DS_WRXCHG2_RTN_B32_agpr> {
+  let Semantic = [
+    (DefVal $base, (LLVMIntToPtr (GetNamedOperand $addr), local_ptr_ty)),
+    (DefVal $addr0, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset0), (ConstantInt si_llvm_i32_ty, 4)))),
+    (DefVal $addr1, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset1), (ConstantInt si_llvm_i32_ty, 4)))),
+    (DefVal $old0, (LLVMLoad si_llvm_i32_ty, (GetVal $addr0))),
+    (LLVMStore (GetNamedOperand $data0), (GetVal $addr0)),
+    (DefVal $old1, (LLVMLoad si_llvm_i32_ty, (GetVal $addr1))),
+    (LLVMStore (GetNamedOperand $data1), (GetVal $addr1)),
+    (DefVal $result, (LLVMInsertElement
+      (LLVMInsertElement (PoisionVal si_llvm_v2i32_ty), (GetVal $old0), (ConstantInt si_llvm_i32_ty, 0)),
+      (GetVal $old1), (ConstantInt si_llvm_i32_ty, 1))),
+    (SetNamedOperand $vdst, (GetVal $result))
+  ];
+}
+
+// _agpr alias of DS_WRXCHG2_RTN_B64
+def DS_WRXCHG2_RTN_B64_agpr_sem : InstSISemantic<DS_WRXCHG2_RTN_B64_agpr> {
+  let Semantic = [
+    (DefVal $base, (LLVMIntToPtr (GetNamedOperand $addr), local_ptr_ty)),
+    (DefVal $addr0, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset0), (ConstantInt si_llvm_i32_ty, 8)))),
+    (DefVal $addr1, (LLVMPtrAdd (GetVal $base), (LLVMMul (GetNamedOperand $offset1), (ConstantInt si_llvm_i32_ty, 8)))),
+    (DefVal $old0, (LLVMLoad si_llvm_i64_ty, (GetVal $addr0))),
+    (LLVMStore (GetNamedOperand $data0), (GetVal $addr0)),
+    (DefVal $old1, (LLVMLoad si_llvm_i64_ty, (GetVal $addr1))),
+    (LLVMStore (GetNamedOperand $data1), (GetVal $addr1)),
+    (DefVal $result, (LLVMInsertElement
+      (LLVMInsertElement (PoisionVal si_llvm_v2i64_ty), (GetVal $old0), (ConstantInt si_llvm_i32_ty, 0)),
+      (GetVal $old1), (ConstantInt si_llvm_i32_ty, 1))),
+    (SetNamedOperand $vdst, (GetVal $result))
+  ];
+}
+
+// _agpr alias of DS_WRXCHG_RTN_B32
+def DS_WRXCHG_RTN_B32_agpr_sem : InstSISemantic<DS_WRXCHG_RTN_B32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (GetNamedOperand $data),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_WRXCHG_RTN_B64
+def DS_WRXCHG_RTN_B64_agpr_sem : InstSISemantic<DS_WRXCHG_RTN_B64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (GetNamedOperand $data),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_XOR_RTN_B32
+def DS_XOR_RTN_B32_agpr_sem : InstSISemantic<DS_XOR_RTN_B32_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMXor (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}
+
+// _agpr alias of DS_XOR_RTN_B64
+def DS_XOR_RTN_B64_agpr_sem : InstSISemantic<DS_XOR_RTN_B64_agpr> {
+  let Semantic = [
+    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
+                                                 (GetNamedOperand $offset)>.ret)),
+    (LLVMStore (LLVMXor (GetVal $old), (GetNamedOperand $data)),
+               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdst, (GetVal $old))
+  ];
+}

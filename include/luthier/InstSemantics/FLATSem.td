@@ -2011,3 +2011,438 @@ def SCRATCH_STORE_DWORDX4_sem : InstSISemantic<SCRATCH_STORE_DWORDX4> {
 //==============================================================================
 
 
+
+//==============================================================================
+// FLAT _agpr variants (Phase 5) — replicated from base records.
+//==============================================================================
+
+// _agpr alias of FLAT_ATOMIC_ADD_F32_RTN
+def FLAT_ATOMIC_ADD_F32_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_ADD_F32_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMFAdd (GetVal $tmp), (GetNamedOperand $vdata))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_ADD_F64_RTN
+def FLAT_ATOMIC_ADD_F64_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_ADD_F64_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMFAdd (GetVal $tmp), (GetNamedOperand $vdata))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_ADD_RTN
+def FLAT_ATOMIC_ADD_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_ADD_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_ADD_X2_RTN
+def FLAT_ATOMIC_ADD_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_ADD_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_AND_RTN
+def FLAT_ATOMIC_AND_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_AND_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWAnd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_AND_X2_RTN
+def FLAT_ATOMIC_AND_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_AND_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWAnd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_CMPSWAP_RTN
+def FLAT_ATOMIC_CMPSWAP_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_CMPSWAP_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
+    (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_CMPSWAP_X2_RTN
+def FLAT_ATOMIC_CMPSWAP_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_CMPSWAP_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 0))),
+    (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_COND_SUB_U32_RTN
+def FLAT_ATOMIC_COND_SUB_U32_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_COND_SUB_U32_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp), (GetNamedOperand $vdata)),
+                                 (LLVMSub (GetVal $tmp), (GetNamedOperand $vdata)), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_CSUB_U32_RTN
+def FLAT_ATOMIC_CSUB_U32_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_CSUB_U32_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $tmp), (GetNamedOperand $vdata)),
+                                 (LLVMSub (GetVal $tmp), (GetNamedOperand $vdata)),
+                                 (ConstantInt si_llvm_i32_ty, 0))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_DEC_RTN
+def FLAT_ATOMIC_DEC_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_DEC_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUDecWrap, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_DEC_X2_RTN
+def FLAT_ATOMIC_DEC_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_DEC_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUDecWrap, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_FCMPSWAP_RTN
+def FLAT_ATOMIC_FCMPSWAP_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_FCMPSWAP_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_FCMPSWAP_X2_RTN
+def FLAT_ATOMIC_FCMPSWAP_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_FCMPSWAP_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 0))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_FMAX_RTN
+def FLAT_ATOMIC_FMAX_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_FMAX_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOGT, (GetNamedOperand $vdata), (GetVal $tmp)),
+                                 (GetNamedOperand $vdata), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_FMIN_RTN
+def FLAT_ATOMIC_FMIN_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_FMIN_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOLT, (GetNamedOperand $vdata), (GetVal $tmp)),
+                                 (GetNamedOperand $vdata), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_INC_RTN
+def FLAT_ATOMIC_INC_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_INC_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUIncWrap, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_INC_X2_RTN
+def FLAT_ATOMIC_INC_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_INC_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUIncWrap, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_MAX_F64_RTN
+def FLAT_ATOMIC_MAX_F64_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_MAX_F64_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOGT, (GetNamedOperand $vdata), (GetVal $tmp)),
+                                 (GetNamedOperand $vdata), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_MIN_F64_RTN
+def FLAT_ATOMIC_MIN_F64_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_MIN_F64_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOLT, (GetNamedOperand $vdata), (GetVal $tmp)),
+                                 (GetNamedOperand $vdata), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_OR_RTN
+def FLAT_ATOMIC_OR_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_OR_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWOr, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_OR_X2_RTN
+def FLAT_ATOMIC_OR_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_OR_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWOr, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_PK_ADD_BF16_RTN
+def FLAT_ATOMIC_PK_ADD_BF16_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_PK_ADD_BF16_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $src, (GetNamedOperand $vdata)),
+    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $src_lo, (LLVMTrunc (GetVal $src), si_llvm_i16_ty)),
+    (DefVal $tmp_hi, (LLVMTrunc (LLVMLShr (GetVal $tmp), 16), si_llvm_i16_ty)),
+    (DefVal $src_hi, (LLVMTrunc (LLVMLShr (GetVal $src), 16), si_llvm_i16_ty)),
+    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), si_llvm_i16_ty),
+                              (LLVMBitCast (GetVal $src_lo), si_llvm_i16_ty))),
+    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), si_llvm_i16_ty),
+                               (LLVMBitCast (GetVal $src_hi), si_llvm_i16_ty))),
+    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), si_llvm_i16_ty), si_llvm_i32_ty),
+                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), si_llvm_i16_ty), si_llvm_i32_ty), 16))),
+    (LLVMStore (GetVal $res), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_PK_ADD_F16_RTN
+def FLAT_ATOMIC_PK_ADD_F16_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_PK_ADD_F16_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $src, (GetNamedOperand $vdata)),
+    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $src_lo, (LLVMTrunc (GetVal $src), si_llvm_i16_ty)),
+    (DefVal $tmp_hi, (LLVMTrunc (LLVMLShr (GetVal $tmp), 16), si_llvm_i16_ty)),
+    (DefVal $src_hi, (LLVMTrunc (LLVMLShr (GetVal $src), 16), si_llvm_i16_ty)),
+    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), si_llvm_half_ty),
+                              (LLVMBitCast (GetVal $src_lo), si_llvm_half_ty))),
+    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), si_llvm_half_ty),
+                               (LLVMBitCast (GetVal $src_hi), si_llvm_half_ty))),
+    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), si_llvm_i16_ty), si_llvm_i32_ty),
+                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), si_llvm_i16_ty), si_llvm_i32_ty), 16))),
+    (LLVMStore (GetVal $res), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_SMAX_RTN
+def FLAT_ATOMIC_SMAX_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_SMAX_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWMax, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_SMAX_X2_RTN
+def FLAT_ATOMIC_SMAX_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_SMAX_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWMax, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_SMIN_RTN
+def FLAT_ATOMIC_SMIN_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_SMIN_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWMin, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_SMIN_X2_RTN
+def FLAT_ATOMIC_SMIN_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_SMIN_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWMin, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_SUB_RTN
+def FLAT_ATOMIC_SUB_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_SUB_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWSub, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_SUB_X2_RTN
+def FLAT_ATOMIC_SUB_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_SUB_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWSub, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_SWAP_RTN
+def FLAT_ATOMIC_SWAP_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_SWAP_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWXchg, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_SWAP_X2_RTN
+def FLAT_ATOMIC_SWAP_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_SWAP_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWXchg, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_UMAX_RTN
+def FLAT_ATOMIC_UMAX_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_UMAX_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUMax, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_UMAX_X2_RTN
+def FLAT_ATOMIC_UMAX_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_UMAX_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUMax, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_UMIN_RTN
+def FLAT_ATOMIC_UMIN_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_UMIN_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUMin, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_UMIN_X2_RTN
+def FLAT_ATOMIC_UMIN_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_UMIN_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUMin, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_XOR_RTN
+def FLAT_ATOMIC_XOR_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_XOR_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWXor, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+// _agpr alias of FLAT_ATOMIC_XOR_X2_RTN
+def FLAT_ATOMIC_XOR_X2_RTN_agpr_sem : InstSISemantic<FLAT_ATOMIC_XOR_X2_RTN_agpr> {
+  let Semantic = [
+    (DefVal $tmp_addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWXor, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+//==============================================================================
+// GLOBAL _agpr variants (Phase 5) — replicated from base records.
+//==============================================================================
+
+
+
+//==============================================================================
+// SCRATCH _agpr variants (Phase 5) — replicated from base records.
+//==============================================================================
+
+

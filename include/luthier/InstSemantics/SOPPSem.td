@@ -635,3 +635,130 @@ def S_ENDPGM_SAVED_sem : InstSISemantic<S_ENDPGM_SAVED> {
     (LLVMUnreachable)
   ];
 }
+
+//==============================================================================
+// SOPP Wait Variants (Phase 5)
+//==============================================================================
+// Split wait-counter ops introduced in GFX10+. All map to the generic
+// `int_amdgcn_s_waitcnt` intrinsic with the immediate field (loses split
+// distinction but preserves memory-fence semantics). Soft variants are
+// scheduler hints with the same observable IR effect.
+
+// GFX10+: waits with sdst input + simm16 mask
+foreach op = ["S_WAITCNT_VMCNT", "S_WAITCNT_LGKMCNT", "S_WAITCNT_EXPCNT",
+              "S_WAITCNT_VSCNT", "S_WAITCNT_VSCNT_soft"] in {
+  def !cast<InstSI>(op)#_sem : InstSISemantic<!cast<InstSI>(op)> {
+    let Semantic = [
+      (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt,
+                     [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+    ];
+  }
+}
+
+// GFX10+ soft generic waitcnt + waitcnt_depctr
+foreach op = ["S_WAITCNT_soft", "S_WAITCNT_DEPCTR"] in {
+  def !cast<InstSI>(op)#_sem : InstSISemantic<!cast<InstSI>(op)> {
+    let Semantic = [
+      (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt,
+                     [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+    ];
+  }
+}
+
+// RDNA4+: split per-event waits. Each maps to its own intrinsic.
+def S_WAIT_LOADCNT_soft_sem : InstSISemantic<S_WAIT_LOADCNT_soft> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_loadcnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+  ];
+}
+def S_WAIT_STORECNT_soft_sem : InstSISemantic<S_WAIT_STORECNT_soft> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_storecnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+  ];
+}
+def S_WAIT_SAMPLECNT_soft_sem : InstSISemantic<S_WAIT_SAMPLECNT_soft> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_samplecnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+  ];
+}
+def S_WAIT_BVHCNT_soft_sem : InstSISemantic<S_WAIT_BVHCNT_soft> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_bvhcnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+  ];
+}
+def S_WAIT_DSCNT_soft_sem : InstSISemantic<S_WAIT_DSCNT_soft> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_dscnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+  ];
+}
+def S_WAIT_KMCNT_soft_sem : InstSISemantic<S_WAIT_KMCNT_soft> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_kmcnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+  ];
+}
+
+// Combined waits: wait on both event types. Emit two intrinsic calls.
+def S_WAIT_LOADCNT_DSCNT_sem : InstSISemantic<S_WAIT_LOADCNT_DSCNT> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_loadcnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)]),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_dscnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+  ];
+}
+def S_WAIT_STORECNT_DSCNT_sem : InstSISemantic<S_WAIT_STORECNT_DSCNT> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_storecnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)]),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_dscnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+  ];
+}
+
+// Async/tensor/xcnt/event/idle — emit a generic-waitcnt-style intrinsic call.
+def S_WAIT_ASYNCCNT_sem : InstSISemantic<S_WAIT_ASYNCCNT> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_asynccnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+  ];
+}
+def S_WAIT_TENSORCNT_sem : InstSISemantic<S_WAIT_TENSORCNT> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_wait_tensorcnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+  ];
+}
+
+// S_WAIT_XCNT / S_WAIT_XCNT_soft, S_WAIT_EVENT, S_WAIT_IDLE — no dedicated
+// intrinsic; fall back to a generic s_waitcnt with the immediate (or 0 for
+// S_WAIT_IDLE which has no operand). These are observable as memory fences.
+def S_WAIT_XCNT_sem : InstSISemantic<S_WAIT_XCNT> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+  ];
+}
+def S_WAIT_XCNT_soft_sem : InstSISemantic<S_WAIT_XCNT_soft> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+  ];
+}
+def S_WAIT_EVENT_sem : InstSISemantic<S_WAIT_EVENT> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt,
+                   [(GetNamedOperand $simm16, si_llvm_i32_ty)])
+  ];
+}
+def S_WAIT_IDLE_sem : InstSISemantic<S_WAIT_IDLE> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt,
+                   [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
