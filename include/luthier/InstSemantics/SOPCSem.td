@@ -262,3 +262,38 @@ def S_CMP_U_F16_sem : InstSISemantic<S_CMP_U_F16> {
       (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty))>.ret
   ];
 }
+
+//------------------------------------------------------------------------------
+// S_SET_GPR_IDX_ON $src0, $src1 (GFX9)
+//
+// Enables VGPR indirect indexing for following VALU instructions:
+//   M0[7:0]   := $src0 & 0xFF       // the index
+//   M0[14:11] := $src1 & 0xF        // per-operand enable mask
+//   MODE.GPR_IDX_EN := 1            // bit 27
+// Other M0/MODE bits are preserved. The companion read-side wrapper in
+// `MIRToIRTranslator::emitIndexedVGPRSrc` consults MODE.GPR_IDX_EN at
+// every VALU operand read; pairs with `S_SET_GPR_IDX_OFF` to bracket
+// the indexed region.
+//------------------------------------------------------------------------------
+def S_SET_GPR_IDX_ON_sem : InstSISemantic<S_SET_GPR_IDX_ON> {
+  let Semantic = [
+    // Clear M0[7:0] and M0[14:11] in one mask (= 0xFFFF8700).
+    (DefVal $m0_cleared,
+      (LLVMAnd (ImplicitUse M0),
+               (ConstantInt si_llvm_i32_ty, 0xFFFF8700))),
+    (DefVal $idx_low,
+      (LLVMAnd (GetNamedOperand $src0),
+               (ConstantInt si_llvm_i32_ty, 0xFF))),
+    (DefVal $mask_shifted,
+      (LLVMShl (LLVMAnd (GetNamedOperand $src1),
+                        (ConstantInt si_llvm_i32_ty, 0xF)),
+               (ConstantInt si_llvm_i32_ty, 11))),
+    (ImplicitDef M0,
+      (LLVMOr (LLVMOr (GetVal $m0_cleared), (GetVal $idx_low)),
+              (GetVal $mask_shifted))),
+    // MODE.GPR_IDX_EN := 1 (bit 27 = 0x08000000).
+    (ImplicitDef MODE,
+      (LLVMOr (ImplicitUse MODE),
+              (ConstantInt si_llvm_i32_ty, 0x08000000)))
+  ];
+}

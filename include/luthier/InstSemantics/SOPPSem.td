@@ -923,3 +923,35 @@ def S_VERSION_sem : InstSISemantic<S_VERSION> {
     (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
+
+//------------------------------------------------------------------------------
+// S_SET_GPR_IDX_OFF (GFX9) — disable VGPR indirect indexing.
+//   MODE.GPR_IDX_EN := 0     // bit 27
+// Other MODE bits are preserved.
+//------------------------------------------------------------------------------
+def S_SET_GPR_IDX_OFF_sem : InstSISemantic<S_SET_GPR_IDX_OFF> {
+  let Semantic = [
+    (ImplicitDef MODE,
+      (LLVMAnd (ImplicitUse MODE),
+               (ConstantInt si_llvm_i32_ty, 0xF7FFFFFF)))  // ~(1 << 27)
+  ];
+}
+
+//------------------------------------------------------------------------------
+// S_SET_GPR_IDX_MODE $simm16 (GFX9) — set the per-operand enable mask
+// without touching MODE.GPR_IDX_EN.
+//   M0[14:11] := $simm16 & 0xF
+// `$simm16` is a `GPRIdxMode` immediate operand.
+//------------------------------------------------------------------------------
+def S_SET_GPR_IDX_MODE_sem : InstSISemantic<S_SET_GPR_IDX_MODE> {
+  let Semantic = [
+    (DefVal $m0_cleared,
+      (LLVMAnd (ImplicitUse M0),
+               (ConstantInt si_llvm_i32_ty, 0xFFFF87FF))),  // ~(0xF << 11)
+    (DefVal $mask_shifted,
+      (LLVMShl (LLVMAnd (GetNamedOperand $simm16),
+                        (ConstantInt si_llvm_i32_ty, 0xF)),
+               (ConstantInt si_llvm_i32_ty, 11))),
+    (ImplicitDef M0, (LLVMOr (GetVal $m0_cleared), (GetVal $mask_shifted)))
+  ];
+}

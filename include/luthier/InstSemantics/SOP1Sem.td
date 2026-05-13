@@ -1641,6 +1641,24 @@ def S_SETPC_B64_return_sem : InstSISemantic<S_SETPC_B64_return> {
 }
 
 //------------------------------------------------------------------------------
+// S_SET_GPR_IDX_IDX (GFX9) — set the M0[7:0] index field used by VGPR
+// indirect indexing. Reads $src0, masks to 8 bits, writes into M0[7:0]
+// preserving M0's other bits. Companion ops S_SET_GPR_IDX_ON / _OFF /
+// _MODE live in SOPCSem.td and SOPPSem.td respectively.
+//------------------------------------------------------------------------------
+def S_SET_GPR_IDX_IDX_sem : InstSISemantic<S_SET_GPR_IDX_IDX> {
+  let Semantic = [
+    (DefVal $m0_cleared,
+      (LLVMAnd (ImplicitUse M0),
+               (ConstantInt si_llvm_i32_ty, 0xFFFFFF00))),
+    (DefVal $idx_low,
+      (LLVMAnd (GetNamedOperand $src0),
+               (ConstantInt si_llvm_i32_ty, 0xFF))),
+    (ImplicitDef M0, (LLVMOr (GetVal $m0_cleared), (GetVal $idx_low)))
+  ];
+}
+
+//------------------------------------------------------------------------------
 // S_ADD_PC_I64 (GFX12)
 //------------------------------------------------------------------------------
 
