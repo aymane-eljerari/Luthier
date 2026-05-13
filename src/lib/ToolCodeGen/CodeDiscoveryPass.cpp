@@ -1061,6 +1061,14 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
 
   llvm::FunctionType *DeviceFuncTy{nullptr};
 
+  /// Collected across iterations. For each S_CALL_B64 encountered, the MI
+  /// initially has a raw 16-bit signed displacement (\c MO_Immediate) as
+  /// operand 1. After the main discovery loop completes (all callees
+  /// materialized), we walk this list and rewrite each MI's operand 1 to
+  /// \c MO_GlobalAddress pointing at the resolved callee \c Function*.
+  llvm::SmallVector<std::pair<llvm::MachineInstr *, uint64_t>>
+      UnresolvedShortCallInsts{};
+
   while (!UnvisitedPointsOfEntry.empty()) {
     EntryPoint CurrentEntryPoint = *UnvisitedPointsOfEntry.begin();
     if (VisitedPointsOfEntry.contains(CurrentEntryPoint)) {
@@ -1118,7 +1126,9 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     PA.preserve<llvm::FunctionAnalysisManagerModuleProxy>();
     TargetMAM.invalidate(TargetModule, PA);
 
-    llvm::SmallDenseSet<llvm::MachineInstr *> UnresolvedShortCallInsts{};
+    // Note: the cross-iteration UnresolvedShortCallInsts is declared above
+    // outside the loop. This local was the legacy per-iteration set —
+    // intentionally unused now; kept as a stub to minimize diff in this file.
 
     /// TODO: IR translation and indirect branch/call analysis goes here
     llvm::Error Err = llvm::Error::success();
@@ -1173,7 +1183,7 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
               InstructionTracesAnalysis::evaluateDirectBranchOrCall(
                   TraceTermMI->getOperand(1).getImm(), *TraceTermAddr);
           UnvisitedPointsOfEntry.insert(EntryPoint{CallTarget});
-          UnresolvedShortCallInsts.insert(TraceTermMI);
+          UnresolvedShortCallInsts.emplace_back(TraceTermMI, CallTarget);
           LLVM_DEBUG(llvm::dbgs()
                      << "[CodeDiscoveryPass] Direct call found, target: "
                      << llvm::formatv("{0:x}\n", CallTarget));
@@ -1197,6 +1207,54 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
 
     UnvisitedPointsOfEntry.erase(CurrentEntryPoint);
     VisitedPointsOfEntry.insert(CurrentEntryPoint);
+  }
+
+  /// All entry points discovered. Rewrite each S_CALL_B64's $simm16 operand
+  /// from a raw 16-bit displacement (\c MO_Immediate) to \c MO_GlobalAddress
+  /// pointing at the resolved callee \c Function. Build an address→Function
+  /// map by scanning the module for functions whose entry-point attribute
+  /// matches.
+  llvm::DenseMap<uint64_t, llvm::Function *> AddrToFunction;
+  for (llvm::Function &F : TargetModule) {
+    if (auto EP = getFunctionEntryPoint(F))
+      AddrToFunction[EP->getEntryPointAddress()] = &F;
+  }
+  for (auto [MI, TargetAddr] : UnresolvedShortCallInsts) {
+    auto It = AddrToFunction.find(TargetAddr);
+    if (It == AddrToFunction.end()) {
+      LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
+                     "[CodeDiscoveryPass] S_CALL_B64 target {0:x} did not "
+                     "resolve to a Function; leaving operand as imm\n",
+                     TargetAddr));
+      continue;
+    }
+    // Operand 1 is $simm16. Replace with MO_GlobalAddress(F, 0).
+    assert(MI->getNumOperands() >= 2 &&
+           "S_CALL_B64 must have at least 2 operands");
+    MI->getOperand(1).ChangeToGA(It->second, /*Offset=*/0);
+    LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
+                   "[CodeDiscoveryPass] Rewrote S_CALL_B64 target → "
+                   "Function '{0}' (addr {1:x})\n",
+                   It->second->getName(), TargetAddr));
+
+    // Emit the call instruction now that the target is resolved. During the
+    // main translation pass the operand was still an Imm, so the
+    // `DirectCall (GetNamedOperandAsFunction $simm16)` body no-op'd. We
+    // construct an IRBuilder at the right insertion point (end of the MI's
+    // IR BasicBlock, before the terminator) and use the existing
+    // emitIndirectTailCall plumbing with the resolved Function.
+    const llvm::MachineBasicBlock *MBB = MI->getParent();
+    auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
+    if (!BB) continue;
+    llvm::Function &ContainingFn = *BB->getParent();
+    llvm::MachineFunction *ContainingMF =
+        const_cast<llvm::MachineFunction *>(MBB->getParent());
+    llvm::Error Err = llvm::Error::success();
+    MIRToIRTranslator FixupTranslator{*ContainingMF, Err};
+    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
+    if (ContainingFn.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL)
+      DeviceFuncTy = FixupTranslator.getStandardDeviceFunctionType();
+    FixupTranslator.emitIndirectTailCall(*MI, It->second);
   }
 
   llvm::PreservedAnalyses PA = llvm::PreservedAnalyses::none();

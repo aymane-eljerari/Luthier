@@ -8838,3 +8838,58 @@ def BUFFER_STORE_FORMAT_D16_X_gfx80_VBUFFER_OFFSET_sem : InstSISemantic<BUFFER_S
 def BUFFER_STORE_FORMAT_D16_X_gfx80_VBUFFER_OFFSET_exact_sem : InstSISemantic<BUFFER_STORE_FORMAT_D16_X_gfx80_VBUFFER_OFFSET_exact> {
   let Semantic = [(LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store_format, [(GetNamedOperand ?:$vdata), (LLVMBitCast (GetNamedOperand ?:$srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand ?:$offset), (GetNamedOperand ?:$soffset), (GetNamedOperand ?:$cpol)])];
 }
+
+//==============================================================================
+// BUFFER cache control instructions (Phase 14)
+//==============================================================================
+// Pure memory-ordering ops; no register effect. Map each to a generic
+// int_amdgcn_s_waitcnt(0) call to preserve fence semantics in the IR.
+
+def BUFFER_INV_sem : InstSISemantic<BUFFER_INV> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+def BUFFER_INVL2_sem : InstSISemantic<BUFFER_INVL2> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+def BUFFER_GL0_INV_sem : InstSISemantic<BUFFER_GL0_INV> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+def BUFFER_GL1_INV_sem : InstSISemantic<BUFFER_GL1_INV> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+def BUFFER_WBINVL1_sem : InstSISemantic<BUFFER_WBINVL1> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+def BUFFER_WBINVL1_SC_sem : InstSISemantic<BUFFER_WBINVL1_SC> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+def BUFFER_WBINVL1_VOL_sem : InstSISemantic<BUFFER_WBINVL1_VOL> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+def BUFFER_WBL2_sem : InstSISemantic<BUFFER_WBL2> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+// BUFFER_STORE_LDS_DWORD: writes from buffer to LDS using M0 for the LDS
+// offset. M0 isn't modeled; emit a fence placeholder.
+def BUFFER_STORE_LDS_DWORD_sem : InstSISemantic<BUFFER_STORE_LDS_DWORD> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}

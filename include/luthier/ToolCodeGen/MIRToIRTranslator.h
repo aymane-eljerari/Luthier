@@ -378,6 +378,14 @@ class MIRToIRTranslator {
   /// returns its associated \c llvm::BasicBlock
   llvm::BasicBlock &getOperandAsBasicBlock(const llvm::MachineOperand &Op);
 
+  /// Retrieves the named operand \p OpName in \p MI as an \c llvm::Function.
+  /// The operand must be of kind \c MO_GlobalAddress and its global value must
+  /// be a Function — typically set by \c CodeDiscoveryPass for direct-call
+  /// instructions (S_CALL_B64) after the callgraph resolves the target.
+  /// Returns nullptr if the operand is not a Function reference.
+  llvm::Function *getOperandAsFunction(const llvm::MachineInstr &MI,
+                                       llvm::AMDGPU::OpName OpName);
+
   /// Returns the fall-through BasicBlock (next block after the current MI's
   /// block)
   llvm::BasicBlock *getNextBB(const llvm::MachineInstr &MI);
@@ -538,11 +546,13 @@ class MIRToIRTranslator {
   void setRegisterFile(const llvm::MachineBasicBlock &MBB, llvm::MCRegister Reg,
                        llvm::IRBuilderBase &Builder, llvm::Value *Val);
 
+public:
   /// Like \c emitIndirectCall but the call is a tail call followed by
-  /// \c ret of the call's return value
+  /// \c ret of the call's return value. Public so post-translation passes
+  /// (e.g. CodeDiscoveryPass's S_CALL_B64 fixup) can re-emit calls after
+  /// late operand resolution.
   void emitIndirectTailCall(const llvm::MachineInstr &MI, llvm::Value *Target);
 
-public:
   MIRToIRTranslator(llvm::MachineFunction &MF, llvm::Error &Err);
 
   /// Provides the function type used to create new trace functions with the

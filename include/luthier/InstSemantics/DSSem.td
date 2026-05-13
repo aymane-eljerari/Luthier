@@ -2990,3 +2990,403 @@ def DS_XOR_RTN_B64_agpr_sem : InstSISemantic<DS_XOR_RTN_B64_agpr> {
     (SetNamedOperand $vdst, (GetVal $old))
   ];
 }
+
+//==============================================================================
+// DS _SRC2_ variants (Phase 14) — fence-only placeholders
+//==============================================================================
+
+def DS_ADD_SRC2_F32_sem : InstSISemantic<DS_ADD_SRC2_F32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_ADD_SRC2_U32_sem : InstSISemantic<DS_ADD_SRC2_U32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_ADD_SRC2_U64_sem : InstSISemantic<DS_ADD_SRC2_U64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_AND_SRC2_B32_sem : InstSISemantic<DS_AND_SRC2_B32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_AND_SRC2_B64_sem : InstSISemantic<DS_AND_SRC2_B64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_DEC_SRC2_U32_sem : InstSISemantic<DS_DEC_SRC2_U32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_DEC_SRC2_U64_sem : InstSISemantic<DS_DEC_SRC2_U64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_INC_SRC2_U32_sem : InstSISemantic<DS_INC_SRC2_U32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_INC_SRC2_U64_sem : InstSISemantic<DS_INC_SRC2_U64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_MAX_SRC2_F32_sem : InstSISemantic<DS_MAX_SRC2_F32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_MAX_SRC2_F64_sem : InstSISemantic<DS_MAX_SRC2_F64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_MAX_SRC2_I32_sem : InstSISemantic<DS_MAX_SRC2_I32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_MAX_SRC2_I64_sem : InstSISemantic<DS_MAX_SRC2_I64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_MAX_SRC2_U32_sem : InstSISemantic<DS_MAX_SRC2_U32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_MAX_SRC2_U64_sem : InstSISemantic<DS_MAX_SRC2_U64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_MIN_SRC2_F32_sem : InstSISemantic<DS_MIN_SRC2_F32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_MIN_SRC2_F64_sem : InstSISemantic<DS_MIN_SRC2_F64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_MIN_SRC2_I32_sem : InstSISemantic<DS_MIN_SRC2_I32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_MIN_SRC2_I64_sem : InstSISemantic<DS_MIN_SRC2_I64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_MIN_SRC2_U32_sem : InstSISemantic<DS_MIN_SRC2_U32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_MIN_SRC2_U64_sem : InstSISemantic<DS_MIN_SRC2_U64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_OR_SRC2_B32_sem : InstSISemantic<DS_OR_SRC2_B32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_OR_SRC2_B64_sem : InstSISemantic<DS_OR_SRC2_B64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_RSUB_SRC2_U32_sem : InstSISemantic<DS_RSUB_SRC2_U32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_RSUB_SRC2_U64_sem : InstSISemantic<DS_RSUB_SRC2_U64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_SUB_SRC2_U32_sem : InstSISemantic<DS_SUB_SRC2_U32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_SUB_SRC2_U64_sem : InstSISemantic<DS_SUB_SRC2_U64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_WRITE_SRC2_B32_sem : InstSISemantic<DS_WRITE_SRC2_B32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_WRITE_SRC2_B64_sem : InstSISemantic<DS_WRITE_SRC2_B64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_XOR_SRC2_B32_sem : InstSISemantic<DS_XOR_SRC2_B32> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_XOR_SRC2_B64_sem : InstSISemantic<DS_XOR_SRC2_B64> {
+  // DS _SRC2_ variants read from an M0-based addressing register that
+  // isn't yet modeled. Emit a generic waitcnt-fence placeholder.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+//==============================================================================
+// Remaining specialized ops (Phase 14) — fence placeholders
+//==============================================================================
+
+def DS_ADD_GS_REG_RTN_sem : InstSISemantic<DS_ADD_GS_REG_RTN> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_ATOMIC_ASYNC_BARRIER_ARRIVE_B64_sem : InstSISemantic<DS_ATOMIC_ASYNC_BARRIER_ARRIVE_B64> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_ATOMIC_BARRIER_ARRIVE_RTN_B64_sem : InstSISemantic<DS_ATOMIC_BARRIER_ARRIVE_RTN_B64> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_ATOMIC_BARRIER_ARRIVE_RTN_B64_agpr_sem : InstSISemantic<DS_ATOMIC_BARRIER_ARRIVE_RTN_B64_agpr> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_BVH_STACK_PUSH8_POP1_RTN_B32_sem : InstSISemantic<DS_BVH_STACK_PUSH8_POP1_RTN_B32> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_BVH_STACK_PUSH8_POP2_RTN_B64_sem : InstSISemantic<DS_BVH_STACK_PUSH8_POP2_RTN_B64> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_BVH_STACK_RTN_B32_sem : InstSISemantic<DS_BVH_STACK_RTN_B32> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_GWS_BARRIER_sem : InstSISemantic<DS_GWS_BARRIER> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_GWS_INIT_sem : InstSISemantic<DS_GWS_INIT> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_GWS_SEMA_BR_sem : InstSISemantic<DS_GWS_SEMA_BR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_GWS_SEMA_P_sem : InstSISemantic<DS_GWS_SEMA_P> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_GWS_SEMA_V_sem : InstSISemantic<DS_GWS_SEMA_V> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_LOAD_TR16_B128_sem : InstSISemantic<DS_LOAD_TR16_B128> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_LOAD_TR4_B64_sem : InstSISemantic<DS_LOAD_TR4_B64> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_LOAD_TR6_B96_sem : InstSISemantic<DS_LOAD_TR6_B96> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_LOAD_TR8_B64_sem : InstSISemantic<DS_LOAD_TR8_B64> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_ORDERED_COUNT_sem : InstSISemantic<DS_ORDERED_COUNT> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_READ_ADDTID_B32_sem : InstSISemantic<DS_READ_ADDTID_B32> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_READ_B64_TR_B16_sem : InstSISemantic<DS_READ_B64_TR_B16> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_READ_B64_TR_B4_sem : InstSISemantic<DS_READ_B64_TR_B4> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_READ_B64_TR_B8_sem : InstSISemantic<DS_READ_B64_TR_B8> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_READ_B96_TR_B6_sem : InstSISemantic<DS_READ_B96_TR_B6> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_SUB_GS_REG_RTN_sem : InstSISemantic<DS_SUB_GS_REG_RTN> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def DS_WRITE_ADDTID_B32_sem : InstSISemantic<DS_WRITE_ADDTID_B32> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}

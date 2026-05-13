@@ -762,3 +762,164 @@ def S_WAIT_IDLE_sem : InstSISemantic<S_WAIT_IDLE> {
                    [(ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
+
+//==============================================================================
+// EXP — Export instruction (Phase 14)
+//==============================================================================
+// Export src0..src3 (selected by $en mask) to the export target $tgt.
+// The $done bit signals last-export; $vm bit is the validmask bit.
+// Maps to int_amdgcn_exp (regular) or int_amdgcn_exp_row (gfx11+ row export).
+
+// EXP: regular export, done=0, vm=0 (the encoding fields are absorbed below)
+def EXP_sem : InstSISemantic<EXP> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_exp,
+      [(GetNamedOperand $tgt, si_llvm_i32_ty),
+       (GetNamedOperand $en, si_llvm_i32_ty),
+       (GetNamedOperand $src0, si_llvm_float_ty),
+       (GetNamedOperand $src1, si_llvm_float_ty),
+       (GetNamedOperand $src2, si_llvm_float_ty),
+       (GetNamedOperand $src3, si_llvm_float_ty),
+       (ConstantInt si_llvm_i1_ty, 0),
+       (GetNamedOperand $vm, si_llvm_i1_ty)])
+  ];
+}
+
+// EXP_DONE: same intrinsic with done=1
+def EXP_DONE_sem : InstSISemantic<EXP_DONE> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_exp,
+      [(GetNamedOperand $tgt, si_llvm_i32_ty),
+       (GetNamedOperand $en, si_llvm_i32_ty),
+       (GetNamedOperand $src0, si_llvm_float_ty),
+       (GetNamedOperand $src1, si_llvm_float_ty),
+       (GetNamedOperand $src2, si_llvm_float_ty),
+       (GetNamedOperand $src3, si_llvm_float_ty),
+       (ConstantInt si_llvm_i1_ty, 1),
+       (GetNamedOperand $vm, si_llvm_i1_ty)])
+  ];
+}
+
+// EXP_ROW: gfx11+ row export; maps to int_amdgcn_exp_row with done=0
+def EXP_ROW_sem : InstSISemantic<EXP_ROW> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_exp_row,
+      [(GetNamedOperand $tgt, si_llvm_i32_ty),
+       (GetNamedOperand $en, si_llvm_i32_ty),
+       (GetNamedOperand $src0, si_llvm_float_ty),
+       (GetNamedOperand $src1, si_llvm_float_ty),
+       (GetNamedOperand $src2, si_llvm_float_ty),
+       (GetNamedOperand $src3, si_llvm_float_ty),
+       (ConstantInt si_llvm_i1_ty, 0),
+       (GetNamedOperand $vm, si_llvm_i32_ty)])
+  ];
+}
+
+// EXP_ROW_DONE: int_amdgcn_exp_row with done=1
+def EXP_ROW_DONE_sem : InstSISemantic<EXP_ROW_DONE> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_exp_row,
+      [(GetNamedOperand $tgt, si_llvm_i32_ty),
+       (GetNamedOperand $en, si_llvm_i32_ty),
+       (GetNamedOperand $src0, si_llvm_float_ty),
+       (GetNamedOperand $src1, si_llvm_float_ty),
+       (GetNamedOperand $src2, si_llvm_float_ty),
+       (GetNamedOperand $src3, si_llvm_float_ty),
+       (ConstantInt si_llvm_i1_ty, 1),
+       (GetNamedOperand $vm, si_llvm_i32_ty)])
+  ];
+}
+
+//==============================================================================
+// S_* system / scheduler / mode-config ops (Phase 14) — fence placeholders
+//==============================================================================
+
+def S_ALLOC_VGPR_sem : InstSISemantic<S_ALLOC_VGPR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_CLAUSE_sem : InstSISemantic<S_CLAUSE> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_CODE_END_sem : InstSISemantic<S_CODE_END> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_DELAY_ALU_sem : InstSISemantic<S_DELAY_ALU> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_GETREG_B32_const_sem : InstSISemantic<S_GETREG_B32_const> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_INST_PREFETCH_sem : InstSISemantic<S_INST_PREFETCH> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_MONITOR_SLEEP_sem : InstSISemantic<S_MONITOR_SLEEP> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_SETKILL_sem : InstSISemantic<S_SETKILL> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_SETPRIO_INC_WG_sem : InstSISemantic<S_SETPRIO_INC_WG> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_SETREG_B32_mode_sem : InstSISemantic<S_SETREG_B32_mode> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_SETREG_IMM32_B32_sem : InstSISemantic<S_SETREG_IMM32_B32> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_SETREG_IMM32_B32_mode_sem : InstSISemantic<S_SETREG_IMM32_B32_mode> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_SETVSKIP_sem : InstSISemantic<S_SETVSKIP> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_SET_VGPR_MSB_sem : InstSISemantic<S_SET_VGPR_MSB> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def S_VERSION_sem : InstSISemantic<S_VERSION> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}

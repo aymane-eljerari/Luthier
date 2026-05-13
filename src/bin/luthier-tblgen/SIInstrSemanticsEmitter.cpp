@@ -105,6 +105,36 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
          << ArgName << ")";
     }
 
+    // --- GetNamedOperandAsFunction $name ---
+    // Retrieves the named operand as an llvm::Function* (set by
+    // CodeDiscoveryPass after callgraph resolution for direct-call instructions).
+    // Returns nullptr if the operand is not a Function-typed GlobalAddress.
+    else if (OpName == "GetNamedOperandAsFunction") {
+      if (unsigned NumArgs = Dag->getNumArgs(); NumArgs != 1)
+        llvm::PrintFatalError(
+            Loc, "Expected `GetNamedOperandAsFunction` to have 1 argument, got " +
+                     llvm::Twine(NumArgs) + " instead");
+      llvm::StringRef ArgName = Dag->getArgNameStr(0);
+      OS << "Translator.getOperandAsFunction(MI, llvm::AMDGPU::OpName::"
+         << ArgName << ")";
+    }
+
+    // --- DirectCall <function-expr> ---
+    // Emits a direct call instruction targeting the given llvm::Function*.
+    // Reuses emitIndirectTailCall plumbing (constructs the standard
+    // device-function-typed argument tuple and emits the call).
+    else if (OpName == "DirectCall") {
+      if (unsigned NumArgs = Dag->getNumArgs(); NumArgs != 1)
+        llvm::PrintFatalError(
+            Loc,
+            "Expected `DirectCall` to have 1 argument (the callee function), "
+            "got " +
+                llvm::Twine(NumArgs) + " instead");
+      OS << "Translator.emitIndirectTailCall(MI, ";
+      emitSemanticStatement(OS, Dag->getArg(0), Loc);
+      OS << ")";
+    }
+
     // --- GetVal $name ---
     else if (OpName == "GetVal") {
       OS << Dag->getArgNameStr(0);
@@ -148,6 +178,26 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       llvm::StringRef RegName = RegDef->getDef()->getName();
       OS << "&Translator.getOperandAsValue(MI, llvm::AMDGPU::" << RegName
          << ")";
+    }
+
+    // --- GetWavefrontSize: subtarget's wavefront size (32 or 64) ---
+    else if (OpName == "GetWavefrontSize") {
+      if (unsigned NumArgs = Dag->getNumArgs(); NumArgs != 0)
+        llvm::PrintFatalError(
+            Loc, "Expected `GetWavefrontSize` to have 0 arguments, got " +
+                     llvm::Twine(NumArgs) + " instead");
+      OS << "Translator.ST.getWavefrontSize()";
+    }
+
+    // --- LLVMIntNTy <width-dag>: parameterized integer type ---
+    else if (OpName == "LLVMIntNTy") {
+      if (unsigned NumArgs = Dag->getNumArgs(); NumArgs != 1)
+        llvm::PrintFatalError(
+            Loc, "Expected `LLVMIntNTy` to have 1 argument, got " +
+                     llvm::Twine(NumArgs) + " instead");
+      OS << "Builder.getIntNTy(";
+      emitSemanticStatement(OS, Dag->getArg(0), Loc);
+      OS << ")";
     }
 
     // --- LLVM Operands ---

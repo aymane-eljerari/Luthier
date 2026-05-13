@@ -450,3 +450,27 @@ def S_SETREG_B32_sem : InstSISemantic<S_SETREG_B32> {
 //    (LLVMBranch (GetNamedOperand $simm16))
 //  ];
 //}
+
+//==============================================================================
+// S_CALL_B64 — direct subroutine call (Phase 26)
+//==============================================================================
+// Hardware semantics: $sdst gets the PC immediately after this instruction
+// (the return address); control jumps to the target encoded in $simm16
+// (a 16-bit signed offset, sign-extended and shifted left by 2, added to PC+4).
+//
+// IR-level model:
+//   $sdst = int_amdgcn_s_getpc()   // post-PC == return address
+//   call <callee>()                // direct call to resolved Function*
+//
+// The $simm16 operand is rewritten by CodeDiscoveryPass from the raw 16-bit
+// displacement (MO_Immediate) to MO_GlobalAddress(<callee Function>) after
+// the callgraph pass resolves the target. If resolution failed the operand
+// stays as Imm; getOperandAsFunction returns nullptr and the call emission
+// silently no-ops.
+def S_CALL_B64_sem : InstSISemantic<S_CALL_B64> {
+  let Semantic = [
+    (SetNamedOperand $sdst,
+      (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_getpc, []<dag>)),
+    (DirectCall (GetNamedOperandAsFunction $simm16))
+  ];
+}

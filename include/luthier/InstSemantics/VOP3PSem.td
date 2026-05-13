@@ -543,3 +543,118 @@ def V_DOT8_I32_IU4_sem : InstSISemantic<V_DOT8_I32_IU4> {
 def V_DOT8_U32_U4_sem : InstSISemantic<V_DOT8_U32_U4> {
   let Semantic = [];
 }
+
+//==============================================================================
+// V_PK_*_BF16 packed BF16 (Phase 17)
+//==============================================================================
+// v2bf16 add/sub/mul/min/max/fma. Map directly to LLVM IR ops on v2bf16.
+
+def V_PK_ADD_BF16_sem : InstSISemantic<V_PK_ADD_BF16> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMFAdd (GetNamedOperand $src0, si_llvm_v2bf16_ty),
+                (GetNamedOperand $src1, si_llvm_v2bf16_ty)))
+  ];
+}
+def V_PK_MUL_BF16_sem : InstSISemantic<V_PK_MUL_BF16> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMFMul (GetNamedOperand $src0, si_llvm_v2bf16_ty),
+                (GetNamedOperand $src1, si_llvm_v2bf16_ty)))
+  ];
+}
+def V_PK_FMA_BF16_sem : InstSISemantic<V_PK_FMA_BF16> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMFMA (GetNamedOperand $src0, si_llvm_v2bf16_ty),
+               (GetNamedOperand $src1, si_llvm_v2bf16_ty),
+               (GetNamedOperand $src2, si_llvm_v2bf16_ty)))
+  ];
+}
+def V_PK_MIN_NUM_BF16_sem : InstSISemantic<V_PK_MIN_NUM_BF16> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMBinaryIntrinsic int_minnum,
+        (GetNamedOperand $src0, si_llvm_v2bf16_ty),
+        (GetNamedOperand $src1, si_llvm_v2bf16_ty)))
+  ];
+}
+def V_PK_MAX_NUM_BF16_sem : InstSISemantic<V_PK_MAX_NUM_BF16> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMBinaryIntrinsic int_maxnum,
+        (GetNamedOperand $src0, si_llvm_v2bf16_ty),
+        (GetNamedOperand $src1, si_llvm_v2bf16_ty)))
+  ];
+}
+def V_PK_MINIMUM3_F16_sem : InstSISemantic<V_PK_MINIMUM3_F16> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMBinaryIntrinsic int_minimum,
+        (LLVMBinaryIntrinsic int_minimum,
+          (GetNamedOperand $src0, si_llvm_v2f16_ty),
+          (GetNamedOperand $src1, si_llvm_v2f16_ty)),
+        (GetNamedOperand $src2, si_llvm_v2f16_ty)))
+  ];
+}
+def V_PK_MAXIMUM3_F16_sem : InstSISemantic<V_PK_MAXIMUM3_F16> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMBinaryIntrinsic int_maximum,
+        (LLVMBinaryIntrinsic int_maximum,
+          (GetNamedOperand $src0, si_llvm_v2f16_ty),
+          (GetNamedOperand $src1, si_llvm_v2f16_ty)),
+        (GetNamedOperand $src2, si_llvm_v2f16_ty)))
+  ];
+}
+def V_PK_MIN3_NUM_F16_sem : InstSISemantic<V_PK_MIN3_NUM_F16> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMBinaryIntrinsic int_minnum,
+        (LLVMBinaryIntrinsic int_minnum,
+          (GetNamedOperand $src0, si_llvm_v2f16_ty),
+          (GetNamedOperand $src1, si_llvm_v2f16_ty)),
+        (GetNamedOperand $src2, si_llvm_v2f16_ty)))
+  ];
+}
+def V_PK_MAX3_NUM_F16_sem : InstSISemantic<V_PK_MAX3_NUM_F16> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMBinaryIntrinsic int_maxnum,
+        (LLVMBinaryIntrinsic int_maxnum,
+          (GetNamedOperand $src0, si_llvm_v2f16_ty),
+          (GetNamedOperand $src1, si_llvm_v2f16_ty)),
+        (GetNamedOperand $src2, si_llvm_v2f16_ty)))
+  ];
+}
+
+// V_PK_{MIN3,MAX3}_{I,U}16: 3-way integer min/max on v2i16.
+foreach base = ["MIN3", "MAX3"] in {
+  foreach sign = ["I", "U"] in {
+    def !cast<InstSI>("V_PK_"#base#"_"#sign#"16")#_sem
+        : InstSISemantic<!cast<InstSI>("V_PK_"#base#"_"#sign#"16")> {
+      let Semantic = [
+        (DefVal $cmp01,
+          (LLVMCmp !cast<LLVMCmpPredicate>(!if(!eq(base, "MIN3"),
+              !if(!eq(sign, "I"), "LLVMICmpSLT", "LLVMICmpULT"),
+              !if(!eq(sign, "I"), "LLVMICmpSGT", "LLVMICmpUGT"))),
+            (GetNamedOperand $src0, si_llvm_v2i16_ty),
+            (GetNamedOperand $src1, si_llvm_v2i16_ty))),
+        (DefVal $sel01,
+          (LLVMSelect (GetVal $cmp01),
+            (GetNamedOperand $src0, si_llvm_v2i16_ty),
+            (GetNamedOperand $src1, si_llvm_v2i16_ty))),
+        (DefVal $cmp2,
+          (LLVMCmp !cast<LLVMCmpPredicate>(!if(!eq(base, "MIN3"),
+              !if(!eq(sign, "I"), "LLVMICmpSLT", "LLVMICmpULT"),
+              !if(!eq(sign, "I"), "LLVMICmpSGT", "LLVMICmpUGT"))),
+            (GetVal $sel01),
+            (GetNamedOperand $src2, si_llvm_v2i16_ty))),
+        (SetNamedOperand $vdst,
+          (LLVMSelect (GetVal $cmp2),
+            (GetVal $sel01),
+            (GetNamedOperand $src2, si_llvm_v2i16_ty)))
+      ];
+    }
+  }
+}

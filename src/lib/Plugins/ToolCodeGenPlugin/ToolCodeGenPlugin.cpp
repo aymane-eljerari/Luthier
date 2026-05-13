@@ -18,15 +18,15 @@
 /// passes and their names with the new pass manager's pass builder when loaded.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/CodeDiscoveryPass.h"
-#include "luthier/ToolCodeGen/CodeObjectManagerAnalysis.h"
-#include "luthier/ToolCodeGen/InitialEntryPointAnalysis.h"
 #include "luthier/ToolCodeGen/IPPredicatedCFG.h"
+#include "luthier/ToolCodeGen/InitialEntryPointAnalysis.h"
 #include "luthier/ToolCodeGen/InstructionTracesAnalysis.h"
 #include "luthier/ToolCodeGen/InstrumentationPMDriver.h"
 #include "luthier/ToolCodeGen/IntrinsicProcessorRegistry.h"
 #include "luthier/ToolCodeGen/IntrinsicProcessorsAnalysis.h"
 #include "luthier/ToolCodeGen/ProcessIntrinsicsAtIRLevelPass.h"
 #include "luthier/ToolCodeGenTesting/AMDGPUMockLoaderPrinter.h"
+#include "luthier/ToolCodeGenTesting/CodeObjectManagerAnalysis.h"
 // #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
 // #include "luthier/ToolCodeGen/LRCallgraph.h"
 // #include "luthier/ToolCodeGen/MMISlotIndexesAnalysis.h"

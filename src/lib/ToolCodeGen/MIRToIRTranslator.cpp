@@ -1223,6 +1223,15 @@ void MIRToIRTranslator::initDeviceFunctionEntryRegs(
 
 void MIRToIRTranslator::emitIndirectTailCall(const llvm::MachineInstr &MI,
                                              llvm::Value *Target) {
+  if (!Target) {
+    // CodeDiscoveryPass couldn't resolve the call target (e.g. S_CALL_B64
+    // with an unresolved address). Skip emission rather than crash — the
+    // MIR still records the call site for downstream analysis.
+    LLVM_DEBUG(llvm::dbgs()
+               << "[MIRToIRTranslator] Skipping call emission in MBB "
+               << MI.getParent()->getNumber() << ": target is nullptr\n");
+    return;
+  }
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Emitting indirect tail call "
                              "in MBB "
                           << MI.getParent()->getNumber()
@@ -1328,6 +1337,16 @@ MIRToIRTranslator::getOperandAsBasicBlock(const llvm::MachineOperand &Op) {
   auto *BB = const_cast<llvm::BasicBlock *>(Op.getMBB()->getBasicBlock());
   assert(BB && "MBB operand has no IR BasicBlock");
   return *BB;
+}
+
+llvm::Function *
+MIRToIRTranslator::getOperandAsFunction(const llvm::MachineInstr &MI,
+                                        llvm::AMDGPU::OpName OpName) {
+  const llvm::MachineOperand *Op = TII.getNamedOperand(MI, OpName);
+  if (!Op || !Op->isGlobal())
+    return nullptr;
+  return const_cast<llvm::Function *>(
+      llvm::dyn_cast<llvm::Function>(Op->getGlobal()));
 }
 
 void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,

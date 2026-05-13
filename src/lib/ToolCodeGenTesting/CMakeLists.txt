@@ -3,6 +3,7 @@ add_library(LuthierToolCodeGenTesting OBJECT
         MockLoadAMDGPUCodeObjects.cpp
         AMDGPUMockLoaderPrinter.cpp
         MockLoaderMemoryAccessor.cpp
+        CodeObjectManagerAnalysis.cpp
         LuthierFile.cpp)
 
 target_compile_definitions(LuthierToolCodeGenTesting

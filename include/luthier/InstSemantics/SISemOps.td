@@ -410,6 +410,39 @@ def GetVal;
 /// operation
 def hasModifierSet;
 
+/// Resolves at IR-build time to the current MachineFunction's wavefront size
+/// (32 or 64). Emits a C++ expression of type \c unsigned. Intended for use
+/// as the size argument to \c LLVMIntNTy or as an immediate operand to ops
+/// that need wave-size-dependent values.
+/// Retrieves a named operand as an \c llvm::Function*. The operand must be
+/// of kind \c MO_GlobalAddress with a Function-typed global value — typically
+/// set by \c CodeDiscoveryPass after callgraph resolution for direct-call
+/// instructions like \c S_CALL_B64.
+def GetNamedOperandAsFunction;
+
+/// Emits a direct call to the given \c llvm::Function*. Reuses the
+/// translator's tail-call plumbing (constructs the device-function-typed
+/// argument tuple and emits the call). Argument should resolve to an
+/// \c llvm::Function* (typically via \c GetNamedOperandAsFunction).
+def DirectCall;
+
+def GetWavefrontSize;
+
+/// Parameterized integer LLVM type. Takes a single dag argument that resolves
+/// to a C++ \c unsigned expression giving the bit width. Emits
+/// \c Builder.getIntNTy(<width>). Typical use: \c (LLVMIntNTy (GetWavefrontSize))
+/// produces \c Builder.getIntNTy(Translator.ST.getWavefrontSize()) — the
+/// wave-mask integer type (i32 on wave32, i64 on wave64).
+def LLVMIntNTy;
+
+/// Wraps an i1 dag in \c int_amdgcn_ballot to produce a wave-mask integer
+/// value matching the current subtarget's wavefront size. Use when writing
+/// per-lane i1 results to wave-mask registers (VCC, EXEC, sdst-pair).
+class BallotWaveMask<dag predicate> {
+  dag ret = (LLVMIntrinsic (LLVMIntNTy (GetWavefrontSize)),
+                             int_amdgcn_ballot, [predicate]);
+}
+
 /// Defined here because AMDGPU.td records don't define it
 def region_ptr_ty : LLVMQualPointerType<2>;
 

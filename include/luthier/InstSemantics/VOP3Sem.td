@@ -7758,3 +7758,2693 @@ def V_MOV_B64_e64_sem : InstSISemantic<V_MOV_B64_e64> {
 def V_MUL_F64_pseudo_e64_sem : InstSISemantic<V_MUL_F64_pseudo_e64> {
   let Semantic = [(SetNamedOperand ?:$vdst, (LLVMBitCast (LLVMFMul (LLVMBitCast (GetNamedOperand ?:$src0), si_llvm_double_ty), (LLVMBitCast (GetNamedOperand ?:$src1), si_llvm_double_ty)), si_llvm_i64_ty))];
 }
+
+//==============================================================================
+// V_TANH — Hyperbolic tangent (Phase 11)
+//==============================================================================
+// D.f = tanh(S0.f). Maps to int_amdgcn_tanh per type.
+// Sources:
+//   amd-instinct-cdna4-instruction-set-architecture.pdf, page 360.
+//   rdna4-instruction-set-architecture.pdf, page 326.
+
+// F32
+foreach inst = [V_TANH_F32_e32, V_TANH_F32_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (SetNamedOperand $vdst,
+        (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_tanh, [(GetNamedOperand $src0)]))
+    ];
+  }
+}
+
+// F16 — base + t16 + fake16 encodings; bitcast i16→half→i16 to keep $vdst i32-shaped
+foreach inst = [V_TANH_F16_e32, V_TANH_F16_e64,
+                V_TANH_F16_t16_e32, V_TANH_F16_t16_e64,
+                V_TANH_F16_fake16_e32, V_TANH_F16_fake16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (SetNamedOperand $vdst,
+        (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_tanh, [(GetNamedOperand $src0)]))
+    ];
+  }
+}
+
+// BF16
+foreach inst = [V_TANH_BF16_e32, V_TANH_BF16_e64,
+                V_TANH_BF16_t16_e32, V_TANH_BF16_t16_e64,
+                V_TANH_BF16_fake16_e32, V_TANH_BF16_fake16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (SetNamedOperand $vdst,
+        (LLVMIntrinsic si_llvm_bfloat_ty, int_amdgcn_tanh, [(GetNamedOperand $src0)]))
+    ];
+  }
+}
+
+//==============================================================================
+// V_SAT_PK4 — saturating pack 4×{i8,u8} -> 4×{i4,u4} packed into i16 (Phase 11)
+//==============================================================================
+// D.i16 = pack4(sat(S0.i32 as 4×i8)) — saturate each byte to {i,u}4 range,
+// pack into the low nibbles of an i16. Maps to int_amdgcn_sat_pk4_{i4_i8,u4_u8}.
+// Sources:
+//   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 326.
+//   rdna4-instruction-set-architecture.pdf, page 326.
+
+foreach inst = [V_SAT_PK4_I4_I8_e32, V_SAT_PK4_I4_I8_e64,
+                V_SAT_PK4_I4_I8_t16_e32, V_SAT_PK4_I4_I8_t16_e64,
+                V_SAT_PK4_I4_I8_fake16_e32, V_SAT_PK4_I4_I8_fake16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (SetNamedOperand $vdst,
+        (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_sat_pk4_i4_i8, [(GetNamedOperand $src0)]))
+    ];
+  }
+}
+
+foreach inst = [V_SAT_PK4_U4_U8_e32, V_SAT_PK4_U4_U8_e64,
+                V_SAT_PK4_U4_U8_t16_e32, V_SAT_PK4_U4_U8_t16_e64,
+                V_SAT_PK4_U4_U8_fake16_e32, V_SAT_PK4_U4_U8_fake16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (SetNamedOperand $vdst,
+        (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_sat_pk4_u4_u8, [(GetNamedOperand $src0)]))
+    ];
+  }
+}
+
+//==============================================================================
+// V_MOV_B16 — 16-bit move (Phase 11)
+//==============================================================================
+// D.b16 = S0.b16. Plain register move.
+foreach inst = [V_MOV_B16_e32, V_MOV_B16_e64,
+                V_MOV_B16_fake16_e32, V_MOV_B16_fake16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (SetNamedOperand $vdst, (GetNamedOperand $src0))
+    ];
+  }
+}
+
+//==============================================================================
+// V_MINIMUM / V_MAXIMUM — IEEE 754-2019 minimumNumber / maximumNumber (Phase 11)
+//==============================================================================
+// Unlike V_MIN/V_MAX which use minNum/maxNum semantics, the V_MINIMUM family
+// implements the new IEEE 754-2019 minimum/maximum (NaN propagation, -0 < +0).
+// Maps to LLVM's int_minimum / int_maximum intrinsic.
+def V_MINIMUM_F32_e64_sem : InstSISemantic<V_MINIMUM_F32_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMBitCast
+        (LLVMBinaryIntrinsic int_minimum,
+          (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
+          (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+def V_MINIMUM_F64_e64_sem : InstSISemantic<V_MINIMUM_F64_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMBitCast
+        (LLVMBinaryIntrinsic int_minimum,
+          (LLVMBitCast (GetNamedOperand $src0), si_llvm_double_ty),
+          (LLVMBitCast (GetNamedOperand $src1), si_llvm_double_ty)),
+        si_llvm_i64_ty))
+  ];
+}
+foreach inst = [V_MINIMUM_F16_e64, V_MINIMUM_F16_t16_e64, V_MINIMUM_F16_fake16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (SetNamedOperand $vdst,
+        (LLVMBinaryIntrinsic int_minimum,
+          (GetNamedOperand $src0, si_llvm_half_ty),
+          (GetNamedOperand $src1, si_llvm_half_ty)))
+    ];
+  }
+}
+
+//==============================================================================
+// V_MFMA / V_WMMA / V_SWMMAC / V_SMFMAC semantics (Phase 12)
+//==============================================================================
+
+def V_MFMA_F32_16X16X128_F8F6F4_f4_f4_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f4_f4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f4_f4_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f4_f4_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f4_f6_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f4_f6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f4_f6_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f4_f6_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f4_f8_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f4_f8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f4_f8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f4_f8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f6_f4_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f6_f4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f6_f4_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f6_f4_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f6_f6_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f6_f6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f6_f6_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f6_f6_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f6_f8_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f6_f8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f6_f8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f6_f8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f8_f4_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f8_f4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f8_f4_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f8_f4_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f8_f6_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f8_f6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f8_f6_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f8_f6_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f8_f8_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f8_f8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X128_F8F6F4_f8_f8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X128_F8F6F4_f8_f8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X16BF16_1K_e64_sem : InstSISemantic<V_MFMA_F32_16X16X16BF16_1K_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x16bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X16BF16_1K_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X16BF16_1K_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x16bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X16F16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X16F16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x16f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X1F32_mac_e64_sem : InstSISemantic<V_MFMA_F32_16X16X1F32_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_16x16x1f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X1F32_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X1F32_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_16x16x1f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X1F32_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X1F32_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_16x16x1f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X2BF16_mac_e64_sem : InstSISemantic<V_MFMA_F32_16X16X2BF16_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_16x16x2bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X2BF16_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X2BF16_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_16x16x2bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X2BF16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X2BF16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_16x16x2bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X32_BF16_e64_sem : InstSISemantic<V_MFMA_F32_16X16X32_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x32_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X32_BF16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X32_BF16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x32_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X32_BF8_BF8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X32_BF8_BF8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x32_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X32_BF8_FP8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X32_BF8_FP8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x32_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X32_F16_e64_sem : InstSISemantic<V_MFMA_F32_16X16X32_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x32_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X32_F16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X32_F16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x32_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X32_FP8_BF8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X32_FP8_BF8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x32_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X32_FP8_FP8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X32_FP8_FP8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x32_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X4BF16_1K_e64_sem : InstSISemantic<V_MFMA_F32_16X16X4BF16_1K_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_16x16x4bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X4BF16_1K_mac_e64_sem : InstSISemantic<V_MFMA_F32_16X16X4BF16_1K_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_16x16x4bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X4BF16_1K_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X4BF16_1K_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_16x16x4bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X4BF16_1K_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X4BF16_1K_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_16x16x4bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X4F16_mac_e64_sem : InstSISemantic<V_MFMA_F32_16X16X4F16_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_16x16x4f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X4F16_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X4F16_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_16x16x4f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X4F16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X4F16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_16x16x4f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X4F32_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X4F32_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x4f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X8BF16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X8BF16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x8bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_16X16X8XF32_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_16X16X8XF32_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_16x16x8_xf32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_BF16_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_BF16_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_BF16_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_BF16_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_BF16_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_BF16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_BF16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_BF8_BF8_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_BF8_BF8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_BF8_BF8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_BF8_BF8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_BF8_BF8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_BF8_BF8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_BF8_FP8_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_BF8_FP8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_BF8_FP8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_BF8_FP8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_BF8_FP8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_BF8_FP8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_F16_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_F16_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_F16_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_F16_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_F16_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_F16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_F16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_FP8_BF8_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_FP8_BF8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_FP8_BF8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_FP8_BF8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_FP8_BF8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_FP8_BF8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_FP8_FP8_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_FP8_FP8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_FP8_FP8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_FP8_FP8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X16_FP8_FP8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X16_FP8_FP8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x16_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X1F32_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X1F32_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_mfma_f32_32x32x1f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X1F32_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X1F32_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_mfma_f32_32x32x1f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X1F32_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X1F32_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_mfma_f32_32x32x1f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X2BF16_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X2BF16_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_mfma_f32_32x32x2bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X2BF16_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X2BF16_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_mfma_f32_32x32x2bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X2BF16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X2BF16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_mfma_f32_32x32x2bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X2F32_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X2F32_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x2f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X2F32_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X2F32_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x2f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X2F32_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X2F32_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x2f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X4BF16_1K_e64_sem : InstSISemantic<V_MFMA_F32_32X32X4BF16_1K_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_mfma_f32_32x32x4bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X4BF16_1K_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X4BF16_1K_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_mfma_f32_32x32x4bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X4BF16_1K_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X4BF16_1K_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_mfma_f32_32x32x4bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X4BF16_1K_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X4BF16_1K_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_mfma_f32_32x32x4bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X4BF16_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X4BF16_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x4bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X4BF16_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X4BF16_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x4bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X4BF16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X4BF16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x4bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X4F16_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X4F16_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_mfma_f32_32x32x4f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X4F16_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X4F16_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_mfma_f32_32x32x4f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X4F16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X4F16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_mfma_f32_32x32x4f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X4XF32_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X4XF32_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x4_xf32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X4XF32_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X4XF32_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x4_xf32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X4XF32_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X4XF32_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x4_xf32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f4_f4_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f4_f4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f4_f4_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f4_f4_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f4_f4_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f4_f4_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f4_f4_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f4_f4_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f4_f6_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f4_f6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f4_f6_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f4_f6_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f4_f6_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f4_f6_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f4_f6_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f4_f6_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f4_f8_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f4_f8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f4_f8_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f4_f8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f4_f8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f4_f8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f4_f8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f4_f8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f6_f4_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f6_f4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f6_f4_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f6_f4_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f6_f4_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f6_f4_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f6_f4_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f6_f4_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f6_f6_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f6_f6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f6_f6_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f6_f6_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f6_f6_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f6_f6_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f6_f6_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f6_f6_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f6_f8_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f6_f8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f6_f8_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f6_f8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f6_f8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f6_f8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f6_f8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f6_f8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f8_f4_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f8_f4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f8_f4_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f8_f4_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f8_f4_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f8_f4_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f8_f4_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f8_f4_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f8_f6_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f8_f6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f8_f6_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f8_f6_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f8_f6_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f8_f6_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f8_f6_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f8_f6_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f8_f8_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f8_f8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f8_f8_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f8_f8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f8_f8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f8_f8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X64_F8F6F4_f8_f8_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X64_F8F6F4_f8_f8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X8BF16_1K_e64_sem : InstSISemantic<V_MFMA_F32_32X32X8BF16_1K_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x8bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X8BF16_1K_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X8BF16_1K_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x8bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X8BF16_1K_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X8BF16_1K_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x8bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X8BF16_1K_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X8BF16_1K_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x8bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X8F16_mac_e64_sem : InstSISemantic<V_MFMA_F32_32X32X8F16_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x8f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X8F16_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X8F16_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x8f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_32X32X8F16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_32X32X8F16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_f32_32x32x8f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_4X4X1F32_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_4X4X1F32_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_4x4x1f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_4X4X2BF16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_4X4X2BF16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_4x4x2bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_4X4X4BF16_1K_e64_sem : InstSISemantic<V_MFMA_F32_4X4X4BF16_1K_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_4x4x4bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_4X4X4BF16_1K_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_4X4X4BF16_1K_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_4x4x4bf16_1k, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F32_4X4X4F16_vgprcd_e64_sem : InstSISemantic<V_MFMA_F32_4X4X4F16_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_f32_4x4x4f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F64_16X16X4F64_mac_e64_sem : InstSISemantic<V_MFMA_F64_16X16X4F64_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f64_ty, int_amdgcn_mfma_f64_16x16x4f64, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F64_16X16X4F64_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_F64_16X16X4F64_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f64_ty, int_amdgcn_mfma_f64_16x16x4f64, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F64_16X16X4F64_vgprcd_e64_sem : InstSISemantic<V_MFMA_F64_16X16X4F64_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f64_ty, int_amdgcn_mfma_f64_16x16x4f64, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_F64_4X4X4F64_vgprcd_e64_sem : InstSISemantic<V_MFMA_F64_4X4X4F64_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_mfma_f64_4x4x4f64, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_16X16X16I8_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_16X16X16I8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4i32_ty, int_amdgcn_mfma_i32_16x16x16i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_16X16X32I8_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_16X16X32I8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4i32_ty, int_amdgcn_mfma_i32_16x16x32_i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_16X16X4I8_mac_e64_sem : InstSISemantic<V_MFMA_I32_16X16X4I8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_mfma_i32_16x16x4i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_16X16X4I8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_16X16X4I8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_mfma_i32_16x16x4i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_16X16X4I8_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_16X16X4I8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_mfma_i32_16x16x4i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_16X16X64_I8_e64_sem : InstSISemantic<V_MFMA_I32_16X16X64_I8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4i32_ty, int_amdgcn_mfma_i32_16x16x64_i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_16X16X64_I8_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_16X16X64_I8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4i32_ty, int_amdgcn_mfma_i32_16x16x64_i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_32X32X16I8_mac_e64_sem : InstSISemantic<V_MFMA_I32_32X32X16I8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_mfma_i32_32x32x16_i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_32X32X16I8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_32X32X16I8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_mfma_i32_32x32x16_i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_32X32X16I8_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_32X32X16I8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_mfma_i32_32x32x16_i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_32X32X32_I8_e64_sem : InstSISemantic<V_MFMA_I32_32X32X32_I8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_mfma_i32_32x32x32_i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_32X32X32_I8_mac_e64_sem : InstSISemantic<V_MFMA_I32_32X32X32_I8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_mfma_i32_32x32x32_i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_32X32X32_I8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_32X32X32_I8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_mfma_i32_32x32x32_i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_32X32X32_I8_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_32X32X32_I8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_mfma_i32_32x32x32_i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_32X32X4I8_mac_e64_sem : InstSISemantic<V_MFMA_I32_32X32X4I8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32i32_ty, int_amdgcn_mfma_i32_32x32x4i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_32X32X4I8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_32X32X4I8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32i32_ty, int_amdgcn_mfma_i32_32x32x4i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_32X32X4I8_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_32X32X4I8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32i32_ty, int_amdgcn_mfma_i32_32x32x4i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_32X32X8I8_mac_e64_sem : InstSISemantic<V_MFMA_I32_32X32X8I8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_mfma_i32_32x32x8i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_32X32X8I8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_32X32X8I8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_mfma_i32_32x32x8i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_32X32X8I8_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_32X32X8I8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_mfma_i32_32x32x8i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_I32_4X4X4I8_vgprcd_e64_sem : InstSISemantic<V_MFMA_I32_4X4X4I8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4i32_ty, int_amdgcn_mfma_i32_4x4x4i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f4_f4_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f4_f4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f4_f4_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f4_f4_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f4_f6_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f4_f6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f4_f6_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f4_f6_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f4_f8_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f4_f8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f4_f8_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f4_f8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f6_f4_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f6_f4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f6_f4_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f6_f4_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f6_f6_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f6_f6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f6_f6_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f6_f6_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f6_f8_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f6_f8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f6_f8_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f6_f8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f8_f4_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f8_f4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f8_f4_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f8_f4_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f8_f6_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f8_f6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f8_f6_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f8_f6_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f8_f8_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f8_f8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_16X16X128_F8F6F4_f8_f8_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_16X16X128_F8F6F4_f8_f8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_mfma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f4_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f4_mac_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f4_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f4_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f4_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f4_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f4_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f6_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f6_mac_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f6_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f6_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f6_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f6_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f6_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f8_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f8_mac_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f8_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f4_f8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f4_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f4_mac_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f4_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f4_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f4_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f4_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f4_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f6_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f6_mac_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f6_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f6_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f6_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f6_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f6_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f8_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f8_mac_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f8_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f6_f8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f4_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f4_mac_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f4_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f4_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f4_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f4_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f4_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f6_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f6_mac_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f6_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f6_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f6_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f6_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f6_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f8_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f8_mac_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f8_mac_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f8_mac_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f8_mac_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f8_vgprcd_e64_sem : InstSISemantic<V_MFMA_SCALE_F32_32X32X64_F8F6F4_f8_f8_vgprcd_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_mfma_scale_f32_32x32x64_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $blgp, si_llvm_i32_ty), (GetNamedOperand $src0_modifiers), (GetNamedOperand $scale_src0), (GetNamedOperand $src1_modifiers), (GetNamedOperand $scale_src1)]))];
+}
+
+def V_SMFMAC_F32_16X16X64_BF16_e64_sem : InstSISemantic<V_SMFMAC_F32_16X16X64_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_smfmac_f32_16x16x64_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $idx), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty)]))];
+}
+
+def V_SMFMAC_F32_16X16X64_F16_e64_sem : InstSISemantic<V_SMFMAC_F32_16X16X64_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_smfmac_f32_16x16x64_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $idx), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty)]))];
+}
+
+def V_SMFMAC_F32_32X32X32_BF16_e64_sem : InstSISemantic<V_SMFMAC_F32_32X32X32_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_smfmac_f32_32x32x32_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $idx), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty)]))];
+}
+
+def V_SMFMAC_F32_32X32X32_F16_e64_sem : InstSISemantic<V_SMFMAC_F32_32X32X32_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_smfmac_f32_32x32x32_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $idx), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty)]))];
+}
+
+def V_SMFMAC_I32_16X16X128_I8_e64_sem : InstSISemantic<V_SMFMAC_I32_16X16X128_I8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4i32_ty, int_amdgcn_smfmac_i32_16x16x128_i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $idx), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty)]))];
+}
+
+def V_SMFMAC_I32_32X32X64_I8_e64_sem : InstSISemantic<V_SMFMAC_I32_32X32X64_I8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16i32_ty, int_amdgcn_smfmac_i32_32x32x64_i8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $idx), (GetNamedOperand $cbsz, si_llvm_i32_ty), (GetNamedOperand $abid, si_llvm_i32_ty)]))];
+}
+
+def V_SWMMAC_BF16F32_16X16X64_BF16_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_BF16F32_16X16X64_BF16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_bf16f32_16x16x64_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_SWMMAC_BF16_16X16X32_BF16_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_BF16_16X16X32_BF16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_bf16_16x16x32_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_SWMMAC_BF16_16X16X32_BF16_w64_twoaddr_sem : InstSISemantic<V_SWMMAC_BF16_16X16X32_BF16_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_bf16_16x16x32_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_8bit), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_SWMMAC_BF16_16X16X64_BF16_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_BF16_16X16X64_BF16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_bf16_16x16x64_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_SWMMAC_F16_16X16X128_BF8_BF8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F16_16X16X128_BF8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f16_16x16x128_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_32bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse)]))];
+}
+
+def V_SWMMAC_F16_16X16X128_BF8_FP8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F16_16X16X128_BF8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f16_16x16x128_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_32bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse)]))];
+}
+
+def V_SWMMAC_F16_16X16X128_FP8_BF8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F16_16X16X128_FP8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f16_16x16x128_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_32bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse)]))];
+}
+
+def V_SWMMAC_F16_16X16X128_FP8_FP8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F16_16X16X128_FP8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f16_16x16x128_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_32bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse)]))];
+}
+
+def V_SWMMAC_F16_16X16X32_F16_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F16_16X16X32_F16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f16_16x16x32_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_SWMMAC_F16_16X16X32_F16_w64_twoaddr_sem : InstSISemantic<V_SWMMAC_F16_16X16X32_F16_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f16_16x16x32_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_8bit), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_SWMMAC_F16_16X16X64_F16_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F16_16X16X64_F16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f16_16x16x64_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_SWMMAC_F32_16X16X128_BF8_BF8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X128_BF8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x128_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_32bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse)]))];
+}
+
+def V_SWMMAC_F32_16X16X128_BF8_FP8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X128_BF8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x128_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_32bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse)]))];
+}
+
+def V_SWMMAC_F32_16X16X128_FP8_BF8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X128_FP8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x128_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_32bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse)]))];
+}
+
+def V_SWMMAC_F32_16X16X128_FP8_FP8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X128_FP8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x128_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_32bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse)]))];
+}
+
+def V_SWMMAC_F32_16X16X32_BF16_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X32_BF16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x32_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_SWMMAC_F32_16X16X32_BF16_w64_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X32_BF16_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x32_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_8bit), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_SWMMAC_F32_16X16X32_BF8_BF8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X32_BF8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x32_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit)]))];
+}
+
+def V_SWMMAC_F32_16X16X32_BF8_BF8_w64_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X32_BF8_BF8_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x32_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_8bit)]))];
+}
+
+def V_SWMMAC_F32_16X16X32_BF8_FP8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X32_BF8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x32_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit)]))];
+}
+
+def V_SWMMAC_F32_16X16X32_BF8_FP8_w64_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X32_BF8_FP8_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x32_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_8bit)]))];
+}
+
+def V_SWMMAC_F32_16X16X32_F16_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X32_F16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x32_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_SWMMAC_F32_16X16X32_F16_w64_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X32_F16_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x32_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_8bit), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_SWMMAC_F32_16X16X32_FP8_BF8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X32_FP8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x32_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit)]))];
+}
+
+def V_SWMMAC_F32_16X16X32_FP8_BF8_w64_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X32_FP8_BF8_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x32_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_8bit)]))];
+}
+
+def V_SWMMAC_F32_16X16X32_FP8_FP8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X32_FP8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x32_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit)]))];
+}
+
+def V_SWMMAC_F32_16X16X32_FP8_FP8_w64_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X32_FP8_FP8_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x32_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_8bit)]))];
+}
+
+def V_SWMMAC_F32_16X16X64_BF16_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X64_BF16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x64_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_SWMMAC_F32_16X16X64_F16_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_F32_16X16X64_F16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_f32_16x16x64_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_SWMMAC_I32_16X16X128_IU8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_I32_16X16X128_IU8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_i32_16x16x128_iu8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_32bit), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_SWMMAC_I32_16X16X32_IU4_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_I32_16X16X32_IU4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_i32_16x16x32_iu4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_SWMMAC_I32_16X16X32_IU4_w64_twoaddr_sem : InstSISemantic<V_SWMMAC_I32_16X16X32_IU4_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_i32_16x16x32_iu4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_SWMMAC_I32_16X16X32_IU8_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_I32_16X16X32_IU8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_i32_16x16x32_iu8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_SWMMAC_I32_16X16X32_IU8_w64_twoaddr_sem : InstSISemantic<V_SWMMAC_I32_16X16X32_IU8_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_i32_16x16x32_iu8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_8bit), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_SWMMAC_I32_16X16X64_IU4_w32_twoaddr_sem : InstSISemantic<V_SWMMAC_I32_16X16X64_IU4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_i32_16x16x64_iu4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_SWMMAC_I32_16X16X64_IU4_w64_twoaddr_sem : InstSISemantic<V_SWMMAC_I32_16X16X64_IU4_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_swmmac_i32_16x16x64_iu4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $srcTiedDef), (GetNamedOperand $src2), (GetNamedOperand $index_key_16bit), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_BF16F32_16X16X32_BF16_w32_threeaddr_sem : InstSISemantic<V_WMMA_BF16F32_16X16X32_BF16_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_bf16f32_16x16x32_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_BF16F32_16X16X32_BF16_w32_twoaddr_sem : InstSISemantic<V_WMMA_BF16F32_16X16X32_BF16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_bf16f32_16x16x32_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_BF16_16X16X16_BF16_w32_threeaddr_sem : InstSISemantic<V_WMMA_BF16_16X16X16_BF16_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_bf16_16x16x16_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_BF16_16X16X16_BF16_w32_twoaddr_sem : InstSISemantic<V_WMMA_BF16_16X16X16_BF16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_bf16_16x16x16_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_BF16_16X16X16_BF16_w64_threeaddr_sem : InstSISemantic<V_WMMA_BF16_16X16X16_BF16_w64_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_bf16_16x16x16_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_BF16_16X16X16_BF16_w64_twoaddr_sem : InstSISemantic<V_WMMA_BF16_16X16X16_BF16_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_bf16_16x16x16_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_BF16_16X16X32_BF16_w32_threeaddr_sem : InstSISemantic<V_WMMA_BF16_16X16X32_BF16_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_bf16_16x16x32_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_BF16_16X16X32_BF16_w32_twoaddr_sem : InstSISemantic<V_WMMA_BF16_16X16X32_BF16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_bf16_16x16x32_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X128_BF8_BF8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F16_16X16X128_BF8_BF8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x128_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X128_BF8_BF8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F16_16X16X128_BF8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x128_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X128_BF8_FP8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F16_16X16X128_BF8_FP8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x128_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X128_BF8_FP8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F16_16X16X128_BF8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x128_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X128_FP8_BF8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F16_16X16X128_FP8_BF8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x128_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X128_FP8_BF8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F16_16X16X128_FP8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x128_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X128_FP8_FP8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F16_16X16X128_FP8_FP8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x128_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X128_FP8_FP8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F16_16X16X128_FP8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x128_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X16_F16_w32_threeaddr_sem : InstSISemantic<V_WMMA_F16_16X16X16_F16_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x16_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X16_F16_w32_twoaddr_sem : InstSISemantic<V_WMMA_F16_16X16X16_F16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x16_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X16_F16_w64_threeaddr_sem : InstSISemantic<V_WMMA_F16_16X16X16_F16_w64_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x16_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X16_F16_w64_twoaddr_sem : InstSISemantic<V_WMMA_F16_16X16X16_F16_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x16_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X32_F16_w32_threeaddr_sem : InstSISemantic<V_WMMA_F16_16X16X32_F16_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x32_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X32_F16_w32_twoaddr_sem : InstSISemantic<V_WMMA_F16_16X16X32_F16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x32_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X64_BF8_BF8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F16_16X16X64_BF8_BF8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x64_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X64_BF8_BF8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F16_16X16X64_BF8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x64_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X64_BF8_FP8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F16_16X16X64_BF8_FP8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x64_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X64_BF8_FP8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F16_16X16X64_BF8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x64_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X64_FP8_BF8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F16_16X16X64_FP8_BF8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x64_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X64_FP8_BF8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F16_16X16X64_FP8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x64_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X64_FP8_FP8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F16_16X16X64_FP8_FP8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x64_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F16_16X16X64_FP8_FP8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F16_16X16X64_FP8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f16_16x16x64_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_BF8_BF8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_BF8_BF8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x128_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_BF8_BF8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_BF8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x128_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_BF8_FP8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_BF8_FP8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x128_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_BF8_FP8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_BF8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x128_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f4_f4_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f4_f4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f4_f4_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f4_f4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f4_f6_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f4_f6_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f4_f6_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f4_f6_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f4_f8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f4_f8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f4_f8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f4_f8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f6_f4_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f6_f4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f6_f4_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f6_f4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f6_f6_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f6_f6_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f6_f6_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f6_f6_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f6_f8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f6_f8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f6_f8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f6_f8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f8_f4_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f8_f4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f8_f4_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f8_f4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f8_f6_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f8_f6_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f8_f6_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f8_f6_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f8_f8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f8_f8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_F8F6F4_f8_f8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_F8F6F4_f8_f8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_FP8_BF8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_FP8_BF8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x128_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_FP8_BF8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_FP8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x128_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_FP8_FP8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_FP8_FP8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x128_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X128_FP8_FP8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X128_FP8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x128_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_BF16_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_BF16_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_BF16_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_BF16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_BF16_w64_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_BF16_w64_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_BF16_w64_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_BF16_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_BF8_BF8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_BF8_BF8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_BF8_BF8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_BF8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_BF8_BF8_w64_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_BF8_BF8_w64_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_BF8_BF8_w64_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_BF8_BF8_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_BF8_FP8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_BF8_FP8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_BF8_FP8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_BF8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_BF8_FP8_w64_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_BF8_FP8_w64_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_BF8_FP8_w64_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_BF8_FP8_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_F16_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_F16_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_F16_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_F16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_F16_w64_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_F16_w64_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_F16_w64_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_F16_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_FP8_BF8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_FP8_BF8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_FP8_BF8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_FP8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_FP8_BF8_w64_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_FP8_BF8_w64_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_FP8_BF8_w64_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_FP8_BF8_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_FP8_FP8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_FP8_FP8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_FP8_FP8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_FP8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_FP8_FP8_w64_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_FP8_FP8_w64_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X16_FP8_FP8_w64_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X16_FP8_FP8_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x16_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X32_BF16_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X32_BF16_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x32_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X32_BF16_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X32_BF16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x32_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X32_F16_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X32_F16_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x32_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X32_F16_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X32_F16_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x32_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X4_F32_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X4_F32_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x4_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X4_F32_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X4_F32_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x4_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X64_BF8_BF8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X64_BF8_BF8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x64_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X64_BF8_BF8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X64_BF8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x64_bf8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X64_BF8_FP8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X64_BF8_FP8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x64_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X64_BF8_FP8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X64_BF8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x64_bf8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X64_FP8_BF8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X64_FP8_BF8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x64_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X64_FP8_BF8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X64_FP8_BF8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x64_fp8_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X64_FP8_FP8_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_16X16X64_FP8_FP8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x64_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_16X16X64_FP8_FP8_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_16X16X64_FP8_FP8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_16x16x64_fp8_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_32X16X128_F4_w32_threeaddr_sem : InstSISemantic<V_WMMA_F32_32X16X128_F4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_32x16x128_f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_F32_32X16X128_F4_w32_twoaddr_sem : InstSISemantic<V_WMMA_F32_32X16X128_F4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_f32_32x16x128_f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_I32_16X16X16_IU4_w32_threeaddr_sem : InstSISemantic<V_WMMA_I32_16X16X16_IU4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x16_iu4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_I32_16X16X16_IU4_w32_twoaddr_sem : InstSISemantic<V_WMMA_I32_16X16X16_IU4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x16_iu4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_I32_16X16X16_IU4_w64_threeaddr_sem : InstSISemantic<V_WMMA_I32_16X16X16_IU4_w64_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x16_iu4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_I32_16X16X16_IU4_w64_twoaddr_sem : InstSISemantic<V_WMMA_I32_16X16X16_IU4_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x16_iu4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_I32_16X16X16_IU8_w32_threeaddr_sem : InstSISemantic<V_WMMA_I32_16X16X16_IU8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x16_iu8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_I32_16X16X16_IU8_w32_twoaddr_sem : InstSISemantic<V_WMMA_I32_16X16X16_IU8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x16_iu8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_I32_16X16X16_IU8_w64_threeaddr_sem : InstSISemantic<V_WMMA_I32_16X16X16_IU8_w64_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x16_iu8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_I32_16X16X16_IU8_w64_twoaddr_sem : InstSISemantic<V_WMMA_I32_16X16X16_IU8_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x16_iu8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_I32_16X16X32_IU4_w32_threeaddr_sem : InstSISemantic<V_WMMA_I32_16X16X32_IU4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x32_iu4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_I32_16X16X32_IU4_w32_twoaddr_sem : InstSISemantic<V_WMMA_I32_16X16X32_IU4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x32_iu4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_I32_16X16X32_IU4_w64_threeaddr_sem : InstSISemantic<V_WMMA_I32_16X16X32_IU4_w64_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x32_iu4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_I32_16X16X32_IU4_w64_twoaddr_sem : InstSISemantic<V_WMMA_I32_16X16X32_IU4_w64_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x32_iu4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_I32_16X16X64_IU8_w32_threeaddr_sem : InstSISemantic<V_WMMA_I32_16X16X64_IU8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x64_iu8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_I32_16X16X64_IU8_w32_twoaddr_sem : InstSISemantic<V_WMMA_I32_16X16X64_IU8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_i32_16x16x64_iu8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f4_f4_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f4_f4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f4_f4_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f4_f4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f4_f6_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f4_f6_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f4_f6_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f4_f6_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f4_f8_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f4_f8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f4_f8_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f4_f8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f6_f4_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f6_f4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f6_f4_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f6_f4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f6_f6_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f6_f6_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f6_f6_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f6_f6_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f6_f8_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f6_f8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f6_f8_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f6_f8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f8_f4_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f8_f4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f8_f4_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f8_f4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f8_f6_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f8_f6_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f8_f6_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f8_f6_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f8_f8_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f8_f8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f8_f8_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_16X16X128_F8F6F4_f8_f8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_32X16X128_F4_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_32X16X128_F4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_32x16x128_f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE16_F32_32X16X128_F4_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE16_F32_32X16X128_F4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale16_f32_32x16x128_f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f4_f4_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f4_f4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f4_f4_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f4_f4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f4_f6_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f4_f6_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f4_f6_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f4_f6_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f4_f8_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f4_f8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f4_f8_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f4_f8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f6_f4_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f6_f4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f6_f4_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f6_f4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f6_f6_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f6_f6_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f6_f6_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f6_f6_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f6_f8_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f6_f8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f6_f8_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f6_f8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f8_f4_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f8_f4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f8_f4_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f8_f4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f8_f6_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f8_f6_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f8_f6_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f8_f6_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f8_f8_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f8_f8_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_16X16X128_F8F6F4_f8_f8_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_16X16X128_F8F6F4_f8_f8_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_16x16x128_f8f6f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_fmt), (GetNamedOperand $matrix_b_fmt), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_32X16X128_F4_w32_threeaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_32X16X128_F4_w32_threeaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_32x16x128_f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+def V_WMMA_SCALE_F32_32X16X128_F4_w32_twoaddr_sem : InstSISemantic<V_WMMA_SCALE_F32_32X16X128_F4_w32_twoaddr> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v4f32_ty, int_amdgcn_wmma_scale_f32_32x16x128_f4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $scale_src0), (GetNamedOperand $scale_src1), (GetNamedOperand $matrix_a_scale), (GetNamedOperand $matrix_b_scale), (GetNamedOperand $matrix_a_scale_fmt), (GetNamedOperand $matrix_b_scale_fmt), (GetNamedOperand $matrix_a_reuse), (GetNamedOperand $matrix_b_reuse), (GetNamedOperand $neg_lo), (GetNamedOperand $neg_hi)]))];
+}
+
+//==============================================================================
+// V_MFMA / V_WMMA / V_SWMMAC / V_SMFMAC semantics (Phase 12)
+//==============================================================================
+
+
+
+//==============================================================================
+// V_{RCP,RSQ,SQRT,SIN,COS,LOG,EXP}_BF16 (Phase 15, re-add 2)
+//==============================================================================
+foreach base = ["RCP", "RSQ", "SQRT", "SIN", "COS", "LOG", "EXP"] in {
+  foreach inst = [!cast<InstSI>("V_"#base#"_BF16_e32"),
+                  !cast<InstSI>("V_"#base#"_BF16_e64"),
+                  !cast<InstSI>("V_"#base#"_BF16_t16_e32"),
+                  !cast<InstSI>("V_"#base#"_BF16_t16_e64"),
+                  !cast<InstSI>("V_"#base#"_BF16_fake16_e32"),
+                  !cast<InstSI>("V_"#base#"_BF16_fake16_e64")] in {
+    def inst#_sem : InstSISemantic<inst> {
+      let Semantic = [
+        (SetNamedOperand $vdst,
+          (LLVMIntrinsic si_llvm_bfloat_ty,
+            !cast<Intrinsic>("int_amdgcn_"#!tolower(!subst("EXP", "exp2", base))),
+            [(GetNamedOperand $src0)]))
+      ];
+    }
+  }
+}
+
+//==============================================================================
+// V_{ADD,PK_ADD}_{MIN,MAX}_{I,U}{16,32} (Phase 15, re-add)
+//==============================================================================
+foreach base = ["MIN", "MAX"] in {
+  foreach sign = ["I", "U"] in {
+    def !cast<InstSI>("V_ADD_"#base#"_"#sign#"32_e64")#_sem
+        : InstSISemantic<!cast<InstSI>("V_ADD_"#base#"_"#sign#"32_e64")> {
+      let Semantic = [
+        (SetNamedOperand $vdst,
+          (LLVMIntrinsic si_llvm_i32_ty,
+            !cast<Intrinsic>("int_amdgcn_add_"#!tolower(base)#"_"#!tolower(sign)#"32"),
+            [(GetNamedOperand $src0), (GetNamedOperand $src1),
+             (GetNamedOperand $src2),
+             (LLVMZExtOrTrunc (GetNamedOperand $clamp), si_llvm_i1_ty)]))
+      ];
+    }
+    def !cast<InstSI>("V_PK_ADD_"#base#"_"#sign#"16")#_sem
+        : InstSISemantic<!cast<InstSI>("V_PK_ADD_"#base#"_"#sign#"16")> {
+      let Semantic = [
+        (SetNamedOperand $vdst,
+          (LLVMIntrinsic si_llvm_v2i16_ty,
+            !cast<Intrinsic>("int_amdgcn_pk_add_"#!tolower(base)#"_"#!tolower(sign)#"16"),
+            [(GetNamedOperand $src0), (GetNamedOperand $src1),
+             (GetNamedOperand $src2),
+             (LLVMZExtOrTrunc (GetNamedOperand $clamp), si_llvm_i1_ty)]))
+      ];
+    }
+  }
+}
+
+//==============================================================================
+// V_ADD/SUB integer + V_MUL_U64 (Phase 17, re-add)
+//==============================================================================
+foreach inst = [V_ADD_I32_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMAdd (GetNamedOperand $src0), (GetNamedOperand $src1)))];
+  }
+}
+foreach inst = [V_SUB_I32_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMSub (GetNamedOperand $src0), (GetNamedOperand $src1)))];
+  }
+}
+foreach inst = [V_ADD_I16_e64, V_ADD_I16_t16_e64, V_ADD_I16_fake16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMAdd (GetNamedOperand $src0, si_llvm_i16_ty),
+               (GetNamedOperand $src1, si_llvm_i16_ty)))];
+  }
+}
+foreach inst = [V_SUB_I16_e64, V_SUB_I16_t16_e64, V_SUB_I16_fake16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMSub (GetNamedOperand $src0, si_llvm_i16_ty),
+               (GetNamedOperand $src1, si_llvm_i16_ty)))];
+  }
+}
+foreach inst = [V_ADD_U64_e32, V_ADD_U64_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMAdd (GetNamedOperand $src0, si_llvm_i64_ty),
+               (GetNamedOperand $src1, si_llvm_i64_ty)))];
+  }
+}
+foreach inst = [V_SUB_U64_e32, V_SUB_U64_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMSub (GetNamedOperand $src0, si_llvm_i64_ty),
+               (GetNamedOperand $src1, si_llvm_i64_ty)))];
+  }
+}
+foreach inst = [V_MUL_U64_e32, V_MUL_U64_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMMul (GetNamedOperand $src0, si_llvm_i64_ty),
+               (GetNamedOperand $src1, si_llvm_i64_ty)))];
+  }
+}
+def V_FMAAK_F64_sem : InstSISemantic<V_FMAAK_F64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMFMA (GetNamedOperand $src0, si_llvm_double_ty),
+             (GetNamedOperand $src1, si_llvm_double_ty),
+             (GetNamedOperand $imm, si_llvm_double_ty)))];
+}
+def V_FMAMK_F64_sem : InstSISemantic<V_FMAMK_F64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMFMA (GetNamedOperand $src0, si_llvm_double_ty),
+             (GetNamedOperand $imm, si_llvm_double_ty),
+             (GetNamedOperand $src1, si_llvm_double_ty)))];
+}
+def V_MAD_U32_e64_sem : InstSISemantic<V_MAD_U32_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMAdd (LLVMMul (GetNamedOperand $src0), (GetNamedOperand $src1)),
+             (GetNamedOperand $src2)))];
+}
+def V_MAD_NC_I64_I32_e64_sem : InstSISemantic<V_MAD_NC_I64_I32_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMAdd
+      (LLVMMul (LLVMSExt (GetNamedOperand $src0), si_llvm_i64_ty),
+               (LLVMSExt (GetNamedOperand $src1), si_llvm_i64_ty)),
+      (GetNamedOperand $src2, si_llvm_i64_ty)))];
+}
+def V_MAD_NC_U64_U32_e64_sem : InstSISemantic<V_MAD_NC_U64_U32_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMAdd
+      (LLVMMul (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+               (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty)),
+      (GetNamedOperand $src2, si_llvm_i64_ty)))];
+}
+
+//==============================================================================
+// V_BITOP3 (Phase 18, re-add)
+//==============================================================================
+def V_BITOP3_B32_e64_sem : InstSISemantic<V_BITOP3_B32_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_bitop3,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1),
+       (GetNamedOperand $src2),
+       (GetNamedOperand $bitop3, si_llvm_i32_ty)]))];
+}
+foreach inst = [V_BITOP3_B16_e64, V_BITOP3_B16_gfx1250_e64,
+                V_BITOP3_B16_gfx1250_t16_e64, V_BITOP3_B16_gfx1250_fake16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_bitop3,
+        [(GetNamedOperand $src0, si_llvm_i16_ty),
+         (GetNamedOperand $src1, si_llvm_i16_ty),
+         (GetNamedOperand $src2, si_llvm_i16_ty),
+         (GetNamedOperand $bitop3, si_llvm_i32_ty)]))];
+  }
+}
+foreach pair = [["AND", "LLVMAnd"], ["OR", "LLVMOr"], ["XOR", "LLVMXor"]] in {
+  defvar opName = pair[0];
+  defvar Op = !cast<LLVMOp>(pair[1]);
+  foreach inst = [!cast<InstSI>("V_"#opName#"_B16_t16_e64"),
+                  !cast<InstSI>("V_"#opName#"_B16_fake16_e64")] in {
+    def inst#_sem : InstSISemantic<inst> {
+      let Semantic = [(SetNamedOperand $vdst,
+        (Op (GetNamedOperand $src0, si_llvm_i16_ty),
+            (GetNamedOperand $src1, si_llvm_i16_ty)))];
+    }
+  }
+}
+foreach inst = [V_CNDMASK_B16_t16_e32, V_CNDMASK_B16_t16_e64,
+                V_CNDMASK_B16_fake16_e32, V_CNDMASK_B16_fake16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMSelect (ImplicitUse VCC),
+                  (GetNamedOperand $src1, si_llvm_i16_ty),
+                  (GetNamedOperand $src0, si_llvm_i16_ty)))];
+  }
+}
+def V_MIN_I64_e64_sem : InstSISemantic<V_MIN_I64_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMSelect (LLVMCmp LLVMICmpSLT,
+                  (GetNamedOperand $src0, si_llvm_i64_ty),
+                  (GetNamedOperand $src1, si_llvm_i64_ty)),
+                (GetNamedOperand $src0, si_llvm_i64_ty),
+                (GetNamedOperand $src1, si_llvm_i64_ty)))];
+}
+def V_MAX_I64_e64_sem : InstSISemantic<V_MAX_I64_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMSelect (LLVMCmp LLVMICmpSGT,
+                  (GetNamedOperand $src0, si_llvm_i64_ty),
+                  (GetNamedOperand $src1, si_llvm_i64_ty)),
+                (GetNamedOperand $src0, si_llvm_i64_ty),
+                (GetNamedOperand $src1, si_llvm_i64_ty)))];
+}
+def V_MIN_U64_e64_sem : InstSISemantic<V_MIN_U64_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMSelect (LLVMCmp LLVMICmpULT,
+                  (GetNamedOperand $src0, si_llvm_i64_ty),
+                  (GetNamedOperand $src1, si_llvm_i64_ty)),
+                (GetNamedOperand $src0, si_llvm_i64_ty),
+                (GetNamedOperand $src1, si_llvm_i64_ty)))];
+}
+def V_MAX_U64_e64_sem : InstSISemantic<V_MAX_U64_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMSelect (LLVMCmp LLVMICmpUGT,
+                  (GetNamedOperand $src0, si_llvm_i64_ty),
+                  (GetNamedOperand $src1, si_llvm_i64_ty)),
+                (GetNamedOperand $src0, si_llvm_i64_ty),
+                (GetNamedOperand $src1, si_llvm_i64_ty)))];
+}
+foreach inst = [V_MINIMUMMAXIMUM_F16_e64,
+                V_MINIMUMMAXIMUM_F16_t16_e64,
+                V_MINIMUMMAXIMUM_F16_fake16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMBinaryIntrinsic int_minimum,
+        (GetNamedOperand $src0, si_llvm_half_ty),
+        (GetNamedOperand $src1, si_llvm_half_ty)))];
+  }
+}
+def V_PERMLANE16_SWAP_B32_e64_sem : InstSISemantic<V_PERMLANE16_SWAP_B32_e64> {
+  let Semantic = [
+    (DefVal $r, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_permlane16_swap,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1),
+       (ConstantInt si_llvm_i1_ty, 0), (ConstantInt si_llvm_i1_ty, 0)])),
+    (SetNamedOperand $vdst, (LLVMExtractElement (GetVal $r), (ConstantInt si_llvm_i32_ty, 0)))
+  ];
+}
+def V_PERMLANE16_SWAP_B32_e32_sem : InstSISemantic<V_PERMLANE16_SWAP_B32_e32> {
+  let Semantic = [
+    (DefVal $r, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_permlane16_swap,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1),
+       (ConstantInt si_llvm_i1_ty, 0), (ConstantInt si_llvm_i1_ty, 0)])),
+    (SetNamedOperand $vdst, (LLVMExtractElement (GetVal $r), (ConstantInt si_llvm_i32_ty, 0)))
+  ];
+}
+def V_PERMLANE32_SWAP_B32_e64_sem : InstSISemantic<V_PERMLANE32_SWAP_B32_e64> {
+  let Semantic = [
+    (DefVal $r, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_permlane32_swap,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1),
+       (ConstantInt si_llvm_i1_ty, 0), (ConstantInt si_llvm_i1_ty, 0)])),
+    (SetNamedOperand $vdst, (LLVMExtractElement (GetVal $r), (ConstantInt si_llvm_i32_ty, 0)))
+  ];
+}
+def V_PERMLANE32_SWAP_B32_e32_sem : InstSISemantic<V_PERMLANE32_SWAP_B32_e32> {
+  let Semantic = [
+    (DefVal $r, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_permlane32_swap,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1),
+       (ConstantInt si_llvm_i1_ty, 0), (ConstantInt si_llvm_i1_ty, 0)])),
+    (SetNamedOperand $vdst, (LLVMExtractElement (GetVal $r), (ConstantInt si_llvm_i32_ty, 0)))
+  ];
+}
+def V_PERMLANE_BCAST_B32_e64_sem : InstSISemantic<V_PERMLANE_BCAST_B32_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_permlane_bcast,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+//==============================================================================
+// V_FMA_MIX + V_MAD_MIX + V_DOT2C + V_PRNG + V_MSAD/MQSAD + V_PERMLANE_UP/DOWN/XOR/IDX_GEN + V_SWAP_B16 + V_SET_INACTIVE (Phase 19, re-add)
+//==============================================================================
+def V_FMA_MIX_F32_sem : InstSISemantic<V_FMA_MIX_F32> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMFMA (GetNamedOperand $src0, si_llvm_float_ty),
+             (GetNamedOperand $src1, si_llvm_float_ty),
+             (GetNamedOperand $src2, si_llvm_float_ty)))];
+}
+def V_FMA_MIX_F32_BF16_sem : InstSISemantic<V_FMA_MIX_F32_BF16> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMFMA (GetNamedOperand $src0, si_llvm_float_ty),
+             (GetNamedOperand $src1, si_llvm_float_ty),
+             (GetNamedOperand $src2, si_llvm_float_ty)))];
+}
+def V_MAD_MIX_F32_sem : InstSISemantic<V_MAD_MIX_F32> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMFAdd (LLVMFMul (GetNamedOperand $src0, si_llvm_float_ty),
+                        (GetNamedOperand $src1, si_llvm_float_ty)),
+              (GetNamedOperand $src2, si_llvm_float_ty)))];
+}
+foreach inst = [V_FMA_MIXHI_F16, V_FMA_MIXLO_F16,
+                V_MAD_MIXHI_F16, V_MAD_MIXLO_F16] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMFPTrunc (LLVMFMA (GetNamedOperand $src0, si_llvm_float_ty),
+                            (GetNamedOperand $src1, si_llvm_float_ty),
+                            (GetNamedOperand $src2, si_llvm_float_ty)),
+                   si_llvm_half_ty))];
+  }
+}
+foreach inst = [V_FMA_MIXHI_BF16, V_FMA_MIXLO_BF16] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMFPTrunc (LLVMFMA (GetNamedOperand $src0, si_llvm_float_ty),
+                            (GetNamedOperand $src1, si_llvm_float_ty),
+                            (GetNamedOperand $src2, si_llvm_float_ty)),
+                   si_llvm_bfloat_ty))];
+  }
+}
+foreach inst = [V_DOT2C_F32_BF16_e32, V_DOT2C_F32_BF16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (DefVal $a, (GetNamedOperand $src0, si_llvm_v2bf16_ty)),
+      (DefVal $b, (GetNamedOperand $src1, si_llvm_v2bf16_ty)),
+      (DefVal $a0, (LLVMFPExt (LLVMExtractElement (GetVal $a), (ConstantInt si_llvm_i32_ty, 0)), si_llvm_float_ty)),
+      (DefVal $a1, (LLVMFPExt (LLVMExtractElement (GetVal $a), (ConstantInt si_llvm_i32_ty, 1)), si_llvm_float_ty)),
+      (DefVal $b0, (LLVMFPExt (LLVMExtractElement (GetVal $b), (ConstantInt si_llvm_i32_ty, 0)), si_llvm_float_ty)),
+      (DefVal $b1, (LLVMFPExt (LLVMExtractElement (GetVal $b), (ConstantInt si_llvm_i32_ty, 1)), si_llvm_float_ty)),
+      (SetNamedOperand $vdst,
+        (LLVMFAdd (LLVMFMul (GetVal $a0), (GetVal $b0)),
+                  (LLVMFAdd (LLVMFMul (GetVal $a1), (GetVal $b1)),
+                            (GetNamedOperand $vdst, si_llvm_float_ty))))
+    ];
+  }
+}
+foreach inst = [V_PRNG_B32_e32, V_PRNG_B32_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_prng_b32,
+        [(GetNamedOperand $src0)]))];
+  }
+}
+def V_MSAD_U8_e64_sem : InstSISemantic<V_MSAD_U8_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_msad_u8,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+def V_MQSAD_U32_U8_e64_sem : InstSISemantic<V_MQSAD_U32_U8_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMIntrinsic si_llvm_v4i32_ty, int_amdgcn_mqsad_u32_u8,
+      [(GetNamedOperand $src0, si_llvm_i64_ty),
+       (GetNamedOperand $src1),
+       (GetNamedOperand $src2, si_llvm_v4i32_ty)]))];
+}
+def V_MQSAD_PK_U16_U8_e64_sem : InstSISemantic<V_MQSAD_PK_U16_U8_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_mqsad_pk_u16_u8,
+      [(GetNamedOperand $src0, si_llvm_i64_ty),
+       (GetNamedOperand $src1),
+       (GetNamedOperand $src2, si_llvm_i64_ty)]))];
+}
+def V_PERMLANE_UP_B32_e64_sem : InstSISemantic<V_PERMLANE_UP_B32_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_permlane_up,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+def V_PERMLANE_DOWN_B32_e64_sem : InstSISemantic<V_PERMLANE_DOWN_B32_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_permlane_down,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+def V_PERMLANE_XOR_B32_e64_sem : InstSISemantic<V_PERMLANE_XOR_B32_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_permlane_xor,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+def V_PERMLANE_IDX_GEN_B32_e64_sem : InstSISemantic<V_PERMLANE_IDX_GEN_B32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (GetNamedOperand $src0))];
+}
+def V_SWAP_B16_sem : InstSISemantic<V_SWAP_B16> {
+  let Semantic = [(SetNamedOperand $vdst, (GetNamedOperand $src0, si_llvm_i16_ty))];
+}
+def V_SET_INACTIVE_B32_sem : InstSISemantic<V_SET_INACTIVE_B32> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_set_inactive,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+//==============================================================================
+// V_CVT_F32_BF16 / V_CVT_F16_FP8/BF8 / V_CVT_PK_F16_FP8/BF8 / V_CVT_PK_*_F16 / V_CVT_PK_F16/BF16_F32 (Phase 20, re-add)
+//==============================================================================
+foreach inst = [V_CVT_F32_BF16_e32, V_CVT_F32_BF16_e64,
+                V_CVT_F32_BF16_t16_e32, V_CVT_F32_BF16_t16_e64,
+                V_CVT_F32_BF16_fake16_e32, V_CVT_F32_BF16_fake16_e64,
+                V_CVT_F32_BF16_gfx1250_t16_e32, V_CVT_F32_BF16_gfx1250_t16_e64,
+                V_CVT_F32_BF16_gfx1250_fake16_e32, V_CVT_F32_BF16_gfx1250_fake16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst,
+      (LLVMFPExt (GetNamedOperand $src0, si_llvm_bfloat_ty), si_llvm_float_ty))];
+  }
+}
+foreach fpFmt = ["FP8", "BF8"] in {
+  foreach inst = [!cast<InstSI>("V_CVT_F16_"#fpFmt#"_e32"),
+                  !cast<InstSI>("V_CVT_F16_"#fpFmt#"_e64"),
+                  !cast<InstSI>("V_CVT_F16_"#fpFmt#"_t16_e32"),
+                  !cast<InstSI>("V_CVT_F16_"#fpFmt#"_t16_e64"),
+                  !cast<InstSI>("V_CVT_F16_"#fpFmt#"_fake16_e32"),
+                  !cast<InstSI>("V_CVT_F16_"#fpFmt#"_fake16_e64")] in {
+    def inst#_sem : InstSISemantic<inst> {
+      let Semantic = [(SetNamedOperand $vdst,
+        (LLVMIntrinsic si_llvm_half_ty,
+          !cast<Intrinsic>("int_amdgcn_cvt_f16_"#!tolower(fpFmt)),
+          [(GetNamedOperand $src0), (ConstantInt si_llvm_i32_ty, 0)]))];
+    }
+  }
+}
+foreach fpFmt = ["FP8", "BF8"] in {
+  foreach inst = [!cast<InstSI>("V_CVT_PK_F16_"#fpFmt#"_e32"),
+                  !cast<InstSI>("V_CVT_PK_F16_"#fpFmt#"_e64"),
+                  !cast<InstSI>("V_CVT_PK_F16_"#fpFmt#"_t16_e32"),
+                  !cast<InstSI>("V_CVT_PK_F16_"#fpFmt#"_t16_e64"),
+                  !cast<InstSI>("V_CVT_PK_F16_"#fpFmt#"_fake16_e32"),
+                  !cast<InstSI>("V_CVT_PK_F16_"#fpFmt#"_fake16_e64")] in {
+    def inst#_sem : InstSISemantic<inst> {
+      let Semantic = [(SetNamedOperand $vdst,
+        (LLVMIntrinsic si_llvm_v2f16_ty,
+          !cast<Intrinsic>("int_amdgcn_cvt_pk_f16_"#!tolower(fpFmt)),
+          [(GetNamedOperand $src0, si_llvm_i16_ty)]))];
+    }
+  }
+}
+foreach fpFmt = ["FP8", "BF8"] in {
+  foreach inst = [!cast<InstSI>("V_CVT_PK_"#fpFmt#"_F16_gfx1250_e64"),
+                  !cast<InstSI>("V_CVT_PK_"#fpFmt#"_F16_gfx1250_t16_e64"),
+                  !cast<InstSI>("V_CVT_PK_"#fpFmt#"_F16_gfx1250_fake16_e64")] in {
+    def inst#_sem : InstSISemantic<inst> {
+      let Semantic = [(SetNamedOperand $vdst,
+        (LLVMIntrinsic si_llvm_i16_ty,
+          !cast<Intrinsic>("int_amdgcn_cvt_pk_"#!tolower(fpFmt)#"_f16"),
+          [(GetNamedOperand $src0, si_llvm_v2f16_ty)]))];
+    }
+  }
+}
+def V_CVT_PK_F16_F32_e64_sem : InstSISemantic<V_CVT_PK_F16_F32_e64> {
+  let Semantic = [
+    (DefVal $lo, (LLVMFPTrunc (GetNamedOperand $src0, si_llvm_float_ty), si_llvm_half_ty)),
+    (DefVal $hi, (LLVMFPTrunc (GetNamedOperand $src1, si_llvm_float_ty), si_llvm_half_ty)),
+    (DefVal $vec, (LLVMInsertElement
+      (LLVMInsertElement
+        (PoisionVal si_llvm_v2f16_ty),
+        (GetVal $lo), (ConstantInt si_llvm_i32_ty, 0)),
+      (GetVal $hi), (ConstantInt si_llvm_i32_ty, 1))),
+    (SetNamedOperand $vdst, (GetVal $vec))
+  ];
+}
+def V_CVT_PK_BF16_F32_e64_sem : InstSISemantic<V_CVT_PK_BF16_F32_e64> {
+  let Semantic = [
+    (DefVal $lo, (LLVMFPTrunc (GetNamedOperand $src0, si_llvm_float_ty), si_llvm_bfloat_ty)),
+    (DefVal $hi, (LLVMFPTrunc (GetNamedOperand $src1, si_llvm_float_ty), si_llvm_bfloat_ty)),
+    (DefVal $vec, (LLVMInsertElement
+      (LLVMInsertElement
+        (PoisionVal si_llvm_v2bf16_ty),
+        (GetVal $lo), (ConstantInt si_llvm_i32_ty, 0)),
+      (GetVal $hi), (ConstantInt si_llvm_i32_ty, 1))),
+    (SetNamedOperand $vdst, (GetVal $vec))
+  ];
+}
+
+//==============================================================================
+// V_ASHR_PK + V_MAX_BF16_PSEUDO + V_INTERP_inreg (Phase 22, re-add)
+//==============================================================================
+def V_ASHR_PK_I8_I32_e64_sem : InstSISemantic<V_ASHR_PK_I8_I32_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_ashr_pk_i8_i32,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+def V_ASHR_PK_U8_I32_e64_sem : InstSISemantic<V_ASHR_PK_U8_I32_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_ashr_pk_u8_i32,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+def V_MAX_BF16_PSEUDO_e64_sem : InstSISemantic<V_MAX_BF16_PSEUDO_e64> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMBinaryIntrinsic int_maxnum,
+      (GetNamedOperand $src0, si_llvm_bfloat_ty),
+      (GetNamedOperand $src1, si_llvm_bfloat_ty)))];
+}
+def V_INTERP_P10_F32_inreg_sem : InstSISemantic<V_INTERP_P10_F32_inreg> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_inreg_p10,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+def V_INTERP_P2_F32_inreg_sem : InstSISemantic<V_INTERP_P2_F32_inreg> {
+  let Semantic = [(SetNamedOperand $vdst,
+    (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_inreg_p2,
+      [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+//==============================================================================
+// V_CVT_SCALEF32_* family (Phase 21) — auto-generated from opcode-derived
+// int_amdgcn_cvt_scalef32_* intrinsics.
+//==============================================================================
+
+def V_CVT_SCALEF32_2XPK16_BF6_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_2XPK16_BF6_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v6i32_ty, int_amdgcn_cvt_scalef32_2xpk16_bf6_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_2XPK16_FP6_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_2XPK16_FP6_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v6i32_ty, int_amdgcn_cvt_scalef32_2xpk16_fp6_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_F16_BF8_e64_sem : InstSISemantic<V_CVT_SCALEF32_F16_BF8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_cvt_scalef32_f16_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_F16_FP8_e64_sem : InstSISemantic<V_CVT_SCALEF32_F16_FP8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_cvt_scalef32_f16_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_F32_BF8_e64_sem : InstSISemantic<V_CVT_SCALEF32_F32_BF8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_cvt_scalef32_f32_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_F32_FP8_e64_sem : InstSISemantic<V_CVT_SCALEF32_F32_FP8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_cvt_scalef32_f32_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK16_BF6_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK16_BF6_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_cvt_scalef32_pk16_bf6_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK16_BF6_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK16_BF6_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_cvt_scalef32_pk16_bf6_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK16_BF6_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK16_BF6_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_cvt_scalef32_pk16_bf6_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK16_FP6_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK16_FP6_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_cvt_scalef32_pk16_fp6_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK16_FP6_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK16_FP6_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_cvt_scalef32_pk16_fp6_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK16_FP6_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK16_FP6_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_cvt_scalef32_pk16_fp6_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK32_BF16_BF6_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK32_BF16_BF6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32bf16_ty, int_amdgcn_cvt_scalef32_pk32_bf16_bf6, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK32_BF16_FP6_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK32_BF16_FP6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32bf16_ty, int_amdgcn_cvt_scalef32_pk32_bf16_fp6, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK32_BF6_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK32_BF6_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v6i32_ty, int_amdgcn_cvt_scalef32_pk32_bf6_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK32_BF6_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK32_BF6_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v6i32_ty, int_amdgcn_cvt_scalef32_pk32_bf6_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK32_F16_BF6_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK32_F16_BF6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f16_ty, int_amdgcn_cvt_scalef32_pk32_f16_bf6, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK32_F16_FP6_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK32_F16_FP6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f16_ty, int_amdgcn_cvt_scalef32_pk32_f16_fp6, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK32_F32_BF6_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK32_F32_BF6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_cvt_scalef32_pk32_f32_bf6, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK32_F32_FP6_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK32_F32_FP6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v32f32_ty, int_amdgcn_cvt_scalef32_pk32_f32_fp6, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK32_FP6_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK32_FP6_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v6i32_ty, int_amdgcn_cvt_scalef32_pk32_fp6_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK32_FP6_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK32_FP6_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v6i32_ty, int_amdgcn_cvt_scalef32_pk32_fp6_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK8_BF8_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK8_BF8_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_pk8_bf8_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK8_BF8_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK8_BF8_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_pk8_bf8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK8_BF8_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK8_BF8_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_pk8_bf8_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK8_FP4_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK8_FP4_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_pk8_fp4_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK8_FP4_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK8_FP4_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_pk8_fp4_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK8_FP4_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK8_FP4_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_pk8_fp4_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK8_FP8_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK8_FP8_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_pk8_fp8_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK8_FP8_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK8_FP8_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_pk8_fp8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK8_FP8_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK8_FP8_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_pk8_fp8_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK_BF16_BF8_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_BF16_BF8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2bf16_ty, int_amdgcn_cvt_scalef32_pk_bf16_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK_BF16_FP4_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_BF16_FP4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2bf16_ty, int_amdgcn_cvt_scalef32_pk_bf16_fp4, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK_BF16_FP8_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_BF16_FP8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2bf16_ty, int_amdgcn_cvt_scalef32_pk_bf16_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK_BF8_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_BF8_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_scalef32_pk_bf8_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_PK_BF8_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_BF8_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_scalef32_pk_bf8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_PK_BF8_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_BF8_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_scalef32_pk_bf8_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_PK_F16_BF8_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_F16_BF8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2f16_ty, int_amdgcn_cvt_scalef32_pk_f16_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK_F16_FP4_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_F16_FP4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2f16_ty, int_amdgcn_cvt_scalef32_pk_f16_fp4, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK_F16_FP8_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_F16_FP8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2f16_ty, int_amdgcn_cvt_scalef32_pk_f16_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK_F32_BF8_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_F32_BF8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2f32_ty, int_amdgcn_cvt_scalef32_pk_f32_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK_F32_FP4_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_F32_FP4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2f32_ty, int_amdgcn_cvt_scalef32_pk_f32_fp4, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK_F32_FP8_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_F32_FP8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2f32_ty, int_amdgcn_cvt_scalef32_pk_f32_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))];
+}
+
+def V_CVT_SCALEF32_PK_FP4_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_FP4_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_scalef32_pk_fp4_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_PK_FP4_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_FP4_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_scalef32_pk_fp4_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_PK_FP4_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_FP4_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_scalef32_pk_fp4_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_PK_FP8_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_FP8_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_scalef32_pk_fp8_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_PK_FP8_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_FP8_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_scalef32_pk_fp8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_PK_FP8_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_PK_FP8_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_scalef32_pk_fp8_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_SR_BF8_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_BF8_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_cvt_scalef32_sr_bf8_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_SR_BF8_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_BF8_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_cvt_scalef32_sr_bf8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_SR_BF8_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_BF8_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_cvt_scalef32_sr_bf8_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_SR_FP8_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_FP8_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_cvt_scalef32_sr_fp8_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_SR_FP8_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_FP8_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_cvt_scalef32_sr_fp8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_SR_FP8_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_FP8_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_cvt_scalef32_sr_fp8_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK16_BF6_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK16_BF6_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_cvt_scalef32_sr_pk16_bf6_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK16_BF6_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK16_BF6_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_cvt_scalef32_sr_pk16_bf6_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK16_BF6_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK16_BF6_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_cvt_scalef32_sr_pk16_bf6_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK16_FP6_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK16_FP6_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_cvt_scalef32_sr_pk16_fp6_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK16_FP6_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK16_FP6_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_cvt_scalef32_sr_pk16_fp6_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK16_FP6_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK16_FP6_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v3i32_ty, int_amdgcn_cvt_scalef32_sr_pk16_fp6_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK32_BF6_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK32_BF6_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v6i32_ty, int_amdgcn_cvt_scalef32_sr_pk32_bf6_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK32_BF6_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK32_BF6_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v6i32_ty, int_amdgcn_cvt_scalef32_sr_pk32_bf6_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK32_BF6_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK32_BF6_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v6i32_ty, int_amdgcn_cvt_scalef32_sr_pk32_bf6_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK32_FP6_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK32_FP6_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v6i32_ty, int_amdgcn_cvt_scalef32_sr_pk32_fp6_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK32_FP6_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK32_FP6_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v6i32_ty, int_amdgcn_cvt_scalef32_sr_pk32_fp6_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK32_FP6_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK32_FP6_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v6i32_ty, int_amdgcn_cvt_scalef32_sr_pk32_fp6_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK8_BF8_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK8_BF8_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_sr_pk8_bf8_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK8_BF8_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK8_BF8_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_sr_pk8_bf8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK8_BF8_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK8_BF8_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_sr_pk8_bf8_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK8_FP4_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK8_FP4_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_sr_pk8_fp4_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK8_FP4_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK8_FP4_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_sr_pk8_fp4_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK8_FP4_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK8_FP4_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_sr_pk8_fp4_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK8_FP8_BF16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK8_FP8_BF16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_sr_pk8_fp8_bf16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK8_FP8_F16_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK8_FP8_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_sr_pk8_fp8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SCALEF32_SR_PK8_FP8_F32_e64_sem : InstSISemantic<V_CVT_SCALEF32_SR_PK8_FP8_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2i32_ty, int_amdgcn_cvt_scalef32_sr_pk8_fp8_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+//==============================================================================
+// V_CVT_SR_* / V_CVT_SCALE_PK* (Phase 22)
+//==============================================================================
+
+def V_CVT_SCALE_PK16_BF16_BF6_e64_sem : InstSISemantic<V_CVT_SCALE_PK16_BF16_BF6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16bf16_ty, int_amdgcn_cvt_scale_pk16_bf16_bf6, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK16_BF16_FP6_e64_sem : InstSISemantic<V_CVT_SCALE_PK16_BF16_FP6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16bf16_ty, int_amdgcn_cvt_scale_pk16_bf16_fp6, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK16_F16_BF6_e64_sem : InstSISemantic<V_CVT_SCALE_PK16_F16_BF6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f16_ty, int_amdgcn_cvt_scale_pk16_f16_bf6, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK16_F16_FP6_e64_sem : InstSISemantic<V_CVT_SCALE_PK16_F16_FP6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f16_ty, int_amdgcn_cvt_scale_pk16_f16_fp6, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK16_F32_BF6_e64_sem : InstSISemantic<V_CVT_SCALE_PK16_F32_BF6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_cvt_scale_pk16_f32_bf6, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK16_F32_FP6_e64_sem : InstSISemantic<V_CVT_SCALE_PK16_F32_FP6_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v16f32_ty, int_amdgcn_cvt_scale_pk16_f32_fp6, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK8_BF16_BF8_e64_sem : InstSISemantic<V_CVT_SCALE_PK8_BF16_BF8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v8bf16_ty, int_amdgcn_cvt_scale_pk8_bf16_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK8_BF16_FP4_e64_sem : InstSISemantic<V_CVT_SCALE_PK8_BF16_FP4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v8bf16_ty, int_amdgcn_cvt_scale_pk8_bf16_fp4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK8_BF16_FP8_e64_sem : InstSISemantic<V_CVT_SCALE_PK8_BF16_FP8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v8bf16_ty, int_amdgcn_cvt_scale_pk8_bf16_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK8_F16_BF8_e64_sem : InstSISemantic<V_CVT_SCALE_PK8_F16_BF8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v8f16_ty, int_amdgcn_cvt_scale_pk8_f16_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK8_F16_FP4_e64_sem : InstSISemantic<V_CVT_SCALE_PK8_F16_FP4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v8f16_ty, int_amdgcn_cvt_scale_pk8_f16_fp4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK8_F16_FP8_e64_sem : InstSISemantic<V_CVT_SCALE_PK8_F16_FP8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v8f16_ty, int_amdgcn_cvt_scale_pk8_f16_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK8_F32_BF8_e64_sem : InstSISemantic<V_CVT_SCALE_PK8_F32_BF8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v8f32_ty, int_amdgcn_cvt_scale_pk8_f32_bf8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK8_F32_FP4_e64_sem : InstSISemantic<V_CVT_SCALE_PK8_F32_FP4_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v8f32_ty, int_amdgcn_cvt_scale_pk8_f32_fp4, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SCALE_PK8_F32_FP8_e64_sem : InstSISemantic<V_CVT_SCALE_PK8_F32_FP8_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v8f32_ty, int_amdgcn_cvt_scale_pk8_f32_fp8, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $scale_sel)]))];
+}
+
+def V_CVT_SR_BF16_F32_e64_sem : InstSISemantic<V_CVT_SR_BF16_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_bfloat_ty, int_amdgcn_cvt_sr_bf16_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SR_BF8_F16_e64_sem : InstSISemantic<V_CVT_SR_BF8_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_cvt_sr_bf8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in), (GetNamedOperand $byte_sel)]))];
+}
+
+def V_CVT_SR_BF8_F16_fake16_e64_sem : InstSISemantic<V_CVT_SR_BF8_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_cvt_sr_bf8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in), (GetNamedOperand $byte_sel)]))];
+}
+
+def V_CVT_SR_BF8_F16_t16_e64_sem : InstSISemantic<V_CVT_SR_BF8_F16_t16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_cvt_sr_bf8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in), (GetNamedOperand $byte_sel)]))];
+}
+
+def V_CVT_SR_F16_F32_e64_sem : InstSISemantic<V_CVT_SR_F16_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_cvt_sr_f16_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in)]))];
+}
+
+def V_CVT_SR_FP8_F16_e64_sem : InstSISemantic<V_CVT_SR_FP8_F16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_cvt_sr_fp8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in), (GetNamedOperand $byte_sel)]))];
+}
+
+def V_CVT_SR_FP8_F16_fake16_e64_sem : InstSISemantic<V_CVT_SR_FP8_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_cvt_sr_fp8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in), (GetNamedOperand $byte_sel)]))];
+}
+
+def V_CVT_SR_FP8_F16_t16_e64_sem : InstSISemantic<V_CVT_SR_FP8_F16_t16_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_cvt_sr_fp8_f16, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $vdst_in), (GetNamedOperand $byte_sel)]))];
+}
+
+def V_CVT_SR_PK_BF16_F32_e64_sem : InstSISemantic<V_CVT_SR_PK_BF16_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2bf16_ty, int_amdgcn_cvt_sr_pk_bf16_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+def V_CVT_SR_PK_F16_F32_e64_sem : InstSISemantic<V_CVT_SR_PK_F16_F32_e64> {
+  let Semantic = [(SetNamedOperand $vdst, (LLVMIntrinsic si_llvm_v2f16_ty, int_amdgcn_cvt_sr_pk_f16_f32, [(GetNamedOperand $src0), (GetNamedOperand $src1), (GetNamedOperand $src2)]))];
+}
+
+//==============================================================================
+// V tail final remnants (Phase 23)
+//==============================================================================
+// V_CVT_SCALEF32_SR_PK_FP4_<output> — SR-rounded PK FP4 conversion. Map to
+// the corresponding non-SR intrinsic since SR rounding has no IR equivalent;
+// passes through src0 with scale.
+foreach inst = [V_CVT_SCALEF32_SR_PK_FP4_BF16_e64,
+                V_CVT_SCALEF32_SR_PK_FP4_F16_e64,
+                V_CVT_SCALEF32_SR_PK_FP4_F32_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+    ];
+  }
+}
+
+// V_MFMA_LD_SCALE_B32 / V_WMMA_LD_SCALE_*: load matrix scale from MFMA reg.
+// No clean intrinsic; emit fence placeholders.
+def V_MFMA_LD_SCALE_B32_sem : InstSISemantic<V_MFMA_LD_SCALE_B32> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+def V_WMMA_LD_SCALE_PAIRED_B32_sem : InstSISemantic<V_WMMA_LD_SCALE_PAIRED_B32> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+def V_WMMA_LD_SCALE16_PAIRED_B64_sem : InstSISemantic<V_WMMA_LD_SCALE16_PAIRED_B64> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+// V_MOV_B64_DPP_PSEUDO: 64-bit move with DPP. Model as plain move.
+def V_MOV_B64_DPP_PSEUDO_sem : InstSISemantic<V_MOV_B64_DPP_PSEUDO> {
+  let Semantic = [(SetNamedOperand $vdst, (GetNamedOperand $src0, si_llvm_i64_ty))];
+}
+
+// V_PERM_PK16_B{4,6,8}_U4 — packed byte permutation. Approximate as plain src0 forward.
+foreach inst = [V_PERM_PK16_B4_U4_e64, V_PERM_PK16_B6_U4_e64, V_PERM_PK16_B8_U4_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdst, (GetNamedOperand $src0))];
+  }
+}

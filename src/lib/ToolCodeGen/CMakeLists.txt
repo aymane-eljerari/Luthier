@@ -50,7 +50,6 @@ add_library(LuthierToolCodeGen OBJECT
         InjectedPayloadAndInstPointAnalysis.cpp
         InjectedPayloadAccessedRegsAnalysis.cpp
         InstrumentationPMDriver.cpp
-        CodeObjectManagerAnalysis.cpp
         InitialEntryPointAnalysis.cpp
         InitialExecutionPointAnalysis.cpp
         Metadata.cpp

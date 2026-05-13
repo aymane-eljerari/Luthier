@@ -17,7 +17,7 @@
 /// Implements the \c MockLoadAMDGPUCodeObjects class.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGenTesting/MockLoadAMDGPUCodeObjects.h"
-#include "luthier/ToolCodeGen/CodeObjectManagerAnalysis.h"
+#include "luthier/ToolCodeGenTesting/CodeObjectManagerAnalysis.h"
 #include <llvm/IR/Module.h>
 
 #undef DEBUG_TYPE

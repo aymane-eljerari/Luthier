@@ -6368,3 +6368,461 @@ def FLAT_STORE_SHORT_SADDR_sem : InstSISemantic<FLAT_STORE_SHORT_SADDR> {
   ];
 }
 
+
+//==============================================================================
+// gfx12 novel async / block / monitor / TR ops (Phase 14) — fence placeholders
+//==============================================================================
+
+def FLAT_LOAD_MONITOR_B128_sem : InstSISemantic<FLAT_LOAD_MONITOR_B128> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def FLAT_LOAD_MONITOR_B128_SADDR_sem : InstSISemantic<FLAT_LOAD_MONITOR_B128_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def FLAT_LOAD_MONITOR_B32_sem : InstSISemantic<FLAT_LOAD_MONITOR_B32> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def FLAT_LOAD_MONITOR_B32_SADDR_sem : InstSISemantic<FLAT_LOAD_MONITOR_B32_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def FLAT_LOAD_MONITOR_B64_sem : InstSISemantic<FLAT_LOAD_MONITOR_B64> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def FLAT_LOAD_MONITOR_B64_SADDR_sem : InstSISemantic<FLAT_LOAD_MONITOR_B64_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def FLAT_LOAD_SBYTE_D16_t16_SADDR_sem : InstSISemantic<FLAT_LOAD_SBYTE_D16_t16_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def FLAT_LOAD_SHORT_D16_t16_SADDR_sem : InstSISemantic<FLAT_LOAD_SHORT_D16_t16_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def FLAT_LOAD_UBYTE_D16_t16_SADDR_sem : InstSISemantic<FLAT_LOAD_UBYTE_D16_t16_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def FLAT_PREFETCH_B8_sem : InstSISemantic<FLAT_PREFETCH_B8> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def FLAT_PREFETCH_B8_SADDR_sem : InstSISemantic<FLAT_PREFETCH_B8_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_ASYNC_TO_LDS_B128_sem : InstSISemantic<GLOBAL_LOAD_ASYNC_TO_LDS_B128> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_ASYNC_TO_LDS_B128_SADDR_sem : InstSISemantic<GLOBAL_LOAD_ASYNC_TO_LDS_B128_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_ASYNC_TO_LDS_B32_sem : InstSISemantic<GLOBAL_LOAD_ASYNC_TO_LDS_B32> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_ASYNC_TO_LDS_B32_SADDR_sem : InstSISemantic<GLOBAL_LOAD_ASYNC_TO_LDS_B32_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_ASYNC_TO_LDS_B64_sem : InstSISemantic<GLOBAL_LOAD_ASYNC_TO_LDS_B64> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_ASYNC_TO_LDS_B64_SADDR_sem : InstSISemantic<GLOBAL_LOAD_ASYNC_TO_LDS_B64_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_ASYNC_TO_LDS_B8_sem : InstSISemantic<GLOBAL_LOAD_ASYNC_TO_LDS_B8> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_ASYNC_TO_LDS_B8_SADDR_sem : InstSISemantic<GLOBAL_LOAD_ASYNC_TO_LDS_B8_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_BLOCK_sem : InstSISemantic<GLOBAL_LOAD_BLOCK> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_BLOCK_SADDR_sem : InstSISemantic<GLOBAL_LOAD_BLOCK_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_DWORD_ADDTID_sem : InstSISemantic<GLOBAL_LOAD_DWORD_ADDTID> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_DWORD_ADDTID_SADDR_sem : InstSISemantic<GLOBAL_LOAD_DWORD_ADDTID_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_MONITOR_B128_sem : InstSISemantic<GLOBAL_LOAD_MONITOR_B128> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_MONITOR_B128_SADDR_sem : InstSISemantic<GLOBAL_LOAD_MONITOR_B128_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_MONITOR_B32_sem : InstSISemantic<GLOBAL_LOAD_MONITOR_B32> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_MONITOR_B32_SADDR_sem : InstSISemantic<GLOBAL_LOAD_MONITOR_B32_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_MONITOR_B64_sem : InstSISemantic<GLOBAL_LOAD_MONITOR_B64> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_MONITOR_B64_SADDR_sem : InstSISemantic<GLOBAL_LOAD_MONITOR_B64_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_TR4_B64_sem : InstSISemantic<GLOBAL_LOAD_TR4_B64> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_TR4_B64_SADDR_sem : InstSISemantic<GLOBAL_LOAD_TR4_B64_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_TR6_B96_sem : InstSISemantic<GLOBAL_LOAD_TR6_B96> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_TR6_B96_SADDR_sem : InstSISemantic<GLOBAL_LOAD_TR6_B96_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_TR_B128_w32_SADDR_sem : InstSISemantic<GLOBAL_LOAD_TR_B128_w32_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_TR_B128_w64_SADDR_sem : InstSISemantic<GLOBAL_LOAD_TR_B128_w64_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_TR_B64_w32_SADDR_sem : InstSISemantic<GLOBAL_LOAD_TR_B64_w32_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_LOAD_TR_B64_w64_SADDR_sem : InstSISemantic<GLOBAL_LOAD_TR_B64_w64_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_STORE_ASYNC_FROM_LDS_B128_sem : InstSISemantic<GLOBAL_STORE_ASYNC_FROM_LDS_B128> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_STORE_ASYNC_FROM_LDS_B128_SADDR_sem : InstSISemantic<GLOBAL_STORE_ASYNC_FROM_LDS_B128_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_STORE_ASYNC_FROM_LDS_B32_sem : InstSISemantic<GLOBAL_STORE_ASYNC_FROM_LDS_B32> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_STORE_ASYNC_FROM_LDS_B32_SADDR_sem : InstSISemantic<GLOBAL_STORE_ASYNC_FROM_LDS_B32_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_STORE_ASYNC_FROM_LDS_B64_sem : InstSISemantic<GLOBAL_STORE_ASYNC_FROM_LDS_B64> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_STORE_ASYNC_FROM_LDS_B64_SADDR_sem : InstSISemantic<GLOBAL_STORE_ASYNC_FROM_LDS_B64_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_STORE_ASYNC_FROM_LDS_B8_sem : InstSISemantic<GLOBAL_STORE_ASYNC_FROM_LDS_B8> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_STORE_ASYNC_FROM_LDS_B8_SADDR_sem : InstSISemantic<GLOBAL_STORE_ASYNC_FROM_LDS_B8_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def SCRATCH_LOAD_BLOCK_sem : InstSISemantic<SCRATCH_LOAD_BLOCK> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def SCRATCH_LOAD_BLOCK_SADDR_sem : InstSISemantic<SCRATCH_LOAD_BLOCK_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def SCRATCH_LOAD_BLOCK_ST_sem : InstSISemantic<SCRATCH_LOAD_BLOCK_ST> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def SCRATCH_LOAD_BLOCK_SVS_sem : InstSISemantic<SCRATCH_LOAD_BLOCK_SVS> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def SCRATCH_STORE_BLOCK_sem : InstSISemantic<SCRATCH_STORE_BLOCK> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def SCRATCH_STORE_BLOCK_SADDR_sem : InstSISemantic<SCRATCH_STORE_BLOCK_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def SCRATCH_STORE_BLOCK_ST_sem : InstSISemantic<SCRATCH_STORE_BLOCK_ST> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def SCRATCH_STORE_BLOCK_SVS_sem : InstSISemantic<SCRATCH_STORE_BLOCK_SVS> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+//==============================================================================
+// Remaining specialized ops (Phase 14) — fence placeholders
+//==============================================================================
+
+def CLUSTER_LOAD_ASYNC_TO_LDS_B128_sem : InstSISemantic<CLUSTER_LOAD_ASYNC_TO_LDS_B128> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def CLUSTER_LOAD_ASYNC_TO_LDS_B128_SADDR_sem : InstSISemantic<CLUSTER_LOAD_ASYNC_TO_LDS_B128_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def CLUSTER_LOAD_ASYNC_TO_LDS_B32_sem : InstSISemantic<CLUSTER_LOAD_ASYNC_TO_LDS_B32> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def CLUSTER_LOAD_ASYNC_TO_LDS_B32_SADDR_sem : InstSISemantic<CLUSTER_LOAD_ASYNC_TO_LDS_B32_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def CLUSTER_LOAD_ASYNC_TO_LDS_B64_sem : InstSISemantic<CLUSTER_LOAD_ASYNC_TO_LDS_B64> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def CLUSTER_LOAD_ASYNC_TO_LDS_B64_SADDR_sem : InstSISemantic<CLUSTER_LOAD_ASYNC_TO_LDS_B64_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def CLUSTER_LOAD_ASYNC_TO_LDS_B8_sem : InstSISemantic<CLUSTER_LOAD_ASYNC_TO_LDS_B8> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def CLUSTER_LOAD_ASYNC_TO_LDS_B8_SADDR_sem : InstSISemantic<CLUSTER_LOAD_ASYNC_TO_LDS_B8_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def CLUSTER_LOAD_B128_sem : InstSISemantic<CLUSTER_LOAD_B128> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def CLUSTER_LOAD_B128_SADDR_sem : InstSISemantic<CLUSTER_LOAD_B128_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def CLUSTER_LOAD_B32_sem : InstSISemantic<CLUSTER_LOAD_B32> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def CLUSTER_LOAD_B32_SADDR_sem : InstSISemantic<CLUSTER_LOAD_B32_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def CLUSTER_LOAD_B64_sem : InstSISemantic<CLUSTER_LOAD_B64> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def CLUSTER_LOAD_B64_SADDR_sem : InstSISemantic<CLUSTER_LOAD_B64_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def TENSOR_SAVE_sem : InstSISemantic<TENSOR_SAVE> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def TENSOR_STOP_sem : InstSISemantic<TENSOR_STOP> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_PREFETCH_B8_sem : InstSISemantic<GLOBAL_PREFETCH_B8> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_PREFETCH_B8_SADDR_sem : InstSISemantic<GLOBAL_PREFETCH_B8_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_STORE_BLOCK_sem : InstSISemantic<GLOBAL_STORE_BLOCK> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_STORE_BLOCK_SADDR_sem : InstSISemantic<GLOBAL_STORE_BLOCK_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_STORE_DWORD_ADDTID_sem : InstSISemantic<GLOBAL_STORE_DWORD_ADDTID> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}
+
+def GLOBAL_STORE_DWORD_ADDTID_SADDR_sem : InstSISemantic<GLOBAL_STORE_DWORD_ADDTID_SADDR> {
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
+}

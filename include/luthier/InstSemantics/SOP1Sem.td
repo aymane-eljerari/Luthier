@@ -1629,3 +1629,13 @@ def S_SETPC_B64_sem : InstSISemantic<S_SETPC_B64> {
     (IndirectTailCall (GetNamedOperand $src0))
   ];
 }
+
+// S_SETPC_B64_return is the return-edge variant of S_SETPC_B64; same operand
+// (target PC in $src0), same IR effect — indirect tail call to the caller's
+// return address. The "_return" suffix is metadata for the MIR scheduler /
+// callgraph analysis, not a semantic difference.
+def S_SETPC_B64_return_sem : InstSISemantic<S_SETPC_B64_return> {
+  let Semantic = [
+    (IndirectTailCall (GetNamedOperand $src0))
+  ];
+}
