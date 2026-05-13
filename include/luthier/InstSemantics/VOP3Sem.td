@@ -7491,3 +7491,270 @@ def V_SUB_NC_U16_fake16_e64_sem : InstSISemantic<V_SUB_NC_U16_fake16_e64> {
 def V_SUB_NC_U16_t16_e64_sem : InstSISemantic<V_SUB_NC_U16_t16_e64> {
   let Semantic = [(SetNamedOperand ?:$vdst, (LLVMZExt (LLVMSub (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)), si_llvm_i32_ty))];
 }
+
+//==============================================================================
+// V_ cross-product alias variants (Phase 8 generic)
+//==============================================================================
+
+// alias of V_CVT_SR_BF8_F32_e64
+def V_CVT_SR_BF8_F32_gfx12_e64_sem : InstSISemantic<V_CVT_SR_BF8_F32_gfx12_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_SR_FP8_F32_e64
+def V_CVT_SR_FP8_F32_gfx12_e64_sem : InstSISemantic<V_CVT_SR_FP8_F32_gfx12_e64> {
+  let Semantic = [];
+}
+
+//==============================================================================
+// V_ cross-product alias variants (Phase 8 generic)
+//==============================================================================
+
+// alias of V_CMPX_CLASS_F16_nosdst_e32
+def V_CMPX_CLASS_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_CLASS_F16_fake16_nosdst_e32> {
+  let Semantic = [(LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class, [(GetNamedOperand ?:$src0), (GetNamedOperand ?:$src1)])];
+}
+
+// alias of V_CMPX_EQ_F16_nosdst_e32
+def V_CMPX_EQ_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_EQ_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_EQ_I16_nosdst_e32
+def V_CMPX_EQ_I16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_EQ_I16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_EQ_U16_nosdst_e32
+def V_CMPX_EQ_U16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_EQ_U16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_F_F16_nosdst_e32
+def V_CMPX_F_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_F_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_F_I16_nosdst_e32
+def V_CMPX_F_I16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_F_I16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_F_U16_nosdst_e32
+def V_CMPX_F_U16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_F_U16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_GE_F16_nosdst_e32
+def V_CMPX_GE_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_GE_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_GE_I16_nosdst_e32
+def V_CMPX_GE_I16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_GE_I16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_GE_U16_nosdst_e32
+def V_CMPX_GE_U16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_GE_U16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_GT_F16_nosdst_e32
+def V_CMPX_GT_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_GT_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_GT_I16_nosdst_e32
+def V_CMPX_GT_I16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_GT_I16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_GT_U16_nosdst_e32
+def V_CMPX_GT_U16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_GT_U16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_LE_F16_nosdst_e32
+def V_CMPX_LE_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_LE_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_LE_I16_nosdst_e32
+def V_CMPX_LE_I16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_LE_I16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_LE_U16_nosdst_e32
+def V_CMPX_LE_U16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_LE_U16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_LG_F16_nosdst_e32
+def V_CMPX_LG_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_LG_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_LT_F16_nosdst_e32
+def V_CMPX_LT_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_LT_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_LT_I16_nosdst_e32
+def V_CMPX_LT_I16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_LT_I16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_LT_U16_nosdst_e32
+def V_CMPX_LT_U16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_LT_U16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_NEQ_F16_nosdst_e32
+def V_CMPX_NEQ_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_NEQ_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_NE_I16_nosdst_e32
+def V_CMPX_NE_I16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_NE_I16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_NE_U16_nosdst_e32
+def V_CMPX_NE_U16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_NE_U16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_NGE_F16_nosdst_e32
+def V_CMPX_NGE_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_NGE_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_NGT_F16_nosdst_e32
+def V_CMPX_NGT_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_NGT_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_NLE_F16_nosdst_e32
+def V_CMPX_NLE_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_NLE_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_NLG_F16_nosdst_e32
+def V_CMPX_NLG_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_NLG_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_NLT_F16_nosdst_e32
+def V_CMPX_NLT_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_NLT_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_O_F16_nosdst_e32
+def V_CMPX_O_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_O_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_TRU_F16_nosdst_e32
+def V_CMPX_TRU_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_TRU_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_T_I16_nosdst_e32
+def V_CMPX_T_I16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_T_I16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_T_U16_nosdst_e32
+def V_CMPX_T_U16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_T_U16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_U_F16_nosdst_e32
+def V_CMPX_U_F16_fake16_nosdst_e32_sem : InstSISemantic<V_CMPX_U_F16_fake16_nosdst_e32> {
+  let Semantic = [];
+}
+
+// alias of V_INTERP_P2_F16
+def V_INTERP_P2_F16_opsel_sem : InstSISemantic<V_INTERP_P2_F16_opsel> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_interp_p2_f16, [(GetNamedOperand ?:$src0), (GetNamedOperand ?:$attrchan), (GetNamedOperand ?:$attr), (GetNamedOperand ?:$high), (ImplicitUse M0)]))];
+}
+
+//==============================================================================
+// V_ cross-product alias variants (Phase 8 generic)
+//==============================================================================
+
+// alias of V_ADD_F64_pseudo_e32
+def V_ADD_F64_pseudo_e64_sem : InstSISemantic<V_ADD_F64_pseudo_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMBitCast (LLVMFAdd (LLVMBitCast (GetNamedOperand ?:$src0), si_llvm_double_ty), (LLVMBitCast (GetNamedOperand ?:$src1), si_llvm_double_ty)), si_llvm_i64_ty))];
+}
+
+// alias of V_CMPX_CLASS_F16_fake16_nosdst_e32
+def V_CMPX_CLASS_F16_fake16_nosdst_e64_sem : InstSISemantic<V_CMPX_CLASS_F16_fake16_nosdst_e64> {
+  let Semantic = [(LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class, [(GetNamedOperand ?:$src0), (GetNamedOperand ?:$src1)])];
+}
+
+// alias of V_CMPX_CLASS_F16_nosdst_e32
+def V_CMPX_CLASS_F16_nosdst_e64_sem : InstSISemantic<V_CMPX_CLASS_F16_nosdst_e64> {
+  let Semantic = [(LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class, [(GetNamedOperand ?:$src0), (GetNamedOperand ?:$src1)])];
+}
+
+// alias of V_CMPX_CLASS_F16_t16_nosdst_e32
+def V_CMPX_CLASS_F16_t16_nosdst_e64_sem : InstSISemantic<V_CMPX_CLASS_F16_t16_nosdst_e64> {
+  let Semantic = [(LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class, [(GetNamedOperand ?:$src0), (GetNamedOperand ?:$src1)])];
+}
+
+// alias of V_CMPX_CLASS_F32_nosdst_e32
+def V_CMPX_CLASS_F32_nosdst_e64_sem : InstSISemantic<V_CMPX_CLASS_F32_nosdst_e64> {
+  let Semantic = [(LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class, [(GetNamedOperand ?:$src0), (GetNamedOperand ?:$src1)])];
+}
+
+// alias of V_CMPX_CLASS_F64_nosdst_e32
+def V_CMPX_CLASS_F64_nosdst_e64_sem : InstSISemantic<V_CMPX_CLASS_F64_nosdst_e64> {
+  let Semantic = [(LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class, [(GetNamedOperand ?:$src0), (GetNamedOperand ?:$src1)])];
+}
+
+// alias of V_LSHLREV_B64_pseudo_e32
+def V_LSHLREV_B64_pseudo_e64_sem : InstSISemantic<V_LSHLREV_B64_pseudo_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMShl (GetNamedOperand ?:$src1), (LLVMZExt (LLVMAnd (GetNamedOperand ?:$src0), (ConstantInt si_llvm_i32_ty, 63)), si_llvm_i64_ty)))];
+}
+
+// alias of V_MIN_NUM_F64_e32
+def V_MIN_NUM_F64_e64_sem : InstSISemantic<V_MIN_NUM_F64_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMBitCast (LLVMMinNum (LLVMBitCast (GetNamedOperand ?:$src0), si_llvm_double_ty), (LLVMBitCast (GetNamedOperand ?:$src1), si_llvm_double_ty)), si_llvm_i64_ty))];
+}
+
+// alias of V_MOVRELD_B32_e32
+def V_MOVRELD_B32_e64_sem : InstSISemantic<V_MOVRELD_B32_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (GetNamedOperand ?:$src0))];
+}
+
+// alias of V_MOVRELSD_2_B32_e32
+def V_MOVRELSD_2_B32_e64_sem : InstSISemantic<V_MOVRELSD_2_B32_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (GetNamedOperand ?:$src0))];
+}
+
+// alias of V_MOVRELSD_B32_e32
+def V_MOVRELSD_B32_e64_sem : InstSISemantic<V_MOVRELSD_B32_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (GetNamedOperand ?:$src0))];
+}
+
+// alias of V_MOVRELS_B32_e32
+def V_MOVRELS_B32_e64_sem : InstSISemantic<V_MOVRELS_B32_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (GetNamedOperand ?:$src0))];
+}
+
+// alias of V_MOV_B16_t16_e32
+def V_MOV_B16_t16_e64_sem : InstSISemantic<V_MOV_B16_t16_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (GetNamedOperand ?:$src0))];
+}
+
+// alias of V_MOV_B64_e32
+def V_MOV_B64_e64_sem : InstSISemantic<V_MOV_B64_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (GetNamedOperand ?:$src0))];
+}
+
+// alias of V_MUL_F64_pseudo_e32
+def V_MUL_F64_pseudo_e64_sem : InstSISemantic<V_MUL_F64_pseudo_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMBitCast (LLVMFMul (LLVMBitCast (GetNamedOperand ?:$src0), si_llvm_double_ty), (LLVMBitCast (GetNamedOperand ?:$src1), si_llvm_double_ty)), si_llvm_i64_ty))];
+}

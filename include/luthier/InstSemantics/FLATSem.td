@@ -5496,3 +5496,875 @@ def SCRATCH_LOAD_LDS_USHORT_ST_sem : InstSISemantic<SCRATCH_LOAD_LDS_USHORT_ST> 
 def SCRATCH_LOAD_LDS_USHORT_SVS_sem : InstSISemantic<SCRATCH_LOAD_LDS_USHORT_SVS> {
   let Semantic = [(DefVal ?:$tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand ?:$saddr), (LLVMZExt (GetNamedOperand ?:$vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand ?:$offset))), (DefVal ?:$tmp, (LLVMLoad si_llvm_i16_ty, (GetVal ?:$tmp_addr))), (SetNamedOperand ?:$vdst, (LLVMZExt (GetVal ?:$tmp), si_llvm_i32_ty))];
 }
+
+//==============================================================================
+// FLAT atomic variants (Phase 9) — _RTN / _SADDR / _SADDR_RTN / _RTN_agpr
+// Generated from base FLAT_ATOMIC_X semantics: _RTN swaps writeback target
+// $vdata→$vdst; _SADDR substitutes addr calc to use $saddr + zext($vaddr).
+//==============================================================================
+
+def FLAT_ATOMIC_ADD_F32_SADDR_sem : InstSISemantic<FLAT_ATOMIC_ADD_F32_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMFAdd (GetVal $tmp), (GetNamedOperand $vdata))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_ADD_F32_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_ADD_F32_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMFAdd (GetVal $tmp), (GetNamedOperand $vdata))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_ADD_F64_SADDR_sem : InstSISemantic<FLAT_ATOMIC_ADD_F64_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMFAdd (GetVal $tmp), (GetNamedOperand $vdata))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_ADD_F64_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_ADD_F64_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMFAdd (GetVal $tmp), (GetNamedOperand $vdata))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_ADD_SADDR_sem : InstSISemantic<FLAT_ATOMIC_ADD_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_ADD_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_ADD_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_ADD_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_ADD_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_ADD_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_ADD_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_AND_SADDR_sem : InstSISemantic<FLAT_ATOMIC_AND_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWAnd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_AND_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_AND_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAnd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_AND_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_AND_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWAnd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_AND_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_AND_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAnd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_CMPSWAP_SADDR_sem : InstSISemantic<FLAT_ATOMIC_CMPSWAP_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
+    (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_CMPSWAP_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_CMPSWAP_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
+    (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_CMPSWAP_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_CMPSWAP_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 0))),
+    (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_CMPSWAP_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_CMPSWAP_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i64_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 0))),
+    (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_COND_SUB_U32_SADDR_sem : InstSISemantic<FLAT_ATOMIC_COND_SUB_U32_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp), (GetNamedOperand $vdata)),
+                                 (LLVMSub (GetVal $tmp), (GetNamedOperand $vdata)), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_COND_SUB_U32_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_COND_SUB_U32_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $tmp), (GetNamedOperand $vdata)),
+                                 (LLVMSub (GetVal $tmp), (GetNamedOperand $vdata)), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_CSUB_U32_SADDR_sem : InstSISemantic<FLAT_ATOMIC_CSUB_U32_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $tmp), (GetNamedOperand $vdata)),
+                                 (LLVMSub (GetVal $tmp), (GetNamedOperand $vdata)),
+                                 (ConstantInt si_llvm_i32_ty, 0))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_CSUB_U32_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_CSUB_U32_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $tmp), (GetNamedOperand $vdata)),
+                                 (LLVMSub (GetVal $tmp), (GetNamedOperand $vdata)),
+                                 (ConstantInt si_llvm_i32_ty, 0))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_DEC_SADDR_sem : InstSISemantic<FLAT_ATOMIC_DEC_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUDecWrap, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_DEC_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_DEC_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWUDecWrap, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_DEC_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_DEC_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUDecWrap, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_DEC_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_DEC_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWUDecWrap, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_FCMPSWAP_SADDR_sem : InstSISemantic<FLAT_ATOMIC_FCMPSWAP_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_FCMPSWAP_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_FCMPSWAP_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_FCMPSWAP_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_FCMPSWAP_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 0))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_FCMPSWAP_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_FCMPSWAP_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 1))),
+    (DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i64_ty, 0))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOEQ, (GetVal $tmp), (GetVal $cmp)), (GetVal $src), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_FMAX_SADDR_sem : InstSISemantic<FLAT_ATOMIC_FMAX_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOGT, (GetNamedOperand $vdata), (GetVal $tmp)),
+                                 (GetNamedOperand $vdata), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_FMAX_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_FMAX_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOGT, (GetNamedOperand $vdata), (GetVal $tmp)),
+                                 (GetNamedOperand $vdata), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_FMIN_SADDR_sem : InstSISemantic<FLAT_ATOMIC_FMIN_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOLT, (GetNamedOperand $vdata), (GetVal $tmp)),
+                                 (GetNamedOperand $vdata), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_FMIN_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_FMIN_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_float_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOLT, (GetNamedOperand $vdata), (GetVal $tmp)),
+                                 (GetNamedOperand $vdata), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_INC_SADDR_sem : InstSISemantic<FLAT_ATOMIC_INC_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUIncWrap, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_INC_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_INC_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWUIncWrap, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_INC_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_INC_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUIncWrap, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_INC_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_INC_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWUIncWrap, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_MAX_F64_SADDR_sem : InstSISemantic<FLAT_ATOMIC_MAX_F64_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOGT, (GetNamedOperand $vdata), (GetVal $tmp)),
+                                 (GetNamedOperand $vdata), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_MAX_F64_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_MAX_F64_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOGT, (GetNamedOperand $vdata), (GetVal $tmp)),
+                                 (GetNamedOperand $vdata), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_MIN_F64_SADDR_sem : InstSISemantic<FLAT_ATOMIC_MIN_F64_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOLT, (GetNamedOperand $vdata), (GetVal $tmp)),
+                                 (GetNamedOperand $vdata), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_MIN_F64_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_MIN_F64_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_double_ty, (GetVal $tmp_addr))),
+    (DefVal $new_val, (LLVMSelect (LLVMFCmp LLVMFCmpOLT, (GetNamedOperand $vdata), (GetVal $tmp)),
+                                 (GetNamedOperand $vdata), (GetVal $tmp))),
+    (LLVMStore (GetVal $new_val), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_OR_SADDR_sem : InstSISemantic<FLAT_ATOMIC_OR_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWOr, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_OR_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_OR_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWOr, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_OR_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_OR_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWOr, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_OR_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_OR_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWOr, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_PK_ADD_BF16_SADDR_sem : InstSISemantic<FLAT_ATOMIC_PK_ADD_BF16_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $src, (GetNamedOperand $vdata)),
+    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $src_lo, (LLVMTrunc (GetVal $src), si_llvm_i16_ty)),
+    (DefVal $tmp_hi, (LLVMTrunc (LLVMLShr (GetVal $tmp), 16), si_llvm_i16_ty)),
+    (DefVal $src_hi, (LLVMTrunc (LLVMLShr (GetVal $src), 16), si_llvm_i16_ty)),
+    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), si_llvm_i16_ty),
+                              (LLVMBitCast (GetVal $src_lo), si_llvm_i16_ty))),
+    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), si_llvm_i16_ty),
+                               (LLVMBitCast (GetVal $src_hi), si_llvm_i16_ty))),
+    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), si_llvm_i16_ty), si_llvm_i32_ty),
+                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), si_llvm_i16_ty), si_llvm_i32_ty), 16))),
+    (LLVMStore (GetVal $res), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_PK_ADD_BF16_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_PK_ADD_BF16_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $src, (GetNamedOperand $vdata)),
+    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $src_lo, (LLVMTrunc (GetVal $src), si_llvm_i16_ty)),
+    (DefVal $tmp_hi, (LLVMTrunc (LLVMLShr (GetVal $tmp), 16), si_llvm_i16_ty)),
+    (DefVal $src_hi, (LLVMTrunc (LLVMLShr (GetVal $src), 16), si_llvm_i16_ty)),
+    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), si_llvm_i16_ty),
+                              (LLVMBitCast (GetVal $src_lo), si_llvm_i16_ty))),
+    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), si_llvm_i16_ty),
+                               (LLVMBitCast (GetVal $src_hi), si_llvm_i16_ty))),
+    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), si_llvm_i16_ty), si_llvm_i32_ty),
+                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), si_llvm_i16_ty), si_llvm_i32_ty), 16))),
+    (LLVMStore (GetVal $res), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_PK_ADD_F16_SADDR_sem : InstSISemantic<FLAT_ATOMIC_PK_ADD_F16_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $src, (GetNamedOperand $vdata)),
+    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $src_lo, (LLVMTrunc (GetVal $src), si_llvm_i16_ty)),
+    (DefVal $tmp_hi, (LLVMTrunc (LLVMLShr (GetVal $tmp), 16), si_llvm_i16_ty)),
+    (DefVal $src_hi, (LLVMTrunc (LLVMLShr (GetVal $src), 16), si_llvm_i16_ty)),
+    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), si_llvm_half_ty),
+                              (LLVMBitCast (GetVal $src_lo), si_llvm_half_ty))),
+    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), si_llvm_half_ty),
+                               (LLVMBitCast (GetVal $src_hi), si_llvm_half_ty))),
+    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), si_llvm_i16_ty), si_llvm_i32_ty),
+                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), si_llvm_i16_ty), si_llvm_i32_ty), 16))),
+    (LLVMStore (GetVal $res), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_PK_ADD_F16_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_PK_ADD_F16_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr))),
+    (DefVal $src, (GetNamedOperand $vdata)),
+    (DefVal $tmp_lo, (LLVMTrunc (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $src_lo, (LLVMTrunc (GetVal $src), si_llvm_i16_ty)),
+    (DefVal $tmp_hi, (LLVMTrunc (LLVMLShr (GetVal $tmp), 16), si_llvm_i16_ty)),
+    (DefVal $src_hi, (LLVMTrunc (LLVMLShr (GetVal $src), 16), si_llvm_i16_ty)),
+    (DefVal $res_lo, (LLVMFAdd (LLVMBitCast (GetVal $tmp_lo), si_llvm_half_ty),
+                              (LLVMBitCast (GetVal $src_lo), si_llvm_half_ty))),
+    (DefVal $res_hi, (LLVMFAdd (LLVMBitCast (GetVal $tmp_hi), si_llvm_half_ty),
+                               (LLVMBitCast (GetVal $src_hi), si_llvm_half_ty))),
+    (DefVal $res, (LLVMOr (LLVMZExt (LLVMBitCast (GetVal $res_lo), si_llvm_i16_ty), si_llvm_i32_ty),
+                         (LLVMShl (LLVMZExt (LLVMBitCast (GetVal $res_hi), si_llvm_i16_ty), si_llvm_i32_ty), 16))),
+    (LLVMStore (GetVal $res), (GetVal $tmp_addr)),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+def FLAT_ATOMIC_SMAX_SADDR_sem : InstSISemantic<FLAT_ATOMIC_SMAX_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWMax, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SMAX_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_SMAX_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWMax, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SMAX_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_SMAX_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWMax, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SMAX_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_SMAX_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWMax, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SMIN_SADDR_sem : InstSISemantic<FLAT_ATOMIC_SMIN_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWMin, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SMIN_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_SMIN_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWMin, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SMIN_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_SMIN_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWMin, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SMIN_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_SMIN_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWMin, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SUB_SADDR_sem : InstSISemantic<FLAT_ATOMIC_SUB_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWSub, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SUB_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_SUB_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWSub, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SUB_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_SUB_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWSub, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SUB_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_SUB_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWSub, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SWAP_SADDR_sem : InstSISemantic<FLAT_ATOMIC_SWAP_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWXchg, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SWAP_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_SWAP_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWXchg, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SWAP_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_SWAP_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWXchg, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_SWAP_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_SWAP_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWXchg, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_UMAX_SADDR_sem : InstSISemantic<FLAT_ATOMIC_UMAX_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUMax, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_UMAX_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_UMAX_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWUMax, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_UMAX_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_UMAX_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUMax, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_UMAX_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_UMAX_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWUMax, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_UMIN_SADDR_sem : InstSISemantic<FLAT_ATOMIC_UMIN_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUMin, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_UMIN_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_UMIN_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWUMin, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_UMIN_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_UMIN_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWUMin, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_UMIN_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_UMIN_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWUMin, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_XOR_SADDR_sem : InstSISemantic<FLAT_ATOMIC_XOR_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWXor, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_XOR_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_XOR_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWXor, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_XOR_X2_SADDR_sem : InstSISemantic<FLAT_ATOMIC_XOR_X2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMAtomicRMW AtomicRMWXor, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_ATOMIC_XOR_X2_SADDR_RTN_sem : InstSISemantic<FLAT_ATOMIC_XOR_X2_SADDR_RTN> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWXor, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+  ];
+}
+
+def FLAT_LOAD_DWORDX2_SADDR_sem : InstSISemantic<FLAT_LOAD_DWORDX2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v2i32_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_LOAD_DWORDX3_SADDR_sem : InstSISemantic<FLAT_LOAD_DWORDX3_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v3i32_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_LOAD_DWORDX4_SADDR_sem : InstSISemantic<FLAT_LOAD_DWORDX4_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v4i32_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (GetVal $tmp))
+  ];
+}
+
+def FLAT_LOAD_DWORD_SADDR_sem : InstSISemantic<FLAT_LOAD_DWORD_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr)))
+  ];
+}
+
+def FLAT_LOAD_SBYTE_D16_HI_SADDR_sem : InstSISemantic<FLAT_LOAD_SBYTE_D16_HI_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 65535))),
+    (SetNamedOperand $vdata, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
+  ];
+}
+
+def FLAT_LOAD_SBYTE_D16_SADDR_sem : InstSISemantic<FLAT_LOAD_SBYTE_D16_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty))
+  ];
+}
+
+def FLAT_LOAD_SBYTE_SADDR_sem : InstSISemantic<FLAT_LOAD_SBYTE_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+def FLAT_LOAD_SHORT_D16_HI_SADDR_sem : InstSISemantic<FLAT_LOAD_SHORT_D16_HI_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty)),
+    (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 65535))),
+    (SetNamedOperand $vdata, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
+  ];
+}
+
+def FLAT_LOAD_SHORT_D16_SADDR_sem : InstSISemantic<FLAT_LOAD_SHORT_D16_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdata, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr)))
+  ];
+}
+
+def FLAT_LOAD_SSHORT_SADDR_sem : InstSISemantic<FLAT_LOAD_SSHORT_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+def FLAT_LOAD_UBYTE_D16_HI_SADDR_sem : InstSISemantic<FLAT_LOAD_UBYTE_D16_HI_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 65535))),
+    (SetNamedOperand $vdata, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
+  ];
+}
+
+def FLAT_LOAD_UBYTE_D16_SADDR_sem : InstSISemantic<FLAT_LOAD_UBYTE_D16_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty))
+  ];
+}
+
+def FLAT_LOAD_UBYTE_SADDR_sem : InstSISemantic<FLAT_LOAD_UBYTE_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+def FLAT_LOAD_USHORT_SADDR_sem : InstSISemantic<FLAT_LOAD_USHORT_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdata, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+def FLAT_STORE_BYTE_D16_HI_SADDR_sem : InstSISemantic<FLAT_STORE_BYTE_D16_HI_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i8_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+def FLAT_STORE_BYTE_SADDR_sem : InstSISemantic<FLAT_STORE_BYTE_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i8_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+def FLAT_STORE_DWORDX2_SADDR_sem : InstSISemantic<FLAT_STORE_DWORDX2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+def FLAT_STORE_DWORDX3_SADDR_sem : InstSISemantic<FLAT_STORE_DWORDX3_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+def FLAT_STORE_DWORDX4_SADDR_sem : InstSISemantic<FLAT_STORE_DWORDX4_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+def FLAT_STORE_DWORD_SADDR_sem : InstSISemantic<FLAT_STORE_DWORD_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+def FLAT_STORE_SHORT_D16_HI_SADDR_sem : InstSISemantic<FLAT_STORE_SHORT_D16_HI_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+def FLAT_STORE_SHORT_SADDR_sem : InstSISemantic<FLAT_STORE_SHORT_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), flat_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i16_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
