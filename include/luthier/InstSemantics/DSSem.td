@@ -19,16 +19,17 @@
 //------------------------------------------------------------------------------
 
 /// Calculate a single-offset DS address: IntToPtr(addr) + offset
-/// The pointer type is local (LDS, AS 3) or region (GDS, AS 2) depending on
-/// the gds modifier.
+/// \p localOrRegionPtr is a dag selecting between local_ptr_ty (LDS, AS 3)
+/// and region_ptr_ty (GDS, AS 2) — typically via SelectOperand on the gds
+/// modifier.
 class CalculateSingleOffsetDSAddr<dag addr, dag offset,
-                                  LLVMQualPointerType localOrRegionPtr> {
+                                  dag localOrRegionPtr> {
   dag ret = (LLVMPtrAdd (LLVMIntToPtr addr, localOrRegionPtr), offset);
 }
 
 /// Calculate a double-offset DS address for READ2/WRITE2 instructions.
 class CalculateDoubleOffsetDSAddr<dag addr, dag offset0, dag offset1,
-                                  LLVMQualPointerType localOrRegionPtr,
+                                  dag localOrRegionPtr,
                                   SILLVMType dataType> {
   // Adj = data type size in bytes (READ2/WRITE2 hardware multiplies the
   // offset by this stride). 64-bit data → 8-byte stride; everything else → 4.
@@ -41,11 +42,12 @@ class CalculateDoubleOffsetDSAddr<dag addr, dag offset0, dag offset1,
 }
 
 /// Helper: select LDS (local_ptr_ty, AS 3) or GDS (region_ptr_ty, AS 2)
-/// based on the gds modifier.
-// LDS (local_ptr_ty, AS 3) is the common case; GDS variants are rare and not
-// distinguished here — proper LDS/GDS switch needs translator-side handling.
+/// based on the gds modifier of the current MI. Uses SelectOperand, which
+/// lowers to a C++ ternary on SIInstrInfo::hasModifiersSet(MI, ::gds).
 class DSAddr<dag addr, dag offset> {
-  dag ret = CalculateSingleOffsetDSAddr<addr, offset, local_ptr_ty>.ret;
+  dag ret = CalculateSingleOffsetDSAddr<addr, offset,
+              (SelectOperand (hasModifierSet $gds),
+                              region_ptr_ty, local_ptr_ty)>.ret;
 }
 
 //------------------------------------------------------------------------------

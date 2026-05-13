@@ -371,8 +371,10 @@ def ImplicitDef;
 /// Used to get a register directly in case of an implicit use
 def ImplicitUse;
 
-/// Used to select an operand based on a boolean predicate (different from
-/// the LLVMSelect operation). Does not translate into an IR operation
+/// Selects between two operands based on a boolean predicate, distinct from
+/// the LLVMSelect IR operation. Lowers to a C++ ternary expression at codegen
+/// time, so it must appear in a value position (not as a top-level statement).
+/// Usage: \c (SelectOperand <cond-dag>, <then-dag>, <else-dag>).
 def SelectOperand;
 
 /// Read the register file of a register as a vector.

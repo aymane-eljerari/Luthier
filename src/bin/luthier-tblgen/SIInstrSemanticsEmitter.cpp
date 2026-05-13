@@ -226,6 +226,41 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       OS << "Translator.ST.getWavefrontSize()";
     }
 
+    // --- SelectOperand <cond>, <then>, <else>: C++ ternary expression ---
+    else if (OpName == "SelectOperand") {
+      if (unsigned NumArgs = Dag->getNumArgs(); NumArgs != 3)
+        llvm::PrintFatalError(
+            Loc, "Expected `SelectOperand` to have 3 arguments (cond, then, "
+                 "else), got " +
+                     llvm::Twine(NumArgs) + " instead");
+      OS << "(";
+      emitSemanticStatement(OS, Dag->getArg(0), Loc);
+      OS << " ? ";
+      emitSemanticStatement(OS, Dag->getArg(1), Loc);
+      OS << " : ";
+      emitSemanticStatement(OS, Dag->getArg(2), Loc);
+      OS << ")";
+    }
+
+    // --- hasModifierSet $<opname>: check if a modifier operand is set ---
+    // Lowers to SIInstrInfo::hasModifiersSet, which returns true iff the
+    // named operand exists on MI and has a non-zero immediate. The operand
+    // is referenced by its dag-arg name (same convention as GetNamedOperand).
+    else if (OpName == "hasModifierSet") {
+      if (unsigned NumArgs = Dag->getNumArgs(); NumArgs != 1)
+        llvm::PrintFatalError(
+            Loc, "Expected `hasModifierSet` to have 1 argument (named operand "
+                 "placeholder), got " +
+                     llvm::Twine(NumArgs) + " instead");
+      llvm::StringRef ArgName = Dag->getArgNameStr(0);
+      if (ArgName.empty())
+        llvm::PrintFatalError(
+            Loc, "`hasModifierSet` argument must be a named placeholder "
+                 "(e.g. $gds)");
+      OS << "Translator.TII.hasModifiersSet(MI, llvm::AMDGPU::OpName::"
+         << ArgName << ")";
+    }
+
     // --- LLVMIntNTy <width-dag>: parameterized integer type ---
     else if (OpName == "LLVMIntNTy") {
       if (unsigned NumArgs = Dag->getNumArgs(); NumArgs != 1)
