@@ -1694,22 +1694,14 @@ def S_GET_SHADER_CYCLES_U64_sem : InstSISemantic<S_GET_SHADER_CYCLES_U64> {
   ];
 }
 
-// S_RFE_B64 / S_RFE_RESTORE_B64 — "Return From Exception". These return from a
-// trap handler by reloading the saved PC (and, for RESTORE, also restoring
-// EXEC) and clearing the wave's PRIV bit. Modeling them faithfully requires
-// the translator to track the per-wave PRIV (privileged) bit, which is not
-// yet plumbed through. Until then, fall back to the inline-asm path: the MIR
-// opcode is preserved verbatim in the IR, which is sufficient for downstream
-// liveness/analysis and avoids emitting an incorrect privileged-mode model.
-//
-// TODO: once the translator models the PRIV bit, replace these stubs with
-// semantics that:
-//   - read the saved PC from the named TTMP register pair (e.g. ttmp[0:1])
-//     and emit an IndirectTailCall to it;
-//   - for S_RFE_RESTORE_B64, also write the saved EXEC value back to $exec
-//     (operand $src1) before the tail call;
-//   - clear the wave's PRIV bit (the part that needs the new state in the
-//     translator).
+// S_RFE_B64 / S_RFE_RESTORE_B64 — "Return From Exception". DELIBERATELY
+// left without DSL semantics: both ops fall through to the translator's
+// inline-asm emitter (MIRToIRTranslator::raiseMachineInstr's `default:`
+// branch invokes InlineAsmEmitter::emitInlineAsm). The MIR opcode and
+// operands are preserved verbatim in the IR as a `call asm sideeffect`,
+// which is the correct conservative model for a privileged "return from
+// exception" whose privileged-mode (PRIV bit) transition the translator
+// does not otherwise track at the state level.
 
 //------------------------------------------------------------------------------
 // S_MOVREL{S,D}_B{32,64} — relative scalar move via M0 indexing.
