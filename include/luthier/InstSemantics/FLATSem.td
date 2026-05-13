@@ -4710,3 +4710,611 @@ def GLOBAL_ATOMIC_XOR_X2_SADDR_RTN_agpr_sem : InstSISemantic<GLOBAL_ATOMIC_XOR_X
   ];
 }
 
+
+//==============================================================================
+// SCRATCH _SADDR / _ST / _SVS variants (Phase 7)
+// _SADDR: scalar base + offset.  _ST: offset only (no base).  _SVS: scalar base + vector index + offset.
+//==============================================================================
+
+// _SADDR variant of SCRATCH_LOAD_DWORDX2
+def SCRATCH_LOAD_DWORDX2_SADDR_sem : InstSISemantic<SCRATCH_LOAD_DWORDX2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v2i32_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_DWORDX2
+def SCRATCH_LOAD_DWORDX2_ST_sem : InstSISemantic<SCRATCH_LOAD_DWORDX2_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_v2i32_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_DWORDX2
+def SCRATCH_LOAD_DWORDX2_SVS_sem : InstSISemantic<SCRATCH_LOAD_DWORDX2_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v2i32_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+// _SADDR variant of SCRATCH_LOAD_DWORDX3
+def SCRATCH_LOAD_DWORDX3_SADDR_sem : InstSISemantic<SCRATCH_LOAD_DWORDX3_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v3i32_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_DWORDX3
+def SCRATCH_LOAD_DWORDX3_ST_sem : InstSISemantic<SCRATCH_LOAD_DWORDX3_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_v3i32_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_DWORDX3
+def SCRATCH_LOAD_DWORDX3_SVS_sem : InstSISemantic<SCRATCH_LOAD_DWORDX3_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v3i32_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+// _SADDR variant of SCRATCH_LOAD_DWORDX4
+def SCRATCH_LOAD_DWORDX4_SADDR_sem : InstSISemantic<SCRATCH_LOAD_DWORDX4_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v4i32_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_DWORDX4
+def SCRATCH_LOAD_DWORDX4_ST_sem : InstSISemantic<SCRATCH_LOAD_DWORDX4_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_v4i32_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_DWORDX4
+def SCRATCH_LOAD_DWORDX4_SVS_sem : InstSISemantic<SCRATCH_LOAD_DWORDX4_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_v4i32_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (GetVal $tmp))
+  ];
+}
+
+// _SADDR variant of SCRATCH_LOAD_DWORD
+def SCRATCH_LOAD_DWORD_SADDR_sem : InstSISemantic<SCRATCH_LOAD_DWORD_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr)))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_DWORD
+def SCRATCH_LOAD_DWORD_ST_sem : InstSISemantic<SCRATCH_LOAD_DWORD_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (SetNamedOperand $vdst, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr)))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_DWORD
+def SCRATCH_LOAD_DWORD_SVS_sem : InstSISemantic<SCRATCH_LOAD_DWORD_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMLoad si_llvm_i32_ty, (GetVal $tmp_addr)))
+  ];
+}
+
+// _SADDR variant of SCRATCH_LOAD_SBYTE_D16_HI
+def SCRATCH_LOAD_SBYTE_D16_HI_SADDR_sem : InstSISemantic<SCRATCH_LOAD_SBYTE_D16_HI_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
+    (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_SBYTE_D16_HI
+def SCRATCH_LOAD_SBYTE_D16_HI_ST_sem : InstSISemantic<SCRATCH_LOAD_SBYTE_D16_HI_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
+    (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_SBYTE_D16_HI
+def SCRATCH_LOAD_SBYTE_D16_HI_SVS_sem : InstSISemantic<SCRATCH_LOAD_SBYTE_D16_HI_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
+    (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
+  ];
+}
+
+// _SADDR variant of SCRATCH_LOAD_SBYTE_D16
+def SCRATCH_LOAD_SBYTE_D16_SADDR_sem : InstSISemantic<SCRATCH_LOAD_SBYTE_D16_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_SBYTE_D16
+def SCRATCH_LOAD_SBYTE_D16_ST_sem : InstSISemantic<SCRATCH_LOAD_SBYTE_D16_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_SBYTE_D16
+def SCRATCH_LOAD_SBYTE_D16_SVS_sem : InstSISemantic<SCRATCH_LOAD_SBYTE_D16_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty))
+  ];
+}
+
+// _SADDR variant of SCRATCH_LOAD_SBYTE
+def SCRATCH_LOAD_SBYTE_SADDR_sem : InstSISemantic<SCRATCH_LOAD_SBYTE_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_SBYTE
+def SCRATCH_LOAD_SBYTE_ST_sem : InstSISemantic<SCRATCH_LOAD_SBYTE_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_SBYTE
+def SCRATCH_LOAD_SBYTE_SVS_sem : InstSISemantic<SCRATCH_LOAD_SBYTE_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+// _SADDR variant of SCRATCH_LOAD_SHORT_D16_HI
+def SCRATCH_LOAD_SHORT_D16_HI_SADDR_sem : InstSISemantic<SCRATCH_LOAD_SHORT_D16_HI_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty)),
+    (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
+    (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_SHORT_D16_HI
+def SCRATCH_LOAD_SHORT_D16_HI_ST_sem : InstSISemantic<SCRATCH_LOAD_SHORT_D16_HI_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty)),
+    (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
+    (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_SHORT_D16_HI
+def SCRATCH_LOAD_SHORT_D16_HI_SVS_sem : InstSISemantic<SCRATCH_LOAD_SHORT_D16_HI_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty)),
+    (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
+    (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
+  ];
+}
+
+// _SADDR variant of SCRATCH_LOAD_SHORT_D16
+def SCRATCH_LOAD_SHORT_D16_SADDR_sem : InstSISemantic<SCRATCH_LOAD_SHORT_D16_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr)))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_SHORT_D16
+def SCRATCH_LOAD_SHORT_D16_ST_sem : InstSISemantic<SCRATCH_LOAD_SHORT_D16_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (SetNamedOperand $vdst, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr)))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_SHORT_D16
+def SCRATCH_LOAD_SHORT_D16_SVS_sem : InstSISemantic<SCRATCH_LOAD_SHORT_D16_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (SetNamedOperand $vdst, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr)))
+  ];
+}
+
+// _SADDR variant of SCRATCH_LOAD_SSHORT
+def SCRATCH_LOAD_SSHORT_SADDR_sem : InstSISemantic<SCRATCH_LOAD_SSHORT_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_SSHORT
+def SCRATCH_LOAD_SSHORT_ST_sem : InstSISemantic<SCRATCH_LOAD_SSHORT_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_SSHORT
+def SCRATCH_LOAD_SSHORT_SVS_sem : InstSISemantic<SCRATCH_LOAD_SSHORT_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMSExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+// _SADDR variant of SCRATCH_LOAD_UBYTE_D16_HI
+def SCRATCH_LOAD_UBYTE_D16_HI_SADDR_sem : InstSISemantic<SCRATCH_LOAD_UBYTE_D16_HI_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
+    (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_UBYTE_D16_HI
+def SCRATCH_LOAD_UBYTE_D16_HI_ST_sem : InstSISemantic<SCRATCH_LOAD_UBYTE_D16_HI_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
+    (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_UBYTE_D16_HI
+def SCRATCH_LOAD_UBYTE_D16_HI_SVS_sem : InstSISemantic<SCRATCH_LOAD_UBYTE_D16_HI_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (DefVal $hi, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $hi_shift, (LLVMShl (GetVal $hi), 16)),
+    (DefVal $lo, (LLVMAnd (GetNamedOperand $vdst), (ConstantInt si_llvm_i32_ty, 65535))),
+    (SetNamedOperand $vdst, (LLVMOr (GetVal $hi_shift), (GetVal $lo)))
+  ];
+}
+
+// _SADDR variant of SCRATCH_LOAD_UBYTE_D16
+def SCRATCH_LOAD_UBYTE_D16_SADDR_sem : InstSISemantic<SCRATCH_LOAD_UBYTE_D16_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_UBYTE_D16
+def SCRATCH_LOAD_UBYTE_D16_ST_sem : InstSISemantic<SCRATCH_LOAD_UBYTE_D16_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_UBYTE_D16
+def SCRATCH_LOAD_UBYTE_D16_SVS_sem : InstSISemantic<SCRATCH_LOAD_UBYTE_D16_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i16_ty))
+  ];
+}
+
+// _SADDR variant of SCRATCH_LOAD_UBYTE
+def SCRATCH_LOAD_UBYTE_SADDR_sem : InstSISemantic<SCRATCH_LOAD_UBYTE_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_UBYTE
+def SCRATCH_LOAD_UBYTE_ST_sem : InstSISemantic<SCRATCH_LOAD_UBYTE_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_UBYTE
+def SCRATCH_LOAD_UBYTE_SVS_sem : InstSISemantic<SCRATCH_LOAD_UBYTE_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i8_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+// _SADDR variant of SCRATCH_LOAD_USHORT
+def SCRATCH_LOAD_USHORT_SADDR_sem : InstSISemantic<SCRATCH_LOAD_USHORT_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+// _ST variant of SCRATCH_LOAD_USHORT
+def SCRATCH_LOAD_USHORT_ST_sem : InstSISemantic<SCRATCH_LOAD_USHORT_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+// _SVS variant of SCRATCH_LOAD_USHORT
+def SCRATCH_LOAD_USHORT_SVS_sem : InstSISemantic<SCRATCH_LOAD_USHORT_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp, (LLVMLoad si_llvm_i16_ty, (GetVal $tmp_addr))),
+    (SetNamedOperand $vdst, (LLVMZExt (GetVal $tmp), si_llvm_i32_ty))
+  ];
+}
+
+// _SADDR variant of SCRATCH_STORE_BYTE_D16_HI
+def SCRATCH_STORE_BYTE_D16_HI_SADDR_sem : InstSISemantic<SCRATCH_STORE_BYTE_D16_HI_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i8_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+// _ST variant of SCRATCH_STORE_BYTE_D16_HI
+def SCRATCH_STORE_BYTE_D16_HI_ST_sem : InstSISemantic<SCRATCH_STORE_BYTE_D16_HI_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i8_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+// _SVS variant of SCRATCH_STORE_BYTE_D16_HI
+def SCRATCH_STORE_BYTE_D16_HI_SVS_sem : InstSISemantic<SCRATCH_STORE_BYTE_D16_HI_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i8_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+// _SADDR variant of SCRATCH_STORE_BYTE
+def SCRATCH_STORE_BYTE_SADDR_sem : InstSISemantic<SCRATCH_STORE_BYTE_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i8_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+// _ST variant of SCRATCH_STORE_BYTE
+def SCRATCH_STORE_BYTE_ST_sem : InstSISemantic<SCRATCH_STORE_BYTE_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i8_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+// _SVS variant of SCRATCH_STORE_BYTE
+def SCRATCH_STORE_BYTE_SVS_sem : InstSISemantic<SCRATCH_STORE_BYTE_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i8_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+// _SADDR variant of SCRATCH_STORE_DWORDX2
+def SCRATCH_STORE_DWORDX2_SADDR_sem : InstSISemantic<SCRATCH_STORE_DWORDX2_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+// _ST variant of SCRATCH_STORE_DWORDX2
+def SCRATCH_STORE_DWORDX2_ST_sem : InstSISemantic<SCRATCH_STORE_DWORDX2_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+// _SVS variant of SCRATCH_STORE_DWORDX2
+def SCRATCH_STORE_DWORDX2_SVS_sem : InstSISemantic<SCRATCH_STORE_DWORDX2_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+// _SADDR variant of SCRATCH_STORE_DWORDX3
+def SCRATCH_STORE_DWORDX3_SADDR_sem : InstSISemantic<SCRATCH_STORE_DWORDX3_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+// _ST variant of SCRATCH_STORE_DWORDX3
+def SCRATCH_STORE_DWORDX3_ST_sem : InstSISemantic<SCRATCH_STORE_DWORDX3_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+// _SVS variant of SCRATCH_STORE_DWORDX3
+def SCRATCH_STORE_DWORDX3_SVS_sem : InstSISemantic<SCRATCH_STORE_DWORDX3_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+// _SADDR variant of SCRATCH_STORE_DWORDX4
+def SCRATCH_STORE_DWORDX4_SADDR_sem : InstSISemantic<SCRATCH_STORE_DWORDX4_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+// _ST variant of SCRATCH_STORE_DWORDX4
+def SCRATCH_STORE_DWORDX4_ST_sem : InstSISemantic<SCRATCH_STORE_DWORDX4_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+// _SVS variant of SCRATCH_STORE_DWORDX4
+def SCRATCH_STORE_DWORDX4_SVS_sem : InstSISemantic<SCRATCH_STORE_DWORDX4_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+// _SADDR variant of SCRATCH_STORE_DWORD
+def SCRATCH_STORE_DWORD_SADDR_sem : InstSISemantic<SCRATCH_STORE_DWORD_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+// _ST variant of SCRATCH_STORE_DWORD
+def SCRATCH_STORE_DWORD_ST_sem : InstSISemantic<SCRATCH_STORE_DWORD_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+// _SVS variant of SCRATCH_STORE_DWORD
+def SCRATCH_STORE_DWORD_SVS_sem : InstSISemantic<SCRATCH_STORE_DWORD_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
+  ];
+}
+
+// _SADDR variant of SCRATCH_STORE_SHORT_D16_HI
+def SCRATCH_STORE_SHORT_D16_HI_SADDR_sem : InstSISemantic<SCRATCH_STORE_SHORT_D16_HI_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+// _ST variant of SCRATCH_STORE_SHORT_D16_HI
+def SCRATCH_STORE_SHORT_D16_HI_ST_sem : InstSISemantic<SCRATCH_STORE_SHORT_D16_HI_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+// _SVS variant of SCRATCH_STORE_SHORT_D16_HI
+def SCRATCH_STORE_SHORT_D16_HI_SVS_sem : InstSISemantic<SCRATCH_STORE_SHORT_D16_HI_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+// _SADDR variant of SCRATCH_STORE_SHORT
+def SCRATCH_STORE_SHORT_SADDR_sem : InstSISemantic<SCRATCH_STORE_SHORT_SADDR> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $saddr), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i16_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+// _ST variant of SCRATCH_STORE_SHORT
+def SCRATCH_STORE_SHORT_ST_sem : InstSISemantic<SCRATCH_STORE_SHORT_ST> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMIntToPtr (GetNamedOperand $offset), scratch_ptr_ty)),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i16_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}
+
+// _SVS variant of SCRATCH_STORE_SHORT
+def SCRATCH_STORE_SHORT_SVS_sem : InstSISemantic<SCRATCH_STORE_SHORT_SVS> {
+  let Semantic = [
+    (DefVal $tmp_addr, (LLVMPtrAdd (LLVMIntToPtr (LLVMAdd (GetNamedOperand $saddr), (LLVMZExt (GetNamedOperand $vaddr), si_llvm_i64_ty)), scratch_ptr_ty), (GetNamedOperand $offset))),
+    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i16_ty)),
+    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
+  ];
+}

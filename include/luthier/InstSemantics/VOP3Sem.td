@@ -4852,3 +4852,2642 @@ foreach inst = [
   }
 }
 
+
+//==============================================================================
+// V_ family _t16 / _fake16 register-file-split variants (Phase 7)
+// gfx11+ 16-bit register file split — same IR semantics as the base op.
+//==============================================================================
+
+// _t16/_fake16 alias of V_ADD_F16_e64
+def V_ADD_F16_fake16_e64_sem : InstSISemantic<V_ADD_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFAdd
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_ADD_F16_e64
+def V_ADD_F16_t16_e64_sem : InstSISemantic<V_ADD_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFAdd
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_ALIGNBIT_B32_e64
+def V_ALIGNBIT_B32_fake16_e64_sem : InstSISemantic<V_ALIGNBIT_B32_fake16_e64> {
+  let Semantic = [
+    (DefVal $concat,
+      (LLVMOr (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                        (ConstantInt si_llvm_i64_ty, 32)),
+              (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
+    (SetNamedOperand $vdst,
+      (LLVMTrunc
+        (LLVMLShr (GetVal $concat),
+                  (LLVMZExt (LLVMAnd (GetNamedOperand $src2),
+                                     (ConstantInt si_llvm_i32_ty, 31)),
+                            si_llvm_i64_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_ALIGNBIT_B32_e64
+def V_ALIGNBIT_B32_t16_e64_sem : InstSISemantic<V_ALIGNBIT_B32_t16_e64> {
+  let Semantic = [
+    (DefVal $concat,
+      (LLVMOr (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                        (ConstantInt si_llvm_i64_ty, 32)),
+              (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
+    (SetNamedOperand $vdst,
+      (LLVMTrunc
+        (LLVMLShr (GetVal $concat),
+                  (LLVMZExt (LLVMAnd (GetNamedOperand $src2),
+                                     (ConstantInt si_llvm_i32_ty, 31)),
+                            si_llvm_i64_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_ALIGNBYTE_B32_e64
+def V_ALIGNBYTE_B32_fake16_e64_sem : InstSISemantic<V_ALIGNBYTE_B32_fake16_e64> {
+  let Semantic = [
+    (DefVal $concat,
+      (LLVMOr (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                        (ConstantInt si_llvm_i64_ty, 32)),
+              (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
+    (DefVal $shift,
+      (LLVMShl (LLVMZExt (LLVMAnd (GetNamedOperand $src2),
+                                   (ConstantInt si_llvm_i32_ty, 3)),
+                          si_llvm_i64_ty),
+               (ConstantInt si_llvm_i64_ty, 3))),
+    (SetNamedOperand $vdst,
+      (LLVMTrunc (LLVMLShr (GetVal $concat), (GetVal $shift)),
+                 si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_ALIGNBYTE_B32_e64
+def V_ALIGNBYTE_B32_t16_e64_sem : InstSISemantic<V_ALIGNBYTE_B32_t16_e64> {
+  let Semantic = [
+    (DefVal $concat,
+      (LLVMOr (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                        (ConstantInt si_llvm_i64_ty, 32)),
+              (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
+    (DefVal $shift,
+      (LLVMShl (LLVMZExt (LLVMAnd (GetNamedOperand $src2),
+                                   (ConstantInt si_llvm_i32_ty, 3)),
+                          si_llvm_i64_ty),
+               (ConstantInt si_llvm_i64_ty, 3))),
+    (SetNamedOperand $vdst,
+      (LLVMTrunc (LLVMLShr (GetVal $concat), (GetVal $shift)),
+                 si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_ASHRREV_I16_e64
+def V_ASHRREV_I16_fake16_e64_sem : InstSISemantic<V_ASHRREV_I16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMAShr (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                  (LLVMAnd (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                            (ConstantInt si_llvm_i16_ty, 15))),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_ASHRREV_I16_e64
+def V_ASHRREV_I16_t16_e64_sem : InstSISemantic<V_ASHRREV_I16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMAShr (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                  (LLVMAnd (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                            (ConstantInt si_llvm_i16_ty, 15))),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CEIL_F16_e64
+def V_CEIL_F16_fake16_e64_sem : InstSISemantic<V_CEIL_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMUnaryIntrinsic int_ceil, (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
+                                              si_llvm_i16_ty),
+                                  si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CEIL_F16_e64
+def V_CEIL_F16_t16_e64_sem : InstSISemantic<V_CEIL_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMUnaryIntrinsic int_ceil, (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
+                                              si_llvm_i16_ty),
+                                  si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_COS_F16_e64
+def V_COS_F16_fake16_e64_sem : InstSISemantic<V_COS_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_cos, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_COS_F16_e64
+def V_COS_F16_t16_e64_sem : InstSISemantic<V_COS_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_cos, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_F16_F32_e64
+def V_CVT_F16_F32_fake16_e64_sem : InstSISemantic<V_CVT_F16_F32_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFPTrunc (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
+                       si_llvm_half_ty),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_F16_F32_e64
+def V_CVT_F16_F32_t16_e64_sem : InstSISemantic<V_CVT_F16_F32_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFPTrunc (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
+                       si_llvm_half_ty),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_F16_I16_e64
+def V_CVT_F16_I16_fake16_e64_sem : InstSISemantic<V_CVT_F16_I16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMSIToFP (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                       si_llvm_half_ty),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_F16_I16_e64
+def V_CVT_F16_I16_t16_e64_sem : InstSISemantic<V_CVT_F16_I16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMSIToFP (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                       si_llvm_half_ty),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_F16_U16_e64
+def V_CVT_F16_U16_fake16_e64_sem : InstSISemantic<V_CVT_F16_U16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMUIToFP (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                       si_llvm_half_ty),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_F16_U16_e64
+def V_CVT_F16_U16_t16_e64_sem : InstSISemantic<V_CVT_F16_U16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMUIToFP (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                       si_llvm_half_ty),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_F32_F16_e64
+def V_CVT_F32_F16_fake16_e64_sem : InstSISemantic<V_CVT_F32_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMBitCast
+        (LLVMFPExt (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
+                                            si_llvm_i16_ty),
+                                 si_llvm_half_ty),
+                   si_llvm_float_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_F32_F16_e64
+def V_CVT_F32_F16_t16_e64_sem : InstSISemantic<V_CVT_F32_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMBitCast
+        (LLVMFPExt (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
+                                            si_llvm_i16_ty),
+                                 si_llvm_half_ty),
+                   si_llvm_float_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_I16_F16_e64
+def V_CVT_I16_F16_fake16_e64_sem : InstSISemantic<V_CVT_I16_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMFPToSI
+          (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                       si_llvm_half_ty),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_I16_F16_e64
+def V_CVT_I16_F16_t16_e64_sem : InstSISemantic<V_CVT_I16_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMFPToSI
+          (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                       si_llvm_half_ty),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_I32_I16_e64
+def V_CVT_I32_I16_fake16_e64_sem : InstSISemantic<V_CVT_I32_I16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMSExt (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_I32_I16_e64
+def V_CVT_I32_I16_t16_e64_sem : InstSISemantic<V_CVT_I32_I16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMSExt (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_NORM_I16_F16_e64
+def V_CVT_NORM_I16_F16_fake16_e64_sem : InstSISemantic<V_CVT_NORM_I16_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_pknorm_i16, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_NORM_I16_F16_e64
+def V_CVT_NORM_I16_F16_t16_e64_sem : InstSISemantic<V_CVT_NORM_I16_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_pknorm_i16, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_NORM_U16_F16_e64
+def V_CVT_NORM_U16_F16_fake16_e64_sem : InstSISemantic<V_CVT_NORM_U16_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_pknorm_u16, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_NORM_U16_F16_e64
+def V_CVT_NORM_U16_F16_t16_e64_sem : InstSISemantic<V_CVT_NORM_U16_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_pknorm_u16, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_U16_F16_e64
+def V_CVT_U16_F16_fake16_e64_sem : InstSISemantic<V_CVT_U16_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMFPToUI
+          (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                       si_llvm_half_ty),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_U16_F16_e64
+def V_CVT_U16_F16_t16_e64_sem : InstSISemantic<V_CVT_U16_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMFPToUI
+          (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                       si_llvm_half_ty),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_U32_U16_e64
+def V_CVT_U32_U16_fake16_e64_sem : InstSISemantic<V_CVT_U32_U16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_U32_U16_e64
+def V_CVT_U32_U16_t16_e64_sem : InstSISemantic<V_CVT_U32_U16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_EXP_F16_e64
+def V_EXP_F16_fake16_e64_sem : InstSISemantic<V_EXP_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_exp2, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_EXP_F16_e64
+def V_EXP_F16_t16_e64_sem : InstSISemantic<V_EXP_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_exp2, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_FLOOR_F16_e64
+def V_FLOOR_F16_fake16_e64_sem : InstSISemantic<V_FLOOR_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMUnaryIntrinsic int_floor, (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
+                                               si_llvm_i16_ty),
+                                   si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_FLOOR_F16_e64
+def V_FLOOR_F16_t16_e64_sem : InstSISemantic<V_FLOOR_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMUnaryIntrinsic int_floor, (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
+                                               si_llvm_i16_ty),
+                                   si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_FMAC_F16_e64
+def V_FMAC_F16_fake16_e64_sem : InstSISemantic<V_FMAC_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFMA
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_FMAC_F16_e64
+def V_FMAC_F16_t16_e64_sem : InstSISemantic<V_FMAC_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFMA
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_FRACT_F16_e64
+def V_FRACT_F16_fake16_e64_sem : InstSISemantic<V_FRACT_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_fract, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_FRACT_F16_e64
+def V_FRACT_F16_t16_e64_sem : InstSISemantic<V_FRACT_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_fract, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_FREXP_EXP_I16_F16_e64
+def V_FREXP_EXP_I16_F16_fake16_e64_sem : InstSISemantic<V_FREXP_EXP_I16_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_frexp_exp, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_FREXP_EXP_I16_F16_e64
+def V_FREXP_EXP_I16_F16_t16_e64_sem : InstSISemantic<V_FREXP_EXP_I16_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_frexp_exp, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_FREXP_MANT_F16_e64
+def V_FREXP_MANT_F16_fake16_e64_sem : InstSISemantic<V_FREXP_MANT_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_FREXP_MANT_F16_e64
+def V_FREXP_MANT_F16_t16_e64_sem : InstSISemantic<V_FREXP_MANT_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_LDEXP_F16_e64
+def V_LDEXP_F16_fake16_e64_sem : InstSISemantic<V_LDEXP_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMLdexp
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_LDEXP_F16_e64
+def V_LDEXP_F16_t16_e64_sem : InstSISemantic<V_LDEXP_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMLdexp
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_LOG_F16_e64
+def V_LOG_F16_fake16_e64_sem : InstSISemantic<V_LOG_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_log, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_LOG_F16_e64
+def V_LOG_F16_t16_e64_sem : InstSISemantic<V_LOG_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_log, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_LSHLREV_B16_e64
+def V_LSHLREV_B16_fake16_e64_sem : InstSISemantic<V_LSHLREV_B16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMShl (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                 (LLVMAnd (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           (ConstantInt si_llvm_i16_ty, 15))),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_LSHLREV_B16_e64
+def V_LSHLREV_B16_t16_e64_sem : InstSISemantic<V_LSHLREV_B16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMShl (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                 (LLVMAnd (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           (ConstantInt si_llvm_i16_ty, 15))),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_LSHRREV_B16_e64
+def V_LSHRREV_B16_fake16_e64_sem : InstSISemantic<V_LSHRREV_B16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMLShr (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                  (LLVMAnd (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                            (ConstantInt si_llvm_i16_ty, 15))),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_LSHRREV_B16_e64
+def V_LSHRREV_B16_t16_e64_sem : InstSISemantic<V_LSHRREV_B16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMLShr (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                  (LLVMAnd (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                            (ConstantInt si_llvm_i16_ty, 15))),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAD_I32_I16_e64
+def V_MAD_I32_I16_fake16_e64_sem : InstSISemantic<V_MAD_I32_I16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMAdd (LLVMMul (LLVMSExt (LLVMTrunc (GetNamedOperand $src0),
+                                               si_llvm_i16_ty),
+                                   si_llvm_i32_ty),
+                         (LLVMSExt (LLVMTrunc (GetNamedOperand $src1),
+                                               si_llvm_i16_ty),
+                                   si_llvm_i32_ty)),
+               (GetNamedOperand $src2)))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAD_I32_I16_e64
+def V_MAD_I32_I16_t16_e64_sem : InstSISemantic<V_MAD_I32_I16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMAdd (LLVMMul (LLVMSExt (LLVMTrunc (GetNamedOperand $src0),
+                                               si_llvm_i16_ty),
+                                   si_llvm_i32_ty),
+                         (LLVMSExt (LLVMTrunc (GetNamedOperand $src1),
+                                               si_llvm_i16_ty),
+                                   si_llvm_i32_ty)),
+               (GetNamedOperand $src2)))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAD_U32_U16_e64
+def V_MAD_U32_U16_fake16_e64_sem : InstSISemantic<V_MAD_U32_U16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMAdd (LLVMMul (LLVMZExt (LLVMTrunc (GetNamedOperand $src0),
+                                               si_llvm_i16_ty),
+                                   si_llvm_i32_ty),
+                         (LLVMZExt (LLVMTrunc (GetNamedOperand $src1),
+                                               si_llvm_i16_ty),
+                                   si_llvm_i32_ty)),
+               (GetNamedOperand $src2)))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAD_U32_U16_e64
+def V_MAD_U32_U16_t16_e64_sem : InstSISemantic<V_MAD_U32_U16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMAdd (LLVMMul (LLVMZExt (LLVMTrunc (GetNamedOperand $src0),
+                                               si_llvm_i16_ty),
+                                   si_llvm_i32_ty),
+                         (LLVMZExt (LLVMTrunc (GetNamedOperand $src1),
+                                               si_llvm_i16_ty),
+                                   si_llvm_i32_ty)),
+               (GetNamedOperand $src2)))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAX3_F16_e64
+def V_MAX3_F16_fake16_e64_sem : InstSISemantic<V_MAX3_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMMaxNum
+            (LLVMMaxNum
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           si_llvm_half_ty),
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                           si_llvm_half_ty)),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAX3_F16_e64
+def V_MAX3_F16_t16_e64_sem : InstSISemantic<V_MAX3_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMMaxNum
+            (LLVMMaxNum
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           si_llvm_half_ty),
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                           si_llvm_half_ty)),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAX3_I16_e64
+def V_MAX3_I16_fake16_e64_sem : InstSISemantic<V_MAX3_I16_fake16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (DefVal $c, (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+    (DefVal $mx, (LLVMSelect (LLVMCmp LLVMICmpSGT, (GetVal $a), (GetVal $b)),
+                              (GetVal $a), (GetVal $b))),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpSGT, (GetVal $mx), (GetVal $c)),
+                    (GetVal $mx), (GetVal $c)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAX3_I16_e64
+def V_MAX3_I16_t16_e64_sem : InstSISemantic<V_MAX3_I16_t16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (DefVal $c, (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+    (DefVal $mx, (LLVMSelect (LLVMCmp LLVMICmpSGT, (GetVal $a), (GetVal $b)),
+                              (GetVal $a), (GetVal $b))),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpSGT, (GetVal $mx), (GetVal $c)),
+                    (GetVal $mx), (GetVal $c)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAX3_U16_e64
+def V_MAX3_U16_fake16_e64_sem : InstSISemantic<V_MAX3_U16_fake16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (DefVal $c, (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+    (DefVal $mx, (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $a), (GetVal $b)),
+                              (GetVal $a), (GetVal $b))),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $mx), (GetVal $c)),
+                    (GetVal $mx), (GetVal $c)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAX3_U16_e64
+def V_MAX3_U16_t16_e64_sem : InstSISemantic<V_MAX3_U16_t16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (DefVal $c, (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+    (DefVal $mx, (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $a), (GetVal $b)),
+                              (GetVal $a), (GetVal $b))),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $mx), (GetVal $c)),
+                    (GetVal $mx), (GetVal $c)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAXMIN_F16_e64
+def V_MAXMIN_F16_fake16_e64_sem : InstSISemantic<V_MAXMIN_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMMinNum
+            (LLVMMaxNum
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           si_llvm_half_ty),
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                           si_llvm_half_ty)),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAXMIN_F16_e64
+def V_MAXMIN_F16_t16_e64_sem : InstSISemantic<V_MAXMIN_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMMinNum
+            (LLVMMaxNum
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           si_llvm_half_ty),
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                           si_llvm_half_ty)),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAX_F16_e64
+def V_MAX_F16_fake16_e64_sem : InstSISemantic<V_MAX_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMMaxNum
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAX_F16_e64
+def V_MAX_F16_t16_e64_sem : InstSISemantic<V_MAX_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMMaxNum
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAX_I16_e64
+def V_MAX_I16_fake16_e64_sem : InstSISemantic<V_MAX_I16_fake16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpSGT, (GetVal $a), (GetVal $b)),
+                    (GetVal $a), (GetVal $b)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAX_I16_e64
+def V_MAX_I16_t16_e64_sem : InstSISemantic<V_MAX_I16_t16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpSGT, (GetVal $a), (GetVal $b)),
+                    (GetVal $a), (GetVal $b)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAX_U16_e64
+def V_MAX_U16_fake16_e64_sem : InstSISemantic<V_MAX_U16_fake16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $a), (GetVal $b)),
+                    (GetVal $a), (GetVal $b)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MAX_U16_e64
+def V_MAX_U16_t16_e64_sem : InstSISemantic<V_MAX_U16_t16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $a), (GetVal $b)),
+                    (GetVal $a), (GetVal $b)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MED3_F16_e64
+def V_MED3_F16_fake16_e64_sem : InstSISemantic<V_MED3_F16_fake16_e64> {
+  let Semantic = [];
+}
+
+// _t16/_fake16 alias of V_MED3_F16_e64
+def V_MED3_F16_t16_e64_sem : InstSISemantic<V_MED3_F16_t16_e64> {
+  let Semantic = [];
+}
+
+// _t16/_fake16 alias of V_MED3_I16_e64
+def V_MED3_I16_fake16_e64_sem : InstSISemantic<V_MED3_I16_fake16_e64> {
+  let Semantic = [];
+}
+
+// _t16/_fake16 alias of V_MED3_I16_e64
+def V_MED3_I16_t16_e64_sem : InstSISemantic<V_MED3_I16_t16_e64> {
+  let Semantic = [];
+}
+
+// _t16/_fake16 alias of V_MED3_U16_e64
+def V_MED3_U16_fake16_e64_sem : InstSISemantic<V_MED3_U16_fake16_e64> {
+  let Semantic = [];
+}
+
+// _t16/_fake16 alias of V_MED3_U16_e64
+def V_MED3_U16_t16_e64_sem : InstSISemantic<V_MED3_U16_t16_e64> {
+  let Semantic = [];
+}
+
+// _t16/_fake16 alias of V_MIN3_F16_e64
+def V_MIN3_F16_fake16_e64_sem : InstSISemantic<V_MIN3_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMMinNum
+            (LLVMMinNum
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           si_llvm_half_ty),
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                           si_llvm_half_ty)),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MIN3_F16_e64
+def V_MIN3_F16_t16_e64_sem : InstSISemantic<V_MIN3_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMMinNum
+            (LLVMMinNum
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           si_llvm_half_ty),
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                           si_llvm_half_ty)),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MIN3_I16_e64
+def V_MIN3_I16_fake16_e64_sem : InstSISemantic<V_MIN3_I16_fake16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (DefVal $c, (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+    (DefVal $mn, (LLVMSelect (LLVMCmp LLVMICmpSLT, (GetVal $a), (GetVal $b)),
+                              (GetVal $a), (GetVal $b))),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpSLT, (GetVal $mn), (GetVal $c)),
+                    (GetVal $mn), (GetVal $c)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MIN3_I16_e64
+def V_MIN3_I16_t16_e64_sem : InstSISemantic<V_MIN3_I16_t16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (DefVal $c, (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+    (DefVal $mn, (LLVMSelect (LLVMCmp LLVMICmpSLT, (GetVal $a), (GetVal $b)),
+                              (GetVal $a), (GetVal $b))),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpSLT, (GetVal $mn), (GetVal $c)),
+                    (GetVal $mn), (GetVal $c)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MIN3_U16_e64
+def V_MIN3_U16_fake16_e64_sem : InstSISemantic<V_MIN3_U16_fake16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (DefVal $c, (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+    (DefVal $mn, (LLVMSelect (LLVMCmp LLVMICmpULT, (GetVal $a), (GetVal $b)),
+                              (GetVal $a), (GetVal $b))),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpULT, (GetVal $mn), (GetVal $c)),
+                    (GetVal $mn), (GetVal $c)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MIN3_U16_e64
+def V_MIN3_U16_t16_e64_sem : InstSISemantic<V_MIN3_U16_t16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (DefVal $c, (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+    (DefVal $mn, (LLVMSelect (LLVMCmp LLVMICmpULT, (GetVal $a), (GetVal $b)),
+                              (GetVal $a), (GetVal $b))),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpULT, (GetVal $mn), (GetVal $c)),
+                    (GetVal $mn), (GetVal $c)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MINMAX_F16_e64
+def V_MINMAX_F16_fake16_e64_sem : InstSISemantic<V_MINMAX_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMMaxNum
+            (LLVMMinNum
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           si_llvm_half_ty),
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                           si_llvm_half_ty)),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MINMAX_F16_e64
+def V_MINMAX_F16_t16_e64_sem : InstSISemantic<V_MINMAX_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMMaxNum
+            (LLVMMinNum
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           si_llvm_half_ty),
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                           si_llvm_half_ty)),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MIN_F16_e64
+def V_MIN_F16_fake16_e64_sem : InstSISemantic<V_MIN_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMMinNum
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MIN_F16_e64
+def V_MIN_F16_t16_e64_sem : InstSISemantic<V_MIN_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMMinNum
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MIN_I16_e64
+def V_MIN_I16_fake16_e64_sem : InstSISemantic<V_MIN_I16_fake16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpSLT, (GetVal $a), (GetVal $b)),
+                    (GetVal $a), (GetVal $b)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MIN_I16_e64
+def V_MIN_I16_t16_e64_sem : InstSISemantic<V_MIN_I16_t16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpSLT, (GetVal $a), (GetVal $b)),
+                    (GetVal $a), (GetVal $b)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MIN_U16_e64
+def V_MIN_U16_fake16_e64_sem : InstSISemantic<V_MIN_U16_fake16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpULT, (GetVal $a), (GetVal $b)),
+                    (GetVal $a), (GetVal $b)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MIN_U16_e64
+def V_MIN_U16_t16_e64_sem : InstSISemantic<V_MIN_U16_t16_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpULT, (GetVal $a), (GetVal $b)),
+                    (GetVal $a), (GetVal $b)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MUL_F16_e64
+def V_MUL_F16_fake16_e64_sem : InstSISemantic<V_MUL_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFMul
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MUL_F16_e64
+def V_MUL_F16_t16_e64_sem : InstSISemantic<V_MUL_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFMul
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MUL_LO_U16_e64
+def V_MUL_LO_U16_fake16_e64_sem : InstSISemantic<V_MUL_LO_U16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMMul (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                 (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_MUL_LO_U16_e64
+def V_MUL_LO_U16_t16_e64_sem : InstSISemantic<V_MUL_LO_U16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMMul (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                 (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_NOT_B16_e64
+def V_NOT_B16_fake16_e64_sem : InstSISemantic<V_NOT_B16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMXor (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                 (LLVMSExt (ConstantTrue si_llvm_i1_ty), si_llvm_i16_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_NOT_B16_e64
+def V_NOT_B16_t16_e64_sem : InstSISemantic<V_NOT_B16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMXor (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                 (LLVMSExt (ConstantTrue si_llvm_i1_ty), si_llvm_i16_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_RCP_F16_e64
+def V_RCP_F16_fake16_e64_sem : InstSISemantic<V_RCP_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_RCP_F16_e64
+def V_RCP_F16_t16_e64_sem : InstSISemantic<V_RCP_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_RNDNE_F16_e64
+def V_RNDNE_F16_fake16_e64_sem : InstSISemantic<V_RNDNE_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMUnaryIntrinsic int_roundeven, (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
+                                                   si_llvm_i16_ty),
+                                       si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_RNDNE_F16_e64
+def V_RNDNE_F16_t16_e64_sem : InstSISemantic<V_RNDNE_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMUnaryIntrinsic int_roundeven, (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
+                                                   si_llvm_i16_ty),
+                                       si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_RSQ_F16_e64
+def V_RSQ_F16_fake16_e64_sem : InstSISemantic<V_RSQ_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rsq, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_RSQ_F16_e64
+def V_RSQ_F16_t16_e64_sem : InstSISemantic<V_RSQ_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rsq, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_SIN_F16_e64
+def V_SIN_F16_fake16_e64_sem : InstSISemantic<V_SIN_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sin, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_SIN_F16_e64
+def V_SIN_F16_t16_e64_sem : InstSISemantic<V_SIN_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sin, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_SQRT_F16_e64
+def V_SQRT_F16_fake16_e64_sem : InstSISemantic<V_SQRT_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_SQRT_F16_e64
+def V_SQRT_F16_t16_e64_sem : InstSISemantic<V_SQRT_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_SUBREV_F16_e64
+def V_SUBREV_F16_fake16_e64_sem : InstSISemantic<V_SUBREV_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFSub
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_SUBREV_F16_e64
+def V_SUBREV_F16_t16_e64_sem : InstSISemantic<V_SUBREV_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFSub
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_SUB_F16_e64
+def V_SUB_F16_fake16_e64_sem : InstSISemantic<V_SUB_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFSub
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_SUB_F16_e64
+def V_SUB_F16_t16_e64_sem : InstSISemantic<V_SUB_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFSub
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_TRUNC_F16_e64
+def V_TRUNC_F16_fake16_e64_sem : InstSISemantic<V_TRUNC_F16_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMUnaryIntrinsic int_trunc, (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
+                                                si_llvm_i16_ty),
+                                    si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// _t16/_fake16 alias of V_TRUNC_F16_e64
+def V_TRUNC_F16_t16_e64_sem : InstSISemantic<V_TRUNC_F16_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMUnaryIntrinsic int_trunc, (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
+                                                si_llvm_i16_ty),
+                                    si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+//==============================================================================
+// V_ variant aliases (Phase 7): opsel / gfx<n> / additional t16+fake16
+//==============================================================================
+
+// alias of V_ALIGNBIT_B32_e64
+def V_ALIGNBIT_B32_opsel_e64_sem : InstSISemantic<V_ALIGNBIT_B32_opsel_e64> {
+  let Semantic = [
+    (DefVal $concat,
+      (LLVMOr (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                        (ConstantInt si_llvm_i64_ty, 32)),
+              (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
+    (SetNamedOperand $vdst,
+      (LLVMTrunc
+        (LLVMLShr (GetVal $concat),
+                  (LLVMZExt (LLVMAnd (GetNamedOperand $src2),
+                                     (ConstantInt si_llvm_i32_ty, 31)),
+                            si_llvm_i64_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_ALIGNBYTE_B32_e64
+def V_ALIGNBYTE_B32_opsel_e64_sem : InstSISemantic<V_ALIGNBYTE_B32_opsel_e64> {
+  let Semantic = [
+    (DefVal $concat,
+      (LLVMOr (LLVMShl (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                        (ConstantInt si_llvm_i64_ty, 32)),
+              (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
+    (DefVal $shift,
+      (LLVMShl (LLVMZExt (LLVMAnd (GetNamedOperand $src2),
+                                   (ConstantInt si_llvm_i32_ty, 3)),
+                          si_llvm_i64_ty),
+               (ConstantInt si_llvm_i64_ty, 3))),
+    (SetNamedOperand $vdst,
+      (LLVMTrunc (LLVMLShr (GetVal $concat), (GetVal $shift)),
+                 si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_ASHRREV_I16_e64
+def V_ASHRREV_I16_opsel_e64_sem : InstSISemantic<V_ASHRREV_I16_opsel_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMAShr (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                  (LLVMAnd (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                            (ConstantInt si_llvm_i16_ty, 15))),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_DIV_FIXUP_F16_e64
+def V_DIV_FIXUP_F16_gfx9_e64_sem : InstSISemantic<V_DIV_FIXUP_F16_gfx9_e64> {
+  let Semantic = [];
+}
+
+// alias of V_DIV_FIXUP_F16_e64
+def V_DIV_FIXUP_F16_gfx9_fake16_e64_sem : InstSISemantic<V_DIV_FIXUP_F16_gfx9_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_DIV_FIXUP_F16_e64
+def V_DIV_FIXUP_F16_gfx9_t16_e64_sem : InstSISemantic<V_DIV_FIXUP_F16_gfx9_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_FMA_F16_e64
+def V_FMA_F16_gfx9_e64_sem : InstSISemantic<V_FMA_F16_gfx9_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFMA
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_FMA_F16_e64
+def V_FMA_F16_gfx9_fake16_e64_sem : InstSISemantic<V_FMA_F16_gfx9_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFMA
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_FMA_F16_e64
+def V_FMA_F16_gfx9_t16_e64_sem : InstSISemantic<V_FMA_F16_gfx9_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFMA
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                         si_llvm_half_ty),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_LSHLREV_B16_e64
+def V_LSHLREV_B16_opsel_e64_sem : InstSISemantic<V_LSHLREV_B16_opsel_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMShl (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                 (LLVMAnd (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           (ConstantInt si_llvm_i16_ty, 15))),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_LSHRREV_B16_e64
+def V_LSHRREV_B16_opsel_e64_sem : InstSISemantic<V_LSHRREV_B16_opsel_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMLShr (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                  (LLVMAnd (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                            (ConstantInt si_llvm_i16_ty, 15))),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_MAD_F16_e64
+def V_MAD_F16_gfx9_e64_sem : InstSISemantic<V_MAD_F16_gfx9_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMBitCast
+          (LLVMFAdd
+            (LLVMFMul
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           si_llvm_half_ty),
+              (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
+                           si_llvm_half_ty)),
+            (LLVMBitCast (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty),
+                         si_llvm_half_ty)),
+          si_llvm_i16_ty),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_MAD_I16_e64
+def V_MAD_I16_gfx9_e64_sem : InstSISemantic<V_MAD_I16_gfx9_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMAdd (LLVMMul (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+                 (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_MAD_I16_e64
+def V_MAD_I16_gfx9_fake16_e64_sem : InstSISemantic<V_MAD_I16_gfx9_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMAdd (LLVMMul (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+                 (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_MAD_I16_e64
+def V_MAD_I16_gfx9_t16_e64_sem : InstSISemantic<V_MAD_I16_gfx9_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMAdd (LLVMMul (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+                 (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_MAD_I64_I32_e64
+def V_MAD_I64_I32_gfx11_e64_sem : InstSISemantic<V_MAD_I64_I32_gfx11_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMAdd (LLVMMul (LLVMSExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                         (LLVMSExt (GetNamedOperand $src1), si_llvm_i64_ty)),
+               (GetNamedOperand $src2)))
+  ];
+}
+
+// alias of V_MAD_U16_e64
+def V_MAD_U16_gfx9_e64_sem : InstSISemantic<V_MAD_U16_gfx9_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMAdd (LLVMMul (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+                 (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_MAD_U16_e64
+def V_MAD_U16_gfx9_fake16_e64_sem : InstSISemantic<V_MAD_U16_gfx9_fake16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMAdd (LLVMMul (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+                 (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_MAD_U16_e64
+def V_MAD_U16_gfx9_t16_e64_sem : InstSISemantic<V_MAD_U16_gfx9_t16_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMAdd (LLVMMul (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                           (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+                 (LLVMTrunc (GetNamedOperand $src2), si_llvm_i16_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_MAD_U64_U32_e64
+def V_MAD_U64_U32_gfx11_e64_sem : InstSISemantic<V_MAD_U64_U32_gfx11_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMAdd (LLVMMul (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+                         (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty)),
+               (GetNamedOperand $src2)))
+  ];
+}
+
+// alias of V_MAX_I16_e64
+def V_MAX_I16_opsel_e64_sem : InstSISemantic<V_MAX_I16_opsel_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpSGT, (GetVal $a), (GetVal $b)),
+                    (GetVal $a), (GetVal $b)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_MAX_U16_e64
+def V_MAX_U16_opsel_e64_sem : InstSISemantic<V_MAX_U16_opsel_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpUGT, (GetVal $a), (GetVal $b)),
+                    (GetVal $a), (GetVal $b)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_MIN_I16_e64
+def V_MIN_I16_opsel_e64_sem : InstSISemantic<V_MIN_I16_opsel_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpSLT, (GetVal $a), (GetVal $b)),
+                    (GetVal $a), (GetVal $b)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_MIN_U16_e64
+def V_MIN_U16_opsel_e64_sem : InstSISemantic<V_MIN_U16_opsel_e64> {
+  let Semantic = [
+    (DefVal $a, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty)),
+    (DefVal $b, (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMSelect (LLVMCmp LLVMICmpULT, (GetVal $a), (GetVal $b)),
+                    (GetVal $a), (GetVal $b)),
+        si_llvm_i32_ty))
+  ];
+}
+
+// alias of V_MUL_LO_U16_e64
+def V_MUL_LO_U16_opsel_e64_sem : InstSISemantic<V_MUL_LO_U16_opsel_e64> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMZExt
+        (LLVMMul (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty),
+                 (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty)),
+        si_llvm_i32_ty))
+  ];
+}
+
+//==============================================================================
+// V_ family record-extracted aliases (Phase 7)
+// Bodies extracted from expanded tablegen records (--print-records) for ops
+// whose base semantics were defined via foreach indirection.
+//==============================================================================
+
+// alias of V_ADD_NC_U16_e64
+def V_ADD_NC_U16_fake16_e64_sem : InstSISemantic<V_ADD_NC_U16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMZExt (LLVMAdd (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)), si_llvm_i32_ty))];
+}
+
+// alias of V_ADD_NC_U16_e64
+def V_ADD_NC_U16_t16_e64_sem : InstSISemantic<V_ADD_NC_U16_t16_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMZExt (LLVMAdd (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)), si_llvm_i32_ty))];
+}
+
+// alias of V_CMPX_CLASS_F16_e32
+def V_CMPX_CLASS_F16_fake16_e32_sem : InstSISemantic<V_CMPX_CLASS_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_CLASS_F16_e64
+def V_CMPX_CLASS_F16_fake16_e64_sem : InstSISemantic<V_CMPX_CLASS_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class, [(GetNamedOperand ?:$src0), (GetNamedOperand ?:$src1)]))];
+}
+
+// alias of V_CMPX_EQ_F16_e32
+def V_CMPX_EQ_F16_fake16_e32_sem : InstSISemantic<V_CMPX_EQ_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpOEQ, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_EQ_F16_e64
+def V_CMPX_EQ_F16_fake16_e64_sem : InstSISemantic<V_CMPX_EQ_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpOEQ, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$result))];
+}
+
+// alias of V_CMPX_EQ_I16_e32
+def V_CMPX_EQ_I16_fake16_e32_sem : InstSISemantic<V_CMPX_EQ_I16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpEQ, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMPX_EQ_I16_e64
+def V_CMPX_EQ_I16_fake16_e64_sem : InstSISemantic<V_CMPX_EQ_I16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpEQ, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMPX_EQ_U16_e32
+def V_CMPX_EQ_U16_fake16_e32_sem : InstSISemantic<V_CMPX_EQ_U16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpEQ, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMPX_EQ_U16_e64
+def V_CMPX_EQ_U16_fake16_e64_sem : InstSISemantic<V_CMPX_EQ_U16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpEQ, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMPX_F_F16_e32
+def V_CMPX_F_F16_fake16_e32_sem : InstSISemantic<V_CMPX_F_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_F_F16_e64
+def V_CMPX_F_F16_fake16_e64_sem : InstSISemantic<V_CMPX_F_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (ConstantFalse si_llvm_i1_ty))];
+}
+
+// alias of V_CMPX_F_I16_e32
+def V_CMPX_F_I16_fake16_e32_sem : InstSISemantic<V_CMPX_F_I16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_F_I16_e64
+def V_CMPX_F_I16_fake16_e64_sem : InstSISemantic<V_CMPX_F_I16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (ConstantFalse si_llvm_i1_ty))];
+}
+
+// alias of V_CMPX_F_U16_e32
+def V_CMPX_F_U16_fake16_e32_sem : InstSISemantic<V_CMPX_F_U16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_F_U16_e64
+def V_CMPX_F_U16_fake16_e64_sem : InstSISemantic<V_CMPX_F_U16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (ConstantFalse si_llvm_i1_ty))];
+}
+
+// alias of V_CMPX_GE_F16_e32
+def V_CMPX_GE_F16_fake16_e32_sem : InstSISemantic<V_CMPX_GE_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpOGE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_GE_F16_e64
+def V_CMPX_GE_F16_fake16_e64_sem : InstSISemantic<V_CMPX_GE_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpOGE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$result))];
+}
+
+// alias of V_CMPX_GE_I16_e32
+def V_CMPX_GE_I16_fake16_e32_sem : InstSISemantic<V_CMPX_GE_I16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpSGE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMPX_GE_I16_e64
+def V_CMPX_GE_I16_fake16_e64_sem : InstSISemantic<V_CMPX_GE_I16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpSGE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMPX_GE_U16_e32
+def V_CMPX_GE_U16_fake16_e32_sem : InstSISemantic<V_CMPX_GE_U16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpUGE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMPX_GE_U16_e64
+def V_CMPX_GE_U16_fake16_e64_sem : InstSISemantic<V_CMPX_GE_U16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpUGE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMPX_GT_F16_e32
+def V_CMPX_GT_F16_fake16_e32_sem : InstSISemantic<V_CMPX_GT_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpOGT, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_GT_F16_e64
+def V_CMPX_GT_F16_fake16_e64_sem : InstSISemantic<V_CMPX_GT_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpOGT, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$result))];
+}
+
+// alias of V_CMPX_GT_I16_e32
+def V_CMPX_GT_I16_fake16_e32_sem : InstSISemantic<V_CMPX_GT_I16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpSGT, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMPX_GT_I16_e64
+def V_CMPX_GT_I16_fake16_e64_sem : InstSISemantic<V_CMPX_GT_I16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpSGT, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMPX_GT_U16_e32
+def V_CMPX_GT_U16_fake16_e32_sem : InstSISemantic<V_CMPX_GT_U16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpUGT, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMPX_GT_U16_e64
+def V_CMPX_GT_U16_fake16_e64_sem : InstSISemantic<V_CMPX_GT_U16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpUGT, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMPX_LE_F16_e32
+def V_CMPX_LE_F16_fake16_e32_sem : InstSISemantic<V_CMPX_LE_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpOLE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_LE_F16_e64
+def V_CMPX_LE_F16_fake16_e64_sem : InstSISemantic<V_CMPX_LE_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpOLE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$result))];
+}
+
+// alias of V_CMPX_LE_I16_e32
+def V_CMPX_LE_I16_fake16_e32_sem : InstSISemantic<V_CMPX_LE_I16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpSLE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMPX_LE_I16_e64
+def V_CMPX_LE_I16_fake16_e64_sem : InstSISemantic<V_CMPX_LE_I16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpSLE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMPX_LE_U16_e32
+def V_CMPX_LE_U16_fake16_e32_sem : InstSISemantic<V_CMPX_LE_U16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpULE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMPX_LE_U16_e64
+def V_CMPX_LE_U16_fake16_e64_sem : InstSISemantic<V_CMPX_LE_U16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpULE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMPX_LG_F16_e32
+def V_CMPX_LG_F16_fake16_e32_sem : InstSISemantic<V_CMPX_LG_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpONE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_LG_F16_e64
+def V_CMPX_LG_F16_fake16_e64_sem : InstSISemantic<V_CMPX_LG_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpONE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$result))];
+}
+
+// alias of V_CMPX_LT_F16_e32
+def V_CMPX_LT_F16_fake16_e32_sem : InstSISemantic<V_CMPX_LT_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpOLT, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_LT_F16_e64
+def V_CMPX_LT_F16_fake16_e64_sem : InstSISemantic<V_CMPX_LT_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpOLT, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$result))];
+}
+
+// alias of V_CMPX_LT_I16_e32
+def V_CMPX_LT_I16_fake16_e32_sem : InstSISemantic<V_CMPX_LT_I16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpSLT, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMPX_LT_I16_e64
+def V_CMPX_LT_I16_fake16_e64_sem : InstSISemantic<V_CMPX_LT_I16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpSLT, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMPX_LT_U16_e32
+def V_CMPX_LT_U16_fake16_e32_sem : InstSISemantic<V_CMPX_LT_U16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpULT, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMPX_LT_U16_e64
+def V_CMPX_LT_U16_fake16_e64_sem : InstSISemantic<V_CMPX_LT_U16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpULT, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMPX_NEQ_F16_e32
+def V_CMPX_NEQ_F16_fake16_e32_sem : InstSISemantic<V_CMPX_NEQ_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpUNE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_NEQ_F16_e64
+def V_CMPX_NEQ_F16_fake16_e64_sem : InstSISemantic<V_CMPX_NEQ_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpUNE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$result))];
+}
+
+// alias of V_CMPX_NE_I16_e32
+def V_CMPX_NE_I16_fake16_e32_sem : InstSISemantic<V_CMPX_NE_I16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpNE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMPX_NE_I16_e64
+def V_CMPX_NE_I16_fake16_e64_sem : InstSISemantic<V_CMPX_NE_I16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpNE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMPX_NE_U16_e32
+def V_CMPX_NE_U16_fake16_e32_sem : InstSISemantic<V_CMPX_NE_U16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpNE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMPX_NE_U16_e64
+def V_CMPX_NE_U16_fake16_e64_sem : InstSISemantic<V_CMPX_NE_U16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMCmp LLVMICmpNE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMPX_NGE_F16_e32
+def V_CMPX_NGE_F16_fake16_e32_sem : InstSISemantic<V_CMPX_NGE_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpULT, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_NGE_F16_e64
+def V_CMPX_NGE_F16_fake16_e64_sem : InstSISemantic<V_CMPX_NGE_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpULT, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$result))];
+}
+
+// alias of V_CMPX_NGT_F16_e32
+def V_CMPX_NGT_F16_fake16_e32_sem : InstSISemantic<V_CMPX_NGT_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpULE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_NGT_F16_e64
+def V_CMPX_NGT_F16_fake16_e64_sem : InstSISemantic<V_CMPX_NGT_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpULE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$result))];
+}
+
+// alias of V_CMPX_NLE_F16_e32
+def V_CMPX_NLE_F16_fake16_e32_sem : InstSISemantic<V_CMPX_NLE_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpUGT, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_NLE_F16_e64
+def V_CMPX_NLE_F16_fake16_e64_sem : InstSISemantic<V_CMPX_NLE_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpUGT, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$result))];
+}
+
+// alias of V_CMPX_NLG_F16_e32
+def V_CMPX_NLG_F16_fake16_e32_sem : InstSISemantic<V_CMPX_NLG_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpUEQ, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_NLG_F16_e64
+def V_CMPX_NLG_F16_fake16_e64_sem : InstSISemantic<V_CMPX_NLG_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpUEQ, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$result))];
+}
+
+// alias of V_CMPX_NLT_F16_e32
+def V_CMPX_NLT_F16_fake16_e32_sem : InstSISemantic<V_CMPX_NLT_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpUGE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_NLT_F16_e64
+def V_CMPX_NLT_F16_fake16_e64_sem : InstSISemantic<V_CMPX_NLT_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$result, (LLVMFCmp LLVMFCmpUGE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$result))];
+}
+
+// alias of V_CMPX_O_F16_e32
+def V_CMPX_O_F16_fake16_e32_sem : InstSISemantic<V_CMPX_O_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMFCmp LLVMFCmpOLE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_O_F16_e64
+def V_CMPX_O_F16_fake16_e64_sem : InstSISemantic<V_CMPX_O_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMFCmp LLVMFCmpOLE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMPX_TRU_F16_e32
+def V_CMPX_TRU_F16_fake16_e32_sem : InstSISemantic<V_CMPX_TRU_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_TRU_F16_e64
+def V_CMPX_TRU_F16_fake16_e64_sem : InstSISemantic<V_CMPX_TRU_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (ConstantTrue si_llvm_i1_ty))];
+}
+
+// alias of V_CMPX_T_I16_e32
+def V_CMPX_T_I16_fake16_e32_sem : InstSISemantic<V_CMPX_T_I16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_T_I16_e64
+def V_CMPX_T_I16_fake16_e64_sem : InstSISemantic<V_CMPX_T_I16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (ConstantTrue si_llvm_i1_ty))];
+}
+
+// alias of V_CMPX_T_U16_e32
+def V_CMPX_T_U16_fake16_e32_sem : InstSISemantic<V_CMPX_T_U16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMPX_T_U16_e64
+def V_CMPX_T_U16_fake16_e64_sem : InstSISemantic<V_CMPX_T_U16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (ConstantTrue si_llvm_i1_ty))];
+}
+
+// alias of V_CMPX_U_F16_e32
+def V_CMPX_U_F16_fake16_e32_sem : InstSISemantic<V_CMPX_U_F16_fake16_e32> {
+  let Semantic = [(DefVal ?:$r, (LLVMFCmp LLVMFCmpUNO, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMPX_U_F16_e64
+def V_CMPX_U_F16_fake16_e64_sem : InstSISemantic<V_CMPX_U_F16_fake16_e64> {
+  let Semantic = [(DefVal ?:$r, (LLVMFCmp LLVMFCmpUNO, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty))), (SetNamedOperand ?:$sdst, (GetVal ?:$r))];
+}
+
+// alias of V_CMP_CLASS_F16_e32
+def V_CMP_CLASS_F16_fake16_e32_sem : InstSISemantic<V_CMP_CLASS_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_CLASS_F16_e64
+def V_CMP_CLASS_F16_fake16_e64_sem : InstSISemantic<V_CMP_CLASS_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class, [(GetNamedOperand ?:$src0), (GetNamedOperand ?:$src1)]))];
+}
+
+// alias of V_CMP_EQ_F16_e32
+def V_CMP_EQ_F16_fake16_e32_sem : InstSISemantic<V_CMP_EQ_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_EQ_F16_e64
+def V_CMP_EQ_F16_fake16_e64_sem : InstSISemantic<V_CMP_EQ_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpOEQ, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMP_EQ_I16_e32
+def V_CMP_EQ_I16_fake16_e32_sem : InstSISemantic<V_CMP_EQ_I16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_EQ_I16_e64
+def V_CMP_EQ_I16_fake16_e64_sem : InstSISemantic<V_CMP_EQ_I16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMCmp LLVMICmpEQ, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMP_EQ_U16_e32
+def V_CMP_EQ_U16_fake16_e32_sem : InstSISemantic<V_CMP_EQ_U16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_EQ_U16_e64
+def V_CMP_EQ_U16_fake16_e64_sem : InstSISemantic<V_CMP_EQ_U16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMCmp LLVMICmpEQ, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMP_F_F16_e32
+def V_CMP_F_F16_fake16_e32_sem : InstSISemantic<V_CMP_F_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_F_F16_e64
+def V_CMP_F_F16_fake16_e64_sem : InstSISemantic<V_CMP_F_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (ConstantFalse si_llvm_i1_ty))];
+}
+
+// alias of V_CMP_F_I16_e32
+def V_CMP_F_I16_fake16_e32_sem : InstSISemantic<V_CMP_F_I16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_F_I16_e64
+def V_CMP_F_I16_fake16_e64_sem : InstSISemantic<V_CMP_F_I16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (ConstantFalse si_llvm_i1_ty))];
+}
+
+// alias of V_CMP_F_U16_e32
+def V_CMP_F_U16_fake16_e32_sem : InstSISemantic<V_CMP_F_U16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_F_U16_e64
+def V_CMP_F_U16_fake16_e64_sem : InstSISemantic<V_CMP_F_U16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (ConstantFalse si_llvm_i1_ty))];
+}
+
+// alias of V_CMP_GE_F16_e32
+def V_CMP_GE_F16_fake16_e32_sem : InstSISemantic<V_CMP_GE_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_GE_F16_e64
+def V_CMP_GE_F16_fake16_e64_sem : InstSISemantic<V_CMP_GE_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpOGE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMP_GE_I16_e32
+def V_CMP_GE_I16_fake16_e32_sem : InstSISemantic<V_CMP_GE_I16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_GE_I16_e64
+def V_CMP_GE_I16_fake16_e64_sem : InstSISemantic<V_CMP_GE_I16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMCmp LLVMICmpSGE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMP_GE_U16_e32
+def V_CMP_GE_U16_fake16_e32_sem : InstSISemantic<V_CMP_GE_U16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_GE_U16_e64
+def V_CMP_GE_U16_fake16_e64_sem : InstSISemantic<V_CMP_GE_U16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMCmp LLVMICmpUGE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMP_GT_F16_e32
+def V_CMP_GT_F16_fake16_e32_sem : InstSISemantic<V_CMP_GT_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_GT_F16_e64
+def V_CMP_GT_F16_fake16_e64_sem : InstSISemantic<V_CMP_GT_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpOGT, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMP_GT_I16_e32
+def V_CMP_GT_I16_fake16_e32_sem : InstSISemantic<V_CMP_GT_I16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_GT_I16_e64
+def V_CMP_GT_I16_fake16_e64_sem : InstSISemantic<V_CMP_GT_I16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMCmp LLVMICmpSGT, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMP_GT_U16_e32
+def V_CMP_GT_U16_fake16_e32_sem : InstSISemantic<V_CMP_GT_U16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_GT_U16_e64
+def V_CMP_GT_U16_fake16_e64_sem : InstSISemantic<V_CMP_GT_U16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMCmp LLVMICmpUGT, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMP_LE_F16_e32
+def V_CMP_LE_F16_fake16_e32_sem : InstSISemantic<V_CMP_LE_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_LE_F16_e64
+def V_CMP_LE_F16_fake16_e64_sem : InstSISemantic<V_CMP_LE_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpOLE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMP_LE_I16_e32
+def V_CMP_LE_I16_fake16_e32_sem : InstSISemantic<V_CMP_LE_I16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_LE_I16_e64
+def V_CMP_LE_I16_fake16_e64_sem : InstSISemantic<V_CMP_LE_I16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMCmp LLVMICmpSLE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMP_LE_U16_e32
+def V_CMP_LE_U16_fake16_e32_sem : InstSISemantic<V_CMP_LE_U16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_LE_U16_e64
+def V_CMP_LE_U16_fake16_e64_sem : InstSISemantic<V_CMP_LE_U16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMCmp LLVMICmpULE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMP_LG_F16_e32
+def V_CMP_LG_F16_fake16_e32_sem : InstSISemantic<V_CMP_LG_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_LG_F16_e64
+def V_CMP_LG_F16_fake16_e64_sem : InstSISemantic<V_CMP_LG_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpONE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMP_LT_F16_e32
+def V_CMP_LT_F16_fake16_e32_sem : InstSISemantic<V_CMP_LT_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_LT_F16_e64
+def V_CMP_LT_F16_fake16_e64_sem : InstSISemantic<V_CMP_LT_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpOLT, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMP_LT_I16_e32
+def V_CMP_LT_I16_fake16_e32_sem : InstSISemantic<V_CMP_LT_I16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_LT_I16_e64
+def V_CMP_LT_I16_fake16_e64_sem : InstSISemantic<V_CMP_LT_I16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMCmp LLVMICmpSLT, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMP_LT_U16_e32
+def V_CMP_LT_U16_fake16_e32_sem : InstSISemantic<V_CMP_LT_U16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_LT_U16_e64
+def V_CMP_LT_U16_fake16_e64_sem : InstSISemantic<V_CMP_LT_U16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMCmp LLVMICmpULT, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMP_NEQ_F16_e32
+def V_CMP_NEQ_F16_fake16_e32_sem : InstSISemantic<V_CMP_NEQ_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_NEQ_F16_e64
+def V_CMP_NEQ_F16_fake16_e64_sem : InstSISemantic<V_CMP_NEQ_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpUNE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMP_NE_I16_e32
+def V_CMP_NE_I16_fake16_e32_sem : InstSISemantic<V_CMP_NE_I16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_NE_I16_e64
+def V_CMP_NE_I16_fake16_e64_sem : InstSISemantic<V_CMP_NE_I16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMCmp LLVMICmpNE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMP_NE_U16_e32
+def V_CMP_NE_U16_fake16_e32_sem : InstSISemantic<V_CMP_NE_U16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_NE_U16_e64
+def V_CMP_NE_U16_fake16_e64_sem : InstSISemantic<V_CMP_NE_U16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMCmp LLVMICmpNE, (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)))];
+}
+
+// alias of V_CMP_NGE_F16_e32
+def V_CMP_NGE_F16_fake16_e32_sem : InstSISemantic<V_CMP_NGE_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_NGE_F16_e64
+def V_CMP_NGE_F16_fake16_e64_sem : InstSISemantic<V_CMP_NGE_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpULT, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMP_NGT_F16_e32
+def V_CMP_NGT_F16_fake16_e32_sem : InstSISemantic<V_CMP_NGT_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_NGT_F16_e64
+def V_CMP_NGT_F16_fake16_e64_sem : InstSISemantic<V_CMP_NGT_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpULE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMP_NLE_F16_e32
+def V_CMP_NLE_F16_fake16_e32_sem : InstSISemantic<V_CMP_NLE_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_NLE_F16_e64
+def V_CMP_NLE_F16_fake16_e64_sem : InstSISemantic<V_CMP_NLE_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpUGT, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMP_NLG_F16_e32
+def V_CMP_NLG_F16_fake16_e32_sem : InstSISemantic<V_CMP_NLG_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_NLG_F16_e64
+def V_CMP_NLG_F16_fake16_e64_sem : InstSISemantic<V_CMP_NLG_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpUEQ, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMP_NLT_F16_e32
+def V_CMP_NLT_F16_fake16_e32_sem : InstSISemantic<V_CMP_NLT_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_NLT_F16_e64
+def V_CMP_NLT_F16_fake16_e64_sem : InstSISemantic<V_CMP_NLT_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpUGE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMP_O_F16_e32
+def V_CMP_O_F16_fake16_e32_sem : InstSISemantic<V_CMP_O_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_O_F16_e64
+def V_CMP_O_F16_fake16_e64_sem : InstSISemantic<V_CMP_O_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpOLE, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CMP_TRU_F16_e32
+def V_CMP_TRU_F16_fake16_e32_sem : InstSISemantic<V_CMP_TRU_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_TRU_F16_e64
+def V_CMP_TRU_F16_fake16_e64_sem : InstSISemantic<V_CMP_TRU_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (ConstantTrue si_llvm_i1_ty))];
+}
+
+// alias of V_CMP_T_I16_e32
+def V_CMP_T_I16_fake16_e32_sem : InstSISemantic<V_CMP_T_I16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_T_I16_e64
+def V_CMP_T_I16_fake16_e64_sem : InstSISemantic<V_CMP_T_I16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (ConstantTrue si_llvm_i1_ty))];
+}
+
+// alias of V_CMP_T_U16_e32
+def V_CMP_T_U16_fake16_e32_sem : InstSISemantic<V_CMP_T_U16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_T_U16_e64
+def V_CMP_T_U16_fake16_e64_sem : InstSISemantic<V_CMP_T_U16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (ConstantTrue si_llvm_i1_ty))];
+}
+
+// alias of V_CMP_U_F16_e32
+def V_CMP_U_F16_fake16_e32_sem : InstSISemantic<V_CMP_U_F16_fake16_e32> {
+  let Semantic = [];
+}
+
+// alias of V_CMP_U_F16_e64
+def V_CMP_U_F16_fake16_e64_sem : InstSISemantic<V_CMP_U_F16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$sdst, (LLVMFCmp LLVMFCmpUNO, (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty)))];
+}
+
+// alias of V_CVT_F16_F32_e32
+def V_CVT_F16_F32_fake16_e32_sem : InstSISemantic<V_CVT_F16_F32_fake16_e32> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMZExt (LLVMBitCast (LLVMFPTrunc (LLVMBitCast (GetNamedOperand ?:$src0), si_llvm_float_ty), si_llvm_half_ty), si_llvm_i16_ty), si_llvm_i32_ty))];
+}
+
+// alias of V_CVT_F16_I16_e32
+def V_CVT_F16_I16_fake16_e32_sem : InstSISemantic<V_CVT_F16_I16_fake16_e32> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMZExt (LLVMBitCast (LLVMSIToFP (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), si_llvm_i16_ty), si_llvm_i32_ty))];
+}
+
+// alias of V_CVT_F16_U16_e32
+def V_CVT_F16_U16_fake16_e32_sem : InstSISemantic<V_CVT_F16_U16_fake16_e32> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMZExt (LLVMBitCast (LLVMUIToFP (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), si_llvm_i16_ty), si_llvm_i32_ty))];
+}
+
+// alias of V_CVT_F32_F16_e32
+def V_CVT_F32_F16_fake16_e32_sem : InstSISemantic<V_CVT_F32_F16_fake16_e32> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMBitCast (LLVMFPExt (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), si_llvm_float_ty), si_llvm_i32_ty))];
+}
+
+// alias of V_CVT_F32_FP8_e64
+def V_CVT_F32_FP8_gfx1250_e64_sem : InstSISemantic<V_CVT_F32_FP8_gfx1250_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_I16_F16_e32
+def V_CVT_I16_F16_fake16_e32_sem : InstSISemantic<V_CVT_I16_F16_fake16_e32> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMZExt (LLVMFPToSI (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), si_llvm_i16_ty), si_llvm_i32_ty))];
+}
+
+// alias of V_CVT_NORM_I16_F16_e32
+def V_CVT_NORM_I16_F16_fake16_e32_sem : InstSISemantic<V_CVT_NORM_I16_F16_fake16_e32> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_pknorm_i16, [(GetNamedOperand ?:$src0)]))];
+}
+
+// alias of V_CVT_NORM_U16_F16_e32
+def V_CVT_NORM_U16_F16_fake16_e32_sem : InstSISemantic<V_CVT_NORM_U16_F16_fake16_e32> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_cvt_pknorm_u16, [(GetNamedOperand ?:$src0)]))];
+}
+
+// alias of V_CVT_PKNORM_I16_F16_e64
+def V_CVT_PKNORM_I16_F16_fake16_e64_sem : InstSISemantic<V_CVT_PKNORM_I16_F16_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PKNORM_I16_F16_e64
+def V_CVT_PKNORM_I16_F16_t16_e64_sem : InstSISemantic<V_CVT_PKNORM_I16_F16_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PKNORM_U16_F16_e64
+def V_CVT_PKNORM_U16_F16_fake16_e64_sem : InstSISemantic<V_CVT_PKNORM_U16_F16_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PKNORM_U16_F16_e64
+def V_CVT_PKNORM_U16_F16_t16_e64_sem : InstSISemantic<V_CVT_PKNORM_U16_F16_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PK_BF8_F32_e64
+def V_CVT_PK_BF8_F32_fake16_e64_sem : InstSISemantic<V_CVT_PK_BF8_F32_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PK_BF8_F32_e64
+def V_CVT_PK_BF8_F32_t16_e64_sem : InstSISemantic<V_CVT_PK_BF8_F32_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PK_F32_BF8_e64
+def V_CVT_PK_F32_BF8_fake16_e64_sem : InstSISemantic<V_CVT_PK_F32_BF8_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PK_F32_BF8_e64
+def V_CVT_PK_F32_BF8_t16_e64_sem : InstSISemantic<V_CVT_PK_F32_BF8_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PK_F32_FP8_e64
+def V_CVT_PK_F32_FP8_fake16_e64_sem : InstSISemantic<V_CVT_PK_F32_FP8_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PK_F32_FP8_e64
+def V_CVT_PK_F32_FP8_t16_e64_sem : InstSISemantic<V_CVT_PK_F32_FP8_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PK_FP8_F32_e64
+def V_CVT_PK_FP8_F32_fake16_e64_sem : InstSISemantic<V_CVT_PK_FP8_F32_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PK_FP8_F32_e64
+def V_CVT_PK_FP8_F32_gfx1250_e64_sem : InstSISemantic<V_CVT_PK_FP8_F32_gfx1250_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PK_FP8_F32_e64
+def V_CVT_PK_FP8_F32_gfx1250_fake16_e64_sem : InstSISemantic<V_CVT_PK_FP8_F32_gfx1250_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PK_FP8_F32_e64
+def V_CVT_PK_FP8_F32_gfx1250_t16_e64_sem : InstSISemantic<V_CVT_PK_FP8_F32_gfx1250_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_PK_FP8_F32_e64
+def V_CVT_PK_FP8_F32_t16_e64_sem : InstSISemantic<V_CVT_PK_FP8_F32_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_SR_FP8_F32_e64
+def V_CVT_SR_FP8_F32_gfx1250_e64_sem : InstSISemantic<V_CVT_SR_FP8_F32_gfx1250_e64> {
+  let Semantic = [];
+}
+
+// alias of V_CVT_U16_F16_e32
+def V_CVT_U16_F16_fake16_e32_sem : InstSISemantic<V_CVT_U16_F16_fake16_e32> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMZExt (LLVMFPToUI (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), si_llvm_i16_ty), si_llvm_i32_ty))];
+}
+
+// alias of V_DOT2_BF16_BF16_e64
+def V_DOT2_BF16_BF16_fake16_e64_sem : InstSISemantic<V_DOT2_BF16_BF16_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_DOT2_BF16_BF16_e64
+def V_DOT2_BF16_BF16_t16_e64_sem : InstSISemantic<V_DOT2_BF16_BF16_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_DOT2_F16_F16_e64
+def V_DOT2_F16_F16_fake16_e64_sem : InstSISemantic<V_DOT2_F16_F16_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_DOT2_F16_F16_e64
+def V_DOT2_F16_F16_t16_e64_sem : InstSISemantic<V_DOT2_F16_F16_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_FMAC_F16_e32
+def V_FMAC_F16_fake16_e32_sem : InstSISemantic<V_FMAC_F16_fake16_e32> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMZExt (LLVMBitCast (LLVMFMA (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty), si_llvm_half_ty), (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src2), si_llvm_i16_ty), si_llvm_half_ty)), si_llvm_i16_ty), si_llvm_i32_ty))];
+}
+
+// alias of V_FREXP_EXP_I16_F16_e32
+def V_FREXP_EXP_I16_F16_fake16_e32_sem : InstSISemantic<V_FREXP_EXP_I16_F16_fake16_e32> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_frexp_exp, [(GetNamedOperand ?:$src0)]))];
+}
+
+// alias of V_LDEXP_F16_e32
+def V_LDEXP_F16_fake16_e32_sem : InstSISemantic<V_LDEXP_F16_fake16_e32> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMZExt (LLVMBitCast (LLVMLdexp (LLVMBitCast (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), si_llvm_half_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)), si_llvm_i16_ty), si_llvm_i32_ty))];
+}
+
+// alias of V_MAXIMUM3_F16_e64
+def V_MAXIMUM3_F16_fake16_e64_sem : InstSISemantic<V_MAXIMUM3_F16_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_MAXIMUM3_F16_e64
+def V_MAXIMUM3_F16_t16_e64_sem : InstSISemantic<V_MAXIMUM3_F16_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_MAXIMUMMINIMUM_F16_e64
+def V_MAXIMUMMINIMUM_F16_fake16_e64_sem : InstSISemantic<V_MAXIMUMMINIMUM_F16_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_MAXIMUMMINIMUM_F16_e64
+def V_MAXIMUMMINIMUM_F16_t16_e64_sem : InstSISemantic<V_MAXIMUMMINIMUM_F16_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_MAXIMUM_F16_e64
+def V_MAXIMUM_F16_fake16_e64_sem : InstSISemantic<V_MAXIMUM_F16_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_MAXIMUM_F16_e64
+def V_MAXIMUM_F16_t16_e64_sem : InstSISemantic<V_MAXIMUM_F16_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_MINIMUM3_F16_e64
+def V_MINIMUM3_F16_fake16_e64_sem : InstSISemantic<V_MINIMUM3_F16_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_MINIMUM3_F16_e64
+def V_MINIMUM3_F16_t16_e64_sem : InstSISemantic<V_MINIMUM3_F16_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_PACK_B32_F16_e64
+def V_PACK_B32_F16_fake16_e64_sem : InstSISemantic<V_PACK_B32_F16_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_PACK_B32_F16_e64
+def V_PACK_B32_F16_t16_e64_sem : InstSISemantic<V_PACK_B32_F16_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_SAT_PK_U8_I16_e64
+def V_SAT_PK_U8_I16_fake16_e64_sem : InstSISemantic<V_SAT_PK_U8_I16_fake16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_SAT_PK_U8_I16_e64
+def V_SAT_PK_U8_I16_t16_e64_sem : InstSISemantic<V_SAT_PK_U8_I16_t16_e64> {
+  let Semantic = [];
+}
+
+// alias of V_SUB_NC_U16_e64
+def V_SUB_NC_U16_fake16_e64_sem : InstSISemantic<V_SUB_NC_U16_fake16_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMZExt (LLVMSub (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)), si_llvm_i32_ty))];
+}
+
+// alias of V_SUB_NC_U16_e64
+def V_SUB_NC_U16_t16_e64_sem : InstSISemantic<V_SUB_NC_U16_t16_e64> {
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMZExt (LLVMSub (LLVMTrunc (GetNamedOperand ?:$src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand ?:$src1), si_llvm_i16_ty)), si_llvm_i32_ty))];
+}

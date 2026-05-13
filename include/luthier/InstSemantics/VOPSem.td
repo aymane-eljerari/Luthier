@@ -3739,3 +3739,52 @@ def V_PIPEFLUSH_e32_sem : InstSISemantic<V_PIPEFLUSH_e32> {
 def V_SCREEN_PARTITION_4SE_B32_e32_sem : InstSISemantic<V_SCREEN_PARTITION_4SE_B32_e32> {
   let Semantic = [];
 }
+
+//==============================================================================
+// V_ family _t16 / _fake16 register-file-split variants (Phase 7)
+// gfx11+ 16-bit register file split — same IR semantics as the base op.
+//==============================================================================
+
+// _t16/_fake16 alias of V_CVT_PK_F32_BF8_e32
+def V_CVT_PK_F32_BF8_fake16_e32_sem : InstSISemantic<V_CVT_PK_F32_BF8_fake16_e32> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_v2f32_ty, int_amdgcn_cvt_pk_f32_bf8, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_PK_F32_BF8_e32
+def V_CVT_PK_F32_BF8_t16_e32_sem : InstSISemantic<V_CVT_PK_F32_BF8_t16_e32> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_v2f32_ty, int_amdgcn_cvt_pk_f32_bf8, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_PK_F32_FP8_e32
+def V_CVT_PK_F32_FP8_fake16_e32_sem : InstSISemantic<V_CVT_PK_F32_FP8_fake16_e32> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_v2f32_ty, int_amdgcn_cvt_pk_f32_fp8, [(GetNamedOperand $src0)]))
+  ];
+}
+
+// _t16/_fake16 alias of V_CVT_PK_F32_FP8_e32
+def V_CVT_PK_F32_FP8_t16_e32_sem : InstSISemantic<V_CVT_PK_F32_FP8_t16_e32> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_v2f32_ty, int_amdgcn_cvt_pk_f32_fp8, [(GetNamedOperand $src0)]))
+  ];
+}
+
+//==============================================================================
+// V_ variant aliases (Phase 7): opsel / gfx<n> / additional t16+fake16
+//==============================================================================
+
+// alias of V_CVT_F32_FP8_e32
+def V_CVT_F32_FP8_gfx1250_e32_sem : InstSISemantic<V_CVT_F32_FP8_gfx1250_e32> {
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_cvt_f32_fp8, [(GetNamedOperand $src0)]))
+  ];
+}
