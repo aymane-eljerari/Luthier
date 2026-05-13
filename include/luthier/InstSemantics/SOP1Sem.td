@@ -1773,9 +1773,27 @@ def S_MOVRELD_B64_sem : InstSISemantic<S_MOVRELD_B64> {
   ];
 }
 
-// S_MOVRELSD_2_B32 (GFX10+): like MOVRELD_B32 but uses 2*M0 stride.
-// Conservative model: leave as a stub for now (M0 stride would need a
-// shift before indexing). Filed as TODO since GFX10+ adoption is partial.
+//------------------------------------------------------------------------------
+// S_MOVRELSD_2_B32 (GFX10+):
+//   SGPR[$sdst + 2*M0] = SGPR[$src0 + 2*M0]
+//
+// Both source and destination are indexed by `2*M0` (stride-2 variant of
+// MOVRELSD). Reuses the slice-based register-file access from Phase 30
+// (`GetRegisterFile $opname`): extract lane `2*M0` from `$src0`'s file
+// slice, insert at lane `2*M0` of `$sdst`'s file slice, write back. The
+// optimizer collapses the constant-M0 case into a direct register-to-
+// register move.
+//------------------------------------------------------------------------------
 def S_MOVRELSD_2_B32_sem : InstSISemantic<S_MOVRELSD_2_B32> {
-  let Semantic = [];
+  let Semantic = [
+    (DefVal $stride2,
+      (LLVMShl (ImplicitUse M0), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $src_val,
+      (LLVMExtractElement (GetRegisterFile $src0, si_llvm_i32_ty),
+                          (GetVal $stride2))),
+    (SetRegisterFile $sdst,
+      (LLVMInsertElement (GetRegisterFile $sdst, si_llvm_i32_ty),
+                         (GetVal $src_val),
+                         (GetVal $stride2)))
+  ];
 }
