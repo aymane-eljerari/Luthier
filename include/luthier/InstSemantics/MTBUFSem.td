@@ -15,15 +15,6 @@
 //===----------------------------------------------------------------------===//
 
 //------------------------------------------------------------------------------
-// Convenience Functions
-//------------------------------------------------------------------------------
-
-class CalculateTypedBufferAddr<dag vaddr, dag rsrc, dag soffset, dag offset> {
-  dag ret = (LLVMPtrAdd (LLVMIntToPtr (GetNamedOperand $vaddr), buffer_ptr_type),
-                         (LLVMAdd (GetNamedOperand $soffset), (GetNamedOperand $offset))));
-}
-
-//------------------------------------------------------------------------------
 // MTBUF Instructions — Typed Buffer Load/Store (TBUFFER)
 //
 // These instructions perform typed buffer (TBUFFER) memory operations with a

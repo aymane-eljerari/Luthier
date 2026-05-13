@@ -413,6 +413,9 @@ def hasModifierSet;
 /// Defined here because AMDGPU.td records don't define it
 def region_ptr_ty : LLVMQualPointerType<2>;
 
+// Note: flat_ptr_ty (addrspace 0) and global_ptr_ty (addrspace 1) are already
+// defined by LLVM's IntrinsicsAMDGPU.td and are referenced directly.
+
 /// Scratch address space
 def scratch_ptr_ty : LLVMQualPointerType<5>;
 

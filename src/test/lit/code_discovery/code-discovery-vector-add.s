@@ -23,9 +23,12 @@
 // CHECK-DAG: lshr i64 {{.*}}, %{{.*}}
 // CHECK-DAG: trunc i64 %{{.*}} to i1
 // CHECK-DAG: br i1 %{{.*}}, label %{{.*}}, label %skip
-// CHECK-DAG: global_load_dword
+// FLAT semantics lift global_load_dword / global_store_dword to typed
+// load/store IR over ptr addrspace(1). VOP3 ops without semantics still
+// fall through as asm sideeffect stubs.
+// CHECK-DAG: load i32, ptr addrspace(1)
 // CHECK-DAG: v_fmac_f32
-// CHECK-DAG: global_store_dword
+// CHECK-DAG: store i32 {{.*}}, ptr addrspace(1)
 
 	.amdgcn_target "amdgcn-amd-amdhsa--gfx908"
 	.amdhsa_code_object_version 6

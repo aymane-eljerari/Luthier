@@ -432,18 +432,10 @@ def V_DOT2_U32_U16_sem : InstSISemantic<V_DOT2_U32_U16> {
 // Sources:
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 437.
 //   rdna4-instruction-set-architecture.pdf, page 499.
-def V_DOT2_BF16_BF16_sem : InstSISemantic<V_DOT2_BF16_BF16> {
-  let Semantic = [];
-}
-
 // D.v2f16 = dot2 with packed f16 result.
 // Sources:
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 436.
 //   rdna4-instruction-set-architecture.pdf, page 499.
-def V_DOT2_F16_F16_sem : InstSISemantic<V_DOT2_F16_F16> {
-  let Semantic = [];
-}
-
 //------------------------------------------------------------------------------
 // V_DOT4 (four-element dot product)
 //------------------------------------------------------------------------------

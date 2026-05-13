@@ -33,7 +33,7 @@
 //==============================================================================
 //
 // These use the VINTRP encoding format (32-bit). Operands:
-//   $vsrc: VGPR source (barycentric coordinate for P1/P2, slot for MOV)
+//   $src0: VGPR source (barycentric coordinate for P1/P2, slot for MOV)
 //   $attr: interpolation attribute number (0–32)
 //   $attrchan: attribute channel (x=0, y=1, z=2, w=3)
 // The LDS parameter memory is accessed implicitly via M0.
@@ -58,7 +58,7 @@
 def V_INTERP_P1_F32_sem : InstSISemantic<V_INTERP_P1_F32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_p1, [(GetNamedOperand $vsrc), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_p1, [(GetNamedOperand $src0), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
   ];
 }
 
@@ -80,7 +80,7 @@ def V_INTERP_P1_F32_sem : InstSISemantic<V_INTERP_P1_F32> {
 def V_INTERP_P2_F32_sem : InstSISemantic<V_INTERP_P2_F32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_p2, [(GetNamedOperand $vsrc), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_p2, [(GetNamedOperand $src0), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
   ];
 }
 
@@ -99,7 +99,7 @@ def V_INTERP_P2_F32_sem : InstSISemantic<V_INTERP_P2_F32> {
 def V_INTERP_MOV_F32_sem : InstSISemantic<V_INTERP_MOV_F32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_mov, [(GetNamedOperand $vsrc), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_mov, [(GetNamedOperand $src0), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
   ];
 }
 
@@ -111,7 +111,7 @@ def V_INTERP_MOV_F32_sem : InstSISemantic<V_INTERP_MOV_F32> {
 def V_INTERP_P1_F32_16bank_sem : InstSISemantic<V_INTERP_P1_F32_16bank> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_p1, [(GetNamedOperand $vsrc), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_interp_p1, [(GetNamedOperand $src0), (GetNamedOperand $attrchan), (GetNamedOperand $attr), (ImplicitUse M0)]))
   ];
 }
 
