@@ -1080,9 +1080,21 @@ llvm::Value *MIRToIRTranslator::getRegisterFile(
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] getRegisterFile: MBB "
                           << MBB.getNumber() << " reg=" << TRI.getName(Reg)
                           << "\n");
-  llvm::MCRegister RegFileBaseReg = std::get<0>(getRegFileKey(Reg));
-  unsigned NumLanes16 = RegFileSize[RegFileBaseReg];
-  RegFileKey MegaKey = std::make_tuple(RegFileBaseReg, 0, NumLanes16);
+  // Slice the register file starting at `Reg`'s offset within its base file:
+  // for an indexed read of `Reg[M0]`, only entries at or after `Reg` are
+  // reachable. This shrinks the vector materialized by `getOperandAsValue`
+  // from the full file (e.g. 108 SGPRs) to just `Reg..end`.
+  auto Key = getRegFileKey(Reg);
+  llvm::MCRegister RegFileBaseReg = std::get<0>(Key);
+  unsigned StartHalves = std::get<1>(Key);
+  unsigned TotalHalves = RegFileSize[RegFileBaseReg];
+  assert(TotalHalves != 0 &&
+         "register file is not modeled for the current target");
+  assert(StartHalves <= TotalHalves &&
+         "register offset exceeds file size");
+  unsigned SliceHalves = TotalHalves - StartHalves;
+  RegFileKey SliceKey =
+      std::make_tuple(RegFileBaseReg, StartHalves, SliceHalves);
 
   if (!LaneTy)
     LaneTy = Builder.getInt32Ty();
@@ -1091,14 +1103,12 @@ llvm::Value *MIRToIRTranslator::getRegisterFile(
 
   unsigned LaneSize = LaneTy->getPrimitiveSizeInBits();
   assert(LaneSize % RegGranule == 0 && "Lane size is not divisible by 16");
-  assert(NumLanes16 != 0 &&
-         "register file is not modeled for the current target");
 
-  unsigned NumRegFileLanes = NumLanes16 * RegGranule / LaneSize;
+  unsigned NumRegFileLanes = SliceHalves * RegGranule / LaneSize;
 
   auto *VecTy = llvm::FixedVectorType::get(LaneTy, NumRegFileLanes);
 
-  return &getOperandAsValue(MBB, MegaKey, Builder, VecTy);
+  return &getOperandAsValue(MBB, SliceKey, Builder, VecTy);
 }
 
 llvm::Value *MIRToIRTranslator::getRegisterFile(const llvm::MachineInstr &MI,
@@ -1153,15 +1163,39 @@ void MIRToIRTranslator::setRegisterFile(const llvm::MachineInstr &MI,
   setRegisterFile(*MBB, Reg, Builder, NewVec);
 }
 
+llvm::Value *
+MIRToIRTranslator::getRegisterFile(const llvm::MachineInstr &MI,
+                                   llvm::AMDGPU::OpName OpName,
+                                   llvm::Type *LaneTy) {
+  const llvm::MachineOperand *Op = TII.getNamedOperand(MI, OpName);
+  assert(Op && Op->isReg() &&
+         "GetRegisterFile target operand is not a register operand");
+  return getRegisterFile(MI, Op->getReg(), LaneTy);
+}
+
+void MIRToIRTranslator::setRegisterFile(const llvm::MachineInstr &MI,
+                                        llvm::AMDGPU::OpName OpName,
+                                        llvm::Value *NewVec) {
+  const llvm::MachineOperand *Op = TII.getNamedOperand(MI, OpName);
+  assert(Op && Op->isReg() &&
+         "SetRegisterFile target operand is not a register operand");
+  setRegisterFile(MI, Op->getReg(), NewVec);
+}
+
 void MIRToIRTranslator::setRegisterFile(const llvm::MachineBasicBlock &MBB,
                                         llvm::MCRegister Reg,
                                         llvm::IRBuilderBase &Builder,
                                         llvm::Value *Val) {
-  llvm::MCRegister RegFileBaseReg = std::get<0>(getRegFileKey(Reg));
-  unsigned NumLanes16 = RegFileSize[RegFileBaseReg];
-  RegFileKey MegaKey = std::make_tuple(RegFileBaseReg, 0, NumLanes16);
+  // Symmetric with getRegisterFile: write the slice [Reg..end-of-file].
+  auto Key = getRegFileKey(Reg);
+  llvm::MCRegister RegFileBaseReg = std::get<0>(Key);
+  unsigned StartHalves = std::get<1>(Key);
+  unsigned TotalHalves = RegFileSize[RegFileBaseReg];
+  unsigned SliceHalves = TotalHalves - StartHalves;
+  RegFileKey SliceKey =
+      std::make_tuple(RegFileBaseReg, StartHalves, SliceHalves);
 
-  setRegOperandValue(MBB, MegaKey, Builder, Val);
+  setRegOperandValue(MBB, SliceKey, Builder, Val);
 }
 
 llvm::FunctionType *MIRToIRTranslator::getStandardDeviceFunctionType() const {

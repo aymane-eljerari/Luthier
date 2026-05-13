@@ -534,10 +534,22 @@ class MIRToIRTranslator {
                                llvm::MCRegister Register,
                                llvm::Type *LaneTy = nullptr);
 
+  /// Same as \c getRegisterFile but takes the register from \p MI's named
+  /// operand \p OpName. Used by the \c GetRegisterFile DSL primitive to
+  /// index into the register file starting at a base named operand.
+  llvm::Value *getRegisterFile(const llvm::MachineInstr &MI,
+                               llvm::AMDGPU::OpName OpName,
+                               llvm::Type *LaneTy = nullptr);
+
   /// Sets the entire register file associated with \p Reg at \p MI's
   /// translation point to the new value \p NewVec
   void setRegisterFile(const llvm::MachineInstr &MI, llvm::MCRegister Reg,
                        llvm::Value *NewVec);
+
+  /// Same as \c setRegisterFile but takes the register from \p MI's named
+  /// operand \p OpName.
+  void setRegisterFile(const llvm::MachineInstr &MI,
+                       llvm::AMDGPU::OpName OpName, llvm::Value *NewVec);
 
   /// Sets the entire register file associated with \p Reg in \p MBB's
   /// register value map to \p Val

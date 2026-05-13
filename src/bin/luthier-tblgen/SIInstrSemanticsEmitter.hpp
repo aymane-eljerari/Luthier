@@ -37,6 +37,7 @@ class RecordKeeper;
 class Record;
 class Init;
 class DagInit;
+class DefInit;
 class raw_ostream;
 } // namespace llvm
 
@@ -67,6 +68,14 @@ private:
   /// Emit code for a top-level semantic statement (SetNamedOperand,
   /// ImplicitDef, DefVal, or a bare store/call).
   void emitSemanticStatement(llvm::raw_ostream &OS, const llvm::Init *Stmt,
+                             llvm::ArrayRef<llvm::SMLoc> Loc);
+
+  /// Emit a `llvm::AMDGPU::<RegName>` reference for a register operand.
+  /// Accepts either a `Register` record (e.g. VCC, EXEC, SGPR0) or a
+  /// `SuperRegFactory<[r0, r1, ...]>` record naming a tuple register
+  /// (emits the underscore-joined subreg name).
+  void emitRegisterReference(llvm::raw_ostream &OS,
+                             const llvm::DefInit *RegDef,
                              llvm::ArrayRef<llvm::SMLoc> Loc);
 
   /// Map a ConstantXxx name to its C++ builder expression.

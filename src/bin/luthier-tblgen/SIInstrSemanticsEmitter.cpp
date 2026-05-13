@@ -25,6 +25,34 @@
 
 namespace luthier {
 
+void SIInstrSemanticsEmitter::emitRegisterReference(
+    llvm::raw_ostream &OS, const llvm::DefInit *RegDef,
+    llvm::ArrayRef<llvm::SMLoc> Loc) {
+  const llvm::Record *Def = RegDef->getDef();
+  const auto &RK = RegDef->getRecordKeeper();
+
+  if (const llvm::Record *RegisterClass = RK.getClass("Register");
+      RegisterClass && Def->isSubClassOf(RegisterClass)) {
+    OS << "llvm::AMDGPU::" << Def->getName();
+    return;
+  }
+
+  if (const llvm::Record *SRFClass = RK.getClass("SuperRegFactory");
+      SRFClass && Def->isSubClassOf(SRFClass)) {
+    std::vector<const llvm::Record *> SubRegs =
+        Def->getValueAsListOfDefs("Regs");
+    OS << "llvm::AMDGPU::";
+    llvm::interleave(
+        SubRegs, [&](const llvm::Record *SubReg) { OS << SubReg->getName(); },
+        [&] { OS << "_"; });
+    return;
+  }
+
+  llvm::PrintFatalError(Loc, "Register operand " + Def->getName() +
+                                 " is neither a `Register` nor a "
+                                 "`SuperRegFactory<[...]>` record");
+}
+
 void SIInstrSemanticsEmitter::emitSemanticStatement(
     llvm::raw_ostream &OS, const llvm::Init *Stmt,
     llvm::ArrayRef<llvm::SMLoc> Loc) {
@@ -49,6 +77,14 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       OS << ")";
     }
     // --- ImplicitDef REG, value_dag ---
+    // REG is either a `Register` record (a direct physical register like
+    // VCC/EXEC/SGPR0) or a `SuperRegFactory<[r0, r1, ...]>` record that
+    // names a synthesized tuple register (e.g. SGPR0_SGPR1_SGPR2_SGPR3).
+    // Tuple registers aren't materialized as tablegen `Register` records —
+    // they're synthesized at codegen time by RegisterTuples expansion — but
+    // their concatenated enum names (`llvm::AMDGPU::SGPR0_SGPR1_SGPR2_SGPR3`)
+    // are valid C++ symbols, so we emit them by string-joining the subreg
+    // names with underscores.
     else if (OpName == "ImplicitDef") {
       if (unsigned NumArgs = Dag->getNumArgs(); NumArgs != 2)
         llvm::PrintFatalError(
@@ -60,21 +96,13 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
         llvm::PrintFatalError(
             Loc, "First argument of `ImplicitDef` is not a record definition");
 
-      const llvm::Record *RegisterClass =
-          RegDef->getRecordKeeper().getClass("Register");
-      if (!RegisterClass) {
-        llvm::PrintFatalError(Loc, "Failed to get SIReg");
-      }
-      if (!RegDef->getDef()->isSubClassOf(RegisterClass)) {
-        llvm::PrintFatalError(
-            Loc, "First argument of `ImplicitDef` is not an Register");
-      }
-      llvm::StringRef RegName = RegDef->getDef()->getName();
+      OS << "Translator.setRegOperandValue(MI, ";
+      emitRegisterReference(OS, RegDef, Loc);
+      OS << ", ";
 
       const auto *ValDag = llvm::dyn_cast<llvm::DagInit>(Dag->getArg(1));
       if (!ValDag)
         llvm::PrintFatalError("ImplicitDef second arg is not a DAG");
-      OS << "Translator.setRegOperandValue(MI, llvm::AMDGPU::" << RegName << ", ";
       emitSemanticStatement(OS, ValDag, Loc);
       OS << ")";
     }
@@ -146,20 +174,25 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       OS << "Translator.getNextBB(MI)";
     }
 
-    // --- GetRegisterFile <reg>, <laneTy> ---
+    // --- GetRegisterFile $opname, <laneTy> ---
+    // First arg is a named operand of `MI` (e.g. `$src0`); the register held
+    // in that operand is the base, and the returned vector slice runs from
+    // that base to the end of its register file.
     else if (OpName == "GetRegisterFile") {
-      OS << "Translator.getRegisterFile(MI, ";
-      emitSemanticStatement(OS, Dag->getArg(0), Loc);
-      OS << ", ";
+      llvm::StringRef ArgName = Dag->getArgNameStr(0);
+      OS << "Translator.getRegisterFile(MI, llvm::AMDGPU::OpName::" << ArgName
+         << ", ";
       emitSemanticStatement(OS, Dag->getArg(1), Loc);
       OS << ")";
     }
 
-    // --- SetRegisterFile <reg>, <val> ---
+    // --- SetRegisterFile $opname, <val> ---
+    // Symmetric with GetRegisterFile; writes the vector slice starting at
+    // the operand-named register.
     else if (OpName == "SetRegisterFile") {
-      OS << "Translator.setRegisterFile(MI, ";
-      emitSemanticStatement(OS, Dag->getArg(0), Loc);
-      OS << ", ";
+      llvm::StringRef ArgName = Dag->getArgNameStr(0);
+      OS << "Translator.setRegisterFile(MI, llvm::AMDGPU::OpName::" << ArgName
+         << ", ";
       emitSemanticStatement(OS, Dag->getArg(1), Loc);
       OS << ")";
     }
@@ -172,12 +205,16 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
     }
 
     // --- ImplicitUse REG ---
+    // REG is a `Register` record or a `SuperRegFactory<[...]>` (see the
+    // comment on `ImplicitDef`).
     else if (OpName == "ImplicitUse") {
-      // First arg is a register def (e.g., VCC, EXEC, SCC)
       const auto *RegDef = llvm::dyn_cast<llvm::DefInit>(Dag->getArg(0));
-      llvm::StringRef RegName = RegDef->getDef()->getName();
-      OS << "&Translator.getOperandAsValue(MI, llvm::AMDGPU::" << RegName
-         << ")";
+      if (!RegDef)
+        llvm::PrintFatalError(
+            Loc, "First argument of `ImplicitUse` is not a record definition");
+      OS << "&Translator.getOperandAsValue(MI, ";
+      emitRegisterReference(OS, RegDef, Loc);
+      OS << ")";
     }
 
     // --- GetWavefrontSize: subtarget's wavefront size (32 or 64) ---

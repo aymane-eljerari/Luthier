@@ -1078,43 +1078,143 @@ def S_MUL_U64_sem : InstSISemantic<S_MUL_U64> {
   ];
 }
 
-// S_CBRANCH_G_FORK: Fork control flow with EXEC mask.
-// PC: in this pseudo-code is pointing to the cbranch_*_fork instruction
-// $current_pc = int_amdgcn_s_getpc();
-// $mask_pass = $src0 & exec;
-// $mask_fail = $src0 & exec;
-// $csp = int_amdgcn_s_getreg(5953);
-// $sgpr_vec = mergevalues (s[0:3], s[4:7], s[8:11], s[12:15], s[16:19], s[20:23]);
-// $csp_entry = $sgpr_vec[$csp];
-// $bitcount_mask_pass = int_ctpop $mask_pass;
-// $bitcount_mask_fail = int_ctpop $mask_fail;
-// $branch_cond = (($mask_pass == exec) || (bitcount_mask_fail >= bitcount_mask_pass));
-// $csp = (($mask_pass == exec) || ($mask_fail == exec)) ? ($csp) : ($csp + 1)
-// $csp_entry_final_val = (($mask_pass == exec) || ($mask_fail == exec)) ? $csp_entry : (
-// if (mask_pass == exec)
-//   PC = SGPR[arg1]
-// else if (mask_fail == exec)
-//   PC += 4
-// else if (bitcount(mask_fail) < bitcount(mask_pass))
-//   exec = mask_fail
-//   SGPR[CSP*4] = { SGPR[arg1], mask_pass }
-//   CSP++
-//   PC += 4
-// else
-//   exec = mask_pass
-//   SGPR[CSP*4] = { (pc+4), mask_fail }
-//   CSP++
-//   PC = SGPR[arg1]
-// $src0 = mask value
-// $src1 = target address (SGPR pair)
-// mask_pass = exec & src0
-// mask_fail = exec & ~src0
-// CSP selects element from SGPR vector.
-// Branch condition: (pass_mask == exec) OR (bitcount(fail_mask) < bitcount(pass_mask))
-// Only available on GFX6-GFX9.
-// Sources:
-//   gcn3-instruction-set-architecture.pdf, page 112.
-//def S_CBRANCH_G_FORK_sem : InstSISemantic<S_CBRANCH_G_FORK> {
+//------------------------------------------------------------------------------
+// S_CBRANCH_G_FORK / S_CBRANCH_I_FORK — fork wave control flow.
+//
+// ISA pseudocode (GFX6-9, gcn3 ISA p.112):
+//   mask_pass = exec & src0;      // src0 = comparison mask
+//   mask_fail = exec & ~src0;
+//   if      (mask_pass == exec)               { PC = src1; }
+//   else if (mask_fail == exec)               { PC += 4;   }
+//   else if (popcount(mask_fail) < popcount(mask_pass)) {
+//     // execute the smaller (fail) side now, push the larger (pass) for JOIN
+//     SGPR[CSP*4..CSP*4+3] = { src1, mask_pass };
+//     CSP++;  exec = mask_fail;  PC += 4;
+//   } else {
+//     SGPR[CSP*4..CSP*4+3] = { PC+4, mask_fail };
+//     CSP++;  exec = mask_pass;  PC = src1;
+//   }
+//
+// CSP (Control Stack Pointer) lives in M0[5:2] and indexes one of 6 SGPR
+// quads: s[0:3], s[4:7], s[8:11], s[12:15], s[16:19], s[20:23]. We model
+// the indexed write by emitting a `select(csp == i, entry, old_quad_i)`
+// per slot so liveness sees every potentially-defined quad. The actual
+// PC redirection is NOT modeled — fork is a hardware-stack operation that
+// has no direct LLVM-IR representation. Downstream analyses get the
+// register-definition set; control-flow modeling for wave divergence is
+// left to higher-level passes.
+//
+// `$entry` is `{ saved_pc, saved_exec }` packed in an i128 with saved_pc
+// in the low 64 bits and saved_exec in the high 64 bits (mirroring the
+// hardware layout described in the ISA manual).
+//------------------------------------------------------------------------------
+
+// Per-slot conditional write to one of the 6 SGPR quads in the CSP stack.
+// Emits a single (ImplicitDef quad, select(should_push & csp==slot, entry,
+// old_quad)) statement. `slot` is the slot index 0..5, `regs` is the list
+// of 4 SGPR Register records that make up the quad. Inlined rather than
+// split into DefVals because tablegen can't synthesize per-slot dag arg
+// names — the emitter binds DefVal targets by literal argname, not by value.
+class CSPStackSlot<int slot, list<Register> regs> {
+  dag ret = (ImplicitDef SuperRegFactory<regs>,
+    (LLVMSelect
+      (LLVMAnd (GetVal $should_push),
+               (LLVMCmp LLVMICmpEQ, (GetVal $csp),
+                                    (ConstantInt si_llvm_i32_ty, slot))),
+      (GetVal $entry),
+      (LLVMBitCast (ImplicitUse SuperRegFactory<regs>), si_llvm_i128_ty)));
+}
+
+def S_CBRANCH_G_FORK_sem : InstSISemantic<S_CBRANCH_G_FORK> {
+  let Semantic = !listconcat(
+    [
+      // Read inputs.
+      (DefVal $mask_in, (GetNamedOperand $src0)),
+      (DefVal $target,  (GetNamedOperand $src1)),
+      (DefVal $cur_pc,  (LLVMIntrinsic si_llvm_i64_ty,
+                                       int_amdgcn_s_getpc, []<dag>)),
+      (DefVal $exec_mask, (ImplicitUse EXEC)),
+
+      // mask_pass = exec & src0; mask_fail = exec & ~src0.
+      // ~src0 expressed as XOR with all-ones at wave-mask width.
+      (DefVal $mask_pass, (LLVMAnd (GetVal $exec_mask), (GetVal $mask_in))),
+      (DefVal $all_ones, (LLVMSExt (ConstantTrue si_llvm_i1_ty),
+                                   (LLVMIntNTy (GetWavefrontSize)))),
+      (DefVal $not_mask_in, (LLVMXor (GetVal $mask_in), (GetVal $all_ones))),
+      (DefVal $mask_fail, (LLVMAnd (GetVal $exec_mask),
+                                   (GetVal $not_mask_in))),
+
+      // Decide which half executes first.
+      (DefVal $bc_pass, (LLVMUnaryIntrinsic int_ctpop, (GetVal $mask_pass))),
+      (DefVal $bc_fail, (LLVMUnaryIntrinsic int_ctpop, (GetVal $mask_fail))),
+      (DefVal $fail_smaller,
+              (LLVMCmp LLVMICmpULT, (GetVal $bc_fail), (GetVal $bc_pass))),
+
+      // No-fork: all-lanes one way → no stack push, no EXEC change.
+      (DefVal $all_pass,
+              (LLVMCmp LLVMICmpEQ, (GetVal $mask_pass), (GetVal $exec_mask))),
+      (DefVal $all_fail,
+              (LLVMCmp LLVMICmpEQ, (GetVal $mask_fail), (GetVal $exec_mask))),
+      (DefVal $no_fork, (LLVMOr (GetVal $all_pass), (GetVal $all_fail))),
+      (DefVal $should_push, (LLVMXor (GetVal $no_fork),
+                                     (ConstantTrue si_llvm_i1_ty))),
+
+      // Saved entry. When fail-side is smaller (we execute fail first), the
+      // PASS side gets saved → saved_pc=src1, saved_exec=mask_pass. Otherwise
+      // we execute pass first and save FAIL → saved_pc=pc+4, saved_exec=mask_fail.
+      (DefVal $pc_plus_4, (LLVMAdd (GetVal $cur_pc),
+                                   (ConstantInt si_llvm_i64_ty, 4))),
+      (DefVal $saved_pc, (LLVMSelect (GetVal $fail_smaller),
+                                     (GetVal $target), (GetVal $pc_plus_4))),
+      (DefVal $saved_exec, (LLVMSelect (GetVal $fail_smaller),
+                                       (GetVal $mask_pass),
+                                       (GetVal $mask_fail))),
+      // Pack into i128: low 64 bits = saved_pc, high 64 bits = saved_exec.
+      (DefVal $saved_pc_128, (LLVMZExt (GetVal $saved_pc), si_llvm_i128_ty)),
+      (DefVal $saved_exec_64, (LLVMZExt (GetVal $saved_exec), si_llvm_i64_ty)),
+      (DefVal $saved_exec_128, (LLVMZExt (GetVal $saved_exec_64),
+                                         si_llvm_i128_ty)),
+      (DefVal $saved_exec_shifted, (LLVMShl (GetVal $saved_exec_128),
+                                            (ConstantInt si_llvm_i128_ty, 64))),
+      (DefVal $entry, (LLVMOr (GetVal $saved_pc_128),
+                              (GetVal $saved_exec_shifted))),
+
+      // Read CSP from M0[5:2] (HW reg encoding 5953 = M0_HWREG | (2 << 6) | (4 << 11)).
+      (DefVal $csp, (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_s_getreg,
+                                   [(ConstantInt si_llvm_i32_ty, 5953)]<dag>))
+    ],
+    // Per-slot CSP stack writes (s[0:3] through s[20:23]).
+    [CSPStackSlot<0, [SGPR0,  SGPR1,  SGPR2,  SGPR3 ]>.ret,
+     CSPStackSlot<1, [SGPR4,  SGPR5,  SGPR6,  SGPR7 ]>.ret,
+     CSPStackSlot<2, [SGPR8,  SGPR9,  SGPR10, SGPR11]>.ret,
+     CSPStackSlot<3, [SGPR12, SGPR13, SGPR14, SGPR15]>.ret,
+     CSPStackSlot<4, [SGPR16, SGPR17, SGPR18, SGPR19]>.ret,
+     CSPStackSlot<5, [SGPR20, SGPR21, SGPR22, SGPR23]>.ret],
+    [
+      // EXEC update: when forking, set EXEC to the smaller half. When not
+      // forking, EXEC is unchanged (the wave just falls through or branches
+      // as a whole — but EXEC stays as it was).
+      (DefVal $forked_exec, (LLVMSelect (GetVal $fail_smaller),
+                                        (GetVal $mask_fail),
+                                        (GetVal $mask_pass))),
+      (DefVal $new_exec, (LLVMSelect (GetVal $no_fork),
+                                     (GetVal $exec_mask),
+                                     (GetVal $forked_exec))),
+      (ImplicitDef EXEC, (GetVal $new_exec)),
+
+      // CSP increment (only when we actually pushed).
+      (DefVal $csp_inc, (LLVMAdd (GetVal $csp),
+                                 (ConstantInt si_llvm_i32_ty, 1))),
+      (DefVal $new_csp, (LLVMSelect (GetVal $should_push),
+                                    (GetVal $csp_inc), (GetVal $csp))),
+      (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_setreg,
+                     [(ConstantInt si_llvm_i32_ty, 5953),
+                      (GetVal $new_csp)]<dag>)
+    ]);
+}
+
+// --- old draft kept below for reference, commented out ---
+//def S_CBRANCH_G_FORK_sem_draft : InstSISemantic<S_CBRANCH_G_FORK> {
 //  let Semantic = [
 //    // Get current PC for branch stack entry
 //    (DefVal $current_pc, (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_getpc, []<dag>)),

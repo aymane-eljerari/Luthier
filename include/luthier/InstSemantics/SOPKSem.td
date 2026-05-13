@@ -336,15 +336,94 @@ def S_SETREG_B32_sem : InstSISemantic<S_SETREG_B32> {
 // S_CBRANCH_I_FORK
 //------------------------------------------------------------------------------
 
-// S_CBRANCH_I_FORK: Fork with integer operand.
-// $sdst = SGPR to store current EXEC mask
-// $simm16 = PC-relative target (already translated to BasicBlock)
-// mask_pass = exec & sdst
-// mask_fail = exec & ~sdst
-// Only available on GFX6-GFX9.
+// S_CBRANCH_I_FORK: same as S_CBRANCH_G_FORK but the comparison mask comes
+// from the operand misleadingly named $sdst (it's actually an input — see
+// SOPInstructions.td:1147 — `(ins SReg_64:$sdst, ...)`), and the branch
+// target is a PC-relative 16-bit displacement in $simm16. We don't model
+// the actual target address here: $simm16 is a `SOPPBrTarget` operand
+// that lowers to MO_MachineBasicBlock at MIR time, so we use `pc + 4` as a
+// conservative saved-PC placeholder. Downstream analyses still see the
+// correct register-define set (the 6 SGPR quads, EXEC, M0[5:2]).
+//
+// Reuses CSPStackSlot<> from SOP2Sem.td.
+//
 // Sources:
 //   gcn3-instruction-set-architecture.pdf, page 112.
-//def S_CBRANCH_I_FORK_sem : InstSISemantic<S_CBRANCH_I_FORK> {
+def S_CBRANCH_I_FORK_sem : InstSISemantic<S_CBRANCH_I_FORK> {
+  let Semantic = !listconcat(
+    [
+      (DefVal $mask_in, (GetNamedOperand $sdst)),
+      (DefVal $cur_pc,  (LLVMIntrinsic si_llvm_i64_ty,
+                                       int_amdgcn_s_getpc, []<dag>)),
+      (DefVal $exec_mask, (ImplicitUse EXEC)),
+
+      (DefVal $mask_pass, (LLVMAnd (GetVal $exec_mask), (GetVal $mask_in))),
+      (DefVal $all_ones, (LLVMSExt (ConstantTrue si_llvm_i1_ty),
+                                   (LLVMIntNTy (GetWavefrontSize)))),
+      (DefVal $not_mask_in, (LLVMXor (GetVal $mask_in), (GetVal $all_ones))),
+      (DefVal $mask_fail, (LLVMAnd (GetVal $exec_mask),
+                                   (GetVal $not_mask_in))),
+
+      (DefVal $bc_pass, (LLVMUnaryIntrinsic int_ctpop, (GetVal $mask_pass))),
+      (DefVal $bc_fail, (LLVMUnaryIntrinsic int_ctpop, (GetVal $mask_fail))),
+      (DefVal $fail_smaller,
+              (LLVMCmp LLVMICmpULT, (GetVal $bc_fail), (GetVal $bc_pass))),
+
+      (DefVal $all_pass,
+              (LLVMCmp LLVMICmpEQ, (GetVal $mask_pass), (GetVal $exec_mask))),
+      (DefVal $all_fail,
+              (LLVMCmp LLVMICmpEQ, (GetVal $mask_fail), (GetVal $exec_mask))),
+      (DefVal $no_fork, (LLVMOr (GetVal $all_pass), (GetVal $all_fail))),
+      (DefVal $should_push, (LLVMXor (GetVal $no_fork),
+                                     (ConstantTrue si_llvm_i1_ty))),
+
+      // Saved PC: conservative `pc + 4` for both branches of the select
+      // (the actual fork-taken target is in $simm16, which we don't lift).
+      (DefVal $pc_plus_4, (LLVMAdd (GetVal $cur_pc),
+                                   (ConstantInt si_llvm_i64_ty, 4))),
+      (DefVal $saved_pc, (GetVal $pc_plus_4)),
+      (DefVal $saved_exec, (LLVMSelect (GetVal $fail_smaller),
+                                       (GetVal $mask_pass),
+                                       (GetVal $mask_fail))),
+      (DefVal $saved_pc_128, (LLVMZExt (GetVal $saved_pc), si_llvm_i128_ty)),
+      (DefVal $saved_exec_64, (LLVMZExt (GetVal $saved_exec), si_llvm_i64_ty)),
+      (DefVal $saved_exec_128, (LLVMZExt (GetVal $saved_exec_64),
+                                         si_llvm_i128_ty)),
+      (DefVal $saved_exec_shifted, (LLVMShl (GetVal $saved_exec_128),
+                                            (ConstantInt si_llvm_i128_ty, 64))),
+      (DefVal $entry, (LLVMOr (GetVal $saved_pc_128),
+                              (GetVal $saved_exec_shifted))),
+
+      (DefVal $csp, (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_s_getreg,
+                                   [(ConstantInt si_llvm_i32_ty, 5953)]<dag>))
+    ],
+    [CSPStackSlot<0, [SGPR0,  SGPR1,  SGPR2,  SGPR3 ]>.ret,
+     CSPStackSlot<1, [SGPR4,  SGPR5,  SGPR6,  SGPR7 ]>.ret,
+     CSPStackSlot<2, [SGPR8,  SGPR9,  SGPR10, SGPR11]>.ret,
+     CSPStackSlot<3, [SGPR12, SGPR13, SGPR14, SGPR15]>.ret,
+     CSPStackSlot<4, [SGPR16, SGPR17, SGPR18, SGPR19]>.ret,
+     CSPStackSlot<5, [SGPR20, SGPR21, SGPR22, SGPR23]>.ret],
+    [
+      (DefVal $forked_exec, (LLVMSelect (GetVal $fail_smaller),
+                                        (GetVal $mask_fail),
+                                        (GetVal $mask_pass))),
+      (DefVal $new_exec, (LLVMSelect (GetVal $no_fork),
+                                     (GetVal $exec_mask),
+                                     (GetVal $forked_exec))),
+      (ImplicitDef EXEC, (GetVal $new_exec)),
+
+      (DefVal $csp_inc, (LLVMAdd (GetVal $csp),
+                                 (ConstantInt si_llvm_i32_ty, 1))),
+      (DefVal $new_csp, (LLVMSelect (GetVal $should_push),
+                                    (GetVal $csp_inc), (GetVal $csp))),
+      (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_setreg,
+                     [(ConstantInt si_llvm_i32_ty, 5953),
+                      (GetVal $new_csp)]<dag>)
+    ]);
+}
+
+// --- old draft kept below for reference, commented out ---
+//def S_CBRANCH_I_FORK_sem_draft : InstSISemantic<S_CBRANCH_I_FORK> {
 //  let Semantic = [
 //    // Get current PC for branch stack entry
 //    (DefVal $current_pc, (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_getpc, []<dag>)),

@@ -1639,3 +1639,104 @@ def S_SETPC_B64_return_sem : InstSISemantic<S_SETPC_B64_return> {
     (IndirectTailCall (GetNamedOperand $src0))
   ];
 }
+
+// S_RFE_B64 / S_RFE_RESTORE_B64 — "Return From Exception". These return from a
+// trap handler by reloading the saved PC (and, for RESTORE, also restoring
+// EXEC) and clearing the wave's PRIV bit. Modeling them faithfully requires
+// the translator to track the per-wave PRIV (privileged) bit, which is not
+// yet plumbed through. Until then, fall back to the inline-asm path: the MIR
+// opcode is preserved verbatim in the IR, which is sufficient for downstream
+// liveness/analysis and avoids emitting an incorrect privileged-mode model.
+//
+// TODO: once the translator models the PRIV bit, replace these stubs with
+// semantics that:
+//   - read the saved PC from the named TTMP register pair (e.g. ttmp[0:1])
+//     and emit an IndirectTailCall to it;
+//   - for S_RFE_RESTORE_B64, also write the saved EXEC value back to $exec
+//     (operand $src1) before the tail call;
+//   - clear the wave's PRIV bit (the part that needs the new state in the
+//     translator).
+
+//------------------------------------------------------------------------------
+// S_MOVREL{S,D}_B{32,64} — relative scalar move via M0 indexing.
+//
+// ISA (gcn3 p.108):
+//   S_MOVRELS_B32:  SDST = SGPR[src0 + M0]
+//   S_MOVRELS_B64:  SGPR[sdst:sdst+1] = SGPR[src0 + M0 : src0 + M0 + 1]
+//   S_MOVRELD_B32:  SGPR[sdst + M0] = src0
+//   S_MOVRELD_B64:  SGPR[sdst + M0 : sdst + M0 + 1] = src0:src0+1
+//
+// M0[31:0] is the dynamic index in units of 32-bit SGPRs added to the
+// named base register. The model reads the register file as a vector of
+// i32 lanes starting at the base register (the modified `getRegisterFile`
+// slices from the base, not from SGPR0, so the vector size is bounded by
+// "remaining SGPRs in the file" rather than the full 108-entry file).
+// `LLVMExtractElement` and `LLVMInsertElement` index the slice with M0
+// directly (lane 0 of the slice == the base register).
+//
+// For the B64 variants we work in i32 lanes and split the 64-bit operand
+// into low/high i32 halves to extract/insert two adjacent lanes.
+//------------------------------------------------------------------------------
+
+def S_MOVRELS_B32_sem : InstSISemantic<S_MOVRELS_B32> {
+  let Semantic = [
+    (SetNamedOperand $sdst,
+      (LLVMExtractElement (GetRegisterFile $src0, si_llvm_i32_ty),
+                          (ImplicitUse M0)))
+  ];
+}
+
+def S_MOVRELS_B64_sem : InstSISemantic<S_MOVRELS_B64> {
+  let Semantic = [
+    (DefVal $m0,    (ImplicitUse M0)),
+    (DefVal $file,  (GetRegisterFile $src0, si_llvm_i32_ty)),
+    (DefVal $m0_p1, (LLVMAdd (GetVal $m0), (ConstantInt si_llvm_i32_ty, 1))),
+    (DefVal $lo32,  (LLVMExtractElement (GetVal $file), (GetVal $m0))),
+    (DefVal $hi32,  (LLVMExtractElement (GetVal $file), (GetVal $m0_p1))),
+    // Assemble i64 = (zext hi << 32) | zext lo.
+    (DefVal $lo64,  (LLVMZExt (GetVal $lo32), si_llvm_i64_ty)),
+    (DefVal $hi64,  (LLVMZExt (GetVal $hi32), si_llvm_i64_ty)),
+    (DefVal $hi64s, (LLVMShl (GetVal $hi64),
+                             (ConstantInt si_llvm_i64_ty, 32))),
+    (SetNamedOperand $sdst, (LLVMOr (GetVal $lo64), (GetVal $hi64s)))
+  ];
+}
+
+def S_MOVRELD_B32_sem : InstSISemantic<S_MOVRELD_B32> {
+  // NOTE: `$sdst` is in the input operand list (see SOP1_32_movreld) — it
+  // names the BASE register, and the actual write goes to SGPR[base + M0]
+  // via SetRegisterFile of the modified file slice.
+  let Semantic = [
+    (SetRegisterFile $sdst,
+      (LLVMInsertElement (GetRegisterFile $sdst, si_llvm_i32_ty),
+                         (GetNamedOperand $src0),
+                         (ImplicitUse M0)))
+  ];
+}
+
+def S_MOVRELD_B64_sem : InstSISemantic<S_MOVRELD_B64> {
+  let Semantic = [
+    (DefVal $m0,    (ImplicitUse M0)),
+    (DefVal $m0_p1, (LLVMAdd (GetVal $m0), (ConstantInt si_llvm_i32_ty, 1))),
+    // Split src0 (i64) into low/high i32 halves.
+    (DefVal $src,   (GetNamedOperand $src0)),
+    (DefVal $lo32,  (LLVMTrunc (GetVal $src), si_llvm_i32_ty)),
+    (DefVal $hi64,  (LLVMLShr (GetVal $src),
+                              (ConstantInt si_llvm_i64_ty, 32))),
+    (DefVal $hi32,  (LLVMTrunc (GetVal $hi64), si_llvm_i32_ty)),
+    // Read-modify-write the file slice starting at $sdst.
+    (DefVal $file0, (GetRegisterFile $sdst, si_llvm_i32_ty)),
+    (DefVal $file1, (LLVMInsertElement (GetVal $file0),
+                                       (GetVal $lo32), (GetVal $m0))),
+    (DefVal $file2, (LLVMInsertElement (GetVal $file1),
+                                       (GetVal $hi32), (GetVal $m0_p1))),
+    (SetRegisterFile $sdst, (GetVal $file2))
+  ];
+}
+
+// S_MOVRELSD_2_B32 (GFX10+): like MOVRELD_B32 but uses 2*M0 stride.
+// Conservative model: leave as a stub for now (M0 stride would need a
+// shift before indexing). Filed as TODO since GFX10+ adoption is partial.
+def S_MOVRELSD_2_B32_sem : InstSISemantic<S_MOVRELSD_2_B32> {
+  let Semantic = [];
+}
