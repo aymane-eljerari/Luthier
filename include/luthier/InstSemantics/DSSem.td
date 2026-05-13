@@ -30,11 +30,9 @@ class CalculateSingleOffsetDSAddr<dag addr, dag offset,
 class CalculateDoubleOffsetDSAddr<dag addr, dag offset0, dag offset1,
                                   LLVMQualPointerType localOrRegionPtr,
                                   SILLVMType dataType> {
-  int Adj = !cond(!eq(dataType.VT.Size, 64) : 8,
-                  (!or(!eq(dataType.VT.Size, 4),
-                       !eq(dataType.VT.Size, 8),
-                       !eq(dataType.VT.Size, 16))
-                       ) : 4);
+  // Adj = data type size in bytes (READ2/WRITE2 hardware multiplies the
+  // offset by this stride). 64-bit data → 8-byte stride; everything else → 4.
+  int Adj = !if(!eq(dataType.ElemSize, 64), 8, 4);
   dag ret = (LLVMPtrAdd (LLVMIntToPtr addr, localOrRegionPtr),
                          (LLVMAdd (LLVMMul offset0, Adj),
                                    (LLVMMul offset1, Adj)
@@ -42,11 +40,12 @@ class CalculateDoubleOffsetDSAddr<dag addr, dag offset0, dag offset1,
                          );
 }
 
-/// Helper: select LDS (local_ptr_ty, AS 3) or GDS (region_ptr_type, AS 2)
+/// Helper: select LDS (local_ptr_ty, AS 3) or GDS (region_ptr_ty, AS 2)
 /// based on the gds modifier.
+// LDS (local_ptr_ty, AS 3) is the common case; GDS variants are rare and not
+// distinguished here — proper LDS/GDS switch needs translator-side handling.
 class DSAddr<dag addr, dag offset> {
-  dag ret = CalculateSingleOffsetDSAddr<addr, offset,
-    (SelectOperand (hasModifierSet $gds), region_ptr_type, local_ptr_ty)>.ret;
+  dag ret = CalculateSingleOffsetDSAddr<addr, offset, local_ptr_ty>.ret;
 }
 
 //------------------------------------------------------------------------------
@@ -2056,497 +2055,81 @@ def DS_WRITE2ST64_B64_sem : InstSISemantic<DS_WRITE2ST64_B64> {
 //------------------------------------------------------------------------------
 
 // DS_ADD_SRC2_U32
-def DS_ADD_SRC2_U32_sem : InstSISemantic<DS_ADD_SRC2_U32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_add_src2_u32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_ADD_SRC2_U64
-def DS_ADD_SRC2_U64_sem : InstSISemantic<DS_ADD_SRC2_U64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_add_src2_u64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_ADD_SRC2_F32
-def DS_ADD_SRC2_F32_sem : InstSISemantic<DS_ADD_SRC2_F32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_add_src2_f32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_SUB_SRC2_U32
-def DS_SUB_SRC2_U32_sem : InstSISemantic<DS_SUB_SRC2_U32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_sub_src2_u32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_SUB_SRC2_U64
-def DS_SUB_SRC2_U64_sem : InstSISemantic<DS_SUB_SRC2_U64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_sub_src2_u64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_RSUB_SRC2_U32
-def DS_RSUB_SRC2_U32_sem : InstSISemantic<DS_RSUB_SRC2_U32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_rsub_src2_u32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_RSUB_SRC2_U64
-def DS_RSUB_SRC2_U64_sem : InstSISemantic<DS_RSUB_SRC2_U64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_rsub_src2_u64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_INC_SRC2_U32
-def DS_INC_SRC2_U32_sem : InstSISemantic<DS_INC_SRC2_U32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_inc_src2_u32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_INC_SRC2_U64
-def DS_INC_SRC2_U64_sem : InstSISemantic<DS_INC_SRC2_U64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_inc_src2_u64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_DEC_SRC2_U32
-def DS_DEC_SRC2_U32_sem : InstSISemantic<DS_DEC_SRC2_U32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_dec_src2_u32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_DEC_SRC2_U64
-def DS_DEC_SRC2_U64_sem : InstSISemantic<DS_DEC_SRC2_U64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_dec_src2_u64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_MIN_SRC2_I32
-def DS_MIN_SRC2_I32_sem : InstSISemantic<DS_MIN_SRC2_I32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_min_src2_i32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_MIN_SRC2_I64
-def DS_MIN_SRC2_I64_sem : InstSISemantic<DS_MIN_SRC2_I64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_min_src2_i64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_MIN_SRC2_U32
-def DS_MIN_SRC2_U32_sem : InstSISemantic<DS_MIN_SRC2_U32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_min_src2_u32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_MIN_SRC2_U64
-def DS_MIN_SRC2_U64_sem : InstSISemantic<DS_MIN_SRC2_U64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_min_src2_u64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_MIN_SRC2_F32
-def DS_MIN_SRC2_F32_sem : InstSISemantic<DS_MIN_SRC2_F32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_min_src2_f32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_MIN_SRC2_F64
-def DS_MIN_SRC2_F64_sem : InstSISemantic<DS_MIN_SRC2_F64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_min_src2_f64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_MAX_SRC2_I32
-def DS_MAX_SRC2_I32_sem : InstSISemantic<DS_MAX_SRC2_I32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_max_src2_i32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_MAX_SRC2_I64
-def DS_MAX_SRC2_I64_sem : InstSISemantic<DS_MAX_SRC2_I64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_max_src2_i64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_MAX_SRC2_U32
-def DS_MAX_SRC2_U32_sem : InstSISemantic<DS_MAX_SRC2_U32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_max_src2_u32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_MAX_SRC2_U64
-def DS_MAX_SRC2_U64_sem : InstSISemantic<DS_MAX_SRC2_U64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_max_src2_u64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_MAX_SRC2_F32
-def DS_MAX_SRC2_F32_sem : InstSISemantic<DS_MAX_SRC2_F32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_max_src2_f32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_MAX_SRC2_F64
-def DS_MAX_SRC2_F64_sem : InstSISemantic<DS_MAX_SRC2_F64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_max_src2_f64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_AND_SRC2_B32
-def DS_AND_SRC2_B32_sem : InstSISemantic<DS_AND_SRC2_B32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_and_src2_b32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_AND_SRC2_B64
-def DS_AND_SRC2_B64_sem : InstSISemantic<DS_AND_SRC2_B64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_and_src2_b64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_OR_SRC2_B32
-def DS_OR_SRC2_B32_sem : InstSISemantic<DS_OR_SRC2_B32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_or_src2_b32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_OR_SRC2_B64
-def DS_OR_SRC2_B64_sem : InstSISemantic<DS_OR_SRC2_B64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_or_src2_b64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_XOR_SRC2_B32
-def DS_XOR_SRC2_B32_sem : InstSISemantic<DS_XOR_SRC2_B32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_xor_src2_b32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_XOR_SRC2_B64
-def DS_XOR_SRC2_B64_sem : InstSISemantic<DS_XOR_SRC2_B64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_xor_src2_b64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_WRITE_SRC2_B32
-def DS_WRITE_SRC2_B32_sem : InstSISemantic<DS_WRITE_SRC2_B32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_write_src2_b32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_WRITE_SRC2_B64
-def DS_WRITE_SRC2_B64_sem : InstSISemantic<DS_WRITE_SRC2_B64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_write_src2_b64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 //------------------------------------------------------------------------------
 // DS GWS Instructions (inline asm)
 //------------------------------------------------------------------------------
 
 // DS_GWS_INIT: Initialize GWS resource.
-def DS_GWS_INIT_sem : InstSISemantic<DS_GWS_INIT> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_gws_init $0 offset:$1 gds",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $data0), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_GWS_BARRIER: GWS barrier.
-def DS_GWS_BARRIER_sem : InstSISemantic<DS_GWS_BARRIER> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_gws_barrier $0 offset:$1 gds",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $data0), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_GWS_SEMA_BR: GWS semaphore broadcast release.
-def DS_GWS_SEMA_BR_sem : InstSISemantic<DS_GWS_SEMA_BR> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_gws_sema_br $0 offset:$1 gds",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $data0), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_GWS_SEMA_P: GWS semaphore P (wait).
-def DS_GWS_SEMA_P_sem : InstSISemantic<DS_GWS_SEMA_P> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_gws_sema_p offset:$0 gds",
-      "i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $offset))
-  ];
-}
-
 // DS_GWS_SEMA_V: GWS semaphore V (signal).
-def DS_GWS_SEMA_V_sem : InstSISemantic<DS_GWS_SEMA_V> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_gws_sema_v offset:$0 gds",
-      "i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $offset))
-  ];
-}
-
 //------------------------------------------------------------------------------
 // DS Ordered Count (inline asm)
 //------------------------------------------------------------------------------
 
 // DS_ORDERED_COUNT: Ordered count operation (GDS).
-def DS_ORDERED_COUNT_sem : InstSISemantic<DS_ORDERED_COUNT> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_i32_ty, "ds_ordered_count $0, $1 offset:$2 gds",
-      "=v,v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $data0), (GetNamedOperand $offset))
-  ];
-}
-
 //------------------------------------------------------------------------------
 // DS BVH Stack Instructions (inline asm)
 //------------------------------------------------------------------------------
 
 // DS_BVH_STACK_RTN_B32: BVH stack pop/push.
-def DS_BVH_STACK_RTN_B32_sem : InstSISemantic<DS_BVH_STACK_RTN_B32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_i32_ty, "ds_bvh_stack_rtn_b32 $0, $1, $2, $3",
-      "=v,v,v,v", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $data0), (GetNamedOperand $data1))
-  ];
-}
-
 // DS_BVH_STACK_PUSH8_POP1_RTN_B32: BVH stack push 8 pop 1.
-def DS_BVH_STACK_PUSH8_POP1_RTN_B32_sem : InstSISemantic<DS_BVH_STACK_PUSH8_POP1_RTN_B32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_i32_ty, "ds_bvh_stack_push8_pop1_rtn_b32 $0, $1, $2, $3",
-      "=v,v,v,v", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $data0), (GetNamedOperand $data1))
-  ];
-}
-
 // DS_BVH_STACK_PUSH8_POP2_RTN_B64: BVH stack push 8 pop 2.
-def DS_BVH_STACK_PUSH8_POP2_RTN_B64_sem : InstSISemantic<DS_BVH_STACK_PUSH8_POP2_RTN_B64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_v2i32_ty, "ds_bvh_stack_push8_pop2_rtn_b64 $0, $1, $2, $3",
-      "=v,v,v,v", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $data0), (GetNamedOperand $data1))
-  ];
-}
-
 //------------------------------------------------------------------------------
 // DS LOAD_TR / READ_TR Instructions (inline asm)
 //------------------------------------------------------------------------------
 
 // DS_LOAD_TR4_B64: Load transpose 4 bytes to 64 bits.
-def DS_LOAD_TR4_B64_sem : InstSISemantic<DS_LOAD_TR4_B64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_v2i32_ty, "ds_load_tr4_b64 $0, $1",
-      "=v,v", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr))
-  ];
-}
-
 // DS_LOAD_TR6_B96: Load transpose 6 bytes to 96 bits.
-def DS_LOAD_TR6_B96_sem : InstSISemantic<DS_LOAD_TR6_B96> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_v3i32_ty, "ds_load_tr6_b96 $0, $1",
-      "=v,v", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr))
-  ];
-}
-
 // DS_LOAD_TR8_B64: Load transpose 8 bytes to 64 bits.
-def DS_LOAD_TR8_B64_sem : InstSISemantic<DS_LOAD_TR8_B64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_v2i32_ty, "ds_load_tr8_b64 $0, $1",
-      "=v,v", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr))
-  ];
-}
-
 // DS_LOAD_TR16_B128: Load transpose 16 bytes to 128 bits.
-def DS_LOAD_TR16_B128_sem : InstSISemantic<DS_LOAD_TR16_B128> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_v4i32_ty, "ds_load_tr16_b128 $0, $1",
-      "=v,v", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr))
-  ];
-}
-
 // DS_READ_B64_TR_B4: Read 64-bit transpose from 4-byte element.
-def DS_READ_B64_TR_B4_sem : InstSISemantic<DS_READ_B64_TR_B4> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_v2i32_ty, "ds_read_b64_tr_b4 $0, $1",
-      "=v,v", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr))
-  ];
-}
-
 // DS_READ_B64_TR_B8: Read 64-bit transpose from 8-byte element.
-def DS_READ_B64_TR_B8_sem : InstSISemantic<DS_READ_B64_TR_B8> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_v2i32_ty, "ds_read_b64_tr_b8 $0, $1",
-      "=v,v", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr))
-  ];
-}
-
 // DS_READ_B64_TR_B16: Read 64-bit transpose from 16-byte element.
-def DS_READ_B64_TR_B16_sem : InstSISemantic<DS_READ_B64_TR_B16> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_v2i32_ty, "ds_read_b64_tr_b16 $0, $1",
-      "=v,v", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr))
-  ];
-}
-
 // DS_READ_B96_TR_B6: Read 96-bit transpose from 6-byte element.
-def DS_READ_B96_TR_B6_sem : InstSISemantic<DS_READ_B96_TR_B6> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_v3i32_ty, "ds_read_b96_tr_b6 $0, $1",
-      "=v,v", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr))
-  ];
-}
-
 //------------------------------------------------------------------------------
 // DS ADDTID Instructions (inline asm)
 //------------------------------------------------------------------------------
 
 // DS_READ_ADDTID_B32: Read with thread-ID-based address offset.
-def DS_READ_ADDTID_B32_sem : InstSISemantic<DS_READ_ADDTID_B32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_i32_ty, "ds_read_addtid_b32 $0 offset:$1",
-      "=v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $offset))
-  ];
-}
-
 // DS_WRITE_ADDTID_B32: Write with thread-ID-based address offset.
-def DS_WRITE_ADDTID_B32_sem : InstSISemantic<DS_WRITE_ADDTID_B32> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_write_addtid_b32 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $data0), (GetNamedOperand $offset))
-  ];
-}
-
 //------------------------------------------------------------------------------
 // DS GS_REG Instructions (inline asm, RDNA3+)
 //------------------------------------------------------------------------------
 
 // DS_ADD_GS_REG_RTN: Add to GS register with return.
-def DS_ADD_GS_REG_RTN_sem : InstSISemantic<DS_ADD_GS_REG_RTN> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_v2i32_ty, "ds_add_gs_reg_rtn $0, $1 offset:$2 gds",
-      "=v,v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $data0), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_SUB_GS_REG_RTN: Subtract from GS register with return.
-def DS_SUB_GS_REG_RTN_sem : InstSISemantic<DS_SUB_GS_REG_RTN> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_v2i32_ty, "ds_sub_gs_reg_rtn $0, $1 offset:$2 gds",
-      "=v,v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $data0), (GetNamedOperand $offset))
-  ];
-}
-
 //------------------------------------------------------------------------------
 // DS Permute / Intrinsic Instructions
 //------------------------------------------------------------------------------
@@ -2564,32 +2147,9 @@ def DS_BPERMUTE_FI_B32_sem : InstSISemantic<DS_BPERMUTE_FI_B32> {
 //------------------------------------------------------------------------------
 
 // DS_ATOMIC_ASYNC_BARRIER_ARRIVE_B64: Async barrier arrive (undocumented).
-def DS_ATOMIC_ASYNC_BARRIER_ARRIVE_B64_sem : InstSISemantic<DS_ATOMIC_ASYNC_BARRIER_ARRIVE_B64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_void_ty, "ds_atomic_async_barrier_arrive_b64 $0 offset:$1",
-      "v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 // DS_ATOMIC_BARRIER_ARRIVE_RTN_B64: Barrier arrive with return (undocumented).
-def DS_ATOMIC_BARRIER_ARRIVE_RTN_B64_sem : InstSISemantic<DS_ATOMIC_BARRIER_ARRIVE_RTN_B64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_i64_ty, "ds_atomic_barrier_arrive_rtn_b64 $0, $1 offset:$2",
-      "=v,v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $offset))
-  ];
-}
-
 //------------------------------------------------------------------------------
 // DS CONDXCHG32_RTN_B64 (inline asm — complex conditional dual-dword exchange)
 //------------------------------------------------------------------------------
 
 // DS_CONDXCHG32_RTN_B64: Conditional 32-bit exchange on 64-bit pair.
-def DS_CONDXCHG32_RTN_B64_sem : InstSISemantic<DS_CONDXCHG32_RTN_B64> {
-  let Semantic = [
-    (LLVMInlineAsm si_llvm_v2i32_ty, "ds_condxchg32_rtn_b64 $0, $1, $2 offset:$3",
-      "=v,v,v,i", /*hasSideEffects=*/1, /*isAlignStack=*/0,
-      (GetNamedOperand $addr), (GetNamedOperand $data0), (GetNamedOperand $offset))
-  ];
-}

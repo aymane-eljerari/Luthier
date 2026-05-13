@@ -59,7 +59,7 @@
 
 foreach i = 0-5 in {
   defvar cmpName = ["EQ", "LG", "GT", "GE", "LT", "LE"][i];
-  defvar cmpPred = [SETOEQ, SETONE, SETOGT, SETOGE, SETOLT, SETOLE][i];
+  defvar cmpPred = [LLVMFCmpOEQ, LLVMFCmpONE, LLVMFCmpOGT, LLVMFCmpOGE, LLVMFCmpOLT, LLVMFCmpOLE][i];
 
   // V_CMP → $sdst
   def V_CMP_#cmpName#_F32_e64_sem
@@ -88,8 +88,7 @@ foreach i = 0-5 in {
       (DefVal $result, (LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
         (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty))),
-      (SetNamedOperand $sdst, (GetVal $result)),
-      (ImplicitDef EXEC, (GetVal $result))
+      (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
 
@@ -100,8 +99,7 @@ foreach i = 0-5 in {
       (DefVal $result, (LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
         (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty))),
-      (SetNamedOperand $sdst, (GetVal $result)),
-      (ImplicitDef EXEC, (GetVal $result))
+      (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
 }
@@ -125,7 +123,7 @@ foreach i = 0-5 in {
 
 foreach i = 0-5 in {
   defvar cmpName = ["NEQ", "NLG", "NGT", "NGE", "NLT", "NLE"][i];
-  defvar cmpPred = [SETUNE, SETUEQ, SETULE, SETULT, SETUGE, SETUGT][i];
+  defvar cmpPred = [LLVMFCmpUNE, LLVMFCmpUEQ, LLVMFCmpULE, LLVMFCmpULT, LLVMFCmpUGE, LLVMFCmpUGT][i];
 
   def V_CMP_#cmpName#_F32_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_F32_e64")> {
@@ -151,8 +149,7 @@ foreach i = 0-5 in {
       (DefVal $result, (LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
         (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty))),
-      (SetNamedOperand $sdst, (GetVal $result)),
-      (ImplicitDef EXEC, (GetVal $result))
+      (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
 
@@ -162,8 +159,7 @@ foreach i = 0-5 in {
       (DefVal $result, (LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
         (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty))),
-      (SetNamedOperand $sdst, (GetVal $result)),
-      (ImplicitDef EXEC, (GetVal $result))
+      (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
 }
@@ -187,7 +183,7 @@ foreach i = 0-5 in {
 
 foreach i = 0-1 in {
   defvar cmpName = ["O", "U"][i];
-  defvar cmpPred = [SETO, SETUO][i];
+  defvar cmpPred = [LLVMFCmpORD, LLVMFCmpUNO][i];
 
   def V_CMP_#cmpName#_F32_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_F32_e64")> {
@@ -213,8 +209,7 @@ foreach i = 0-1 in {
       (DefVal $result, (LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
         (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty))),
-      (SetNamedOperand $sdst, (GetVal $result)),
-      (ImplicitDef EXEC, (GetVal $result))
+      (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
 
@@ -224,16 +219,15 @@ foreach i = 0-1 in {
       (DefVal $result, (LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
         (LLVMBitCast (GetNamedOperand $src1), si_llvm_float_ty))),
-      (SetNamedOperand $sdst, (GetVal $result)),
-      (ImplicitDef EXEC, (GetVal $result))
+      (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
 }
 
 // F = always false, TRU/T = always true (F32 e64)
-foreach i = 0-2 in {
-  defvar cmpName = ["F", "TRU", "T"][i];
-  defvar constVal = [ConstantFalse, ConstantTrue, ConstantTrue][i];
+foreach i = 0-1 in {
+  defvar cmpName = ["F", "TRU"][i];
+  defvar constVal = [ConstantFalse, ConstantTrue][i];
 
   def V_CMP_#cmpName#_F32_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_F32_e64")> {
@@ -246,15 +240,13 @@ foreach i = 0-2 in {
   def V_CMPX_#cmpName#_F32_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMPX_"#cmpName#"_F32_e64")> {
     let Semantic = [
-      (SetNamedOperand $sdst, (constVal si_llvm_i1_ty)),
-      (ImplicitDef EXEC, (constVal si_llvm_i1_ty))
+      (SetNamedOperand $sdst, (constVal si_llvm_i1_ty))
     ];
   }
   def V_CMPSX_#cmpName#_F32_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMPSX_"#cmpName#"_F32_e64")> {
     let Semantic = [
-      (SetNamedOperand $sdst, (constVal si_llvm_i1_ty)),
-      (ImplicitDef EXEC, (constVal si_llvm_i1_ty))
+      (SetNamedOperand $sdst, (constVal si_llvm_i1_ty))
     ];
   }
 }
@@ -278,7 +270,7 @@ foreach i = 0-2 in {
 
 foreach i = 0-5 in {
   defvar cmpName = ["EQ", "LG", "GT", "GE", "LT", "LE"][i];
-  defvar cmpPred = [SETOEQ, SETONE, SETOGT, SETOGE, SETOLT, SETOLE][i];
+  defvar cmpPred = [LLVMFCmpOEQ, LLVMFCmpONE, LLVMFCmpOGT, LLVMFCmpOGE, LLVMFCmpOLT, LLVMFCmpOLE][i];
 
   def V_CMP_#cmpName#_F64_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_F64_e64")> {
@@ -302,8 +294,7 @@ foreach i = 0-5 in {
       (DefVal $result, (LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_double_ty),
         (LLVMBitCast (GetNamedOperand $src1), si_llvm_double_ty))),
-      (SetNamedOperand $sdst, (GetVal $result)),
-      (ImplicitDef EXEC, (GetVal $result))
+      (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
   def V_CMPSX_#cmpName#_F64_e64_sem
@@ -312,8 +303,7 @@ foreach i = 0-5 in {
       (DefVal $result, (LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_double_ty),
         (LLVMBitCast (GetNamedOperand $src1), si_llvm_double_ty))),
-      (SetNamedOperand $sdst, (GetVal $result)),
-      (ImplicitDef EXEC, (GetVal $result))
+      (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
 }
@@ -337,7 +327,7 @@ foreach i = 0-5 in {
 
 foreach i = 0-5 in {
   defvar cmpName = ["NEQ", "NLG", "NGT", "NGE", "NLT", "NLE"][i];
-  defvar cmpPred = [SETUNE, SETUEQ, SETULE, SETULT, SETUGE, SETUGT][i];
+  defvar cmpPred = [LLVMFCmpUNE, LLVMFCmpUEQ, LLVMFCmpULE, LLVMFCmpULT, LLVMFCmpUGE, LLVMFCmpUGT][i];
 
   def V_CMP_#cmpName#_F64_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_F64_e64")> {
@@ -361,8 +351,7 @@ foreach i = 0-5 in {
       (DefVal $result, (LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_double_ty),
         (LLVMBitCast (GetNamedOperand $src1), si_llvm_double_ty))),
-      (SetNamedOperand $sdst, (GetVal $result)),
-      (ImplicitDef EXEC, (GetVal $result))
+      (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
   def V_CMPSX_#cmpName#_F64_e64_sem
@@ -371,8 +360,7 @@ foreach i = 0-5 in {
       (DefVal $result, (LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_double_ty),
         (LLVMBitCast (GetNamedOperand $src1), si_llvm_double_ty))),
-      (SetNamedOperand $sdst, (GetVal $result)),
-      (ImplicitDef EXEC, (GetVal $result))
+      (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
 }
@@ -396,7 +384,7 @@ foreach i = 0-5 in {
 
 foreach i = 0-1 in {
   defvar cmpName = ["O", "U"][i];
-  defvar cmpPred = [SETO, SETUO][i];
+  defvar cmpPred = [LLVMFCmpORD, LLVMFCmpUNO][i];
 
   def V_CMP_#cmpName#_F64_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_F64_e64")> {
@@ -420,8 +408,7 @@ foreach i = 0-1 in {
       (DefVal $result, (LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_double_ty),
         (LLVMBitCast (GetNamedOperand $src1), si_llvm_double_ty))),
-      (SetNamedOperand $sdst, (GetVal $result)),
-      (ImplicitDef EXEC, (GetVal $result))
+      (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
   def V_CMPSX_#cmpName#_F64_e64_sem
@@ -430,15 +417,14 @@ foreach i = 0-1 in {
       (DefVal $result, (LLVMFCmp cmpPred,
         (LLVMBitCast (GetNamedOperand $src0), si_llvm_double_ty),
         (LLVMBitCast (GetNamedOperand $src1), si_llvm_double_ty))),
-      (SetNamedOperand $sdst, (GetVal $result)),
-      (ImplicitDef EXEC, (GetVal $result))
+      (SetNamedOperand $sdst, (GetVal $result))
     ];
   }
 }
 
-foreach i = 0-2 in {
-  defvar cmpName = ["F", "TRU", "T"][i];
-  defvar constVal = [ConstantFalse, ConstantTrue, ConstantTrue][i];
+foreach i = 0-1 in {
+  defvar cmpName = ["F", "TRU"][i];
+  defvar constVal = [ConstantFalse, ConstantTrue][i];
 
   def V_CMP_#cmpName#_F64_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_F64_e64")> {
@@ -451,15 +437,13 @@ foreach i = 0-2 in {
   def V_CMPX_#cmpName#_F64_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMPX_"#cmpName#"_F64_e64")> {
     let Semantic = [
-      (SetNamedOperand $sdst, (constVal si_llvm_i1_ty)),
-      (ImplicitDef EXEC, (constVal si_llvm_i1_ty))
+      (SetNamedOperand $sdst, (constVal si_llvm_i1_ty))
     ];
   }
   def V_CMPSX_#cmpName#_F64_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMPSX_"#cmpName#"_F64_e64")> {
     let Semantic = [
-      (SetNamedOperand $sdst, (constVal si_llvm_i1_ty)),
-      (ImplicitDef EXEC, (constVal si_llvm_i1_ty))
+      (SetNamedOperand $sdst, (constVal si_llvm_i1_ty))
     ];
   }
 }
@@ -484,7 +468,7 @@ foreach i = 0-2 in {
 
 foreach i = 0-5 in {
   defvar cmpName = ["EQ", "LG", "GT", "GE", "LT", "LE"][i];
-  defvar cmpPred = [SETOEQ, SETONE, SETOGT, SETOGE, SETOLT, SETOLE][i];
+  defvar cmpPred = [LLVMFCmpOEQ, LLVMFCmpONE, LLVMFCmpOGT, LLVMFCmpOGE, LLVMFCmpOLT, LLVMFCmpOLE][i];
 
   foreach inst = ["V_CMP_"#cmpName#"_F16_e64",
                   "V_CMP_"#cmpName#"_F16_t16_e64"] in {
@@ -508,8 +492,7 @@ foreach i = 0-5 in {
                        si_llvm_half_ty),
           (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
                        si_llvm_half_ty))),
-        (SetNamedOperand $sdst, (GetVal $result)),
-        (ImplicitDef EXEC, (GetVal $result))
+        (SetNamedOperand $sdst, (GetVal $result))
       ];
     }
   }
@@ -534,7 +517,7 @@ foreach i = 0-5 in {
 
 foreach i = 0-5 in {
   defvar cmpName = ["NEQ", "NLG", "NGT", "NGE", "NLT", "NLE"][i];
-  defvar cmpPred = [SETUNE, SETUEQ, SETULE, SETULT, SETUGE, SETUGT][i];
+  defvar cmpPred = [LLVMFCmpUNE, LLVMFCmpUEQ, LLVMFCmpULE, LLVMFCmpULT, LLVMFCmpUGE, LLVMFCmpUGT][i];
 
   foreach inst = ["V_CMP_"#cmpName#"_F16_e64",
                   "V_CMP_"#cmpName#"_F16_t16_e64"] in {
@@ -558,8 +541,7 @@ foreach i = 0-5 in {
                        si_llvm_half_ty),
           (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty),
                        si_llvm_half_ty))),
-        (SetNamedOperand $sdst, (GetVal $result)),
-        (ImplicitDef EXEC, (GetVal $result))
+        (SetNamedOperand $sdst, (GetVal $result))
       ];
     }
   }
@@ -608,15 +590,13 @@ foreach i = 0-3 in {
         !eq(i, 0) : [(DefVal $r, (LLVMFCmp LLVMFCmpOLE,
           (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), si_llvm_half_ty),
           (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty))),
-          (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
+          (SetNamedOperand $sdst, (GetVal $r))],
         !eq(i, 1) : [(DefVal $r, (LLVMFCmp LLVMFCmpUNO,
           (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), si_llvm_half_ty),
           (LLVMBitCast (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty), si_llvm_half_ty))),
-          (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-        !eq(i, 2) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty)),
-                      (ImplicitDef EXEC, (ConstantFalse si_llvm_i1_ty))],
-        !eq(i, 3) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty)),
-                      (ImplicitDef EXEC, (ConstantTrue si_llvm_i1_ty))]
+          (SetNamedOperand $sdst, (GetVal $r))],
+        !eq(i, 2) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty))],
+        !eq(i, 3) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty))]
       );
     }
   }
@@ -641,7 +621,7 @@ foreach i = 0-3 in {
 
 foreach i = 0-7 in {
   defvar cmpName = ["EQ", "NE", "GT", "GE", "LT", "LE", "F", "T"][i];
-  defvar cmpPredI32 = [SETEQ, SETNE, SETGT, SETGE, SETLT, SETLE, SETEQ, SETEQ][i];
+  defvar cmpPredI32 = [LLVMICmpEQ, LLVMICmpNE, LLVMICmpSGT, LLVMICmpSGE, LLVMICmpSLT, LLVMICmpSLE, LLVMICmpEQ, LLVMICmpEQ][i];
 
   def V_CMP_#cmpName#_I32_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_I32_e64")> {
@@ -656,9 +636,9 @@ foreach i = 0-7 in {
     : InstSISemantic<!cast<InstSI>("V_CMPX_"#cmpName#"_I32_e64")> {
     let Semantic = !cond(
       !le(i, 5) : [(DefVal $r, (LLVMCmp cmpPredI32, (GetNamedOperand $src0), (GetNamedOperand $src1))),
-                    (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-      !eq(i, 6) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty)), (ImplicitDef EXEC, (ConstantFalse si_llvm_i1_ty))],
-      !eq(i, 7) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty)), (ImplicitDef EXEC, (ConstantTrue si_llvm_i1_ty))]
+                    (SetNamedOperand $sdst, (GetVal $r))],
+      !eq(i, 6) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty))],
+      !eq(i, 7) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty))]
     );
   }
 }
@@ -682,7 +662,7 @@ foreach i = 0-7 in {
 
 foreach i = 0-7 in {
   defvar cmpName = ["EQ", "NE", "GT", "GE", "LT", "LE", "F", "T"][i];
-  defvar cmpPredU32 = [SETEQ, SETNE, SETUGT, SETUGE, SETULT, SETULE, SETEQ, SETEQ][i];
+  defvar cmpPredU32 = [LLVMICmpEQ, LLVMICmpNE, LLVMFCmpUGT, LLVMFCmpUGE, LLVMFCmpULT, LLVMFCmpULE, LLVMICmpEQ, LLVMICmpEQ][i];
 
   def V_CMP_#cmpName#_U32_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_U32_e64")> {
@@ -697,9 +677,9 @@ foreach i = 0-7 in {
     : InstSISemantic<!cast<InstSI>("V_CMPX_"#cmpName#"_U32_e64")> {
     let Semantic = !cond(
       !le(i, 5) : [(DefVal $r, (LLVMCmp cmpPredU32, (GetNamedOperand $src0), (GetNamedOperand $src1))),
-                    (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-      !eq(i, 6) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty)), (ImplicitDef EXEC, (ConstantFalse si_llvm_i1_ty))],
-      !eq(i, 7) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty)), (ImplicitDef EXEC, (ConstantTrue si_llvm_i1_ty))]
+                    (SetNamedOperand $sdst, (GetVal $r))],
+      !eq(i, 6) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty))],
+      !eq(i, 7) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty))]
     );
   }
 }
@@ -725,7 +705,7 @@ foreach i = 0-7 in {
   defvar cmpName = ["EQ", "NE", "GT", "GE", "LT", "LE", "F", "T"][i];
 
   // I64 signed
-  defvar cmpPredI64 = [SETEQ, SETNE, SETGT, SETGE, SETLT, SETLE, SETEQ, SETEQ][i];
+  defvar cmpPredI64 = [LLVMICmpEQ, LLVMICmpNE, LLVMICmpSGT, LLVMICmpSGE, LLVMICmpSLT, LLVMICmpSLE, LLVMICmpEQ, LLVMICmpEQ][i];
 
   def V_CMP_#cmpName#_I64_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_I64_e64")> {
@@ -739,14 +719,14 @@ foreach i = 0-7 in {
     : InstSISemantic<!cast<InstSI>("V_CMPX_"#cmpName#"_I64_e64")> {
     let Semantic = !cond(
       !le(i, 5) : [(DefVal $r, (LLVMCmp cmpPredI64, (GetNamedOperand $src0), (GetNamedOperand $src1))),
-                    (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-      !eq(i, 6) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty)), (ImplicitDef EXEC, (ConstantFalse si_llvm_i1_ty))],
-      !eq(i, 7) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty)), (ImplicitDef EXEC, (ConstantTrue si_llvm_i1_ty))]
+                    (SetNamedOperand $sdst, (GetVal $r))],
+      !eq(i, 6) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty))],
+      !eq(i, 7) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty))]
     );
   }
 
   // U64 unsigned
-  defvar cmpPredU64 = [SETEQ, SETNE, SETUGT, SETUGE, SETULT, SETULE, SETEQ, SETEQ][i];
+  defvar cmpPredU64 = [LLVMICmpEQ, LLVMICmpNE, LLVMFCmpUGT, LLVMFCmpUGE, LLVMFCmpULT, LLVMFCmpULE, LLVMICmpEQ, LLVMICmpEQ][i];
 
   def V_CMP_#cmpName#_U64_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_U64_e64")> {
@@ -760,9 +740,9 @@ foreach i = 0-7 in {
     : InstSISemantic<!cast<InstSI>("V_CMPX_"#cmpName#"_U64_e64")> {
     let Semantic = !cond(
       !le(i, 5) : [(DefVal $r, (LLVMCmp cmpPredU64, (GetNamedOperand $src0), (GetNamedOperand $src1))),
-                    (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-      !eq(i, 6) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty)), (ImplicitDef EXEC, (ConstantFalse si_llvm_i1_ty))],
-      !eq(i, 7) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty)), (ImplicitDef EXEC, (ConstantTrue si_llvm_i1_ty))]
+                    (SetNamedOperand $sdst, (GetVal $r))],
+      !eq(i, 6) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty))],
+      !eq(i, 7) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty))]
     );
   }
 }
@@ -808,14 +788,14 @@ foreach i = 0-7 in {
                   "V_CMPX_"#cmpName#"_I16_t16_e64"] in {
     def inst#_sem : InstSISemantic<!cast<InstSI>(inst)> {
       let Semantic = !cond(
-        !eq(i, 0) : [(DefVal $r, (LLVMCmp LLVMICmpEQ, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-        !eq(i, 1) : [(DefVal $r, (LLVMCmp LLVMICmpNE, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-        !eq(i, 2) : [(DefVal $r, (LLVMCmp LLVMICmpSGT, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-        !eq(i, 3) : [(DefVal $r, (LLVMCmp LLVMICmpSGE, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-        !eq(i, 4) : [(DefVal $r, (LLVMCmp LLVMICmpSLT, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-        !eq(i, 5) : [(DefVal $r, (LLVMCmp LLVMICmpSLE, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-        !eq(i, 6) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty)), (ImplicitDef EXEC, (ConstantFalse si_llvm_i1_ty))],
-        !eq(i, 7) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty)), (ImplicitDef EXEC, (ConstantTrue si_llvm_i1_ty))]
+        !eq(i, 0) : [(DefVal $r, (LLVMCmp LLVMICmpEQ, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r))],
+        !eq(i, 1) : [(DefVal $r, (LLVMCmp LLVMICmpNE, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r))],
+        !eq(i, 2) : [(DefVal $r, (LLVMCmp LLVMICmpSGT, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r))],
+        !eq(i, 3) : [(DefVal $r, (LLVMCmp LLVMICmpSGE, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r))],
+        !eq(i, 4) : [(DefVal $r, (LLVMCmp LLVMICmpSLT, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r))],
+        !eq(i, 5) : [(DefVal $r, (LLVMCmp LLVMICmpSLE, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r))],
+        !eq(i, 6) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty))],
+        !eq(i, 7) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty))]
       );
     }
   }
@@ -841,14 +821,14 @@ foreach i = 0-7 in {
                   "V_CMPX_"#cmpName#"_U16_t16_e64"] in {
     def inst#_sem : InstSISemantic<!cast<InstSI>(inst)> {
       let Semantic = !cond(
-        !eq(i, 0) : [(DefVal $r, (LLVMCmp LLVMICmpEQ, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-        !eq(i, 1) : [(DefVal $r, (LLVMCmp LLVMICmpNE, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-        !eq(i, 2) : [(DefVal $r, (LLVMCmp LLVMICmpUGT, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-        !eq(i, 3) : [(DefVal $r, (LLVMCmp LLVMICmpUGE, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-        !eq(i, 4) : [(DefVal $r, (LLVMCmp LLVMICmpULT, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-        !eq(i, 5) : [(DefVal $r, (LLVMCmp LLVMICmpULE, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r)), (ImplicitDef EXEC, (GetVal $r))],
-        !eq(i, 6) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty)), (ImplicitDef EXEC, (ConstantFalse si_llvm_i1_ty))],
-        !eq(i, 7) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty)), (ImplicitDef EXEC, (ConstantTrue si_llvm_i1_ty))]
+        !eq(i, 0) : [(DefVal $r, (LLVMCmp LLVMICmpEQ, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r))],
+        !eq(i, 1) : [(DefVal $r, (LLVMCmp LLVMICmpNE, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r))],
+        !eq(i, 2) : [(DefVal $r, (LLVMCmp LLVMICmpUGT, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r))],
+        !eq(i, 3) : [(DefVal $r, (LLVMCmp LLVMICmpUGE, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r))],
+        !eq(i, 4) : [(DefVal $r, (LLVMCmp LLVMICmpULT, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r))],
+        !eq(i, 5) : [(DefVal $r, (LLVMCmp LLVMICmpULE, (LLVMTrunc (GetNamedOperand $src0), si_llvm_i16_ty), (LLVMTrunc (GetNamedOperand $src1), si_llvm_i16_ty))), (SetNamedOperand $sdst, (GetVal $r))],
+        !eq(i, 6) : [(SetNamedOperand $sdst, (ConstantFalse si_llvm_i1_ty))],
+        !eq(i, 7) : [(SetNamedOperand $sdst, (ConstantTrue si_llvm_i1_ty))]
       );
     }
   }

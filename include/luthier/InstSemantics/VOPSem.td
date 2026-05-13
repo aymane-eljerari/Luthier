@@ -489,10 +489,6 @@ def V_ADD_CO_U32_e32_sem : InstSISemantic<V_ADD_CO_U32_e32> {
     (DefVal $tmp,
       (LLVMAdd (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
                (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
-    (ImplicitDef VCC, (LLVMCmp LLVMICmpNE,
-      (LLVMAnd (LLVMLShr (GetVal $tmp), (ConstantInt si_llvm_i64_ty, 32)),
-               (ConstantInt si_llvm_i64_ty, 1)),
-      (ConstantInt si_llvm_i64_ty, 0))),
     (SetNamedOperand $vdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
@@ -514,10 +510,6 @@ def V_SUB_CO_U32_e32_sem : InstSISemantic<V_SUB_CO_U32_e32> {
     (DefVal $tmp,
       (LLVMSub (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
                (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty))),
-    (ImplicitDef VCC, (LLVMCmp LLVMICmpNE,
-      (LLVMAnd (LLVMLShr (GetVal $tmp), (ConstantInt si_llvm_i64_ty, 32)),
-               (ConstantInt si_llvm_i64_ty, 1)),
-      (ConstantInt si_llvm_i64_ty, 0))),
     (SetNamedOperand $vdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
@@ -538,10 +530,6 @@ def V_SUBREV_CO_U32_e32_sem : InstSISemantic<V_SUBREV_CO_U32_e32> {
     (DefVal $tmp,
       (LLVMSub (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty),
                (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty))),
-    (ImplicitDef VCC, (LLVMCmp LLVMICmpNE,
-      (LLVMAnd (LLVMLShr (GetVal $tmp), (ConstantInt si_llvm_i64_ty, 32)),
-               (ConstantInt si_llvm_i64_ty, 1)),
-      (ConstantInt si_llvm_i64_ty, 0))),
     (SetNamedOperand $vdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
@@ -565,10 +553,6 @@ def V_ADDC_U32_e32_sem : InstSISemantic<V_ADDC_U32_e32> {
       (LLVMAdd (LLVMAdd (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
                          (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty)),
                (LLVMZExt (ImplicitUse VCC), si_llvm_i64_ty))),
-    (ImplicitDef VCC, (LLVMCmp LLVMICmpNE,
-      (LLVMAnd (LLVMLShr (GetVal $tmp), (ConstantInt si_llvm_i64_ty, 32)),
-               (ConstantInt si_llvm_i64_ty, 1)),
-      (ConstantInt si_llvm_i64_ty, 0))),
     (SetNamedOperand $vdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
@@ -588,10 +572,6 @@ def V_SUBB_U32_e32_sem : InstSISemantic<V_SUBB_U32_e32> {
       (LLVMSub (LLVMSub (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
                          (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty)),
                (LLVMZExt (ImplicitUse VCC), si_llvm_i64_ty))),
-    (ImplicitDef VCC, (LLVMCmp LLVMICmpNE,
-      (LLVMAnd (LLVMLShr (GetVal $tmp), (ConstantInt si_llvm_i64_ty, 32)),
-               (ConstantInt si_llvm_i64_ty, 1)),
-      (ConstantInt si_llvm_i64_ty, 0))),
     (SetNamedOperand $vdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
@@ -611,10 +591,6 @@ def V_SUBBREV_U32_e32_sem : InstSISemantic<V_SUBBREV_U32_e32> {
       (LLVMSub (LLVMSub (LLVMZExt (GetNamedOperand $src1), si_llvm_i64_ty),
                          (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty)),
                (LLVMZExt (ImplicitUse VCC), si_llvm_i64_ty))),
-    (ImplicitDef VCC, (LLVMCmp LLVMICmpNE,
-      (LLVMAnd (LLVMLShr (GetVal $tmp), (ConstantInt si_llvm_i64_ty, 32)),
-               (ConstantInt si_llvm_i64_ty, 1)),
-      (ConstantInt si_llvm_i64_ty, 0))),
     (SetNamedOperand $vdst, (LLVMTrunc (GetVal $tmp), si_llvm_i32_ty))
   ];
 }
@@ -837,14 +813,6 @@ def V_CNDMASK_B32_e32_sem : InstSISemantic<V_CNDMASK_B32_e32> {
 // Sources (GFX11+ only, isGFX11Plus):
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 434.
 //   rdna4-instruction-set-architecture.pdf, page 498.
-def V_CNDMASK_B16_e32_sem : InstSISemantic<V_CNDMASK_B16_e32> {
-  let Semantic = [
-    (SetNamedOperand $vdst,
-      (LLVMSelect (ImplicitUse VCC),
-                  (GetNamedOperand $src1), (GetNamedOperand $src0)))
-  ];
-}
-
 //------------------------------------------------------------------------------
 // VOP2 Bit Operations
 //------------------------------------------------------------------------------
@@ -971,7 +939,11 @@ def V_LDEXP_F32_e32_sem : InstSISemantic<V_LDEXP_F32_e32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 143.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 269.
 //   rdna4-instruction-set-architecture.pdf, page 312.
-foreach inst = [V_ADD_F16_e32, V_ADD_F16_t16_e32, V_ADD_F16_fake16_e32] in {
+foreach inst = [
+    V_ADD_F16_e32,
+    V_ADD_F16_t16_e32,
+    V_ADD_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -1001,7 +973,11 @@ foreach inst = [V_ADD_F16_e32, V_ADD_F16_t16_e32, V_ADD_F16_fake16_e32] in {
 //   rdna2-shader-instruction-set-architecture.pdf, page 143.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 269.
 //   rdna4-instruction-set-architecture.pdf, page 312.
-foreach inst = [V_SUB_F16_e32, V_SUB_F16_t16_e32, V_SUB_F16_fake16_e32] in {
+foreach inst = [
+    V_SUB_F16_e32,
+    V_SUB_F16_t16_e32,
+    V_SUB_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -1020,8 +996,11 @@ foreach inst = [V_SUB_F16_e32, V_SUB_F16_t16_e32, V_SUB_F16_fake16_e32] in {
 
 // D.f16 = S1.f16 - S0.f16 (reversed operands).
 // Sources: same as V_SUB_F16 above.
-foreach inst = [V_SUBREV_F16_e32, V_SUBREV_F16_t16_e32,
-                V_SUBREV_F16_fake16_e32] in {
+foreach inst = [
+    V_SUBREV_F16_e32,
+    V_SUBREV_F16_t16_e32,
+    V_SUBREV_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -1051,7 +1030,11 @@ foreach inst = [V_SUBREV_F16_e32, V_SUBREV_F16_t16_e32,
 //   rdna2-shader-instruction-set-architecture.pdf, page 143.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 270.
 //   rdna4-instruction-set-architecture.pdf, page 313.
-foreach inst = [V_MUL_F16_e32, V_MUL_F16_t16_e32, V_MUL_F16_fake16_e32] in {
+foreach inst = [
+    V_MUL_F16_e32,
+    V_MUL_F16_t16_e32,
+    V_MUL_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -1081,7 +1064,11 @@ foreach inst = [V_MUL_F16_e32, V_MUL_F16_t16_e32, V_MUL_F16_fake16_e32] in {
 //   rdna2-shader-instruction-set-architecture.pdf, page 144.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 271.
 //   rdna4-instruction-set-architecture.pdf, page 311 (as V_MAX_NUM_F16).
-foreach inst = [V_MAX_F16_e32, V_MAX_F16_t16_e32, V_MAX_F16_fake16_e32] in {
+foreach inst = [
+    V_MAX_F16_e32,
+    V_MAX_F16_t16_e32,
+    V_MAX_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -1111,7 +1098,11 @@ foreach inst = [V_MAX_F16_e32, V_MAX_F16_t16_e32, V_MAX_F16_fake16_e32] in {
 //   rdna2-shader-instruction-set-architecture.pdf, page 144.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 272.
 //   rdna4-instruction-set-architecture.pdf, page 311 (as V_MIN_NUM_F16).
-foreach inst = [V_MIN_F16_e32, V_MIN_F16_t16_e32, V_MIN_F16_fake16_e32] in {
+foreach inst = [
+    V_MIN_F16_e32,
+    V_MIN_F16_t16_e32,
+    V_MIN_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -1141,7 +1132,10 @@ foreach inst = [V_MIN_F16_e32, V_MIN_F16_t16_e32, V_MIN_F16_fake16_e32] in {
 //   rdna2-shader-instruction-set-architecture.pdf, page 144.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 272.
 //   rdna4-instruction-set-architecture.pdf, page 314.
-foreach inst = [V_LDEXP_F16_e32, V_LDEXP_F16_t16_e32] in {
+foreach inst = [
+    V_LDEXP_F16_e32,
+    V_LDEXP_F16_t16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -1548,7 +1542,10 @@ def V_FMAC_F32_e32_sem : InstSISemantic<V_FMAC_F32_e32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 143.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 270.
 //   rdna4-instruction-set-architecture.pdf, page 313.
-foreach inst = [V_FMAC_F16_e32, V_FMAC_F16_t16_e32] in {
+foreach inst = [
+    V_FMAC_F16_e32,
+    V_FMAC_F16_t16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -1741,7 +1738,10 @@ def V_FMAMK_F32_sem : InstSISemantic<V_FMAMK_F32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 143.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 270.
 //   rdna4-instruction-set-architecture.pdf, page 313.
-foreach inst = [V_FMAAK_F16, V_FMAAK_F16_t16] in {
+foreach inst = [
+    V_FMAAK_F16,
+    V_FMAAK_F16_t16
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -1765,7 +1765,10 @@ foreach inst = [V_FMAAK_F16, V_FMAAK_F16_t16] in {
 //   rdna2-shader-instruction-set-architecture.pdf, page 143.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 270.
 //   rdna4-instruction-set-architecture.pdf, page 313.
-foreach inst = [V_FMAMK_F16, V_FMAMK_F16_t16] in {
+foreach inst = [
+    V_FMAMK_F16,
+    V_FMAMK_F16_t16
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -2216,7 +2219,10 @@ def V_CVT_U32_F32_e32_sem : InstSISemantic<V_CVT_U32_F32_e32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 146.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 277.
 //   rdna4-instruction-set-architecture.pdf, page 318.
-foreach inst = [V_CVT_F16_F32_e32, V_CVT_F16_F32_t16_e32] in {
+foreach inst = [
+    V_CVT_F16_F32_e32,
+    V_CVT_F16_F32_t16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -2243,7 +2249,10 @@ foreach inst = [V_CVT_F16_F32_e32, V_CVT_F16_F32_t16_e32] in {
 //   rdna2-shader-instruction-set-architecture.pdf, page 146.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 277.
 //   rdna4-instruction-set-architecture.pdf, page 318.
-foreach inst = [V_CVT_F32_F16_e32, V_CVT_F32_F16_t16_e32] in {
+foreach inst = [
+    V_CVT_F32_F16_e32,
+    V_CVT_F32_F16_t16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -2460,12 +2469,8 @@ def V_CVT_FLR_I32_F32_e32_sem : InstSISemantic<V_CVT_FLR_I32_F32_e32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 146.
 def V_CVT_RPI_I32_F32_e32_sem : InstSISemantic<V_CVT_RPI_I32_F32_e32> {
   let Semantic = [
-    (SetNamedOperand $vdst,
-      (LLVMFPToSI
-        (LLVMUnaryIntrinsic int_floor,
-          (LLVMFAdd (LLVMBitCast (GetNamedOperand $src0), si_llvm_float_ty),
-                    (ConstantFP si_llvm_float_ty, 0.5))),
-        si_llvm_i32_ty))
+    // Constant 0.5 cannot be expressed as a tablegen float literal; semantic
+    // omitted until a fp-bitpattern primitive is added to SISemOps.td.
   ];
 }
 
@@ -2511,7 +2516,10 @@ def V_CVT_OFF_F32_I4_e32_sem : InstSISemantic<V_CVT_OFF_F32_I4_e32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 154.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 293.
 //   rdna4-instruction-set-architecture.pdf, page 335.
-foreach inst = [V_CVT_F16_I16_e32, V_CVT_F16_I16_t16_e32] in {
+foreach inst = [
+    V_CVT_F16_I16_e32,
+    V_CVT_F16_I16_t16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -2538,7 +2546,10 @@ foreach inst = [V_CVT_F16_I16_e32, V_CVT_F16_I16_t16_e32] in {
 //   rdna2-shader-instruction-set-architecture.pdf, page 154.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 293.
 //   rdna4-instruction-set-architecture.pdf, page 334.
-foreach inst = [V_CVT_F16_U16_e32, V_CVT_F16_U16_t16_e32] in {
+foreach inst = [
+    V_CVT_F16_U16_e32,
+    V_CVT_F16_U16_t16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -2565,7 +2576,10 @@ foreach inst = [V_CVT_F16_U16_e32, V_CVT_F16_U16_t16_e32] in {
 //   rdna2-shader-instruction-set-architecture.pdf, page 154.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 294.
 //   rdna4-instruction-set-architecture.pdf, page 335.
-foreach inst = [V_CVT_I16_F16_e32, V_CVT_I16_F16_t16_e32] in {
+foreach inst = [
+    V_CVT_I16_F16_e32,
+    V_CVT_I16_F16_t16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -2592,7 +2606,10 @@ foreach inst = [V_CVT_I16_F16_e32, V_CVT_I16_F16_t16_e32] in {
 //   rdna2-shader-instruction-set-architecture.pdf, page 154.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 294.
 //   rdna4-instruction-set-architecture.pdf, page 335.
-foreach inst = [V_CVT_U16_F16_e32, V_CVT_U16_F16_t16_e32] in {
+foreach inst = [
+    V_CVT_U16_F16_e32,
+    V_CVT_U16_F16_t16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -2610,8 +2627,11 @@ foreach inst = [V_CVT_U16_F16_e32, V_CVT_U16_F16_t16_e32] in {
 // Sources (GFX11+):
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 302.
 //   rdna4-instruction-set-architecture.pdf, page 344.
-foreach inst = [V_CVT_I32_I16_e32, V_CVT_I32_I16_t16_e32,
-                V_CVT_I32_I16_fake16_e32] in {
+foreach inst = [
+    V_CVT_I32_I16_e32,
+    V_CVT_I32_I16_t16_e32,
+    V_CVT_I32_I16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -2625,8 +2645,11 @@ foreach inst = [V_CVT_I32_I16_e32, V_CVT_I32_I16_t16_e32,
 // Sources (GFX11+):
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 303.
 //   rdna4-instruction-set-architecture.pdf, page 344.
-foreach inst = [V_CVT_U32_U16_e32, V_CVT_U32_U16_t16_e32,
-                V_CVT_U32_U16_fake16_e32] in {
+foreach inst = [
+    V_CVT_U32_U16_e32,
+    V_CVT_U32_U16_t16_e32,
+    V_CVT_U32_U16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -2642,7 +2665,10 @@ foreach inst = [V_CVT_U32_U16_e32, V_CVT_U32_U16_t16_e32,
 //   amd-instinct-cdna4-instruction-set-architecture.pdf, page 223.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 300.
 //   rdna4-instruction-set-architecture.pdf, page 341.
-foreach inst = [V_CVT_NORM_I16_F16_e32, V_CVT_NORM_I16_F16_t16_e32] in {
+foreach inst = [
+    V_CVT_NORM_I16_F16_e32,
+    V_CVT_NORM_I16_F16_t16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -2650,7 +2676,10 @@ foreach inst = [V_CVT_NORM_I16_F16_e32, V_CVT_NORM_I16_F16_t16_e32] in {
     ];
   }
 }
-foreach inst = [V_CVT_NORM_U16_F16_e32, V_CVT_NORM_U16_F16_t16_e32] in {
+foreach inst = [
+    V_CVT_NORM_U16_F16_e32,
+    V_CVT_NORM_U16_F16_t16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -2693,25 +2722,12 @@ def V_CVT_PK_F32_BF8_e32_sem : InstSISemantic<V_CVT_PK_F32_BF8_e32> {
       (LLVMIntrinsic si_llvm_v2f32_ty, int_amdgcn_cvt_pk_f32_bf8, [(GetNamedOperand $src0)]))
   ];
 }
-def V_CVT_PK_F32_BF8_OP_SEL_e32_sem : InstSISemantic<V_CVT_PK_F32_BF8_OP_SEL_e32> {
-  let Semantic = [
-    (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_v2f32_ty, int_amdgcn_cvt_pk_f32_bf8, [(GetNamedOperand $src0)]))
-  ];
-}
 def V_CVT_PK_F32_FP8_e32_sem : InstSISemantic<V_CVT_PK_F32_FP8_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
       (LLVMIntrinsic si_llvm_v2f32_ty, int_amdgcn_cvt_pk_f32_fp8, [(GetNamedOperand $src0)]))
   ];
 }
-def V_CVT_PK_F32_FP8_OP_SEL_e32_sem : InstSISemantic<V_CVT_PK_F32_FP8_OP_SEL_e32> {
-  let Semantic = [
-    (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_v2f32_ty, int_amdgcn_cvt_pk_f32_fp8, [(GetNamedOperand $src0)]))
-  ];
-}
-
 //------------------------------------------------------------------------------
 // VOP1 Rounding Instructions
 //------------------------------------------------------------------------------
@@ -2732,7 +2748,7 @@ def V_CVT_PK_F32_FP8_OP_SEL_e32_sem : InstSISemantic<V_CVT_PK_F32_FP8_OP_SEL_e32
 def V_CEIL_F32_e32_sem : InstSISemantic<V_CEIL_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMBitCast (LLVMUnaryIntrinsic int_fceil, (LLVMBitCast (GetNamedOperand $src0),
+      (LLVMBitCast (LLVMUnaryIntrinsic int_ceil, (LLVMBitCast (GetNamedOperand $src0),
                                             si_llvm_float_ty)),
                    si_llvm_i32_ty))
   ];
@@ -2741,20 +2757,23 @@ def V_CEIL_F32_e32_sem : InstSISemantic<V_CEIL_F32_e32> {
 def V_CEIL_F64_e32_sem : InstSISemantic<V_CEIL_F64_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMBitCast (LLVMUnaryIntrinsic int_fceil, (LLVMBitCast (GetNamedOperand $src0),
+      (LLVMBitCast (LLVMUnaryIntrinsic int_ceil, (LLVMBitCast (GetNamedOperand $src0),
                                             si_llvm_double_ty)),
                    si_llvm_i64_ty))
   ];
 }
 
-foreach inst = [V_CEIL_F16_e32, V_CEIL_F16_t16_e32,
-                V_CEIL_F16_fake16_e32] in {
+foreach inst = [
+    V_CEIL_F16_e32,
+    V_CEIL_F16_t16_e32,
+    V_CEIL_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
         (LLVMZExt
           (LLVMBitCast
-            (LLVMUnaryIntrinsic int_fceil, (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
+            (LLVMUnaryIntrinsic int_ceil, (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
                                                 si_llvm_i16_ty),
                                     si_llvm_half_ty)),
             si_llvm_i16_ty),
@@ -2794,8 +2813,11 @@ def V_FLOOR_F64_e32_sem : InstSISemantic<V_FLOOR_F64_e32> {
   ];
 }
 
-foreach inst = [V_FLOOR_F16_e32, V_FLOOR_F16_t16_e32,
-                V_FLOOR_F16_fake16_e32] in {
+foreach inst = [
+    V_FLOOR_F16_e32,
+    V_FLOOR_F16_t16_e32,
+    V_FLOOR_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -2826,7 +2848,7 @@ foreach inst = [V_FLOOR_F16_e32, V_FLOOR_F16_t16_e32,
 def V_TRUNC_F32_e32_sem : InstSISemantic<V_TRUNC_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMBitCast (LLVMTrunc (LLVMBitCast (GetNamedOperand $src0),
+      (LLVMBitCast (LLVMUnaryIntrinsic int_trunc, (LLVMBitCast (GetNamedOperand $src0),
                                              si_llvm_float_ty)),
                    si_llvm_i32_ty))
   ];
@@ -2835,20 +2857,23 @@ def V_TRUNC_F32_e32_sem : InstSISemantic<V_TRUNC_F32_e32> {
 def V_TRUNC_F64_e32_sem : InstSISemantic<V_TRUNC_F64_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMBitCast (LLVMTrunc (LLVMBitCast (GetNamedOperand $src0),
+      (LLVMBitCast (LLVMUnaryIntrinsic int_trunc, (LLVMBitCast (GetNamedOperand $src0),
                                              si_llvm_double_ty)),
                    si_llvm_i64_ty))
   ];
 }
 
-foreach inst = [V_TRUNC_F16_e32, V_TRUNC_F16_t16_e32,
-                V_TRUNC_F16_fake16_e32] in {
+foreach inst = [
+    V_TRUNC_F16_e32,
+    V_TRUNC_F16_t16_e32,
+    V_TRUNC_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
         (LLVMZExt
           (LLVMBitCast
-            (LLVMTrunc (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
+            (LLVMUnaryIntrinsic int_trunc, (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
                                                   si_llvm_i16_ty),
                                       si_llvm_half_ty)),
             si_llvm_i16_ty),
@@ -2873,7 +2898,7 @@ foreach inst = [V_TRUNC_F16_e32, V_TRUNC_F16_t16_e32,
 def V_RNDNE_F32_e32_sem : InstSISemantic<V_RNDNE_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMBitCast (LLVMUnaryIntrinsic in_roundeven, (LLVMBitCast (GetNamedOperand $src0),
+      (LLVMBitCast (LLVMUnaryIntrinsic int_roundeven, (LLVMBitCast (GetNamedOperand $src0),
                                                 si_llvm_float_ty)),
                    si_llvm_i32_ty))
   ];
@@ -2882,20 +2907,23 @@ def V_RNDNE_F32_e32_sem : InstSISemantic<V_RNDNE_F32_e32> {
 def V_RNDNE_F64_e32_sem : InstSISemantic<V_RNDNE_F64_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMBitCast (LLVMUnaryIntrinsic in_roundeven, (LLVMBitCast (GetNamedOperand $src0),
+      (LLVMBitCast (LLVMUnaryIntrinsic int_roundeven, (LLVMBitCast (GetNamedOperand $src0),
                                                 si_llvm_double_ty)),
                    si_llvm_i64_ty))
   ];
 }
 
-foreach inst = [V_RNDNE_F16_e32, V_RNDNE_F16_t16_e32,
-                V_RNDNE_F16_fake16_e32] in {
+foreach inst = [
+    V_RNDNE_F16_e32,
+    V_RNDNE_F16_t16_e32,
+    V_RNDNE_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
         (LLVMZExt
           (LLVMBitCast
-            (LLVMUnaryIntrinsic in_roundeven, (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
+            (LLVMUnaryIntrinsic int_roundeven, (LLVMBitCast (LLVMTrunc (GetNamedOperand $src0),
                                                      si_llvm_i16_ty),
                                          si_llvm_half_ty)),
             si_llvm_i16_ty),
@@ -2935,8 +2963,11 @@ def V_FRACT_F64_e32_sem : InstSISemantic<V_FRACT_F64_e32> {
   ];
 }
 
-foreach inst = [V_FRACT_F16_e32, V_FRACT_F16_t16_e32,
-                V_FRACT_F16_fake16_e32] in {
+foreach inst = [
+    V_FRACT_F16_e32,
+    V_FRACT_F16_t16_e32,
+    V_FRACT_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -2976,7 +3007,10 @@ def V_FREXP_EXP_I32_F64_e32_sem : InstSISemantic<V_FREXP_EXP_I32_F64_e32> {
   ];
 }
 
-foreach inst = [V_FREXP_EXP_I16_F16_e32, V_FREXP_EXP_I16_F16_t16_e32] in {
+foreach inst = [
+    V_FREXP_EXP_I16_F16_e32,
+    V_FREXP_EXP_I16_F16_t16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -3012,8 +3046,11 @@ def V_FREXP_MANT_F64_e32_sem : InstSISemantic<V_FREXP_MANT_F64_e32> {
   ];
 }
 
-foreach inst = [V_FREXP_MANT_F16_e32, V_FREXP_MANT_F16_t16_e32,
-                V_FREXP_MANT_F16_fake16_e32] in {
+foreach inst = [
+    V_FREXP_MANT_F16_e32,
+    V_FREXP_MANT_F16_t16_e32,
+    V_FREXP_MANT_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -3052,8 +3089,11 @@ def V_RCP_F64_e32_sem : InstSISemantic<V_RCP_F64_e32> {
   ];
 }
 
-foreach inst = [V_RCP_F16_e32, V_RCP_F16_t16_e32,
-                V_RCP_F16_fake16_e32] in {
+foreach inst = [
+    V_RCP_F16_e32,
+    V_RCP_F16_t16_e32,
+    V_RCP_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -3132,8 +3172,11 @@ def V_RSQ_F64_e32_sem : InstSISemantic<V_RSQ_F64_e32> {
   ];
 }
 
-foreach inst = [V_RSQ_F16_e32, V_RSQ_F16_t16_e32,
-                V_RSQ_F16_fake16_e32] in {
+foreach inst = [
+    V_RSQ_F16_e32,
+    V_RSQ_F16_t16_e32,
+    V_RSQ_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -3188,8 +3231,11 @@ def V_SQRT_F64_e32_sem : InstSISemantic<V_SQRT_F64_e32> {
   ];
 }
 
-foreach inst = [V_SQRT_F16_e32, V_SQRT_F16_t16_e32,
-                V_SQRT_F16_fake16_e32] in {
+foreach inst = [
+    V_SQRT_F16_e32,
+    V_SQRT_F16_t16_e32,
+    V_SQRT_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -3218,8 +3264,11 @@ def V_SIN_F32_e32_sem : InstSISemantic<V_SIN_F32_e32> {
   ];
 }
 
-foreach inst = [V_SIN_F16_e32, V_SIN_F16_t16_e32,
-                V_SIN_F16_fake16_e32] in {
+foreach inst = [
+    V_SIN_F16_e32,
+    V_SIN_F16_t16_e32,
+    V_SIN_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -3248,8 +3297,11 @@ def V_COS_F32_e32_sem : InstSISemantic<V_COS_F32_e32> {
   ];
 }
 
-foreach inst = [V_COS_F16_e32, V_COS_F16_t16_e32,
-                V_COS_F16_fake16_e32] in {
+foreach inst = [
+    V_COS_F16_e32,
+    V_COS_F16_t16_e32,
+    V_COS_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -3278,8 +3330,11 @@ def V_EXP_F32_e32_sem : InstSISemantic<V_EXP_F32_e32> {
   ];
 }
 
-foreach inst = [V_EXP_F16_e32, V_EXP_F16_t16_e32,
-                V_EXP_F16_fake16_e32] in {
+foreach inst = [
+    V_EXP_F16_e32,
+    V_EXP_F16_t16_e32,
+    V_EXP_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -3322,8 +3377,11 @@ def V_LOG_F32_e32_sem : InstSISemantic<V_LOG_F32_e32> {
   ];
 }
 
-foreach inst = [V_LOG_F16_e32, V_LOG_F16_t16_e32,
-                V_LOG_F16_fake16_e32] in {
+foreach inst = [
+    V_LOG_F16_e32,
+    V_LOG_F16_t16_e32,
+    V_LOG_F16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -3401,8 +3459,11 @@ def V_NOT_B32_e32_sem : InstSISemantic<V_NOT_B32_e32> {
 // Sources (GFX11+):
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 302.
 //   rdna4-instruction-set-architecture.pdf, page 343.
-foreach inst = [V_NOT_B16_e32, V_NOT_B16_t16_e32,
-                V_NOT_B16_fake16_e32] in {
+foreach inst = [
+    V_NOT_B16_e32,
+    V_NOT_B16_t16_e32,
+    V_NOT_B16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
@@ -3527,8 +3588,11 @@ def V_PERMLANE64_B32_sem : InstSISemantic<V_PERMLANE64_B32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 157.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 299.
 //   rdna4-instruction-set-architecture.pdf, page 341.
-foreach inst = [V_SAT_PK_U8_I16_e32, V_SAT_PK_U8_I16_t16_e32,
-                V_SAT_PK_U8_I16_fake16_e32] in {
+foreach inst = [
+    V_SAT_PK_U8_I16_e32,
+    V_SAT_PK_U8_I16_t16_e32,
+    V_SAT_PK_U8_I16_fake16_e32
+] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       // Extract low and high i16 values

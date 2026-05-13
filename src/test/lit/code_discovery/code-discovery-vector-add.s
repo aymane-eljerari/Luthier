@@ -27,7 +27,7 @@
 // load/store IR over ptr addrspace(1). VOP3 ops without semantics still
 // fall through as asm sideeffect stubs.
 // CHECK-DAG: load i32, ptr addrspace(1)
-// CHECK-DAG: v_fmac_f32
+// CHECK-DAG: call float @llvm.fma.f32
 // CHECK-DAG: store i32 {{.*}}, ptr addrspace(1)
 
 	.amdgcn_target "amdgcn-amd-amdhsa--gfx908"

@@ -1435,16 +1435,21 @@ void MIRToIRTranslator::fixupPhis() {
   /// own predecessors). Those get appended to \c ToBeFixedPhis while we
   /// iterate, so keep draining until the list is empty.
   while (!ToBeFixedPhis.empty()) {
-    auto It = ToBeFixedPhis.begin();
-    for (const llvm::MachineBasicBlock *PredMBB : It->MBB->predecessors()) {
+    // Copy the front entry by value, then pop. `getOperandAsValue` below may
+    // append new entries to `ToBeFixedPhis` (via materializeReg's placeholder
+    // PHIs), which can grow the SmallVector and invalidate any iterator we
+    // kept into it.
+    ToBeFixedRegValuePhiInfo Cur = ToBeFixedPhis.front();
+    ToBeFixedPhis.erase(ToBeFixedPhis.begin());
+    for (const llvm::MachineBasicBlock *PredMBB : Cur.MBB->predecessors()) {
       auto *PredBB = const_cast<llvm::BasicBlock *>(PredMBB->getBasicBlock());
-      if (!llvm::is_contained(It->Phi->blocks(), PredBB)) {
+      if (!llvm::is_contained(Cur.Phi->blocks(), PredBB)) {
         llvm::IRBuilder<llvm::InstSimplifyFolder,
                         llvm::IRBuilderCallbackInserter>
-            Builder(It->Phi->getContext(),
+            Builder(Cur.Phi->getContext(),
                     llvm::InstSimplifyFolder{MF.getDataLayout()},
                     llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
-                      if (It->Phi->hasMetadata("amdgpu.uniform"))
+                      if (Cur.Phi->hasMetadata("amdgpu.uniform"))
                         I->setMetadata("amdgpu.uniform",
                                        llvm::MDNode::get(I->getContext(), {}));
                       LLVM_DEBUG(
@@ -1457,14 +1462,13 @@ void MIRToIRTranslator::fixupPhis() {
         // instructions (asm calls, loads, etc.) already appear above this
         // point
         Builder.SetInsertPoint(PredBB->getTerminator());
-        It->Phi->addIncoming(&getOperandAsValue(*PredMBB, It->RegKey, Builder,
-                                                It->Phi->getType()),
+        Cur.Phi->addIncoming(&getOperandAsValue(*PredMBB, Cur.RegKey, Builder,
+                                                Cur.Phi->getType()),
                              PredBB);
       }
     }
-    if (It->Phi->getNumIncomingValues() == 1)
-      SingleValuePhis.push_back(It->Phi);
-    ToBeFixedPhis.erase(It);
+    if (Cur.Phi->getNumIncomingValues() == 1)
+      SingleValuePhis.push_back(Cur.Phi);
   }
 
   /// Remove single edge

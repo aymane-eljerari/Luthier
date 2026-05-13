@@ -22,9 +22,11 @@
 //     evenly partition the stored value.
 
 // CHECK:     define {{.*}} @reduce_sum_lds
-// CHECK-DAG: ds_write_b32
-// CHECK-DAG: ds_read_b32
-// CHECK-DAG: v_add_f32
+// DSSem lifts ds_write_b32 / ds_read_b32 to typed store / load against
+// ptr addrspace(3); VOPSem lifts v_add_f32 to a typed fadd.
+// CHECK-DAG: store i32 {{.*}}, ptr addrspace(3)
+// CHECK-DAG: load i32, ptr addrspace(3)
+// CHECK-DAG: fadd float
 // The S_CMP_LT_U32 should lift to a 32-bit icmp ult against an i32
 // immediate. If the immediate had defaulted to i64 (as it did before the
 // fix), the translator would have aborted on the ICmpInst operand-type
