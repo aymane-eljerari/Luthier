@@ -377,6 +377,10 @@ def ImplicitUse;
 /// Usage: \c (SelectOperand <cond-dag>, <then-dag>, <else-dag>).
 def SelectOperand;
 
+/// Returns true at codegen time if the current subtarget has the named
+/// feature
+def hasFeature;
+
 /// Read the register file of a register as a vector.
 /// The first argument is the register. The second argument is the lane
 /// scalar type (e.g. \c si_llvm_i32_ty for

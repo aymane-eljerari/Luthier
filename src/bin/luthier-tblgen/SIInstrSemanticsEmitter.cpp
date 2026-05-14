@@ -242,6 +242,24 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       OS << ")";
     }
 
+    // --- hasFeature $<short-name>: check if subtarget has a feature ---
+    // Lowers to MCSubtargetInfo::hasFeature on Translator.ST. The arg-name
+    // placeholder is auto-prefixed with "Feature" to form the enum value
+    // (e.g. $GFX9Insts -> llvm::AMDGPU::FeatureGFX9Insts).
+    else if (OpName == "hasFeature") {
+      if (unsigned NumArgs = Dag->getNumArgs(); NumArgs != 1)
+        llvm::PrintFatalError(
+            Loc, "Expected `hasFeature` to have 1 argument (feature name "
+                 "placeholder), got " +
+                     llvm::Twine(NumArgs) + " instead");
+      llvm::StringRef ArgName = Dag->getArgNameStr(0);
+      if (ArgName.empty())
+        llvm::PrintFatalError(
+            Loc, "`hasFeature` argument must be a named placeholder "
+                 "(e.g. $GFX9Insts)");
+      OS << "Translator.ST.hasFeature(llvm::AMDGPU::Feature" << ArgName << ")";
+    }
+
     // --- hasModifierSet $<opname>: check if a modifier operand is set ---
     // Lowers to SIInstrInfo::hasModifiersSet, which returns true iff the
     // named operand exists on MI and has a non-zero immediate. The operand
