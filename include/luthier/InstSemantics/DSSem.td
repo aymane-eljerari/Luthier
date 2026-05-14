@@ -1554,6 +1554,168 @@ foreach desc = [
       [DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret]))
   ]>;
 
+//------------------------------------------------------------------------------
+// DS BVH stack helpers (RDNA4 ray-tracing) — DS_BVH_STACK_*
+// Each lowers to its dedicated LLVM intrinsic. The intrinsic returns a
+// {vdst, i32 addr} struct: vdst is the popped/last node pointer, and the i32
+// is the new stack-address-pointer value (the in-out $addr operand).
+// See DSInstructions.td DS_BVH_STACK class and AMDGPUInstructionSelector.cpp.
+//   DS_BVH_STACK_RTN_B32              -> int_amdgcn_ds_bvh_stack_rtn              ({i32, i32}, data1 <4xi32>)
+//   DS_BVH_STACK_PUSH8_POP1_RTN_B32   -> int_amdgcn_ds_bvh_stack_push8_pop1_rtn   ({i32, i32}, data1 <8xi32>)
+//   DS_BVH_STACK_PUSH8_POP2_RTN_B64   -> int_amdgcn_ds_bvh_stack_push8_pop2_rtn   ({i64, i32}, data1 <8xi32>)
+// The intrinsic is non-overloaded, so CreateIntrinsic auto-infers the return
+// type (use the 2-arg form by omitting the leading type argument).
+//------------------------------------------------------------------------------
+
+class DSBvhStackDesc<InstSI inst, Intrinsic intr, SILLVMType data1Ty> {
+  InstSI Inst = inst;
+  Intrinsic Intr = intr;
+  SILLVMType Data1Ty = data1Ty;
+}
+
+foreach desc = [
+  DSBvhStackDesc<DS_BVH_STACK_RTN_B32,
+                 int_amdgcn_ds_bvh_stack_rtn,            si_llvm_v4i32_ty>,
+  DSBvhStackDesc<DS_BVH_STACK_PUSH8_POP1_RTN_B32,
+                 int_amdgcn_ds_bvh_stack_push8_pop1_rtn, si_llvm_v8i32_ty>,
+  DSBvhStackDesc<DS_BVH_STACK_PUSH8_POP2_RTN_B64,
+                 int_amdgcn_ds_bvh_stack_push8_pop2_rtn, si_llvm_v8i32_ty>
+] in
+  def : InstSISemantic<desc.Inst, [
+    (DefVal $result, (LLVMIntrinsic desc.Intr,
+      [(GetNamedOperand $addr_in, si_llvm_i32_ty),
+       (GetNamedOperand $data0, si_llvm_i32_ty),
+       (GetNamedOperand $data1, desc.Data1Ty),
+       (GetNamedOperand $offset, si_llvm_i32_ty)])),
+    (SetNamedOperand $vdst, (LLVMExtractValue (GetVal $result), [0])),
+    (SetNamedOperand $addr, (LLVMExtractValue (GetVal $result), [1]))
+  ]>;
+
+//------------------------------------------------------------------------------
+// DS atomic barrier-arrive helpers (RDNA4 gfx1250+) — selection patterns in
+// DSInstructions.td:907-917 (GCNPat → DS_ATOMIC_*_ARRIVE_*).
+//   DS_ATOMIC_ASYNC_BARRIER_ARRIVE_B64
+//     -> int_amdgcn_ds_atomic_async_barrier_arrive_b64(local_ptr) -> void
+//     (NoRet pseudo: no $vdst, no $data0; pointer constructed from DSAddr.)
+//   DS_ATOMIC_BARRIER_ARRIVE_RTN_B64 (+ _agpr alias on CDNA)
+//     -> int_amdgcn_ds_atomic_barrier_arrive_rtn_b64(local_ptr, i64) -> i64
+//------------------------------------------------------------------------------
+
+def DS_ATOMIC_ASYNC_BARRIER_ARRIVE_B64_sem
+  : InstSISemantic<DS_ATOMIC_ASYNC_BARRIER_ARRIVE_B64, [
+      (LLVMIntrinsic si_llvm_void_ty,
+                     int_amdgcn_ds_atomic_async_barrier_arrive_b64,
+                     [DSAddr<(GetNamedOperand $addr),
+                             (GetNamedOperand $offset)>.ret])
+    ]>;
+
+foreach inst = [DS_ATOMIC_BARRIER_ARRIVE_RTN_B64,
+                DS_ATOMIC_BARRIER_ARRIVE_RTN_B64_agpr] in
+  def : InstSISemantic<inst, [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_i64_ty,
+                     int_amdgcn_ds_atomic_barrier_arrive_rtn_b64,
+                     [DSAddr<(GetNamedOperand $addr),
+                             (GetNamedOperand $offset)>.ret,
+                      (GetNamedOperand $data0, si_llvm_i64_ty)]))
+  ]>;
+
+//------------------------------------------------------------------------------
+// DS GWS (Global Wave Sync) helpers — GDS-only semaphore primitives.
+//   Mapping is 1:1 between pseudo and intrinsic (see
+//   AMDGPUInstructionSelector.cpp gwsIntrinToOpcode).
+//   DS_GWS_1D variants (init, barrier, sema_br): (i32 data0, i32 offset) -> void
+//   DS_GWS_0D variants (sema_v, sema_p, sema_release_all): (i32 offset) -> void
+// Operands need explicit i32 typing because the Offset operand is 16-bit
+// natively but the intrinsics expect i32.
+//------------------------------------------------------------------------------
+
+class DSGws1DDesc<InstSI inst, Intrinsic intr> {
+  InstSI Inst = inst;
+  Intrinsic Intr = intr;
+}
+
+foreach desc = [
+  DSGws1DDesc<DS_GWS_INIT,    int_amdgcn_ds_gws_init>,
+  DSGws1DDesc<DS_GWS_BARRIER, int_amdgcn_ds_gws_barrier>,
+  DSGws1DDesc<DS_GWS_SEMA_BR, int_amdgcn_ds_gws_sema_br>
+] in
+  def : InstSISemantic<desc.Inst, [
+    (LLVMIntrinsic si_llvm_void_ty, desc.Intr,
+      [(GetNamedOperand $data0, si_llvm_i32_ty),
+       (GetNamedOperand $offset, si_llvm_i32_ty)])
+  ]>;
+
+class DSGws0DDesc<InstSI inst, Intrinsic intr> {
+  InstSI Inst = inst;
+  Intrinsic Intr = intr;
+}
+
+foreach desc = [
+  DSGws0DDesc<DS_GWS_SEMA_V,           int_amdgcn_ds_gws_sema_v>,
+  DSGws0DDesc<DS_GWS_SEMA_P,           int_amdgcn_ds_gws_sema_p>,
+  DSGws0DDesc<DS_GWS_SEMA_RELEASE_ALL, int_amdgcn_ds_gws_sema_release_all>
+] in
+  def : InstSISemantic<desc.Inst, [
+    (LLVMIntrinsic si_llvm_void_ty, desc.Intr,
+      [(GetNamedOperand $offset, si_llvm_i32_ty)])
+  ]>;
+
+//------------------------------------------------------------------------------
+// DS GS_REG_RTN — atomic update of a GDS_STRMOUT_* register bank entry.
+// Operands: $vdst (i64), $data0 (i32 data), $offset (i32 ImmArg selecting
+// register slot). Intrinsic return is `llvm_anyint_ty` — overloaded by
+// declared return type; the pseudo uses VGPROp_64 for $vdst, so we lock to
+// i64 by passing it as the overload retTy. RDNA3 only.
+//------------------------------------------------------------------------------
+
+foreach desc = [
+  DSGws1DDesc<DS_ADD_GS_REG_RTN, int_amdgcn_ds_add_gs_reg_rtn>,
+  DSGws1DDesc<DS_SUB_GS_REG_RTN, int_amdgcn_ds_sub_gs_reg_rtn>
+] in
+  def : InstSISemantic<desc.Inst, [
+    (SetNamedOperand $vdst,
+      (LLVMIntrinsic si_llvm_i64_ty, desc.Intr,
+        [(GetNamedOperand $data0, si_llvm_i32_ty),
+         (GetNamedOperand $offset, si_llvm_i32_ty)]))
+  ]>;
+
+//------------------------------------------------------------------------------
+// DS_{READ,WRITE}_ADDTID_B32 — per-lane base-plus-stride LDS access.
+//   addr_b16 = ({OFFSET1, OFFSET0} + M0[15:0]) truncated to 16 bits
+//   byte_addr = (i32)addr_b16 + laneID * 4
+//   MEM[byte_addr].b32 = DATA0  (WRITE)
+//   RETURN_DATA      = MEM[byte_addr].b32  (READ)
+// laneID is built from int_amdgcn_mbcnt_lo/hi (works for wave32 and wave64).
+// The 16-bit truncation of the (offset + M0_lo) sum is modeled with an
+// explicit AND of 0xFFFF after the add.
+//------------------------------------------------------------------------------
+
+class DSAddTidAddr {
+  dag ret = (LLVMIntToPtr
+    (LLVMAdd
+      (LLVMAnd
+        (LLVMAdd (GetNamedOperand $offset, si_llvm_i32_ty),
+                 (LLVMAnd (ImplicitUse M0),
+                          (ConstantInt si_llvm_i32_ty, 0xFFFF))),
+        (ConstantInt si_llvm_i32_ty, 0xFFFF)),
+      (LLVMMul
+        (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_mbcnt_hi,
+          [(ConstantInt si_llvm_i32_ty, -1),
+           (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_mbcnt_lo,
+             [(ConstantInt si_llvm_i32_ty, -1),
+              (ConstantInt si_llvm_i32_ty, 0)])]),
+        (ConstantInt si_llvm_i32_ty, 4))),
+    local_ptr_ty);
+}
+
+def DS_READ_ADDTID_B32_sem : InstSISemantic<DS_READ_ADDTID_B32, [
+  (SetNamedOperand $vdst, (LLVMLoad si_llvm_i32_ty, DSAddTidAddr<>.ret))
+]>;
+
+def DS_WRITE_ADDTID_B32_sem : InstSISemantic<DS_WRITE_ADDTID_B32, [
+  (LLVMStore (GetNamedOperand $data0, si_llvm_i32_ty), DSAddTidAddr<>.ret)
+]>;
 
 //------------------------------------------------------------------------------
 // Group F: DS_CMPST_* (pre-GFX11) + DS_CMPSTORE_* (GFX11+) — compare-and-store
@@ -1634,46 +1796,28 @@ foreach desc = [
 }
 
 //==============================================================================
-// Remaining specialized ops (Phase 14) — fence placeholders
+// Unmodeled DS instructions — intentionally no InstSISemantic record
 //==============================================================================
-
 //
-// These instructions either touch M0-based addressing not yet modeled, read
-// from special register banks (GDS_STRMOUT_*, GS_REGS), or have no documented
-// pseudocode in any ISA PDF. Model them as a generic waitcnt fence so the IR
-// records a memory side-effect without committing to incorrect semantics.
-foreach inst = [
-  // _SRC2_ variants (Phase 14) — M0-based second-source addressing
-  DS_ADD_SRC2_F32, DS_ADD_SRC2_U32, DS_ADD_SRC2_U64,
-  DS_AND_SRC2_B32, DS_AND_SRC2_B64,
-  DS_DEC_SRC2_U32, DS_DEC_SRC2_U64,
-  DS_INC_SRC2_U32, DS_INC_SRC2_U64,
-  DS_MAX_SRC2_F32, DS_MAX_SRC2_F64, DS_MAX_SRC2_I32, DS_MAX_SRC2_I64,
-  DS_MAX_SRC2_U32, DS_MAX_SRC2_U64,
-  DS_MIN_SRC2_F32, DS_MIN_SRC2_F64, DS_MIN_SRC2_I32, DS_MIN_SRC2_I64,
-  DS_MIN_SRC2_U32, DS_MIN_SRC2_U64,
-  DS_OR_SRC2_B32, DS_OR_SRC2_B64,
-  DS_RSUB_SRC2_U32, DS_RSUB_SRC2_U64,
-  DS_SUB_SRC2_U32, DS_SUB_SRC2_U64,
-  DS_WRITE_SRC2_B32, DS_WRITE_SRC2_B64,
-  DS_XOR_SRC2_B32, DS_XOR_SRC2_B64,
-  // GWS — GDS-only semaphores; no pseudocode in any PDF
-  DS_GWS_BARRIER, DS_GWS_INIT,
-  DS_GWS_SEMA_BR, DS_GWS_SEMA_P, DS_GWS_SEMA_V, DS_GWS_SEMA_RELEASE_ALL,
-  // RDNA3 GS_REG ops — GDS_STRMOUT_* register bank, not memory
-  DS_ADD_GS_REG_RTN, DS_SUB_GS_REG_RTN,
-  // Ordered count (GDS-only, M0-derived)
-  DS_ORDERED_COUNT,
-  // BVH stack helpers (RDNA4)
-  DS_BVH_STACK_RTN_B32,
-  DS_BVH_STACK_PUSH8_POP1_RTN_B32, DS_BVH_STACK_PUSH8_POP2_RTN_B64,
-  // ADDTID ops (uses laneID; not modeled)
-  DS_READ_ADDTID_B32, DS_WRITE_ADDTID_B32,
-  // Async/sync barrier arrive (undocumented)
-  DS_ATOMIC_ASYNC_BARRIER_ARRIVE_B64,
-  DS_ATOMIC_BARRIER_ARRIVE_RTN_B64, DS_ATOMIC_BARRIER_ARRIVE_RTN_B64_agpr
-] in
-  def : InstSISemantic<inst, [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt,
-                                     [(ConstantInt si_llvm_i32_ty, 0)])
-  ]>;
+// The following DS opcodes have no luthier semantic. They will fall through to
+// MIInlineAsmEmitter at translation time, which emits the original assembly
+// instruction as an `asm sideeffect` call. This preserves the side-effect for
+// downstream analyses without committing to a (potentially wrong) IR model.
+//
+// Why each is unmodeled:
+//
+//   DS_*_SRC2_* family (32 records: ADD/SUB/RSUB/INC/DEC/MIN/MAX/AND/OR/XOR/
+//     WRITE × U32/U64/I32/I64/F32/F64/B32/B64 — exact set varies):
+//       Hardware addressing is `B = A + 4*(offset1[7] ? sign_ext({A[31],
+//       A[31:17]}) : {offset1[6:0], offset0})`. This depends on bits of the
+//       ADDR VGPR at runtime and on the M0-derived addressing path. No LLVM
+//       intrinsic exposes this form.
+//
+//   DS_ORDERED_COUNT:
+//       One MIR pseudo maps back to either `int_amdgcn_ds_ordered_add` or
+//       `int_amdgcn_ds_ordered_swap` based on OFFSET1[5:4]. The intrinsic
+//       signature also expects M0 packed as a pointer + several ImmArgs
+//       that aren't recoverable from MIR alone.
+//
+// To re-enable a semantic for any of these, add an `InstSISemantic<...>` def
+// (or `foreach inst = [...] in def : InstSISemantic<inst, [...]>`).

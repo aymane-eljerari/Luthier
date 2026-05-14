@@ -124,6 +124,13 @@ def LLVMInsertElement : LLVMOp<"CreateInsertElement">;
 
 def LLVMExtractElement : LLVMOp<"CreateExtractElement">;
 
+/// Extract a member from an aggregate (struct or array) value. Usage:
+///   \c (LLVMExtractValue <aggregate>, [<idx0>, <idx1>, ...]).
+/// The index list is forwarded as an \c ArrayRef<unsigned> to
+/// \c IRBuilder::CreateExtractValue. Used for splitting struct-returning
+/// intrinsic results (e.g. \c llvm.amdgcn.ds.bvh.stack.*).
+def LLVMExtractValue : LLVMOp<"CreateExtractValue">;
+
 def LLVMFAdd : LLVMOp<"CreateFAdd">;
 
 def LLVMFSub : LLVMOp<"CreateFSub">;
