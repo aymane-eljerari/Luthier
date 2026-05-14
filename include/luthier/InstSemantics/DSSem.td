@@ -1,4 +1,4 @@
-//===- DSSem.td ---------------------------------------------------*- tblgen -*-===//
+//===- DSSem.td ----------------------------------------------*- tblgen -*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,23 +27,8 @@ class CalculateSingleOffsetDSAddr<dag addr, dag offset,
   dag ret = (LLVMPtrAdd (LLVMIntToPtr addr, localOrRegionPtr), offset);
 }
 
-/// Calculate a double-offset DS address for READ2/WRITE2 instructions.
-class CalculateDoubleOffsetDSAddr<dag addr, dag offset0, dag offset1,
-                                  dag localOrRegionPtr,
-                                  SILLVMType dataType> {
-  // Adj = data type size in bytes (READ2/WRITE2 hardware multiplies the
-  // offset by this stride). 64-bit data → 8-byte stride; everything else → 4.
-  int Adj = !if(!eq(dataType.ElemSize, 64), 8, 4);
-  dag ret = (LLVMPtrAdd (LLVMIntToPtr addr, localOrRegionPtr),
-                         (LLVMAdd (LLVMMul offset0, Adj),
-                                   (LLVMMul offset1, Adj)
-                                   )
-                         );
-}
-
 /// Helper: select LDS (local_ptr_ty, AS 3) or GDS (region_ptr_ty, AS 2)
-/// based on the gds modifier of the current MI. Uses SelectOperand, which
-/// lowers to a C++ ternary on SIInstrInfo::hasModifiersSet(MI, ::gds).
+/// based on the gds modifier of the current MI
 class DSAddr<dag addr, dag offset> {
   dag ret = CalculateSingleOffsetDSAddr<addr, offset,
               (SelectOperand (hasModifierSet $gds),
@@ -54,20 +39,6 @@ class DSAddr<dag addr, dag offset> {
 // DS 32-bit Atomic Operations (no return)
 // tmp = MEM[addr]; MEM[addr] = OP(tmp, data)
 //------------------------------------------------------------------------------
-
-// Sources (present in all architectures):
-//   southern-islands-instruction-set-architecture.pdf, pages 230-237.
-//   sea-islands-instruction-set-architecture_0.pdf, pages 240-246.
-//   gcn3-instruction-set-architecture.pdf, page 267.
-//   vega-7nm-shader-instruction-set-architecture.pdf, page 184.
-//   instinct-mi100-cdna1-shader-instruction-set-architecture.pdf, page 175.
-//   instinct-mi200-cdna2-instruction-set-architecture.pdf, page 173.
-//   amd-instinct-mi300-cdna3-instruction-set-architecture.pdf, page 418.
-//   amd-instinct-cdna4-instruction-set-architecture.pdf, page 465.
-//   rdna-shader-instruction-set-architecture.pdf, page 201.
-//   rdna2-shader-instruction-set-architecture.pdf, page 196.
-//   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 511.
-//   rdna4-instruction-set-architecture.pdf, page 585.
 
 // DS_ADD_U32: tmp = MEM[addr]; MEM[addr] = tmp + data.
 def DS_ADD_U32_sem : InstSISemantic<DS_ADD_U32> {
