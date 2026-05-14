@@ -1206,11 +1206,6 @@ def DS_BPERMUTE_FI_B32_sem : InstSISemantic<DS_BPERMUTE_FI_B32> {
 // VGPR variant — replicated verbatim from the corresponding base record.
 //==============================================================================
 
-//==============================================================================
-// DS _SRC2_ variants (Phase 14) — fence-only placeholders
-//==============================================================================
-
-
 //------------------------------------------------------------------------------
 // Group B: integer binary atomics (ADD / SUB / RSUB / AND / OR / XOR)
 // Each entry covers the NoRet record + the RTN record's base/agpr pair.
@@ -1796,28 +1791,225 @@ foreach desc = [
 }
 
 //==============================================================================
+// DS_*_SRC2_* family — pre-RDNA A-relative second-source addressing
+//==============================================================================
+// Source: gcn3-instruction-set-architecture.pdf, pages 254-259
+//   (also in southern-islands/sea-islands; removed in RDNA).
+//
+// For each DS_*_SRC2_* opcode, the hardware reads/writes two LDS locations:
+//   - A = ADDR VGPR (byte offset into LDS) — already produced by VGPR;
+//         used directly as the byte address into A's slot.
+//   - B = A + 4 * displ, where the 15-bit signed `displ` is selected by
+//         offset1[7] (= bit 15 of the merged 16-bit $offset):
+//             offset1[7] == 0:  displ = sign_extend({offset1[6:0], offset0})
+//             offset1[7] == 1:  displ = sign_extend({A[31], A[31:17]})
+//
+// Encoded as sign-extend(15-bit) idioms in LLVM IR:
+//   displ_imm = ($offset << 17) ashr 17   (widens bit 14 of offset to bit 31)
+//   displ_A   = ($addr ashr 17)           (sign-extends from A[31:17])
+//
+// SRC2 is LDS-only in all generations (no GDS encoding). We use local_ptr_ty
+// directly. M0 LDS-size clamping (gfx6-gfx8) would also apply here, but the
+// pseudos retain `$offset` as a raw immediate and we model the byte address
+// arithmetic directly — matching how the SRC2 spec itself describes the
+// operation.
+
+class DSAddrSrc2B<dag addr, dag offset> {
+  // 15-bit signed displacement selected by offset[15]:
+  dag displ = (LLVMSelect
+    (LLVMTrunc (LLVMLShr offset, (ConstantInt si_llvm_i32_ty, 15)),
+               si_llvm_i1_ty),
+    (LLVMAShr addr, (ConstantInt si_llvm_i32_ty, 17)),
+    (LLVMAShr (LLVMShl offset, (ConstantInt si_llvm_i32_ty, 17)),
+              (ConstantInt si_llvm_i32_ty, 17)));
+  // B = A + 4 * displ
+  dag ret = (LLVMIntToPtr
+              (LLVMAdd addr,
+                (LLVMShl displ, (ConstantInt si_llvm_i32_ty, 2))),
+              local_ptr_ty);
+}
+
+class DSAddrSrc2A<dag addr> {
+  dag ret = (LLVMIntToPtr addr, local_ptr_ty);
+}
+
+//------------------------------------------------------------------------------
+// SRC2 integer binary: DS[A] = OP(DS[A], DS[B]) (RSUB swaps the operands).
+//------------------------------------------------------------------------------
+
+class DSSrc2BinOp<LLVMOp op, SILLVMType ty, bit reverse, InstSI inst> {
+  LLVMOp Op = op;
+  SILLVMType Ty = ty;
+  bit Reverse = reverse;
+  InstSI Inst = inst;
+}
+
+foreach desc = [
+  DSSrc2BinOp<LLVMAdd, si_llvm_i32_ty, 0, DS_ADD_SRC2_U32>,
+  DSSrc2BinOp<LLVMSub, si_llvm_i32_ty, 0, DS_SUB_SRC2_U32>,
+  DSSrc2BinOp<LLVMSub, si_llvm_i32_ty, 1, DS_RSUB_SRC2_U32>,
+  DSSrc2BinOp<LLVMAnd, si_llvm_i32_ty, 0, DS_AND_SRC2_B32>,
+  DSSrc2BinOp<LLVMOr,  si_llvm_i32_ty, 0, DS_OR_SRC2_B32>,
+  DSSrc2BinOp<LLVMXor, si_llvm_i32_ty, 0, DS_XOR_SRC2_B32>,
+  DSSrc2BinOp<LLVMAdd, si_llvm_i64_ty, 0, DS_ADD_SRC2_U64>,
+  DSSrc2BinOp<LLVMSub, si_llvm_i64_ty, 0, DS_SUB_SRC2_U64>,
+  DSSrc2BinOp<LLVMSub, si_llvm_i64_ty, 1, DS_RSUB_SRC2_U64>,
+  DSSrc2BinOp<LLVMAnd, si_llvm_i64_ty, 0, DS_AND_SRC2_B64>,
+  DSSrc2BinOp<LLVMOr,  si_llvm_i64_ty, 0, DS_OR_SRC2_B64>,
+  DSSrc2BinOp<LLVMXor, si_llvm_i64_ty, 0, DS_XOR_SRC2_B64>
+] in
+  def : InstSISemantic<desc.Inst, [
+    (DefVal $a, (LLVMLoad desc.Ty,
+      DSAddrSrc2A<(GetNamedOperand $addr, si_llvm_i32_ty)>.ret)),
+    (DefVal $b, (LLVMLoad desc.Ty,
+      DSAddrSrc2B<(GetNamedOperand $addr, si_llvm_i32_ty),
+                  (GetNamedOperand $offset, si_llvm_i32_ty)>.ret)),
+    (LLVMStore !if(desc.Reverse,
+                   (desc.Op (GetVal $b), (GetVal $a)),
+                   (desc.Op (GetVal $a), (GetVal $b))),
+               DSAddrSrc2A<(GetNamedOperand $addr, si_llvm_i32_ty)>.ret)
+  ]>;
+
+//------------------------------------------------------------------------------
+// SRC2 integer MIN/MAX: DS[A] = select(cmp(DS[A], DS[B]), DS[A], DS[B]).
+//------------------------------------------------------------------------------
+
+class DSSrc2MinMaxIntDesc<LLVMCmpPredicate pred, SILLVMType ty, InstSI inst> {
+  LLVMCmpPredicate Pred = pred;
+  SILLVMType Ty = ty;
+  InstSI Inst = inst;
+}
+
+foreach desc = [
+  DSSrc2MinMaxIntDesc<LLVMICmpSLT, si_llvm_i32_ty, DS_MIN_SRC2_I32>,
+  DSSrc2MinMaxIntDesc<LLVMICmpSGT, si_llvm_i32_ty, DS_MAX_SRC2_I32>,
+  DSSrc2MinMaxIntDesc<LLVMICmpULT, si_llvm_i32_ty, DS_MIN_SRC2_U32>,
+  DSSrc2MinMaxIntDesc<LLVMICmpUGT, si_llvm_i32_ty, DS_MAX_SRC2_U32>,
+  DSSrc2MinMaxIntDesc<LLVMICmpSLT, si_llvm_i64_ty, DS_MIN_SRC2_I64>,
+  DSSrc2MinMaxIntDesc<LLVMICmpSGT, si_llvm_i64_ty, DS_MAX_SRC2_I64>,
+  DSSrc2MinMaxIntDesc<LLVMICmpULT, si_llvm_i64_ty, DS_MIN_SRC2_U64>,
+  DSSrc2MinMaxIntDesc<LLVMICmpUGT, si_llvm_i64_ty, DS_MAX_SRC2_U64>
+] in
+  def : InstSISemantic<desc.Inst, [
+    (DefVal $a, (LLVMLoad desc.Ty,
+      DSAddrSrc2A<(GetNamedOperand $addr, si_llvm_i32_ty)>.ret)),
+    (DefVal $b, (LLVMLoad desc.Ty,
+      DSAddrSrc2B<(GetNamedOperand $addr, si_llvm_i32_ty),
+                  (GetNamedOperand $offset, si_llvm_i32_ty)>.ret)),
+    (LLVMStore (LLVMSelect (LLVMCmp desc.Pred, (GetVal $a), (GetVal $b)),
+                            (GetVal $a), (GetVal $b)),
+               DSAddrSrc2A<(GetNamedOperand $addr, si_llvm_i32_ty)>.ret)
+  ]>;
+
+//------------------------------------------------------------------------------
+// SRC2 FP MIN/MAX (F32/F64): bitcast to FP, minnum/maxnum, bitcast back.
+//------------------------------------------------------------------------------
+
+class DSSrc2FpMinMaxDesc<Intrinsic intr, SILLVMType iTy, SILLVMType fpTy,
+                          InstSI inst> {
+  Intrinsic Intr = intr;
+  SILLVMType ITy = iTy;
+  SILLVMType FpTy = fpTy;
+  InstSI Inst = inst;
+}
+
+foreach desc = [
+  DSSrc2FpMinMaxDesc<int_minnum, si_llvm_i32_ty, si_llvm_float_ty,  DS_MIN_SRC2_F32>,
+  DSSrc2FpMinMaxDesc<int_maxnum, si_llvm_i32_ty, si_llvm_float_ty,  DS_MAX_SRC2_F32>,
+  DSSrc2FpMinMaxDesc<int_minnum, si_llvm_i64_ty, si_llvm_double_ty, DS_MIN_SRC2_F64>,
+  DSSrc2FpMinMaxDesc<int_maxnum, si_llvm_i64_ty, si_llvm_double_ty, DS_MAX_SRC2_F64>
+] in
+  def : InstSISemantic<desc.Inst, [
+    (DefVal $a, (LLVMLoad desc.ITy,
+      DSAddrSrc2A<(GetNamedOperand $addr, si_llvm_i32_ty)>.ret)),
+    (DefVal $b, (LLVMLoad desc.ITy,
+      DSAddrSrc2B<(GetNamedOperand $addr, si_llvm_i32_ty),
+                  (GetNamedOperand $offset, si_llvm_i32_ty)>.ret)),
+    (LLVMStore (LLVMBitCast
+                 (LLVMBinaryIntrinsic desc.Intr,
+                   (LLVMBitCast (GetVal $a), desc.FpTy),
+                   (LLVMBitCast (GetVal $b), desc.FpTy)),
+                 desc.ITy),
+               DSAddrSrc2A<(GetNamedOperand $addr, si_llvm_i32_ty)>.ret)
+  ]>;
+
+// DS_ADD_SRC2_F32 — only F32 (no F64 variant) per the GCN3 ISA tables.
+def DS_ADD_SRC2_F32_sem : InstSISemantic<DS_ADD_SRC2_F32, [
+  (DefVal $a, (LLVMLoad si_llvm_i32_ty,
+    DSAddrSrc2A<(GetNamedOperand $addr, si_llvm_i32_ty)>.ret)),
+  (DefVal $b, (LLVMLoad si_llvm_i32_ty,
+    DSAddrSrc2B<(GetNamedOperand $addr, si_llvm_i32_ty),
+                (GetNamedOperand $offset, si_llvm_i32_ty)>.ret)),
+  (LLVMStore (LLVMBitCast
+               (LLVMFAdd (LLVMBitCast (GetVal $a), si_llvm_float_ty),
+                         (LLVMBitCast (GetVal $b), si_llvm_float_ty)),
+               si_llvm_i32_ty),
+             DSAddrSrc2A<(GetNamedOperand $addr, si_llvm_i32_ty)>.ret)
+]>;
+
+//------------------------------------------------------------------------------
+// SRC2 INC / DEC:
+//   INC: DS[A] = (DS[A] >= DS[B]) ? 0 : DS[A] + 1
+//   DEC: DS[A] = (DS[A] == 0 || DS[A] > DS[B]) ? DS[B] : DS[A] - 1
+//------------------------------------------------------------------------------
+
+class DSSrc2IncDecDesc<bit isInc, SILLVMType ty, InstSI inst> {
+  bit IsInc = isInc;
+  SILLVMType Ty = ty;
+  InstSI Inst = inst;
+}
+
+foreach desc = [
+  DSSrc2IncDecDesc<1, si_llvm_i32_ty, DS_INC_SRC2_U32>,
+  DSSrc2IncDecDesc<0, si_llvm_i32_ty, DS_DEC_SRC2_U32>,
+  DSSrc2IncDecDesc<1, si_llvm_i64_ty, DS_INC_SRC2_U64>,
+  DSSrc2IncDecDesc<0, si_llvm_i64_ty, DS_DEC_SRC2_U64>
+] in
+  def : InstSISemantic<desc.Inst, [
+    (DefVal $a, (LLVMLoad desc.Ty,
+      DSAddrSrc2A<(GetNamedOperand $addr, si_llvm_i32_ty)>.ret)),
+    (DefVal $b, (LLVMLoad desc.Ty,
+      DSAddrSrc2B<(GetNamedOperand $addr, si_llvm_i32_ty),
+                  (GetNamedOperand $offset, si_llvm_i32_ty)>.ret)),
+    (LLVMStore
+      !if(desc.IsInc,
+          (LLVMSelect (LLVMCmp LLVMICmpUGE, (GetVal $a), (GetVal $b)),
+                       (ConstantInt desc.Ty, 0),
+                       (LLVMAdd (GetVal $a), (ConstantInt desc.Ty, 1))),
+          (LLVMSelect (LLVMOr (LLVMCmp LLVMICmpEQ, (GetVal $a), (ConstantInt desc.Ty, 0)),
+                               (LLVMCmp LLVMICmpUGT, (GetVal $a), (GetVal $b))),
+                       (GetVal $b),
+                       (LLVMSub (GetVal $a), (ConstantInt desc.Ty, 1)))),
+      DSAddrSrc2A<(GetNamedOperand $addr, si_llvm_i32_ty)>.ret)
+  ]>;
+
+//------------------------------------------------------------------------------
+// SRC2 WRITE: DS[A] = DS[B]  (no read of A).
+//------------------------------------------------------------------------------
+
+class DSSrc2WriteDesc<SILLVMType ty, InstSI inst> {
+  SILLVMType Ty = ty;
+  InstSI Inst = inst;
+}
+
+foreach desc = [
+  DSSrc2WriteDesc<si_llvm_i32_ty, DS_WRITE_SRC2_B32>,
+  DSSrc2WriteDesc<si_llvm_i64_ty, DS_WRITE_SRC2_B64>
+] in
+  def : InstSISemantic<desc.Inst, [
+    (DefVal $b, (LLVMLoad desc.Ty,
+      DSAddrSrc2B<(GetNamedOperand $addr, si_llvm_i32_ty),
+                  (GetNamedOperand $offset, si_llvm_i32_ty)>.ret)),
+    (LLVMStore (GetVal $b),
+               DSAddrSrc2A<(GetNamedOperand $addr, si_llvm_i32_ty)>.ret)
+  ]>;
+
+//==============================================================================
 // Unmodeled DS instructions — intentionally no InstSISemantic record
 //==============================================================================
 //
-// The following DS opcodes have no luthier semantic. They will fall through to
-// MIInlineAsmEmitter at translation time, which emits the original assembly
-// instruction as an `asm sideeffect` call. This preserves the side-effect for
-// downstream analyses without committing to a (potentially wrong) IR model.
-//
-// Why each is unmodeled:
-//
-//   DS_*_SRC2_* family (32 records: ADD/SUB/RSUB/INC/DEC/MIN/MAX/AND/OR/XOR/
-//     WRITE × U32/U64/I32/I64/F32/F64/B32/B64 — exact set varies):
-//       Hardware addressing is `B = A + 4*(offset1[7] ? sign_ext({A[31],
-//       A[31:17]}) : {offset1[6:0], offset0})`. This depends on bits of the
-//       ADDR VGPR at runtime and on the M0-derived addressing path. No LLVM
-//       intrinsic exposes this form.
-//
-//   DS_ORDERED_COUNT:
-//       One MIR pseudo maps back to either `int_amdgcn_ds_ordered_add` or
-//       `int_amdgcn_ds_ordered_swap` based on OFFSET1[5:4]. The intrinsic
-//       signature also expects M0 packed as a pointer + several ImmArgs
-//       that aren't recoverable from MIR alone.
-//
-// To re-enable a semantic for any of these, add an `InstSISemantic<...>` def
-// (or `foreach inst = [...] in def : InstSISemantic<inst, [...]>`).
+// DS_ORDERED_COUNT — one MIR pseudo maps back to either
+// `int_amdgcn_ds_ordered_add` or `int_amdgcn_ds_ordered_swap` based on
+// OFFSET1[5:4]. The intrinsic signature also expects M0 packed as a pointer
+// + several ImmArgs that aren't recoverable from MIR alone. Falls through to
+// MIInlineAsmEmitter for an opaque `asm sideeffect`.
