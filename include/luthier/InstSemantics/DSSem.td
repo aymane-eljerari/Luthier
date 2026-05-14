@@ -272,67 +272,9 @@ def DS_READ_I16_sem : InstSISemantic<DS_READ_I16> {
 // DS Compare-and-Store Instructions
 //------------------------------------------------------------------------------
 
-// DS_CMPST_B32: if (MEM[addr] == data0) MEM[addr] = data1.
-// Sources:
-//   southern-islands-instruction-set-architecture.pdf, pages 230-237.
-//   sea-islands-instruction-set-architecture_0.pdf, pages 240-246.
-//   gcn3-instruction-set-architecture.pdf, page 268.
-//   vega-7nm-shader-instruction-set-architecture.pdf, page 186.
-//   amd-instinct-mi300-cdna3-instruction-set-architecture.pdf, page 422.
-//   rdna-shader-instruction-set-architecture.pdf, page 203.
-//   rdna2-shader-instruction-set-architecture.pdf, page 198.
-//   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 514 (as DS_CMPSTORE_B32).
-//   rdna4-instruction-set-architecture.pdf, page 589 (as DS_CMPSTORE_B32).
-foreach inst = [DS_CMPST_B32, DS_CMPST_B32_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data0)),
-                            (GetNamedOperand $data1), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
-  ]>;
 
-// DS_CMPST_RTN_B32: D = MEM[addr]; if (D == data0) MEM[addr] = data1.
-foreach inst = [DS_CMPST_RTN_B32, DS_CMPST_RTN_B32_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data0)),
-                            (GetNamedOperand $data1), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (GetVal $old))
-  ]>;
 
-// DS_CMPST_F32: if (as_float(MEM[addr]) == as_float(data0)) MEM[addr] = data1.
-// Sources:
-//   southern-islands-instruction-set-architecture.pdf, pages 230-237.
-//   sea-islands-instruction-set-architecture_0.pdf, pages 240-246.
-//   gcn3-instruction-set-architecture.pdf, page 268.
-//   vega-7nm-shader-instruction-set-architecture.pdf, page 186.
-//   amd-instinct-mi300-cdna3-instruction-set-architecture.pdf, page 422.
-foreach inst = [DS_CMPST_F32, DS_CMPST_F32_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
-                  (LLVMBitCast (GetVal $old), si_llvm_float_ty),
-                  (LLVMBitCast (GetNamedOperand $data0), si_llvm_float_ty)),
-                (GetNamedOperand $data1), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
-  ]>;
 
-// DS_CMPST_RTN_F32: D = MEM[addr]; if (as_float(D) == as_float(data0)) MEM[addr] = data1.
-foreach inst = [DS_CMPST_RTN_F32, DS_CMPST_RTN_F32_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
-                  (LLVMBitCast (GetVal $old), si_llvm_float_ty),
-                  (LLVMBitCast (GetNamedOperand $data0), si_llvm_float_ty)),
-                (GetNamedOperand $data1), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (GetVal $old))
-  ]>;
 
 //------------------------------------------------------------------------------
 // DS Swizzle / Permute Instructions
@@ -622,151 +564,22 @@ def DS_READ_B128_sem : InstSISemantic<DS_READ_B128> {
 // DS 64-bit Compare-and-Store Instructions
 //------------------------------------------------------------------------------
 
-// DS_CMPST_B64: if (MEM[addr] == data0) MEM[addr] = data1 (64-bit).
-foreach inst = [DS_CMPST_B64, DS_CMPST_B64_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data0)),
-                            (GetNamedOperand $data1), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
-  ]>;
 
-// DS_CMPST_RTN_B64: D = MEM[addr]; if (D == data0) MEM[addr] = data1 (64-bit).
-foreach inst = [DS_CMPST_RTN_B64, DS_CMPST_RTN_B64_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data0)),
-                            (GetNamedOperand $data1), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (GetVal $old))
-  ]>;
 
-// DS_CMPST_F64: if (as_double(MEM[addr]) == as_double(data0)) MEM[addr] = data1 (64-bit float compare).
-foreach inst = [DS_CMPST_F64, DS_CMPST_F64_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
-                  (LLVMBitCast (GetVal $old), si_llvm_double_ty),
-                  (LLVMBitCast (GetNamedOperand $data0), si_llvm_double_ty)),
-                (GetNamedOperand $data1), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
-  ]>;
 
-// DS_CMPST_RTN_F64: D = MEM[addr]; if (as_double(D) == as_double(data0)) MEM[addr] = data1 (64-bit float).
-foreach inst = [DS_CMPST_RTN_F64, DS_CMPST_RTN_F64_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
-                  (LLVMBitCast (GetVal $old), si_llvm_double_ty),
-                  (LLVMBitCast (GetNamedOperand $data0), si_llvm_double_ty)),
-                (GetNamedOperand $data1), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (GetVal $old))
-  ]>;
 
 //------------------------------------------------------------------------------
 // DS CMPSTORE variants (GFX12+ renamed CMPST)
 // Identical semantics to their CMPST counterparts.
 //------------------------------------------------------------------------------
 
-// DS_CMPSTORE_B32: same as DS_CMPST_B32.
-// DS_CMPSTORE_B32 (GFX11+): operand roles agree with BUFFER_ATOMIC_CMPSWAP.
-// cmp = data1, src = data0 — write data0 if old == data1. NOTE this is the
-// OPPOSITE of DS_CMPST_B32, where cmp = data0 and src = data1.
-foreach inst = [DS_CMPSTORE_B32, DS_CMPSTORE_B32_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data1)),
-                            (GetNamedOperand $data0), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
-  ]>;
 
-// DS_CMPSTORE_B64: same as DS_CMPST_B64.
-foreach inst = [DS_CMPSTORE_B64, DS_CMPSTORE_B64_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data1)),
-                            (GetNamedOperand $data0), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
-  ]>;
 
-// DS_CMPSTORE_F32: same as DS_CMPST_F32.
-foreach inst = [DS_CMPSTORE_F32, DS_CMPSTORE_F32_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
-                  (LLVMBitCast (GetVal $old), si_llvm_float_ty),
-                  (LLVMBitCast (GetNamedOperand $data1), si_llvm_float_ty)),
-                (GetNamedOperand $data0), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
-  ]>;
 
-// DS_CMPSTORE_F64: same as DS_CMPST_F64.
-foreach inst = [DS_CMPSTORE_F64, DS_CMPSTORE_F64_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
-                  (LLVMBitCast (GetVal $old), si_llvm_double_ty),
-                  (LLVMBitCast (GetNamedOperand $data1), si_llvm_double_ty)),
-                (GetNamedOperand $data0), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
-  ]>;
 
-// DS_CMPSTORE_RTN_B32: same as DS_CMPST_RTN_B32.
-foreach inst = [DS_CMPSTORE_RTN_B32, DS_CMPSTORE_RTN_B32_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data1)),
-                            (GetNamedOperand $data0), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (GetVal $old))
-  ]>;
 
-// DS_CMPSTORE_RTN_B64: same as DS_CMPST_RTN_B64.
-foreach inst = [DS_CMPSTORE_RTN_B64, DS_CMPSTORE_RTN_B64_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMCmp LLVMICmpEQ, (GetVal $old), (GetNamedOperand $data1)),
-                            (GetNamedOperand $data0), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (GetVal $old))
-  ]>;
 
-// DS_CMPSTORE_RTN_F32: same as DS_CMPST_RTN_F32.
-foreach inst = [DS_CMPSTORE_RTN_F32, DS_CMPSTORE_RTN_F32_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i32_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
-                  (LLVMBitCast (GetVal $old), si_llvm_float_ty),
-                  (LLVMBitCast (GetNamedOperand $data1), si_llvm_float_ty)),
-                (GetNamedOperand $data0), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (GetVal $old))
-  ]>;
 
-// DS_CMPSTORE_RTN_F64: same as DS_CMPST_RTN_F64.
-foreach inst = [DS_CMPSTORE_RTN_F64, DS_CMPSTORE_RTN_F64_agpr] in
-  def : InstSISemantic<inst, [
-    (DefVal $old, (LLVMLoad si_llvm_i64_ty, DSAddr<(GetNamedOperand $addr),
-                                                 (GetNamedOperand $offset)>.ret)),
-    (LLVMStore (LLVMSelect (LLVMFCmp LLVMFCmpOEQ,
-                  (LLVMBitCast (GetVal $old), si_llvm_double_ty),
-                  (LLVMBitCast (GetNamedOperand $data1), si_llvm_double_ty)),
-                (GetNamedOperand $data0), (GetVal $old)),
-               DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (GetVal $old))
-  ]>;
 
 //------------------------------------------------------------------------------
 // DS Float Atomics (64-bit and return variants)
@@ -1708,16 +1521,127 @@ foreach desc = [
     ]>;
 }
 
+//------------------------------------------------------------------------------
+// DS transpose loads (CDNA4 DS_READ_B*_TR_*; RDNA4 DS_LOAD_TR*_*)
+// Each lowers to its dedicated LLVM intrinsic on a local pointer. The result
+// type is the lane-strided vector the intrinsic naturally returns, per LLVM's
+// DSLoadTrPat selection patterns in DSInstructions.td.
+//   DS_READ_B64_TR_B4  / DS_LOAD_TR4_B64    -> v2i32 via int_amdgcn_ds_(read|load)_tr4_b64
+//   DS_READ_B64_TR_B8  / DS_LOAD_TR8_B64    -> v2i32 via int_amdgcn_ds_(read|load)_tr8_b64
+//   DS_READ_B96_TR_B6  / DS_LOAD_TR6_B96    -> v3i32 via int_amdgcn_ds_(read|load)_tr6_b96
+//   DS_READ_B64_TR_B16                      -> v4i16 via int_amdgcn_ds_read_tr16_b64
+//   DS_LOAD_TR16_B128                       -> v8i16 via int_amdgcn_ds_load_tr16_b128
+//------------------------------------------------------------------------------
+
+class DSTrLoadDesc<InstSI inst, SILLVMType vTy, Intrinsic intr> {
+  InstSI Inst = inst;
+  SILLVMType VTy = vTy;
+  Intrinsic Intr = intr;
+}
+
+foreach desc = [
+  DSTrLoadDesc<DS_READ_B64_TR_B4,  si_llvm_v2i32_ty, int_amdgcn_ds_read_tr4_b64>,
+  DSTrLoadDesc<DS_READ_B64_TR_B8,  si_llvm_v2i32_ty, int_amdgcn_ds_read_tr8_b64>,
+  DSTrLoadDesc<DS_READ_B64_TR_B16, si_llvm_v4i16_ty, int_amdgcn_ds_read_tr16_b64>,
+  DSTrLoadDesc<DS_READ_B96_TR_B6,  si_llvm_v3i32_ty, int_amdgcn_ds_read_tr6_b96>,
+  DSTrLoadDesc<DS_LOAD_TR4_B64,    si_llvm_v2i32_ty, int_amdgcn_ds_load_tr4_b64>,
+  DSTrLoadDesc<DS_LOAD_TR6_B96,    si_llvm_v3i32_ty, int_amdgcn_ds_load_tr6_b96>,
+  DSTrLoadDesc<DS_LOAD_TR8_B64,    si_llvm_v2i32_ty, int_amdgcn_ds_load_tr8_b64>,
+  DSTrLoadDesc<DS_LOAD_TR16_B128,  si_llvm_v8i16_ty, int_amdgcn_ds_load_tr16_b128>
+] in
+  def : InstSISemantic<desc.Inst, [
+    (SetNamedOperand $vdst, (LLVMIntrinsic desc.VTy, desc.Intr,
+      [DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret]))
+  ]>;
+
+
+//------------------------------------------------------------------------------
+// Group F: DS_CMPST_* (pre-GFX11) + DS_CMPSTORE_* (GFX11+) — compare-and-store
+//
+//   CMPST: cmp = data0, src = data1   "src and cmp are OPPOSITE of BUFFER_ATOMIC_CMPSWAP"
+//   CMPSTORE: cmp = data1, src = data0   "src and cmp AGREE with BUFFER_ATOMIC_CMPSWAP"
+//
+// The GFX11 rename also swapped operand roles. Both:
+//   MEM = (cmp(old, <cmp-operand>) ? <src-operand> : old)
+//   RTN form additionally writes vdst = old.
+// Float variants bitcast the i32/i64 container to float/double for the
+// compare. Integer variants compare in the container type directly.
+//------------------------------------------------------------------------------
+
+class DSCmpStoreDesc<bit isFloat, SILLVMType iTy, SILLVMType fpTy,
+                     bit cmpFirst,
+                     InstSI noret, InstSI noret_agpr,
+                     InstSI rtn, InstSI rtn_agpr> {
+  bit IsFloat = isFloat;
+  SILLVMType ITy = iTy;
+  SILLVMType FpTy = fpTy;
+  bit CmpFirst = cmpFirst;          // 1 = CMPST (cmp=data0), 0 = CMPSTORE (cmp=data1)
+  list<InstSI> NoRet = [noret, noret_agpr];
+  list<InstSI> Rtn = [rtn, rtn_agpr];
+}
+
+foreach desc = [
+  // CMPST family (pre-GFX11): cmp=data0, src=data1
+  DSCmpStoreDesc<0, si_llvm_i32_ty, si_llvm_float_ty,  1,
+    DS_CMPST_B32, DS_CMPST_B32_agpr, DS_CMPST_RTN_B32, DS_CMPST_RTN_B32_agpr>,
+  DSCmpStoreDesc<0, si_llvm_i64_ty, si_llvm_double_ty, 1,
+    DS_CMPST_B64, DS_CMPST_B64_agpr, DS_CMPST_RTN_B64, DS_CMPST_RTN_B64_agpr>,
+  DSCmpStoreDesc<1, si_llvm_i32_ty, si_llvm_float_ty,  1,
+    DS_CMPST_F32, DS_CMPST_F32_agpr, DS_CMPST_RTN_F32, DS_CMPST_RTN_F32_agpr>,
+  DSCmpStoreDesc<1, si_llvm_i64_ty, si_llvm_double_ty, 1,
+    DS_CMPST_F64, DS_CMPST_F64_agpr, DS_CMPST_RTN_F64, DS_CMPST_RTN_F64_agpr>,
+  // CMPSTORE family (GFX11+): cmp=data1, src=data0
+  DSCmpStoreDesc<0, si_llvm_i32_ty, si_llvm_float_ty,  0,
+    DS_CMPSTORE_B32, DS_CMPSTORE_B32_agpr, DS_CMPSTORE_RTN_B32, DS_CMPSTORE_RTN_B32_agpr>,
+  DSCmpStoreDesc<0, si_llvm_i64_ty, si_llvm_double_ty, 0,
+    DS_CMPSTORE_B64, DS_CMPSTORE_B64_agpr, DS_CMPSTORE_RTN_B64, DS_CMPSTORE_RTN_B64_agpr>,
+  DSCmpStoreDesc<1, si_llvm_i32_ty, si_llvm_float_ty,  0,
+    DS_CMPSTORE_F32, DS_CMPSTORE_F32_agpr, DS_CMPSTORE_RTN_F32, DS_CMPSTORE_RTN_F32_agpr>,
+  DSCmpStoreDesc<1, si_llvm_i64_ty, si_llvm_double_ty, 0,
+    DS_CMPSTORE_F64, DS_CMPSTORE_F64_agpr, DS_CMPSTORE_RTN_F64, DS_CMPSTORE_RTN_F64_agpr>
+] in {
+  foreach inst = desc.NoRet in
+    def : InstSISemantic<inst, [
+      (DefVal $old, (LLVMLoad desc.ITy, DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)),
+      (LLVMStore (LLVMSelect
+                   !if(desc.IsFloat,
+                       (LLVMFCmp LLVMFCmpOEQ,
+                         (LLVMBitCast (GetVal $old), desc.FpTy),
+                         (LLVMBitCast !if(desc.CmpFirst, (GetNamedOperand $data0), (GetNamedOperand $data1)), desc.FpTy)),
+                       (LLVMCmp LLVMICmpEQ,
+                         (GetVal $old),
+                         !if(desc.CmpFirst, (GetNamedOperand $data0), (GetNamedOperand $data1)))),
+                   !if(desc.CmpFirst, (GetNamedOperand $data1), (GetNamedOperand $data0)),
+                   (GetVal $old)),
+                 DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)
+    ]>;
+  foreach inst = desc.Rtn in
+    def : InstSISemantic<inst, [
+      (DefVal $old, (LLVMLoad desc.ITy, DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret)),
+      (LLVMStore (LLVMSelect
+                   !if(desc.IsFloat,
+                       (LLVMFCmp LLVMFCmpOEQ,
+                         (LLVMBitCast (GetVal $old), desc.FpTy),
+                         (LLVMBitCast !if(desc.CmpFirst, (GetNamedOperand $data0), (GetNamedOperand $data1)), desc.FpTy)),
+                       (LLVMCmp LLVMICmpEQ,
+                         (GetVal $old),
+                         !if(desc.CmpFirst, (GetNamedOperand $data0), (GetNamedOperand $data1)))),
+                   !if(desc.CmpFirst, (GetNamedOperand $data1), (GetNamedOperand $data0)),
+                   (GetVal $old)),
+                 DSAddr<(GetNamedOperand $addr), (GetNamedOperand $offset)>.ret),
+      (SetNamedOperand $vdst, (GetVal $old))
+    ]>;
+}
+
 //==============================================================================
 // Remaining specialized ops (Phase 14) — fence placeholders
 //==============================================================================
 
 //
 // These instructions either touch M0-based addressing not yet modeled, read
-// from special register banks (GDS_STRMOUT_*, GS_REGS), perform opaque
-// transpose loads (CDNA4/RDNA4), or have no documented pseudocode in any
-// ISA PDF. Model them as a generic waitcnt fence so the IR records a
-// memory side-effect without committing to incorrect semantics.
+// from special register banks (GDS_STRMOUT_*, GS_REGS), or have no documented
+// pseudocode in any ISA PDF. Model them as a generic waitcnt fence so the IR
+// records a memory side-effect without committing to incorrect semantics.
 foreach inst = [
   // _SRC2_ variants (Phase 14) — M0-based second-source addressing
   DS_ADD_SRC2_F32, DS_ADD_SRC2_U32, DS_ADD_SRC2_U64,
@@ -1743,11 +1667,6 @@ foreach inst = [
   // BVH stack helpers (RDNA4)
   DS_BVH_STACK_RTN_B32,
   DS_BVH_STACK_PUSH8_POP1_RTN_B32, DS_BVH_STACK_PUSH8_POP2_RTN_B64,
-  // CDNA4 transpose loads
-  DS_READ_B64_TR_B4, DS_READ_B64_TR_B8, DS_READ_B64_TR_B16,
-  DS_READ_B96_TR_B6,
-  // RDNA4 transpose loads
-  DS_LOAD_TR4_B64, DS_LOAD_TR6_B96, DS_LOAD_TR8_B64, DS_LOAD_TR16_B128,
   // ADDTID ops (uses laneID; not modeled)
   DS_READ_ADDTID_B32, DS_WRITE_ADDTID_B32,
   // Async/sync barrier arrive (undocumented)
