@@ -129,10 +129,10 @@ void emitLuthierLongBranch(llvm::MachineBasicBlock &MBB,
 
   llvm::BuildMI(&MBB, DL, TII->get(llvm::AMDGPU::S_SETPC_B64)).addReg(PCReg);
 
-  // Scavenge an SReg_64 to replace PCReg. Honors any pre-reserved
-  // long-branch reg the caller set up (same fast path as stock).
+  // Scavenge an SReg_64 to replace PCReg.
   llvm::Register LongBranchReservedReg = MFI->getLongBranchReservedReg();
   llvm::Register Scav;
+  bool ScavengerSpilled = false;
   if (LongBranchReservedReg) {
     RS.enterBasicBlock(MBB);
     Scav = LongBranchReservedReg;
@@ -142,27 +142,30 @@ void emitLuthierLongBranch(llvm::MachineBasicBlock &MBB,
         llvm::AMDGPU::SReg_64RegClass,
         llvm::MachineBasicBlock::iterator(GetPC),
         /*RestoreAfter=*/false, /*SPAdj=*/0, /*AllowSpill=*/false);
+    if (!Scav) {
+      // No globally-free reg. Invoke the SVA-lane sink with explicit
+      // Spill (in MBB before GetPC) and Reload (in RestoreBB after
+      // the long jump lands) insertion points. Pick a fixed pair
+      // (SGPR0_SGPR1) — the sink emits explicit save/restore so any
+      // pair works.
+      Scav = llvm::AMDGPU::SGPR0_SGPR1;
+      ScavengerSpilled = true;
+      if (!RS.invokeSVASpillSink(MBB, GetPC->getIterator(), RestoreBB,
+                                 RestoreBB.begin(), Scav,
+                                 llvm::AMDGPU::SReg_64RegClass)) {
+        llvm::report_fatal_error(
+            "LuthierBranchRelaxation: no free SReg_64 found and SVA-lane "
+            "spill sink unavailable; cannot relax long branch",
+            /*GenCrashDiag=*/false);
+      }
+    }
   }
 
-  if (Scav) {
-    RS.setRegUsed(Scav);
-    MRI.replaceRegWith(PCReg, Scav);
-    MRI.clearVirtRegs();
-  } else {
-    // No globally-free SReg_64. Driving the SVA-lane spill sink from
-    // here requires the relaxer's cond/uncond fixup loop to converge
-    // under the inserted spill-trampoline+restore MBBs — under tight
-    // --amdgpu-s-branch-bits the inserted MBBs push neighboring
-    // branches further out of range and the iteration count grows
-    // unbounded (see task #30 followup). For now surface the failure.
-    llvm::report_fatal_error(
-        "LuthierBranchRelaxation: no free SReg_64 found; SVA-lane "
-        "spill sink integration is gated on the relaxer's "
-        "convergence fix (see task #30 followup).",
-        /*GenCrashDiag=*/false);
-  }
+  RS.setRegUsed(Scav);
+  MRI.replaceRegWith(PCReg, Scav);
+  MRI.clearVirtRegs();
 
-  auto *DestLabel = Scav ? DestBB.getSymbol() : RestoreBB.getSymbol();
+  auto *DestLabel = !ScavengerSpilled ? DestBB.getSymbol() : RestoreBB.getSymbol();
   auto *Offset = llvm::MCBinaryExpr::createSub(
       llvm::MCSymbolRefExpr::create(DestLabel, MCCtx),
       llvm::MCSymbolRefExpr::create(PostGetPCLabel, MCCtx), MCCtx);
@@ -398,11 +401,15 @@ bool LuthierBranchRelaxationWorker::fixupConditionalBranch(
 
   bool ReversedCond = !TII->reverseBranchCondition(Cond);
   if (ReversedCond) {
-    if (FBB && isBlockInRange(MI, *FBB)) {
-      removeBranch(MBB);
-      insertBranch(MBB, FBB, TBB, Cond);
-      return true;
-    }
+    // NOTE: stock LLVM takes a clean-reverse optimization here when
+    // FBB is in range — `cond → FBB; uncond → TBB`. That leaves the
+    // uncond out-of-range, which then gets a trampoline that pushes
+    // FBB further, which then makes the new cond out-of-range, ad
+    // infinitum under tight `--amdgpu-s-branch-bits`. We skip the
+    // optimization and always take the split-block path, which lands
+    // a layout-adjacent NewBB and breaks the feedback loop. Slightly
+    // worse code in the in-range case, dramatically better
+    // convergence in the out-of-range case.
     if (FBB) {
       if (TBB == FBB) {
         removeBranch(MBB);

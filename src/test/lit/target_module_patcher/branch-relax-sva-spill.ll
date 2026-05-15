@@ -1,28 +1,3 @@
-; XFAIL: *
-;
-; ============================================================
-;  CURRENT BLOCKER (post-liveness fix in #37):
-;  The patcher now reaches stub_kernel through TargetFAM, computes
-;  liveness via fullyRecomputeLiveIns, and the relaxer fires. The
-;  scavenger correctly identifies no free SReg_64 and the
-;  SVASpillCallback is invoked with the right SVA VGPR resolution
-;  (entry-segment lookup works after the SV-storage analysis was
-;  also routed through TargetFAM).
-;
-;  Remaining blocker: the stock scavenger's spill() API hands the
-;  callback (SpillBefore, ReloadBefore) iterators that are BOTH in
-;  the trampoline MBB — but a long-jump's reload has to land in
-;  RestoreBB (which runs after the jump's target lands). Bridging
-;  the two requires emitLuthierLongBranch to invoke the sink
-;  explicitly (bypassing scavenger.spill) with separate Spill/
-;  Reload MBBs. An initial attempt at this caused an infinite loop
-;  in the relaxer; the cleaner solution likely needs the relaxer
-;  to also stop calling scavengeRegisterBackwards's spill branch.
-;
-;  For now the patcher hard-errors instead of silently corrupting
-;  PC; this test pins down that the diagnostic fires.
-; ============================================================
-;
 ; Exercises the SVASpillCallback path in LuthierRegScavenger.
 ;
 ; Custom target stub (_target_stub_branch_relax.s.txt) defines s4..s101
