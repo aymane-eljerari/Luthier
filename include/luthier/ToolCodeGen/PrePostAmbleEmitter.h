@@ -24,8 +24,6 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOL_CODE_GEN_PRE_POST_AMBLE_EMITTER_H
 #define LUTHIER_TOOL_CODE_GEN_PRE_POST_AMBLE_EMITTER_H
-#include "luthier/HSA/LoadedCodeObjectDeviceFunction.h"
-#include "luthier/HSA/LoadedCodeObjectKernel.h"
 #include "luthier/Intrinsic/IntrinsicProcessor.h"
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/CodeGen/MachineFunctionPass.h>

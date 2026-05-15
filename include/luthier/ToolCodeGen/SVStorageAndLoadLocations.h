@@ -23,8 +23,6 @@
 #ifndef LUTHIER_TOOL_CODE_GEN_SV_STORAGE_AND_LOAD_LOCATIONS_H
 #define LUTHIER_TOOL_CODE_GEN_SV_STORAGE_AND_LOAD_LOCATIONS_H
 #include "luthier/HSA/LoadedCodeObject.h"
-#include "luthier/HSA/LoadedCodeObjectDeviceFunction.h"
-#include "luthier/HSA/LoadedCodeObjectKernel.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
 #include "luthier/ToolCodeGen/LegacyPassSupport.h"
 #include <llvm/CodeGen/MachinePassManager.h>

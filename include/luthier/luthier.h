@@ -27,9 +27,6 @@
 /// Undef the ill-defined \c ICMP_NE in HIP headers
 #undef ICMP_NE
 #include "HSATooling/InstrumentationTask.h"
-#include "luthier/HSA/KernelDescriptor.h"
-#include "luthier/HSA/LoadedCodeObjectKernel.h"
-#include "luthier/HSA/LoadedCodeObjectSymbol.h"
 #include "luthier/Intrinsic/Intrinsics.h"
 
 namespace luthier {

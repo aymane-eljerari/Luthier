@@ -24,10 +24,7 @@
 #define LUTHIER_HSA_CODE_OBJECT_CACHE_H
 #include "luthier/Common/Singleton.h"
 #include "luthier/HSA/ApiTable.h"
-#include "luthier/HSA/LoadedCodeObjectDeviceFunction.h"
-#include "luthier/HSA/LoadedCodeObjectExternSymbol.h"
-#include "luthier/HSA/LoadedCodeObjectKernel.h"
-#include "luthier/HSA/LoadedCodeObjectVariable.h"
+#include "luthier/HSA/hsa.h"
 #include "luthier/Object/AMDGCNObjectFile.h"
 #include "luthier/Rocprofiler/ApiTableSnapshot.h"
 #include "luthier/Rocprofiler/ApiTableWrapperInstaller.h"
@@ -43,8 +40,6 @@ class LoadedCodeObjectCache final : public Singleton<LoadedCodeObjectCache> {
 private:
   /// Mutex to protect the cache entries
   mutable std::recursive_mutex CacheMutex;
-
-  const amdgpu::hsamd::MetadataParser &MDParser;
 
   const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApiTableSnapshot;
 
@@ -91,7 +86,7 @@ public:
           &CoreApiTableSnapshot,
       const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
           &VenLoaderSnapshot,
-      const amdgpu::hsamd::MetadataParser &MDParser, llvm::Error &Err);
+      llvm::Error &Err);
 
   /// Queries whether \p LCO is cached or not
   /// \param LCO the \c LoadedCodeObject is being queried
@@ -103,35 +98,6 @@ public:
 
   llvm::Expected<luthier::object::AMDGCNObjectFile &>
   getAssociatedObjectFile(hsa_loaded_code_object_t LCO) const;
-
-  llvm::Error getLoadedCodeObjectSymbols(
-      hsa_loaded_code_object_t LCO,
-      llvm::SmallVectorImpl<std::unique_ptr<LoadedCodeObjectSymbol>> &Out)
-      const;
-
-  llvm::Error getKernelSymbols(
-      hsa_loaded_code_object_t LCO,
-      llvm::SmallVectorImpl<std::unique_ptr<hsa::LoadedCodeObjectSymbol>> &Out)
-      const;
-
-  llvm::Error getVariableSymbols(
-      hsa_loaded_code_object_t LCO,
-      llvm::SmallVectorImpl<std::unique_ptr<hsa::LoadedCodeObjectSymbol>> &Out)
-      const;
-
-  llvm::Error getDeviceFunctionSymbols(
-      hsa_loaded_code_object_t LCO,
-      llvm::SmallVectorImpl<std::unique_ptr<hsa::LoadedCodeObjectSymbol>> &Out)
-      const;
-
-  llvm::Error getExternalSymbols(
-      hsa_loaded_code_object_t LCO,
-      llvm::SmallVectorImpl<std::unique_ptr<hsa::LoadedCodeObjectSymbol>> &Out)
-      const;
-
-  llvm::Expected<std::unique_ptr<LoadedCodeObjectSymbol>>
-  getLoadedCodeObjectSymbolByName(hsa_loaded_code_object_t LCO,
-                                  llvm::StringRef Name) const;
 };
 
 } // namespace luthier::hsa

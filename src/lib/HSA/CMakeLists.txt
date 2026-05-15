@@ -6,12 +6,7 @@ add_library(LuthierHSA OBJECT
         hsa.cpp
         HsaError.cpp
         ISA.cpp
-        KernelDescriptor.cpp
         LoadedCodeObjectCache.cpp
-        LoadedCodeObjectDeviceFunction.cpp
-        LoadedCodeObjectKernel.cpp
-        LoadedCodeObjectSymbol.cpp
-        LoadedCodeObjectVariable.cpp
         PacketMonitor.cpp
         Region.cpp
         Memory.cpp

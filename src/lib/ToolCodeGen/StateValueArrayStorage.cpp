@@ -18,6 +18,8 @@
 /// This file implement different storage mechanisms for the state value array.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/StateValueArrayStorage.h"
+#include "luthier/Common/ErrorCheck.h"
+#include "luthier/Common/GenericLuthierError.h"
 #include "luthier/ToolCodeGen/MIRConvenience.h"
 #include "luthier/ToolCodeGen/SVAFrameLanes.h"
 #include "luthier/ToolCodeGen/StateValueArraySpecs.h"

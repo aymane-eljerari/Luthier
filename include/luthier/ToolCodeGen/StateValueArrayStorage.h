@@ -20,8 +20,6 @@
 #ifndef LUTHIER_TOOL_CODE_GEN_STATE_VALUE_ARRAY_STORAGE_H
 #define LUTHIER_TOOL_CODE_GEN_STATE_VALUE_ARRAY_STORAGE_H
 #include "luthier/HSA/LoadedCodeObject.h"
-#include "luthier/HSA/LoadedCodeObjectDeviceFunction.h"
-#include "luthier/HSA/LoadedCodeObjectKernel.h"
 #include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
 #include <llvm/CodeGen/SlotIndexes.h>
 

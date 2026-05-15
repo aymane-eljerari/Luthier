@@ -19,6 +19,8 @@
 /// \c FunctionPreambleDescriptor and its analysis pass.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
+#include "luthier/Common/ErrorCheck.h"
+#include "luthier/Common/GenericLuthierError.h"
 #include "luthier/Intrinsic/IntrinsicProcessor.h"
 #include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/SVAFrameLanes.h"

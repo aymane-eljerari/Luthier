@@ -18,6 +18,8 @@
 /// This file implements the State Value Location Intervals Pass.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
+#include "luthier/Common/ErrorCheck.h"
+#include "luthier/Common/GenericLuthierError.h"
 #include "luthier/Common/LuthierError.h"
 #include "luthier/ToolCodeGen/IPPredicatedLivenessIModulePass.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
