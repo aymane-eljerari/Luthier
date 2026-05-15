@@ -495,6 +495,59 @@ void stripStaleNumRegsAttrs(llvm::Module &TargetModule) {
   }
 }
 
+/// Walk every non-indirect branch in \p MF, sum byte sizes via
+/// \c TII.getInstSizeInBytes to estimate per-MBB layout offsets, and
+/// report any branch whose target lies beyond \c s_branch's signed
+/// 16-bit-word range (±131,068 bytes). When out-of-range branches are
+/// found we currently emit a diagnostic and return their count — the
+/// actual relax-to-\c s_setpc_b64 rewrite (with SGPR scavenging from
+/// per-MBB live-ins and SVA-lane spill fallback per
+/// \c StateValueArraySpecs::findLowestFreeLanes) is the next phase.
+///
+/// Why we need this even though stock LLVM \c BranchRelaxationPass
+/// exists: \c CodeGenerator::printAssemblyFile invokes
+/// \c TM.addAsmPrinter directly, skipping the standard post-RA
+/// machine-pass chain. So no LLVM pass runs between TargetModulePatcher
+/// and AsmPrinter; out-of-range branches would be silently emitted
+/// with truncated displacements.
+unsigned detectOutOfRangeBranches(const llvm::MachineFunction &MF) {
+  static constexpr int64_t kSBranchMaxBytes = (1LL << 18) - 4;
+  const auto &TII = *MF.getSubtarget().getInstrInfo();
+  // First pass: byte offset of each MBB from the start of the function.
+  llvm::DenseMap<const llvm::MachineBasicBlock *, int64_t> MBBOffset;
+  int64_t Cursor = 0;
+  for (const auto &MBB : MF) {
+    MBBOffset[&MBB] = Cursor;
+    for (const auto &MI : MBB)
+      Cursor += TII.getInstSizeInBytes(MI);
+  }
+  // Second pass: for every direct branch MI, measure to its target MBB.
+  unsigned NumOutOfRange = 0;
+  Cursor = 0;
+  for (const auto &MBB : MF) {
+    int64_t MIOffset = Cursor;
+    for (const auto &MI : MBB) {
+      if (MI.isBranch() && !MI.isIndirectBranch()) {
+        if (auto *TargetMBB = TII.getBranchDestBlock(MI)) {
+          int64_t TgtOff = MBBOffset[TargetMBB];
+          int64_t Delta = TgtOff - (MIOffset + TII.getInstSizeInBytes(MI));
+          if (Delta > kSBranchMaxBytes || Delta < -kSBranchMaxBytes) {
+            ++NumOutOfRange;
+            LLVM_DEBUG(llvm::dbgs()
+                       << "  out-of-range branch in " << MF.getName()
+                       << " at offset " << MIOffset << " → "
+                       << TargetMBB->getName() << " (delta " << Delta
+                       << " bytes)\n");
+          }
+        }
+      }
+      MIOffset += TII.getInstSizeInBytes(MI);
+    }
+    Cursor = MIOffset;
+  }
+  return NumOutOfRange;
+}
+
 } // namespace
 
 bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
@@ -604,12 +657,28 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
     inlineInjectedPayload(*InjectedPayloadMF, *InsertionPointMI, MBBMap, VMap);
   }
 
-  // Branch displacement check + s_setpc_b64 relaxation (when an inlined
-  // payload pushes an app branch out of s_branch's ±2^18 byte range) is
-  // a follow-up task — current default for inlining hot regions stays
-  // safely in range for typical kernels, and the framework for free-SGPR
-  // scavenging (per-MBB live-ins + SVA free-lane fallback) is already in
-  // place but unused.
+  // Post-inline branch displacement check. CodeGenerator::printAssemblyFile
+  // invokes AsmPrinter directly with no intermediate machine-pass chain, so
+  // LLVM's BranchRelaxationPass never runs on the target module — out-of-range
+  // branches would otherwise be silently truncated by the encoder. For now we
+  // count + diagnose; the actual relaxation (s_setpc_b64 + SGPR scavenging
+  // via per-MBB live-ins, falling back to spilling two app SGPRs into the
+  // lowest free SVA lanes per StateValueArraySpecs::findLowestFreeLanes) is
+  // the next phase.
+  unsigned TotalOutOfRange = 0;
+  for (const llvm::Function &F : TargetModule) {
+    if (auto *MF = TargetMMI.getMachineFunction(F))
+      TotalOutOfRange += detectOutOfRangeBranches(*MF);
+  }
+  if (TotalOutOfRange > 0) {
+    LUTHIER_CTX_EMIT_ON_ERROR(
+        Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+                 "TargetModulePatcherPass: {0} branch(es) in the patched "
+                 "target module exceed s_branch range (±2^18 bytes); "
+                 "s_setpc_b64 relaxation is not yet implemented",
+                 TotalOutOfRange)));
+    return Changed;
+  }
   return true;
 }
 
