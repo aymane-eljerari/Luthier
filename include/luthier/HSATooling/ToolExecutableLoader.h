@@ -190,6 +190,18 @@ private:
   std::unordered_map<hsa_executable_symbol_t,
                      llvm::StringMap<hsa_executable_symbol_t>>
       OriginalToInstrumentedKernelsMap{};
+
+  /// FIXME: Should this be SmallDenseMap for optimization? 
+  /// \brief Only load the most specific compatible Code Object
+  /// Examle: amdgcn-amd-amdhsa--gfx908 is more specific 
+  /// than amdgcn-amd-amdhsa--gfx90a which is the general architecture,
+  /// and will thus be prefered  
+  llvm::DenseMap<hsa_agent_t, hsa_executable_t> AgentLoadedExecutables;
+
+  /// \brief A mapping of agent to llvm Bitcode appropriate for the Agent
+  llvm::DenseMap<hsa_agent_t, llvm::StringRef> AgentExecutableBitcode;
+
+  llvm::SmallVector<std::unique_ptr<llvm::MemoryBuffer>, 4> ManagedFatBinBuffers;
 };
 }; // namespace luthier
 
