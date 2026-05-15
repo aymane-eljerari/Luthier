@@ -155,6 +155,12 @@ public:
     LCOVector::iterator It;
 
   public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type        = MockLoadedCodeObject;
+    using reference         = MockLoadedCodeObject &;
+    using pointer           = MockLoadedCodeObject *;
+    using difference_type   = std::ptrdiff_t;
+
     explicit loaded_code_object_iterator(LCOVector::iterator It) : It(It) {}
 
     MockLoadedCodeObject &operator*() const { return **It; }
@@ -185,6 +191,12 @@ public:
     LCOVector::const_iterator It;
 
   public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type        = const MockLoadedCodeObject;
+    using reference         = const MockLoadedCodeObject &;
+    using pointer           = const MockLoadedCodeObject *;
+    using difference_type   = std::ptrdiff_t;
+
     explicit const_loaded_code_object_iterator(LCOVector::const_iterator It)
         : It(It) {}
 

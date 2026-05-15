@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file MockLoadAMDGPUCodeObjects.cpp
-/// Implements the \c MockLoadAMDGPUCodeObjects class.
+/// \file AMDGPUMockLoaderPrinter.cpp
+/// Implements the \c AMDGPUMockLoaderPrinter class.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGenTesting/AMDGPUMockLoaderPrinter.h"
 #include "luthier/Object/ObjectFileUtils.h"
@@ -111,12 +111,11 @@ AMDGPUMockLoaderPrinter::run(llvm::Module &M,
   MockAMDGPULoader &Loader =
       MAM.getResult<MockAMDGPULoaderAnalysis>(M).getLoader();
 
-  unsigned CodeObjectIdx = 0;
-
   OS << "Num Code Objects: " << Loader.loaded_code_objects_size() << "\n";
   OS << "Loaded Code Object Contents:\n";
 
-  for (const auto &LCO : Loader.loaded_code_objects()) {
+  for (const auto &[CodeObjectIdx, LCO] :
+       llvm::enumerate(Loader.loaded_code_objects())) {
     auto TargetTripleOrErr =
         object::getObjectFileTargetTuple(LCO.getCodeObject());
 
@@ -261,14 +260,16 @@ AMDGPUMockLoaderPrinter::run(llvm::Module &M,
           llvm::ArrayRef ReadBytes = {
               reinterpret_cast<uint8_t *>(SegmentCurrAddr), ReadSize};
 
+          auto DecodeResult = DisAsm->getInstruction(
+              Inst, InstSize, ReadBytes, SegmentCurrAddr, llvm::nulls());
           LUTHIER_CTX_EMIT_ON_ERROR(
               Ctx, LUTHIER_GENERIC_ERROR_CHECK(
-                       DisAsm->getInstruction(Inst, InstSize, ReadBytes,
-                                              SegmentCurrAddr, llvm::nulls()) ==
-                           llvm::MCDisassembler::Success,
+                       DecodeResult == llvm::MCDisassembler::Success,
                        llvm::formatv(
                            "Failed to disassemble instruction at address {0:x}",
                            SegmentCurrAddr)));
+          if (DecodeResult != llvm::MCDisassembler::Success)
+            break;
           printBytes(llvm::ArrayRef(ReadBytes.data(), InstSize), OS);
           OS << "\n  |->";
           IP->printInst(&Inst, SegmentCurrAddr, "", *STI, OS);
@@ -287,7 +288,6 @@ AMDGPUMockLoaderPrinter::run(llvm::Module &M,
           SegmentCurrAddr += 8;
         }
       }
-      CodeObjectIdx++;
     }
   }
   return llvm::PreservedAnalyses::all();
