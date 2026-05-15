@@ -1,0 +1,194 @@
+//===-- LuthierRegScavenger.h ------------------------------------*- C++ -*-===//
+// Copyright @ Northeastern University Computer Architecture Lab
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//===----------------------------------------------------------------------===//
+/// \file LuthierRegScavenger.h
+/// Luthier-side fork of \c llvm::RegScavenger from
+/// \c llvm/CodeGen/RegisterScavenging.{h,cpp}. Forked rather than subclassed
+/// because \c llvm::RegScavenger::scavengeRegisterBackwards is non-virtual,
+/// so an override would not be dispatched through a \c RegScavenger* pointer
+/// (and AMDGPU's \c SIInstrInfo::insertIndirectBranch invokes scavenging via
+/// such a pointer). Sibling-class layout lets us substitute the scavenger
+/// at every callsite Luthier owns while leaving stock LLVM behavior alone
+/// for everything else.
+///
+/// Two Luthier-specific additions over stock:
+///   1. \c LuthierReservedRegs — a \c DenseSet of phys-regs the scavenger
+///      must never pick, regardless of \c MRI.isReserved / \c LiveUnits /
+///      backward-walk state. Used by \c TargetModulePatcherPass to protect
+///      the SVA storage register on schemes where it lives in SGPRs.
+///   2. \c SVASpillCallback — an optional spill sink that replaces the
+///      stock FrameIndex-based emergency spill. When set, the scavenger
+///      delegates the spill to the caller, which is expected to write the
+///      scavenged reg into free SVA lanes (\c StateValueArraySpecs::
+///      findLowestFreeLanes) via \c V_WRITELANE_B32 / \c V_READLANE_B32.
+//===----------------------------------------------------------------------===//
+#ifndef LUTHIER_TOOL_CODE_GEN_LUTHIER_REG_SCAVENGER_H
+#define LUTHIER_TOOL_CODE_GEN_LUTHIER_REG_SCAVENGER_H
+
+#include <functional>
+#include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/BitVector.h>
+#include <llvm/ADT/DenseSet.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/CodeGen/LiveRegUnits.h>
+#include <llvm/CodeGen/MachineBasicBlock.h>
+#include <llvm/CodeGen/Register.h>
+
+namespace llvm {
+class MachineFunction;
+class MachineInstr;
+class MachineRegisterInfo;
+class TargetInstrInfo;
+class TargetRegisterClass;
+class TargetRegisterInfo;
+} // namespace llvm
+
+namespace luthier {
+
+/// Sibling-class fork of \c llvm::RegScavenger with two Luthier hooks:
+/// an extra "do-not-clobber" set consulted alongside \c MRI.isReserved,
+/// and an optional SVA-lane spill sink that replaces the FrameIndex
+/// emergency-spill path.
+class LuthierRegScavenger {
+public:
+  /// Spill sink for the no-free-reg case. Receives the chosen reg, its
+  /// class, and the spill+reload insertion points the scavenger picked.
+  /// Returns \c true on success; on \c false the scavenger falls back
+  /// to the stock FrameIndex-based path (or reports a hard error if
+  /// there's no emergency slot).
+  using SVASpillCallback = std::function<bool(
+      llvm::MachineBasicBlock &MBB,
+      llvm::MachineBasicBlock::iterator SpillBefore,
+      llvm::MachineBasicBlock::iterator ReloadBefore, llvm::MCRegister Reg,
+      const llvm::TargetRegisterClass &RC)>;
+
+  LuthierRegScavenger() = default;
+
+  /// Mark \p Regs as never-pick. The scavenger consults this in addition
+  /// to \c MRI.isReserved, the in-flight \c LiveUnits, and the backward
+  /// scan's \c Used set.
+  void setReservedRegs(llvm::DenseSet<llvm::MCPhysReg> Regs) {
+    LuthierReservedRegs = std::move(Regs);
+  }
+
+  /// Install an SVA-lane spill sink. When set and the scavenger needs
+  /// to spill (no globally-free reg in the class found), the callback
+  /// is invoked instead of \c spill(). On \c true the scavenger
+  /// considers the reg available.
+  void setSVASpillCallback(SVASpillCallback CB) {
+    SpillSink = std::move(CB);
+  }
+
+  // ============ Stock RegScavenger API surface ============================
+  //
+  // These methods mirror their llvm::RegScavenger counterparts in
+  // signature + behavior. Any deviation from stock is documented inline.
+
+  /// See \c RegScavenger::assignRegToScavengingIndex.
+  void assignRegToScavengingIndex(int FI, llvm::Register Reg,
+                                  llvm::MachineInstr *Restore = nullptr);
+
+  /// See \c RegScavenger::enterBasicBlock.
+  void enterBasicBlock(llvm::MachineBasicBlock &MBB);
+
+  /// See \c RegScavenger::enterBasicBlockEnd.
+  void enterBasicBlockEnd(llvm::MachineBasicBlock &MBB);
+
+  /// See \c RegScavenger::backward.
+  void backward();
+
+  /// See \c RegScavenger::backward(iterator).
+  void backward(llvm::MachineBasicBlock::iterator I) {
+    while (MBBI != I)
+      backward();
+  }
+
+  /// See \c RegScavenger::isRegUsed. Luthier reserved regs are reported
+  /// as used regardless of \p IncludeReserved (they're always off-limits).
+  bool isRegUsed(llvm::Register Reg, bool IncludeReserved = true) const;
+
+  /// See \c RegScavenger::getRegsAvailable. Luthier reserved regs never
+  /// appear in the returned mask.
+  llvm::BitVector getRegsAvailable(const llvm::TargetRegisterClass *RC);
+
+  /// See \c RegScavenger::FindUnusedReg.
+  llvm::Register FindUnusedReg(const llvm::TargetRegisterClass *RC) const;
+
+  /// See \c RegScavenger::addScavengingFrameIndex.
+  void addScavengingFrameIndex(int FI) { Scavenged.push_back(ScavengedInfo(FI)); }
+
+  /// See \c RegScavenger::isScavengingFrameIndex.
+  bool isScavengingFrameIndex(int FI) const {
+    for (const ScavengedInfo &SI : Scavenged)
+      if (SI.FrameIndex == FI)
+        return true;
+    return false;
+  }
+
+  /// See \c RegScavenger::getScavengingFrameIndices.
+  void getScavengingFrameIndices(llvm::SmallVectorImpl<int> &A) const {
+    for (const ScavengedInfo &I : Scavenged)
+      if (I.FrameIndex >= 0)
+        A.push_back(I.FrameIndex);
+  }
+
+  /// See \c RegScavenger::scavengeRegisterBackwards.
+  llvm::Register
+  scavengeRegisterBackwards(const llvm::TargetRegisterClass &RC,
+                            llvm::MachineBasicBlock::iterator To,
+                            bool RestoreAfter, int SPAdj,
+                            bool AllowSpill = true);
+
+  /// See \c RegScavenger::setRegUsed.
+  void setRegUsed(llvm::Register Reg,
+                  llvm::LaneBitmask LaneMask = llvm::LaneBitmask::getAll());
+
+private:
+  /// See \c RegScavenger::ScavengedInfo.
+  struct ScavengedInfo {
+    ScavengedInfo(int FI = -1) : FrameIndex(FI) {}
+    int FrameIndex;
+    llvm::Register Reg;
+    const llvm::MachineInstr *Restore = nullptr;
+  };
+
+  bool isReserved(llvm::Register Reg) const;
+
+  void init(llvm::MachineBasicBlock &MBB);
+
+  ScavengedInfo &spill(llvm::Register Reg, const llvm::TargetRegisterClass &RC,
+                       int SPAdj, llvm::MachineBasicBlock::iterator Before,
+                       llvm::MachineBasicBlock::iterator &UseMI);
+
+  const llvm::TargetRegisterInfo *TRI = nullptr;
+  const llvm::TargetInstrInfo *TII = nullptr;
+  llvm::MachineRegisterInfo *MRI = nullptr;
+  llvm::MachineBasicBlock *MBB = nullptr;
+  llvm::MachineBasicBlock::iterator MBBI;
+  llvm::SmallVector<ScavengedInfo, 2> Scavenged;
+  llvm::LiveRegUnits LiveUnits;
+
+  /// Phys-regs the scavenger is forbidden to pick, on top of MRI's
+  /// reserved set. Populated via \c setReservedRegs.
+  llvm::DenseSet<llvm::MCPhysReg> LuthierReservedRegs;
+
+  /// Optional spill sink. When non-empty, replaces the FrameIndex
+  /// spill path.
+  SVASpillCallback SpillSink;
+};
+
+} // namespace luthier
+
+#endif

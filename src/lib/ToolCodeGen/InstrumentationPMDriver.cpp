@@ -508,32 +508,52 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
     bool UserInsertedMIRPrint = false;
 
     if (MIRPassPipelineNotSpecified) {
-      // TODO: codegen pipeline — uncomment when deps are available:
-      // llvm::TargetLibraryInfoImpl TLII(...);
-      // auto LegacyIPM = new llvm::legacy::PassManager();
-      // auto *IMMIWP = new llvm::MachineModuleInfoWrapperPass(&TargetAppTM);
-      // LegacyIPM->add(new IModuleMAMWrapperPass(&IMAM));
-      // LegacyIPM->add(new llvm::TargetLibraryInfoWrapperPass(TLII));
-      // auto *TPC = ITM->createPassConfig(*LegacyIPM);
-      // TPC->setDisableVerify(true);
-      // LegacyIPM->add(TPC);
-      // LegacyIPM->add(IMMIWP);
-      // TPC->addISelPasses();
-      // LegacyIPM->add(new PhysicalRegAccessVirtualizationPass());
-      // LegacyIPM->add(new IntrinsicMIRLoweringPass());
-      // TPC->insertPass(&PrologEpilogCodeInserterID,
-      //                 new InjectedPayloadPEIPass());
-      // TPC->addMachinePasses();
-      // LegacyIPM->add(new PrePostAmbleEmitter());
-      // LegacyIPM->add(new PatchLiftedRepresentationPass());
-      // llvm::PassRegistry *Registry =
-      //     llvm::PassRegistry::getPassRegistry();
-      // AugmentTargetPassConfigCallback(*Registry, *TPC, *ITM);
-      // for (const auto &Plugin : PassPlugins)
-      //   Plugin.invokeAugmentTargetPassConfigCallback(*Registry, *TPC, *ITM);
-      // TPC->setInitialized();
-      // LegacyIPM->run(*IModule);
-      // delete LegacyIPM;
+      // Default IModule codegen pipeline. Mirrors what users have been
+      // spelling out via --imodule-mir-passes in lit tests:
+      //   isel, mir-lowering, injected-payload-accessed-regs,
+      //   imodule-ip-pred-liveness, payload-preserve-live-regs,
+      //   lr-sv-storage-load-locs, injected-payload-pei,
+      //   target-module-patcher.
+      //
+      // Each step is bracketed by TPC->addMachinePrePasses() /
+      // addMachinePostPasses() the same way parseCodeGenPipeline does
+      // when adding registered legacy passes. That preserves the
+      // expected pre/post setup hooks around every pass.
+      //
+      // Note: this path does NOT call TPC->addMachinePasses() — the
+      // existing lit tests for the chain (regalloc-pressure.ll, the
+      // target-module-patcher tests) run with just the module-pass
+      // sequence above, not the full AMDGPU codegen pipeline. The
+      // explicit `machine-passes` token in --imodule-mir-passes
+      // remains the way to opt into the full RA + WWM + frame
+      // lowering chain (e.g., regalloc-pressure-lowered.ll).
+      TPC->addISelPasses();
+
+      auto AddModulePass = [&](llvm::Pass *P, llvm::StringRef Name) {
+        TPC->addMachinePrePasses();
+        MIRLegacyPM->add(P);
+        std::string Banner = ("After " + Name).str();
+        TPC->addMachinePostPasses(Banner);
+      };
+
+      AddModulePass(new IntrinsicMIRLoweringPass(),
+                    "Luthier IntrinsicMIRLowering");
+      AddModulePass(new InjectedPayloadAccessedRegsAnalysis(),
+                    "Luthier InjectedPayloadAccessedRegs");
+      AddModulePass(new IModuleIPPredicatedLivenessAnalysis(),
+                    "Luthier IPPredLiveness");
+      AddModulePass(new InjectedPayloadPreserveLiveRegsPass(),
+                    "Luthier PreserveLiveRegs");
+      AddModulePass(new LRStateValueStorageAndLoadLocationsAnalysis(),
+                    "Luthier LRStateValueStorage");
+      if (!Options.DisableInjectedPayloadPEI) {
+        // PEI is a MachineFunctionPass; the legacy PM auto-handles it
+        // by iterating Functions. Same wrapping as the module passes.
+        AddModulePass(new InjectedPayloadPEIPass(),
+                      "Luthier InjectedPayloadPEI");
+      }
+      AddModulePass(new TargetModulePatcherPass(),
+                    "Luthier TargetModulePatcher");
     } else if (MIRPassPipelineSpecifiedAndNotEmpty) {
       llvm::raw_ostream *PrintStream =
           MustDumpMIR ? &OutFile->os() : nullptr;
@@ -602,6 +622,31 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
     }
   }
   /// Conservatively invalidate all other target module passes even if only the
+  // If the user requested an imodule output but opted out of MIR codegen
+  // (e.g., --imodule-mir-passes= with a .ll output for IR-only tests),
+  // dump the post-IR-pipeline IModule IR here. This preserves the
+  // previous-default behavior of emitting the IModule's IR to the
+  // output file when no MIR pipeline runs, which IR-level injection
+  // tests rely on.
+  if (IModule) {
+    llvm::StringRef OutPath = Options.IModuleOutput;
+    bool IsLuthierOutput = OutPath.ends_with(".luthier");
+    bool MIRPassPipelineNotSpecified =
+        Options.IModuleMIRPasses.getNumOccurrences() == 0;
+    bool MIRPassPipelineSpecifiedAndNotEmpty =
+        !Options.IModuleMIRPasses.getValue().empty();
+    bool MustRunCodeGen =
+        MIRPassPipelineNotSpecified || MIRPassPipelineSpecifiedAndNotEmpty;
+    if (!OutPath.empty() && !IsLuthierOutput && !MustRunCodeGen) {
+      std::error_code EC;
+      llvm::ToolOutputFile Out(OutPath, EC, llvm::sys::fs::OF_Text);
+      if (!EC) {
+        IModule->print(Out.os(), /*AAW=*/nullptr);
+        Out.keep();
+      }
+    }
+  }
+
   /// imodule was modified
   bool Modified = IRStagePA.areAllPreserved() || MIRModified;
   return Modified ? llvm::PreservedAnalyses::none()

@@ -12,6 +12,7 @@
 ; RUN:    -initial-execution-point=0:stub_kernel.kd \
 ; RUN:    -imodule-path=%s \
 ; RUN:    -imodule-output=%t.luthier \
+; RUN:    -imodule-mir-passes= \
 ; RUN:    -imodule-ir-passes=luthier-remove-unused-hooks \
 ; RUN:    -o /dev/null && \
 ; RUN: FileCheck %s < %t.luthier

@@ -22,6 +22,7 @@
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include "luthier/ToolCodeGen/IPPredicatedLivenessIModulePass.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
+#include "luthier/ToolCodeGen/LuthierBranchRelaxation.h"
 #include "luthier/ToolCodeGen/MMISlotIndexesAnalysis.h"
 #include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
 #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
@@ -34,12 +35,10 @@
 #include <GCNSubtarget.h>
 #include <SIInstrInfo.h>
 #include <SIMachineFunctionInfo.h>
-#include <llvm/CodeGen/BranchRelaxation.h>
 #include <llvm/CodeGen/MachineBasicBlock.h>
 #include <llvm/CodeGen/MachineFrameInfo.h>
 #include <llvm/CodeGen/MachineFunction.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
-#include <llvm/CodeGen/MachinePassManager.h>
 #include <llvm/CodeGen/TargetInstrInfo.h>
 #include <llvm/CodeGen/TargetRegisterInfo.h>
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
@@ -675,23 +674,116 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // via per-MBB live-ins, falling back to spilling two app SGPRs into the
   // lowest free SVA lanes per StateValueArraySpecs::findLowestFreeLanes) is
   // the next phase.
-  // Phase B step 4: invoke LLVM's stock BranchRelaxationPass on every
+  // Phase B step 4: invoke Luthier's forked BranchRelaxation on every
   // patched target MF. CodeGenerator::printAssemblyFile takes the MMI
   // straight to AsmPrinter (no addPassesToEmitFile), so far-jumps need
   // explicit relaxation here or they'd silently emit with truncated
-  // displacements. The new-PM BranchRelaxationPass::run signature takes
-  // an MFAM but doesn't actually consult it — the body just calls the
-  // internal BranchRelaxation worker which sets up its own RegScavenger
-  // via trackLivenessAfterRegAlloc. We construct an empty MFAM purely
-  // to satisfy the signature. Lit-testable via the AMDGPU backend's
-  // hidden --amdgpu-s-branch-bits=<N> knob (defined in SIInstrInfo.cpp)
-  // which shrinks the s_branch range so small kernels trigger the
-  // long-jump path.
-  llvm::MachineFunctionAnalysisManager MFAM;
-  llvm::BranchRelaxationPass BRPass;
+  // displacements. We use a sibling-class fork (LuthierBranchRelaxation
+  // + LuthierRegScavenger, not subclasses — stock methods are non-
+  // virtual) so the scavenger can be told to reserve the SVA storage
+  // register and, eventually, route emergency spills to SVA lanes.
+  //
+  // ReservedForSVA gathers every reg that ever appears in any SVS
+  // storage segment for this MF — that's the set the scavenger must
+  // not pick when allocating the long-branch PC pair.
   for (llvm::Function &F : TargetModule) {
-    if (auto *MF = TargetMMI.getMachineFunction(F))
-      BRPass.run(*MF, MFAM);
+    auto *MF = TargetMMI.getMachineFunction(F);
+    if (!MF)
+      continue;
+    llvm::DenseSet<llvm::MCPhysReg> ReservedForSVA;
+    for (const auto &MBB : *MF) {
+      for (const auto &Seg : SVLocations.getStorageIntervals(MBB)) {
+        llvm::SmallVector<llvm::MCRegister, 4> Regs;
+        Seg.getSVS().getAllStorageRegisters(Regs);
+        for (llvm::MCRegister R : Regs)
+          ReservedForSVA.insert(R.id());
+      }
+    }
+
+    // SVA-lane spill sink: when the long-branch scavenger can't find a
+    // globally-free SReg_64, fall through to here. We spill the chosen
+    // pair into the two lowest free SVA lanes via V_WRITELANE_B32 at
+    // SpillBefore and reload via V_READLANE_B32 at ReloadBefore. The
+    // SVA storage VGPR is read from the MF's entry MBB's first segment;
+    // this is correct for the common case where SVA storage stays in
+    // one VGPR for the whole function. For schemes that switch storage
+    // mid-function, the segment covering the actual spill point would
+    // be more precise — but the trampoline MBBs created by the relaxer
+    // aren't in `SVLocations` (post-analysis MBBs), so entry-segment
+    // is the conservative pick that always resolves.
+    llvm::MachineFunction *MFPtr = MF;
+    const StateValueArraySpecs *SpecsPtr = SVASpecs.get();
+    const SVStorageAndLoadLocations *SVLocPtr = &SVLocations;
+    auto SpillSink =
+        [MFPtr, SpecsPtr, SVLocPtr](
+            llvm::MachineBasicBlock &SpillMBB,
+            llvm::MachineBasicBlock::iterator SpillBefore,
+            llvm::MachineBasicBlock::iterator ReloadBefore,
+            llvm::MCRegister Reg,
+            const llvm::TargetRegisterClass &RC) -> bool {
+          // Only the SReg_64 case is supported (the only class the
+          // long-branch scavenger ever asks for).
+          if (&RC != &llvm::AMDGPU::SReg_64RegClass)
+            return false;
+
+          // Resolve SVA VGPR from the MF's entry MBB's first segment.
+          if (MFPtr->empty())
+            return false;
+          auto EntrySegs = SVLocPtr->getStorageIntervals(MFPtr->front());
+          if (EntrySegs.empty())
+            return false;
+          llvm::MCRegister SVAVGPR =
+              EntrySegs.front().getSVS().getStateValueStorageReg();
+          if (!SVAVGPR)
+            return false;
+
+          const auto &ST = MFPtr->getSubtarget<llvm::GCNSubtarget>();
+          unsigned WaveSize = ST.getWavefrontSize();
+          auto FreeLanes = SpecsPtr->findLowestFreeLanes(2, WaveSize);
+          if (FreeLanes.size() < 2)
+            return false;
+
+          const auto *TII = ST.getInstrInfo();
+          const auto *TRI = ST.getRegisterInfo();
+          llvm::MCRegister Sub0 = TRI->getSubReg(Reg, llvm::AMDGPU::sub0);
+          llvm::MCRegister Sub1 = TRI->getSubReg(Reg, llvm::AMDGPU::sub1);
+          if (!Sub0 || !Sub1)
+            return false;
+
+          // Spill: write each sub-reg into its reserved SVA lane right
+          // before the long-branch arithmetic clobbers them. Note that
+          // V_WRITELANE_B32 has a tied-def operand for the destination
+          // VGPR so the read-modify-write of unrelated lanes is encoded
+          // explicitly.
+          llvm::DebugLoc DL;
+          llvm::BuildMI(SpillMBB, SpillBefore, DL,
+                        TII->get(llvm::AMDGPU::V_WRITELANE_B32), SVAVGPR)
+              .addReg(Sub0)
+              .addImm(FreeLanes[0])
+              .addReg(SVAVGPR);
+          llvm::BuildMI(SpillMBB, SpillBefore, DL,
+                        TII->get(llvm::AMDGPU::V_WRITELANE_B32), SVAVGPR)
+              .addReg(Sub1)
+              .addImm(FreeLanes[1])
+              .addReg(SVAVGPR);
+
+          // Reload: pull each lane back into the sub-reg in the
+          // RestoreBB that runs after the long jump lands.
+          auto &ReloadMBB = *ReloadBefore->getParent();
+          llvm::BuildMI(ReloadMBB, ReloadBefore, DL,
+                        TII->get(llvm::AMDGPU::V_READLANE_B32), Sub0)
+              .addReg(SVAVGPR)
+              .addImm(FreeLanes[0]);
+          llvm::BuildMI(ReloadMBB, ReloadBefore, DL,
+                        TII->get(llvm::AMDGPU::V_READLANE_B32), Sub1)
+              .addReg(SVAVGPR)
+              .addImm(FreeLanes[1]);
+          return true;
+        };
+
+    LuthierBranchRelaxation BR(std::move(ReservedForSVA),
+                               std::move(SpillSink));
+    BR.run(*MF);
   }
 
   // Sanity-check: re-run the detector and hard-error if anything

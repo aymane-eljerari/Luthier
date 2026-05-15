@@ -16,6 +16,7 @@
 // RUN:    -initial-execution-point=0:vector_add.kd \
 // RUN:    -imodule-path=%luthier_test_imodule_dir/TrivialCounter-gfx1100.ll \
 // RUN:    -imodule-output=%t.imod.ll \
+// RUN:    -imodule-mir-passes= \
 // RUN:    -imodule-ir-passes=luthier-mock-inject-at-opcode \
 // RUN:    -luthier-mock-inject-opcode=V_FMAC_F32 \
 // RUN:    -o /dev/null && \

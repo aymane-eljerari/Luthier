@@ -14,6 +14,7 @@
 // RUN:    -initial-execution-point=0:vector_add.kd \
 // RUN:    -imodule-path=%luthier_test_imodule_dir/TrivialCounter-gfx90a.ll \
 // RUN:    -imodule-output=%t.imod.ll \
+// RUN:    -imodule-mir-passes= \
 // RUN:    -imodule-ir-passes=luthier-mock-inject-at-mbb-entry \
 // RUN:    -o /dev/null && \
 // RUN: FileCheck %s < %t.imod.ll
