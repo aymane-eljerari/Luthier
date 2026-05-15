@@ -6,6 +6,7 @@ add_library(LuthierHSATooling OBJECT
         #InstrumentationModule.cpp
         #InstrumentationTask.cpp
         LoadedCodeObjectCache.cpp
+        PacketMonitor.cpp
         TargetManager.cpp
         #ToolExecutableLoader.cpp
 )

@@ -19,7 +19,7 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
-#include "luthier/HSATooling/PacketMointor.h"
+#include "luthier/HSATooling/PacketMonitor.h"
 
 namespace luthier {
 
