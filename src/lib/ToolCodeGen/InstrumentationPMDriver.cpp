@@ -36,7 +36,6 @@
 // #include "luthier/ToolCodeGen/InjectedPayloadPEIPass.h"
 // #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
 // #include "luthier/ToolCodeGen/IntrinsicProcessorsAnalysis.h"
-// #include "luthier/ToolCodeGen/PatchLiftedRepresentationPass.h"
 // #include "luthier/ToolCodeGen/ProcessIntrinsicsAtIRLevelPass.h"
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
 #include "luthier/ToolCodeGenTesting/LuthierFile.h"
