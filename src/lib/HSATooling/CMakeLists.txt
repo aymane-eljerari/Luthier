@@ -5,6 +5,7 @@ add_library(LuthierHSATooling OBJECT
         HsaMemoryAllocationAccessor.cpp
         #InstrumentationModule.cpp
         #InstrumentationTask.cpp
+        LoadedCodeObjectCache.cpp
         TargetManager.cpp
         #ToolExecutableLoader.cpp
 )
