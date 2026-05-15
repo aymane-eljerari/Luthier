@@ -147,6 +147,31 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
          << ArgName << ")";
     }
 
+    // --- GetSyncScope <value-dag> ---
+    // Decode a cpol immediate's Value* into a SyncScope::ID via the
+    // translator. The argument is a value-producing dag (typically
+    // (GetNamedOperand $cpol)) — emits the dag to compute the Value*,
+    // then wraps it in getSyncScope().
+    else if (OpName == "GetSyncScope") {
+      if (Dag->getNumArgs() != 1)
+        llvm::PrintFatalError(
+            Loc, "Expected `GetSyncScope` to have 1 argument");
+      OS << "Translator.getSyncScope(";
+      emitSemanticStatement(OS, Dag->getArg(0), Loc);
+      OS << ")";
+    }
+    // --- GetOrdering <value-dag> ---
+    // Decode a cpol immediate's Value* into an AtomicOrdering via the
+    // translator. Currently always Monotonic.
+    else if (OpName == "GetOrdering") {
+      if (Dag->getNumArgs() != 1)
+        llvm::PrintFatalError(
+            Loc, "Expected `GetOrdering` to have 1 argument");
+      OS << "Translator.getOrdering(";
+      emitSemanticStatement(OS, Dag->getArg(0), Loc);
+      OS << ")";
+    }
+
     // --- DirectCall <function-expr> ---
     // Emits a direct call instruction targeting the given llvm::Function*.
     // Reuses emitIndirectTailCall plumbing (constructs the standard

@@ -502,7 +502,7 @@ foreach desc = [
     (DefVal $addr, CalculateFlatAddr<(GetNamedOperand $vaddr),
                                       (GetNamedOperand $offset)>.ret),
     (LLVMAtomicRMW desc.Op, (GetVal $addr), (GetNamedOperand $vdata),
-                    AlignNone, AtomicOrderingMonotonic, SyncScopeSystem)
+                    AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty)))
   ]>;
   // NoRet (SADDR).
   def : InstSISemantic<desc.Sad, [
@@ -510,7 +510,7 @@ foreach desc = [
                                        (GetNamedOperand $vaddr),
                                        (GetNamedOperand $offset)>.ret),
     (LLVMAtomicRMW desc.Op, (GetVal $addr), (GetNamedOperand $vdata),
-                    AlignNone, AtomicOrderingMonotonic, SyncScopeSystem)
+                    AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty)))
   ]>;
   // RTN (base + _agpr): write old loaded value to $vdst.
   foreach rtnInst = [desc.Rtn, desc.RtnAgpr] in
@@ -520,8 +520,7 @@ foreach desc = [
       (SetNamedOperand $vdst, (LLVMAtomicRMW desc.Op, (GetVal $addr),
                                               (GetNamedOperand $vdata),
                                               AlignNone,
-                                              AtomicOrderingMonotonic,
-                                              SyncScopeSystem))
+                                              (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
     ]>;
   // RTN (SADDR).
   def : InstSISemantic<desc.SadRtn, [
@@ -530,8 +529,7 @@ foreach desc = [
                                        (GetNamedOperand $offset)>.ret),
     (SetNamedOperand $vdst, (LLVMAtomicRMW desc.Op, (GetVal $addr),
                                             (GetNamedOperand $vdata),
-                                            AlignNone, AtomicOrderingMonotonic,
-                                            SyncScopeSystem))
+                                            AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
   ]>;
 }
 
@@ -906,14 +904,14 @@ foreach desc = [
     (DefVal $addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                         (GetNamedOperand $offset)>.ret),
     (LLVMAtomicRMW desc.Op, (GetVal $addr), (GetNamedOperand $vdata),
-                    AlignNone, AtomicOrderingMonotonic, SyncScopeSystem)
+                    AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty)))
   ]>;
   def : InstSISemantic<desc.Sad, [
     (DefVal $addr, CalculateGlobalSAddr<(GetNamedOperand $saddr),
                                          (GetNamedOperand $vaddr),
                                          (GetNamedOperand $offset)>.ret),
     (LLVMAtomicRMW desc.Op, (GetVal $addr), (GetNamedOperand $vdata),
-                    AlignNone, AtomicOrderingMonotonic, SyncScopeSystem)
+                    AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty)))
   ]>;
   foreach rtnInst = [desc.Rtn, desc.RtnAgpr] in
     def : InstSISemantic<rtnInst, [
@@ -922,8 +920,7 @@ foreach desc = [
       (SetNamedOperand $vdst, (LLVMAtomicRMW desc.Op, (GetVal $addr),
                                               (GetNamedOperand $vdata),
                                               AlignNone,
-                                              AtomicOrderingMonotonic,
-                                              SyncScopeSystem))
+                                              (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
     ]>;
   def : InstSISemantic<desc.SadRtn, [
     (DefVal $addr, CalculateGlobalSAddr<(GetNamedOperand $saddr),
@@ -931,8 +928,7 @@ foreach desc = [
                                          (GetNamedOperand $offset)>.ret),
     (SetNamedOperand $vdst, (LLVMAtomicRMW desc.Op, (GetVal $addr),
                                             (GetNamedOperand $vdata),
-                                            AlignNone, AtomicOrderingMonotonic,
-                                            SyncScopeSystem))
+                                            AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
   ]>;
 }
 
@@ -979,15 +975,14 @@ foreach desc = [
                                          (GetNamedOperand $offset)>.ret),
     (SetNamedOperand $vdst, (LLVMAtomicRMW desc.Op, (GetVal $addr),
                                             (GetNamedOperand $vdata),
-                                            AlignNone, AtomicOrderingMonotonic,
-                                            SyncScopeSystem))
+                                            AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
   ]>;
 
 def GLOBAL_ATOMIC_ORDERED_ADD_B64_sem : InstSISemantic<GLOBAL_ATOMIC_ORDERED_ADD_B64> {
   let Semantic = [
     (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret),
-    (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem)
+    (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty)))
   ];
 }
 
@@ -1218,7 +1213,7 @@ def GLOBAL_ATOMIC_ORDERED_ADD_B64_RTN_sem : InstSISemantic<GLOBAL_ATOMIC_ORDERED
   let Semantic = [
     (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
   ];
 }
 
@@ -1226,7 +1221,7 @@ def GLOBAL_ATOMIC_ORDERED_ADD_B64_RTN_agpr_sem : InstSISemantic<GLOBAL_ATOMIC_OR
   let Semantic = [
     (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
   ];
 }
 
@@ -1234,7 +1229,7 @@ def GLOBAL_ATOMIC_ORDERED_ADD_B64_SADDR_sem : InstSISemantic<GLOBAL_ATOMIC_ORDER
   let Semantic = [
     (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret),
-    (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem)
+    (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty)))
   ];
 }
 
@@ -1242,7 +1237,7 @@ def GLOBAL_ATOMIC_ORDERED_ADD_B64_SADDR_RTN_sem : InstSISemantic<GLOBAL_ATOMIC_O
   let Semantic = [
     (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
   ];
 }
 
@@ -1250,7 +1245,7 @@ def GLOBAL_ATOMIC_ORDERED_ADD_B64_SADDR_RTN_agpr_sem : InstSISemantic<GLOBAL_ATO
   let Semantic = [
     (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
                                             (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, AtomicOrderingMonotonic, SyncScopeSystem))
+    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
   ];
 }
 

@@ -436,6 +436,26 @@ class MIRToIRTranslator {
   /// block)
   llvm::BasicBlock *getNextBB(const llvm::MachineInstr &MI);
 
+  /// Decode the cache-policy immediate value into a SyncScope::ID.
+  /// \p CPolVal must be an integer constant carrying the cpol bits as encoded
+  /// by AMDGPU FLAT/MUBUF/MTBUF/SMEM instructions. The bit layout varies by
+  /// subtarget:
+  ///   - gfx7-gfx11 (pre-CDNA3, pre-gfx12): bit 0=GLC, bit 1=SLC, bit 2=DLC.
+  ///     SLC=1 ⇒ system; GLC=1 SLC=0 ⇒ agent; GLC=0 ⇒ workgroup.
+  ///   - CDNA3 (gfx940/942/950): bits[1:0]=SC1:SC0 (4-level scope):
+  ///     00 wavefront, 01 workgroup, 10 agent, 11 system.
+  ///   - gfx12 (RDNA4): bits[4:3]=scope (4-level), bits[2:0]=th.
+  /// Falls back to SyncScope::System if the value isn't a ConstantInt.
+  llvm::SyncScope::ID getSyncScope(const llvm::Value *CPolVal) const;
+
+  /// Decode the cache-policy immediate value into an AtomicOrdering.
+  /// AMDGPU atomic instructions are monotonic at the HW level: acquire /
+  /// release / sequential consistency are produced by SIMemoryLegalizer
+  /// surrounding the atomic with barrier instructions, not by the atomic
+  /// itself. Always returns Monotonic for now; the cpol value is reserved
+  /// for future per-bit ordering refinement.
+  llvm::AtomicOrdering getOrdering(const llvm::Value *CPolVal) const;
+
   /// Retrieves and translates the named operand \p OpName to a value and caches
   /// it for the \p MI's basic block
   /// If \p OutType is given, appropriately converts the returned

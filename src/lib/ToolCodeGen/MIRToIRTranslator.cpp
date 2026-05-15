@@ -1555,6 +1555,56 @@ llvm::BasicBlock *MIRToIRTranslator::getNextBB(const llvm::MachineInstr &MI) {
   return const_cast<llvm::BasicBlock *>(NextMBB->getBasicBlock());
 }
 
+llvm::SyncScope::ID
+MIRToIRTranslator::getSyncScope(const llvm::Value *CPolVal) const {
+  llvm::LLVMContext &Ctx = MF.getFunction().getContext();
+  const auto *CI = llvm::dyn_cast_or_null<llvm::ConstantInt>(CPolVal);
+  if (!CI)
+    return llvm::SyncScope::System;
+  uint64_t CPol = CI->getZExtValue();
+
+  // Pick the encoding by subtarget.
+  if (llvm::AMDGPU::isGFX12Plus(ST)) {
+    // gfx12: bits[4:3] = scope. 00=CU, 01=SE, 10=DEV, 11=SYS.
+    unsigned Scope = (CPol >> 3) & 0x3;
+    switch (Scope) {
+    case 0: return Ctx.getOrInsertSyncScopeID("wavefront");
+    case 1: return Ctx.getOrInsertSyncScopeID("workgroup");
+    case 2: return Ctx.getOrInsertSyncScopeID("agent");
+    case 3: default: return llvm::SyncScope::System;
+    }
+  }
+  if (llvm::AMDGPU::isGFX940(ST)) {
+    // CDNA3: bits[1:0] = SC1:SC0. 00=wavefront, 01=workgroup, 10=agent, 11=sys.
+    unsigned Scope = CPol & 0x3;
+    switch (Scope) {
+    case 0: return Ctx.getOrInsertSyncScopeID("wavefront");
+    case 1: return Ctx.getOrInsertSyncScopeID("workgroup");
+    case 2: return Ctx.getOrInsertSyncScopeID("agent");
+    case 3: default: return llvm::SyncScope::System;
+    }
+  }
+  // gfx7-gfx11 (pre-CDNA3, pre-gfx12): bit 0 = GLC, bit 1 = SLC.
+  //   SLC=1                ⇒ system
+  //   GLC=1 SLC=0         ⇒ agent
+  //   GLC=0               ⇒ workgroup
+  bool GLC = CPol & 0x1;
+  bool SLC = CPol & 0x2;
+  if (SLC)
+    return llvm::SyncScope::System;
+  if (GLC)
+    return Ctx.getOrInsertSyncScopeID("agent");
+  return Ctx.getOrInsertSyncScopeID("workgroup");
+}
+
+llvm::AtomicOrdering
+MIRToIRTranslator::getOrdering(const llvm::Value * /*CPolVal*/) const {
+  // AMDGPU atomics are monotonic at the HW level. Higher orderings are
+  // expressed by surrounding barrier instructions inserted by
+  // SIMemoryLegalizer at lowering time, not by the atomic op itself.
+  return llvm::AtomicOrdering::Monotonic;
+}
+
 void MIRToIRTranslator::fixupPhis() {
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Fixing up "
                           << ToBeFixedPhis.size() << " PHI nodes\n");

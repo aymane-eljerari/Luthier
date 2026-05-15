@@ -175,6 +175,14 @@ def LLVMLdexp : LLVMOp<"CreateLdexp">;
 
 def LLVMAtomicRMW : LLVMOp<"CreateAtomicRMW">;
 
+/// Decode a cpol immediate (Value*) into a SyncScope::ID per subtarget.
+/// Use: (LLVMAtomicRMW ..., (GetSyncScope (GetNamedOperand $cpol)))
+def GetSyncScope;
+
+/// Decode a cpol immediate (Value*) into an AtomicOrdering per subtarget.
+/// Currently always Monotonic; the cpol value is reserved for future use.
+def GetOrdering;
+
 def LLVMBranch : LLVMOp<"CreateBr">;
 
 def LLVMCondBranch : LLVMOp<"CreateCondBr">;
