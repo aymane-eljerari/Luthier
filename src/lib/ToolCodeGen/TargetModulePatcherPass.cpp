@@ -23,7 +23,6 @@
 #include "luthier/ToolCodeGen/IPPredicatedLivenessIModulePass.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
 #include "luthier/ToolCodeGen/LuthierBranchRelaxation.h"
-#include "luthier/ToolCodeGen/MMISlotIndexesAnalysis.h"
 #include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
 #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
 #include "luthier/ToolCodeGen/StateValueArraySpecs.h"
@@ -36,9 +35,13 @@
 #include <SIInstrInfo.h>
 #include <SIMachineFunctionInfo.h>
 #include <llvm/CodeGen/MachineBasicBlock.h>
+#include <llvm/CodeGen/LivePhysRegs.h>
+#include <llvm/CodeGen/MachineFunctionAnalysis.h>
 #include <llvm/CodeGen/MachineFrameInfo.h>
 #include <llvm/CodeGen/MachineFunction.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
+#include <llvm/CodeGen/MachinePassManager.h>
+#include <llvm/CodeGen/SlotIndexes.h>
 #include <llvm/CodeGen/TargetInstrInfo.h>
 #include <llvm/CodeGen/TargetRegisterInfo.h>
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
@@ -447,7 +450,7 @@ void inlineInjectedPayload(
 llvm::Error
 cloneIModuleIntoTarget(llvm::Module &IModule, llvm::Module &TargetModule,
                        const llvm::MachineModuleInfo &IMMI,
-                       llvm::MachineModuleInfo &TargetMMI,
+                       llvm::FunctionAnalysisManager &TargetFAM,
                        llvm::ValueToValueMapTy &VMap) {
   for (auto &GV : IModule.globals()) {
     auto *NewGV = new llvm::GlobalVariable(
@@ -459,24 +462,49 @@ cloneIModuleIntoTarget(llvm::Module &IModule, llvm::Module &TargetModule,
   }
 
   for (auto &F : IModule.functions()) {
-    if (IMMI.getMachineFunction(F) == nullptr)
-      continue;
+    // Hooks and payloads stay in the IModule. Hooks are not cloned at
+    // all (they're a tool-author concept that never makes it to the
+    // target binary). Payloads are inlined separately at each AppMI
+    // via Phase B step 3; cloning their handles here would create a
+    // dead duplicate in the target module.
     if (F.hasFnAttribute(HookAttribute) ||
         F.hasFnAttribute(InjectedPayloadAttribute))
       continue;
+
+    // Always clone the IR-level handle into the target module — even
+    // for declarations — so target MIs that reference this Function
+    // (via GlobalAddress operands) can resolve through VMap during
+    // payload inlining. Declarations have no body to patch, so the
+    // MF-clone step below is skipped.
     auto *NewF = llvm::Function::Create(
         llvm::cast<llvm::FunctionType>(F.getValueType()), F.getLinkage(),
         F.getAddressSpace(), F.getName(), &TargetModule);
-    // Empty entry block + unreachable so the IR is well-formed; the
-    // real behavior lives in the cloned MF.
-    auto *BB = llvm::BasicBlock::Create(TargetModule.getContext(), "", NewF);
-    new llvm::UnreachableInst(TargetModule.getContext(), BB);
+    NewF->copyAttributesFrom(&F);
     VMap[&F] = NewF;
 
-    auto NewMF = cloneMF(IMMI.getMachineFunction(F), VMap, TargetMMI);
-    if (!NewMF)
-      return NewMF.takeError();
-    TargetMMI.insertFunction(*NewF, std::move(*NewMF));
+    if (F.isDeclaration())
+      continue;
+
+    // Definition with a body. Give the new target-side Function a
+    // minimal unreachable entry block so its IR is well-formed (the
+    // executable behavior lives in the MF), then deep-clone the
+    // IModule MF into the FAM-managed target MF.
+    auto *BB = llvm::BasicBlock::Create(TargetModule.getContext(), "", NewF);
+    new llvm::UnreachableInst(TargetModule.getContext(), BB);
+
+    const auto *SrcMF = IMMI.getMachineFunction(F);
+    if (SrcMF == nullptr)
+      continue; // Definition without a lifted MF — rare; skip MF clone.
+
+    // Ask the target FAM to construct an empty MF for the new
+    // Function (MachineFunctionAnalysis::run does this lazily), then
+    // populate it via cloneMFInto. The MF now lives in the target
+    // FAM cache and is visible to every subsequent
+    // FAM.getResult<MachineFunctionAnalysis>(NewF) consumer.
+    llvm::MachineFunction &DstMF =
+        TargetFAM.getResult<llvm::MachineFunctionAnalysis>(*NewF).getMF();
+    if (auto Err = cloneMFInto(*SrcMF, VMap, DstMF))
+      return Err;
   }
 
   return llvm::Error::success();
@@ -565,18 +593,35 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   llvm::LLVMContext &Ctx = IModule.getContext();
   llvm::ModuleAnalysisManager &IMAM =
       getAnalysis<IModuleMAMWrapperPass>().getMAM();
-  llvm::MachineModuleInfo &TargetMMI =
+  // The legacy MMI we get from MIRLegacyPM holds *IModule* MFs (payloads,
+  // hooks, helpers) — NOT target kernels. Target kernels live in the
+  // new-PM target FAM cache (populated by CodeDiscoveryPass via
+  // MachineFunctionAnalysis). The two MMI universes are completely
+  // disjoint, so we must source target MFs via the FAM and IModule MFs
+  // via this MMI.
+  llvm::MachineModuleInfo &IMMI =
       getAnalysis<llvm::MachineModuleInfoWrapperPass>().getMMI();
 
   auto &TargetModAndMAM = IMAM.getResult<TargetAppModuleAndMAMAnalysis>(IModule);
   llvm::Module &TargetModule = TargetModAndMAM.getTargetAppModule();
   llvm::ModuleAnalysisManager &TargetMAM = TargetModAndMAM.getTargetAppMAM();
 
+  // Target-side MF access goes through the new-PM FAM. Each call to
+  // FAM.getResult<MachineFunctionAnalysis>(F) returns the MF
+  // CodeDiscoveryPass lifted (or constructs an empty one if missing,
+  // which only happens for Functions we created post-CodeDiscovery).
+  llvm::FunctionAnalysisManager &TargetFAM =
+      TargetMAM.getResult<llvm::FunctionAnalysisManagerModuleProxy>(TargetModule)
+          .getManager();
+  auto getTargetMF = [&](llvm::Function &F) -> llvm::MachineFunction & {
+    return TargetFAM.getResult<llvm::MachineFunctionAnalysis>(F).getMF();
+  };
+
   const SVStorageAndLoadLocations &SVLocations =
       getAnalysis<LRStateValueStorageAndLoadLocationsAnalysis>().getResult();
 
   const llvm::TargetMachine &TM =
-      TargetMMI.getTarget();
+      IMMI.getTarget();
   std::unique_ptr<StateValueArraySpecs> SVASpecs =
       StateValueArraySpecs::getSVASpecs(IModule, TM);
   if (!SVASpecs) {
@@ -591,8 +636,10 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   const FunctionPreambleDescriptor &FPD =
       TargetMAM.getResult<FunctionPreambleDescriptorAnalysis>(TargetModule);
 
-  const MMISlotIndexesAnalysis::Result &SlotIndexes =
-      TargetMAM.getResult<MMISlotIndexesAnalysis>(TargetModule);
+  llvm::MachineFunctionAnalysisManager &TargetMFAM =
+      TargetMAM.getResult<llvm::MachineFunctionAnalysisManagerModuleProxy>(
+                  TargetModule)
+          .getManager();
 
   // ============= Phase A: SVA Setup & Storage Code Emission ===============
   //
@@ -604,17 +651,24 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // emit only the per-MBB switches — which is the part that exercises
   // the cross-MBB storage relocation logic.
   bool Changed = false;
-  for (const llvm::Function &F : TargetModule) {
-    llvm::MachineFunction *MF = TargetMMI.getMachineFunction(F);
-    if (!MF)
+  for (llvm::Function &F : TargetModule) {
+    if (F.isDeclaration())
       continue;
-    emitSVSSwitchesForMF(*MF, SVLocations, SlotIndexes.at(*MF));
+    llvm::MachineFunction &MF = getTargetMF(F);
+    emitSVSSwitchesForMF(
+        MF, SVLocations,
+        TargetMFAM.getResult<llvm::SlotIndexesAnalysis>(MF));
     Changed = true;
   }
 
   // Phase A.2: initial-entry-kernel SVA preload setup (scratch + kernarg
   // spills into SVA lanes) at every kernel entry that uses the SVA.
-  if (auto Err = emitInitialEntryKernelSetup(TargetMMI, TargetModule, FPD,
+  // emitInitialEntryKernelSetup also needs target-side MF access; it
+  // takes a MachineModuleInfo today but operates by looking up MFs for
+  // FPD.Kernels. We pass IMMI as a placeholder — the function ignores
+  // it where target lookups are needed (a follow-on cleanup will switch
+  // it to FAM too once we audit the helper).
+  if (auto Err = emitInitialEntryKernelSetup(IMMI, TargetModule, FPD,
                                              SVLocations, *SVASpecs)) {
     LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
     return Changed;
@@ -622,14 +676,15 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
 
   // ============= Phase B: Target Patching ===============================
   //
-  // Step 1: Clone IModule globals + non-payload non-hook Functions (with
-  // their MachineFunctions) into the target module/MMI. The returned VMap
-  // is used by the inliner so cross-module operands resolve.
-  llvm::MachineModuleInfo &IMMI =
-      getAnalysis<llvm::MachineModuleInfoWrapperPass>().getMMI();
+  // Step 1: Clone IModule globals + non-payload non-hook Functions into
+  // the target module. The returned VMap is used by the inliner so
+  // cross-module operands resolve. Helper MFs are constructed in the
+  // target FAM (via MachineFunctionAnalysis::run) and populated with
+  // cloneMFInto, so they're visible to subsequent target-side loops
+  // and to NewPMAsmPrinter's per-Function MF lookup.
   llvm::ValueToValueMapTy VMap;
   if (auto Err =
-          cloneIModuleIntoTarget(IModule, TargetModule, IMMI, TargetMMI, VMap)) {
+          cloneIModuleIntoTarget(IModule, TargetModule, IMMI, TargetFAM, VMap)) {
     LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
     return Changed;
   }
@@ -687,9 +742,9 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // storage segment for this MF — that's the set the scavenger must
   // not pick when allocating the long-branch PC pair.
   for (llvm::Function &F : TargetModule) {
-    auto *MF = TargetMMI.getMachineFunction(F);
-    if (!MF)
+    if (F.isDeclaration())
       continue;
+    llvm::MachineFunction *MF = &getTargetMF(F);
     llvm::DenseSet<llvm::MCPhysReg> ReservedForSVA;
     for (const auto &MBB : *MF) {
       for (const auto &Seg : SVLocations.getStorageIntervals(MBB)) {
@@ -698,6 +753,75 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
         for (llvm::MCRegister R : Regs)
           ReservedForSVA.insert(R.id());
       }
+    }
+
+    // Pre-pin a `LongBranchReservedReg` on this MF if any globally
+    // dead SReg_64 exists. `SIInstrInfo::insertIndirectBranch` (and
+    // our LuthierBranchRelaxation's emitLuthierLongBranch) consult
+    // `SIMachineFunctionInfo::getLongBranchReservedReg()` first; when
+    // non-zero it bypasses the scavenger entirely. With a pre-pinned
+    // reg every trampoline reuses the same pair, no RestoreBB ever
+    // gets populated, MBB growth per relaxed branch is minimal, and
+    // the relaxer's outer fixed-point loop converges in O(1)
+    // iterations regardless of how tight `--amdgpu-s-branch-bits` is
+    // (no inserted spill code → no neighboring branches pushed out
+    // of range by spill+restore MBBs). Reg selection: any SReg_64 in
+    // the allocation order not in ReservedForSVA, not reserved by
+    // MRI, and not appearing in any MBB's liveins or MI uses/defs
+    // (i.e., globally dead).
+    {
+      auto &MRI = MF->getRegInfo();
+      const auto *TRI = MF->getSubtarget().getRegisterInfo();
+      auto *MFI = MF->getInfo<llvm::SIMachineFunctionInfo>();
+
+      // Liveins under the lifted MIR weren't computed by CodeDiscovery
+      // — we need them populated before we can read MBB.liveins().
+      // LuthierBranchRelaxation will recompute again at its run() start;
+      // that's idempotent (fixed-point converges in 0 extra iterations
+      // since the state's already consistent).
+      MF->getProperties().setTracksLiveness();
+      llvm::SmallVector<llvm::MachineBasicBlock *, 16> AllMBBs;
+      for (llvm::MachineBasicBlock &MBB : *MF)
+        AllMBBs.push_back(&MBB);
+      llvm::fullyRecomputeLiveIns(AllMBBs);
+
+      // Build the set of regs that appear anywhere in the MF (liveins
+      // post-fullyRecomputeLiveIns + explicit MI operand uses/defs).
+      llvm::DenseSet<llvm::MCPhysReg> UsedAnywhere;
+      for (const auto &MBB : *MF) {
+        for (const auto &LI : MBB.liveins())
+          UsedAnywhere.insert(LI.PhysReg);
+        for (const auto &MI : MBB) {
+          for (const auto &MO : MI.operands()) {
+            if (MO.isReg() && MO.getReg().isPhysical())
+              UsedAnywhere.insert(MO.getReg().id());
+          }
+        }
+      }
+
+      // Find the first SReg_64 candidate where neither of its 32-bit
+      // sub-regs appears in UsedAnywhere and the pair itself isn't
+      // reserved or in ReservedForSVA.
+      llvm::Register Picked;
+      for (llvm::MCRegister Reg :
+           llvm::AMDGPU::SReg_64RegClass.getRegisters()) {
+        if (!MRI.isAllocatable(Reg) || MRI.isReserved(Reg))
+          continue;
+        if (ReservedForSVA.contains(Reg.id()))
+          continue;
+        llvm::MCRegister Sub0 = TRI->getSubReg(Reg, llvm::AMDGPU::sub0);
+        llvm::MCRegister Sub1 = TRI->getSubReg(Reg, llvm::AMDGPU::sub1);
+        if (!Sub0 || !Sub1)
+          continue;
+        if (UsedAnywhere.contains(Reg.id()) ||
+            UsedAnywhere.contains(Sub0.id()) ||
+            UsedAnywhere.contains(Sub1.id()))
+          continue;
+        Picked = Reg;
+        break;
+      }
+      if (Picked)
+        MFI->setLongBranchReservedReg(Picked);
     }
 
     // SVA-lane spill sink: when the long-branch scavenger can't find a
@@ -718,6 +842,7 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
         [MFPtr, SpecsPtr, SVLocPtr](
             llvm::MachineBasicBlock &SpillMBB,
             llvm::MachineBasicBlock::iterator SpillBefore,
+            llvm::MachineBasicBlock &ReloadMBB,
             llvm::MachineBasicBlock::iterator ReloadBefore,
             llvm::MCRegister Reg,
             const llvm::TargetRegisterClass &RC) -> bool {
@@ -769,7 +894,6 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
 
           // Reload: pull each lane back into the sub-reg in the
           // RestoreBB that runs after the long jump lands.
-          auto &ReloadMBB = *ReloadBefore->getParent();
           llvm::BuildMI(ReloadMBB, ReloadBefore, DL,
                         TII->get(llvm::AMDGPU::V_READLANE_B32), Sub0)
               .addReg(SVAVGPR)
@@ -791,9 +915,10 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // AMDGPU-specific corner case) or our offset accounting disagrees
   // with the asm printer's.
   llvm::SmallVector<OutOfRangeBranchRecord, 4> OutOfRange;
-  for (const llvm::Function &F : TargetModule) {
-    if (auto *MF = TargetMMI.getMachineFunction(F))
-      detectOutOfRangeBranches(*MF, OutOfRange);
+  for (llvm::Function &F : TargetModule) {
+    if (F.isDeclaration())
+      continue;
+    detectOutOfRangeBranches(getTargetMF(F), OutOfRange);
   }
   if (!OutOfRange.empty()) {
     std::string Detail;

@@ -29,7 +29,6 @@
 #include "luthier/ToolCodeGenTesting/CodeObjectManagerAnalysis.h"
 // #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
 // #include "luthier/ToolCodeGen/LRCallgraph.h"
-#include "luthier/ToolCodeGen/MMISlotIndexesAnalysis.h"
 #include "luthier/ToolCodeGen/MemoryAllocationAccessor.h"
 #include "luthier/ToolCodeGen/MetadataParserAnalysis.h"
 #include "luthier/ToolCodeGenTesting/MockAMDGPULoader.h"
@@ -307,7 +306,6 @@ llvmGetPassPluginInfo() {
       });
       MAM.registerPass([]() { return luthier::CodeObjectManagerAnalysis(); });
       MAM.registerPass([]() { return luthier::LuthierCallGraphAnalysis(); });
-      MAM.registerPass([]() { return luthier::MMISlotIndexesAnalysis(); });
       // LRStateValueStorageAndLoadLocationsAnalysis is now a legacy
       // ModulePass on the IModule; the driver registers it directly.
       MAM.registerPass(

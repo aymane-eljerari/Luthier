@@ -141,7 +141,7 @@ void emitLuthierLongBranch(llvm::MachineBasicBlock &MBB,
     Scav = RS.scavengeRegisterBackwards(
         llvm::AMDGPU::SReg_64RegClass,
         llvm::MachineBasicBlock::iterator(GetPC),
-        /*RestoreAfter=*/false, /*SPAdj=*/0, /*AllowSpill=*/true);
+        /*RestoreAfter=*/false, /*SPAdj=*/0, /*AllowSpill=*/false);
   }
 
   if (Scav) {
@@ -149,14 +149,16 @@ void emitLuthierLongBranch(llvm::MachineBasicBlock &MBB,
     MRI.replaceRegWith(PCReg, Scav);
     MRI.clearVirtRegs();
   } else {
-    // Stock SIInstrInfo falls back to TRI->spillEmergencySGPR here.
-    // Our LuthierRegScavenger's SVASpillCallback path would already
-    // have produced a working Scav if installed; reaching this branch
-    // means no callback was installed and no globally-dead SReg_64
-    // exists. Surface the failure rather than silently corrupt PC.
+    // No globally-free SReg_64. Driving the SVA-lane spill sink from
+    // here requires the relaxer's cond/uncond fixup loop to converge
+    // under the inserted spill-trampoline+restore MBBs — under tight
+    // --amdgpu-s-branch-bits the inserted MBBs push neighboring
+    // branches further out of range and the iteration count grows
+    // unbounded (see task #30 followup). For now surface the failure.
     llvm::report_fatal_error(
-        "LuthierBranchRelaxation: no free SReg_64 found and no SVA-lane "
-        "spill sink installed; cannot relax long branch",
+        "LuthierBranchRelaxation: no free SReg_64 found; SVA-lane "
+        "spill sink integration is gated on the relaxer's "
+        "convergence fix (see task #30 followup).",
         /*GenCrashDiag=*/false);
   }
 
@@ -564,10 +566,38 @@ bool LuthierBranchRelaxationWorker::run(llvm::MachineFunction &mf) {
   TM = &MF->getTarget();
   TRI = ST.getRegisterInfo();
   MF->RenumberBlocks();
+
+  // Stock BranchRelaxationPass runs late in the codegen pipeline, after
+  // LiveIntervals / regalloc have populated per-MBB live-in sets and
+  // set MachineFunctionProperties::TracksLiveness. We run immediately
+  // after CodeDiscoveryPass on lifted MIR, where neither has happened.
+  // Without TracksLiveness, MBB::livein_begin asserts; without computed
+  // live-ins, fixupUnconditionalBranch's live-in propagation from
+  // successors copies an empty set and the long-jump trampoline ends
+  // up with no live-ins — fine for correctness on AMDGPU but the
+  // scavenger inside emitLuthierLongBranch consults LiveOut (initialized
+  // from successor live-ins via enterBasicBlockEnd → LiveUnits.addLiveOuts),
+  // so missing live-ins make every register look free and the scavenger
+  // happily picks ones the app uses. Recompute here to fix both.
+  MF->getProperties().setTracksLiveness();
+  llvm::SmallVector<llvm::MachineBasicBlock *, 16> MBBs;
+  for (llvm::MachineBasicBlock &MBB : *MF)
+    MBBs.push_back(&MBB);
+  llvm::fullyRecomputeLiveIns(MBBs);
+
   scanFunction();
   bool MadeChange = false;
-  while (relaxBranchInstructions())
+  // Bound the relaxer's outer fixed-point loop. Stock LLVM converges
+  // naturally because each fixup tightens distance; under tight
+  // `--amdgpu-s-branch-bits` and our SVA-aware scavenger insertions
+  // we can fail to converge (see task #30 followup). Bail safely
+  // rather than spin.
+  constexpr int kRelaxIterLimit = 64;
+  for (int I = 0; I < kRelaxIterLimit; ++I) {
+    if (!relaxBranchInstructions())
+      break;
     MadeChange = true;
+  }
   BlockInfo.clear();
   RelaxedUnconditionals.clear();
   return MadeChange;

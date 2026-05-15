@@ -221,10 +221,21 @@ llvm::Expected<std::unique_ptr<llvm::MachineFunction>> cloneMF(
                     SrcF.getName())));
   llvm::Function &DestF = *cast<llvm::Function>(DestFMapEntry->second);
 
-  // Construct the destination machine function
+  // Construct the destination machine function and delegate to
+  // cloneMFInto for the rest of the work.
   auto DstMF = std::make_unique<llvm::MachineFunction>(
       DestF, DestMMI.getTarget(), *DestMMI.getTarget().getSubtargetImpl(DestF),
       DestMMI.getContext(), SrcMF->getFunctionNumber());
+  LUTHIER_RETURN_ON_ERROR(cloneMFInto(*SrcMF, VMap, *DstMF, SrcToDstMIMap));
+  return DstMF;
+}
+
+llvm::Error cloneMFInto(
+    const llvm::MachineFunction &SrcMFRef, const llvm::ValueToValueMapTy &VMap,
+    llvm::MachineFunction &DstMFRef,
+    llvm::DenseMap<llvm::MachineInstr *, llvm::MachineInstr *> *SrcToDstMIMap) {
+  const llvm::MachineFunction *SrcMF = &SrcMFRef;
+  llvm::MachineFunction *DstMF = &DstMFRef;
   llvm::DenseMap<llvm::MachineBasicBlock *, llvm::MachineBasicBlock *>
       Src2DstMBB;
 
@@ -414,7 +425,7 @@ llvm::Expected<std::unique_ptr<llvm::MachineFunction>> cloneMF(
   DstMRI->freezeReservedRegs();
   //  bool Verified = DstMF->verify(nullptr, "", /*AbortOnError=*/true);
   //  LUTHIER_RETURN_ON_ERROR(LUTHIER_ASSERTION(Verified));
-  return DstMF;
+  return llvm::Error::success();
 }
 
 llvm::Error cloneMMI(

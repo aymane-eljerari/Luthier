@@ -64,13 +64,16 @@ namespace luthier {
 class LuthierRegScavenger {
 public:
   /// Spill sink for the no-free-reg case. Receives the chosen reg, its
-  /// class, and the spill+reload insertion points the scavenger picked.
-  /// Returns \c true on success; on \c false the scavenger falls back
-  /// to the stock FrameIndex-based path (or reports a hard error if
-  /// there's no emergency slot).
+  /// class, and the spill+reload insertion points the caller picked.
+  /// Spill and reload may live in different MBBs (long-jump trampoline
+  /// reload lands in RestoreBB; standard scavenger reload lands in the
+  /// same MBB). Returns \c true on success; on \c false the scavenger
+  /// falls back to the stock FrameIndex-based path (or reports a hard
+  /// error if there's no emergency slot).
   using SVASpillCallback = std::function<bool(
-      llvm::MachineBasicBlock &MBB,
+      llvm::MachineBasicBlock &SpillMBB,
       llvm::MachineBasicBlock::iterator SpillBefore,
+      llvm::MachineBasicBlock &ReloadMBB,
       llvm::MachineBasicBlock::iterator ReloadBefore, llvm::MCRegister Reg,
       const llvm::TargetRegisterClass &RC)>;
 
@@ -154,6 +157,18 @@ public:
   /// See \c RegScavenger::setRegUsed.
   void setRegUsed(llvm::Register Reg,
                   llvm::LaneBitmask LaneMask = llvm::LaneBitmask::getAll());
+
+  /// Explicitly invoke the SVA-lane spill sink with caller-supplied
+  /// insertion points. Used by \c emitLuthierLongBranch when the
+  /// scavenger's normal spill flow can't express the reload-in-
+  /// RestoreBB semantics a long-jump needs. Returns \c true on
+  /// success (the sink emitted spill+reload), \c false otherwise.
+  bool invokeSVASpillSink(llvm::MachineBasicBlock &SpillMBB,
+                          llvm::MachineBasicBlock::iterator SpillBefore,
+                          llvm::MachineBasicBlock &ReloadMBB,
+                          llvm::MachineBasicBlock::iterator ReloadBefore,
+                          llvm::MCRegister Reg,
+                          const llvm::TargetRegisterClass &RC);
 
 private:
   /// See \c RegScavenger::ScavengedInfo.

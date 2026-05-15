@@ -240,7 +240,7 @@ LuthierRegScavenger::ScavengedInfo &LuthierRegScavenger::spill(
   // FrameIndex machinery. The sink is expected to emit the spill+reload
   // using SVA lanes via V_WRITELANE/V_READLANE.
   if (SpillSink) {
-    if (SpillSink(*MBB, Before, UseMI, Reg, RC)) {
+    if (SpillSink(*MBB, Before, *UseMI->getParent(), UseMI, Reg, RC)) {
       // Synthesize a scavenging slot record so the caller's
       // scavengeRegisterBackwards bookkeeping (which assumes a slot
       // index) still works. FrameIndex == -1 marks it as SVA-lane-managed.
@@ -307,6 +307,17 @@ LuthierRegScavenger::ScavengedInfo &LuthierRegScavenger::spill(
     TRI->eliminateFrameIndex(II, SPAdj, FIOperandNum, /*RS=*/nullptr);
   }
   return Scavenged[SI];
+}
+
+bool LuthierRegScavenger::invokeSVASpillSink(
+    llvm::MachineBasicBlock &SpillMBB,
+    llvm::MachineBasicBlock::iterator SpillBefore,
+    llvm::MachineBasicBlock &ReloadMBB,
+    llvm::MachineBasicBlock::iterator ReloadBefore, llvm::MCRegister Reg,
+    const llvm::TargetRegisterClass &RC) {
+  if (!SpillSink)
+    return false;
+  return SpillSink(SpillMBB, SpillBefore, ReloadMBB, ReloadBefore, Reg, RC);
 }
 
 llvm::Register LuthierRegScavenger::scavengeRegisterBackwards(

@@ -36,7 +36,6 @@ add_library(LuthierToolCodeGen OBJECT
         StateValueArraySpecs.cpp
         IPPredicatedCFG.cpp
         StateValueArrayStorage.cpp
-        MMISlotIndexesAnalysis.cpp
         ProcessIntrinsicsAtIRLevelPass.cpp
         RemoveUnusedHooksPass.cpp
         ForwardISAStateToCalleesPass.cpp

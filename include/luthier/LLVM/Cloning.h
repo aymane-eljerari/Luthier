@@ -49,6 +49,21 @@ llvm::Expected<std::unique_ptr<llvm::MachineFunction>> cloneMF(
     llvm::DenseMap<llvm::MachineInstr *, llvm::MachineInstr *> *SrcToDstMIMap =
         nullptr);
 
+/// Clone the contents of \p SrcMF into the pre-existing destination
+/// machine function \p DstMF. Used when the destination MF is managed
+/// by a new-PM \c MachineFunctionAnalysis cache (which constructs an
+/// empty MF for a Function on first query); the caller obtains the
+/// empty MF and asks this routine to populate it. \p DstMF must
+/// already be associated with the correct destination Function (i.e.,
+/// \c VMap[&SrcMF->getFunction()] == &DstMF.getFunction()).
+///
+/// Behaves identically to \c cloneMF post-construction otherwise.
+llvm::Error cloneMFInto(
+    const llvm::MachineFunction &SrcMF, const llvm::ValueToValueMapTy &VMap,
+    llvm::MachineFunction &DstMF,
+    llvm::DenseMap<llvm::MachineInstr *, llvm::MachineInstr *> *SrcToDstMIMap =
+        nullptr);
+
 /// Clones the content of the source Machine Module Info \p SrcMMI into
 /// the \p DestMMI. Uses the \p VMap to map the global objects in the source
 /// module into the destination, already cloned module

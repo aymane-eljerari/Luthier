@@ -26,7 +26,6 @@
 #include "luthier/HSATooling/ToolExecutableLoader.h"
 #include "luthier/ToolCodeGen/InjectedPayloadPEIPass.h"
 #include "luthier/ToolCodeGen/InstrumentationPMDriver.h"
-#include "luthier/ToolCodeGen/MMISlotIndexesAnalysis.h"
 #include "luthier/ToolCodeGen/PatchLiftedRepresentationPass.h"
 #include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
 #include "luthier/ToolCodeGen/RunIRPassesOnIModulePass.h"
@@ -140,7 +139,6 @@ CodeGenerator::applyInstrumentationTask(const InstrumentationTask &Task,
   // Add the LR Callgraph analysis pass
   TargetMAM.registerPass([&]() { return LRCallGraphAnalysis(); });
   // Add the MMI-wide Slot indexes analysis pass
-  TargetMAM.registerPass([&]() { return MMISlotIndexesAnalysis(); });
   // LRStateValueStorageAndLoadLocationsAnalysis is no longer a target-MAM
   // analysis; it runs as a legacy ModulePass on the IModule's codegen PM
   // (initialized in InstrumentationPMDriver) so it can consume the legacy

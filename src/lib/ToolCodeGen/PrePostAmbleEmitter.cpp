@@ -27,6 +27,8 @@
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
 #include <GCNSubtarget.h>
 #include <SIMachineFunctionInfo.h>
+#include <llvm/CodeGen/MachinePassManager.h>
+#include <llvm/CodeGen/SlotIndexes.h>
 
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "luthier-pre-post-amble-emitter"
@@ -381,8 +383,12 @@ static void emitCodeToMoveSVA(llvm::ModuleAnalysisManager &TargetMAM,
                               llvm::Module &TargetModule,
                               llvm::MachineFunction *MF,
                               luthier::SVStorageAndLoadLocations &SVLocations) {
-  auto &SlotIndexes =
-      TargetMAM.getCachedResult<MMISlotIndexesAnalysis>(TargetModule)->at(*MF);
+  auto &TargetMFAM =
+      TargetMAM
+          .getResult<llvm::MachineFunctionAnalysisManagerModuleProxy>(
+              TargetModule)
+          .getManager();
+  auto &SlotIndexes = TargetMFAM.getResult<llvm::SlotIndexesAnalysis>(*MF);
 
   // Now we need to emit code that juggles the SVS between different
   // storage schemes

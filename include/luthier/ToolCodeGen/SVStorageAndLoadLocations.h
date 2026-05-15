@@ -27,7 +27,7 @@
 #include "luthier/HSA/LoadedCodeObjectKernel.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
 #include "luthier/ToolCodeGen/LegacyPassSupport.h"
-#include "luthier/ToolCodeGen/MMISlotIndexesAnalysis.h"
+#include <llvm/CodeGen/MachinePassManager.h>
 #include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
 #include "luthier/ToolCodeGen/StateValueArrayStorage.h"
 #include <llvm/CodeGen/SlotIndexes.h>
@@ -136,7 +136,8 @@ public:
   /// operation
   llvm::Error calculate(
       const llvm::MachineModuleInfo &TargetMMI, const llvm::Module &TargetM,
-      const MMISlotIndexesAnalysis::Result &SlotIndexes,
+      llvm::FunctionAnalysisManager &TargetFAM,
+      llvm::MachineFunctionAnalysisManager &TargetMFAM,
       const InjectedPayloadAndInstPoint &IPIP, FunctionPreambleDescriptor &FPD,
       const llvm::DenseMap<const llvm::Function *, struct PayloadLiveSets>
           &PayloadLiveSetsByFn);

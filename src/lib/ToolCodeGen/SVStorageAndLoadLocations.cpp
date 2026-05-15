@@ -21,12 +21,14 @@
 #include "luthier/Common/LuthierError.h"
 #include "luthier/ToolCodeGen/IPPredicatedLivenessIModulePass.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
-#include "luthier/ToolCodeGen/MMISlotIndexesAnalysis.h"
 #include "luthier/ToolCodeGen/StateValueArrayStorage.h"
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
 #include <AMDGPU.h>
 #include <GCNSubtarget.h>
+#include <llvm/CodeGen/MachineFunctionAnalysis.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
+#include <llvm/CodeGen/MachinePassManager.h>
+#include <llvm/CodeGen/SlotIndexes.h>
 #include <llvm/CodeGen/TargetRegisterInfo.h>
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
 #include <llvm/Support/CommandLine.h>
@@ -468,7 +470,8 @@ SVStorageAndLoadLocations::getStateValueArrayLoadPlanForInstPoint(
 
 llvm::Error SVStorageAndLoadLocations::calculate(
     const llvm::MachineModuleInfo &TargetMMI, const llvm::Module &TargetM,
-    const MMISlotIndexesAnalysis::Result &SlotIndexes,
+    llvm::FunctionAnalysisManager &TargetFAM,
+    llvm::MachineFunctionAnalysisManager &TargetMFAM,
     const InjectedPayloadAndInstPoint &IPIP, FunctionPreambleDescriptor &FPD,
     const llvm::DenseMap<const llvm::Function *, PayloadLiveSets>
         &PayloadLiveSetsByFn) {
@@ -478,11 +481,16 @@ llvm::Error SVStorageAndLoadLocations::calculate(
   llvm::DenseSet<llvm::MCPhysReg> AllPayloadsDoNotClobber =
       liveAcrossAllPayloads(PayloadLiveSetsByFn);
 
+  // Target MFs live in the new-PM target FAM cache (CodeDiscoveryPass
+  // populates them via FAM.getResult<MachineFunctionAnalysis>(F).getMF()
+  // — MachineFunctionAnalysis is a Function-level analysis registered
+  // in FAM). Pull via TargetFAM rather than the legacy IMMI we receive
+  // (which only contains the IModule's payloads/hooks).
   llvm::SmallVector<llvm::MachineFunction *, 4> MFs;
-  for (const auto &F : TargetM) {
-    if (auto *MF = TargetMMI.getMachineFunction(F)) {
-      MFs.push_back(MF);
-    }
+  for (llvm::Function &F : const_cast<llvm::Module &>(TargetM)) {
+    if (F.isDeclaration())
+      continue;
+    MFs.push_back(&TargetFAM.getResult<llvm::MachineFunctionAnalysis>(F).getMF());
   }
 
   // Early exit if no MF is present in the LCO of LR
@@ -530,8 +538,8 @@ llvm::Error SVStorageAndLoadLocations::calculate(
             StateValueStorageIntervals
                 .insert({&MBB, llvm::SmallVector<StateValueStorageSegment>{}})
                 .first->getSecond();
-        Segments.emplace_back(SlotIndexes.at(*MF).getMBBStartIdx(&MBB),
-                              SlotIndexes.at(*MF).getMBBEndIdx(&MBB),
+        Segments.emplace_back(TargetMFAM.getResult<llvm::SlotIndexesAnalysis>(*MF).getMBBStartIdx(&MBB),
+                              TargetMFAM.getResult<llvm::SlotIndexesAnalysis>(*MF).getMBBEndIdx(&MBB),
                               StateValueFixedLocation);
       }
       if (MF->getFunction().getCallingConv() !=
@@ -594,7 +602,7 @@ llvm::Error SVStorageAndLoadLocations::calculate(
       for (const auto &MBB : *MF) {
         // Marks the beginning of the current interval we are in this loop
         llvm::SlotIndex CurrentIntervalBegin =
-            SlotIndexes.at(*MF).getMBBStartIdx(&MBB);
+            TargetMFAM.getResult<llvm::SlotIndexesAnalysis>(*MF).getMBBStartIdx(&MBB);
 
         auto &CurrentMBBSegments =
             StateValueStorageIntervals.insert({&MBB, {}}).first->getSecond();
@@ -635,8 +643,8 @@ llvm::Error SVStorageAndLoadLocations::calculate(
           if (&MI == &MBB.back() || TryRelocatingValueStateReg ||
               MustRelocateStateValue) {
             auto NextIndex = &MI == &MBB.back()
-                                 ? SlotIndexes.at(*MF).getMBBEndIdx(&MBB)
-                                 : SlotIndexes.at(*MF).getInstructionIndex(MI);
+                                 ? TargetMFAM.getResult<llvm::SlotIndexesAnalysis>(*MF).getMBBEndIdx(&MBB)
+                                 : TargetMFAM.getResult<llvm::SlotIndexesAnalysis>(*MF).getInstructionIndex(MI);
             CurrentMBBSegments.emplace_back(CurrentIntervalBegin, NextIndex,
                                             SVS);
             for (const auto &HookMI : HookInsertionPointsInCurrentSegment) {
@@ -715,10 +723,16 @@ bool LRStateValueStorageAndLoadLocationsAnalysis::runOnModule(
   auto &FPD =
       TargetMAM.getResult<FunctionPreambleDescriptorAnalysis>(TargetModule);
 
-  auto Err = Result.calculate(
-      MMIAnalysis->getMMI(), TargetModule,
-      TargetMAM.getResult<MMISlotIndexesAnalysis>(TargetModule), *IPIP, FPD,
-      IPLiveness.getMap());
+  auto &TargetFAM =
+      TargetMAM.getResult<llvm::FunctionAnalysisManagerModuleProxy>(TargetModule)
+          .getManager();
+  auto &TargetMFAM =
+      TargetMAM.getResult<llvm::MachineFunctionAnalysisManagerModuleProxy>(
+                  TargetModule)
+          .getManager();
+  auto Err =
+      Result.calculate(MMIAnalysis->getMMI(), TargetModule, TargetFAM,
+                       TargetMFAM, *IPIP, FPD, IPLiveness.getMap());
   if (Err)
     IModule.getContext().emitError(llvm::toString(std::move(Err)));
 
