@@ -57,18 +57,6 @@ public:
 
   [[nodiscard]] bool canRelaxDirectBranch() const;
 
-  void addIndirectBranchOrCallTarget(llvm::Function &F);
-
-  [[nodiscard]] llvm::SmallVector<llvm::Function *>
-  getIndirectBranchAndCallTargets() const;
-
-  void removeIndirectBranchTarget(llvm::Function &F);
-
-  void setIndirectBranchOrCallTargetsResolutionStatus(llvm::LLVMContext &Ctx,
-                                                      bool Status);
-
-  bool getIndirectBranchOrCallTargetsResolutionStatus() const;
-
   static bool classof(const Metadata *MD);
 };
 
