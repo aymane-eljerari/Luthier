@@ -34,10 +34,12 @@
 #include <GCNSubtarget.h>
 #include <SIInstrInfo.h>
 #include <SIMachineFunctionInfo.h>
+#include <llvm/CodeGen/BranchRelaxation.h>
 #include <llvm/CodeGen/MachineBasicBlock.h>
 #include <llvm/CodeGen/MachineFrameInfo.h>
 #include <llvm/CodeGen/MachineFunction.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
+#include <llvm/CodeGen/MachinePassManager.h>
 #include <llvm/CodeGen/TargetInstrInfo.h>
 #include <llvm/CodeGen/TargetRegisterInfo.h>
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
@@ -510,10 +512,23 @@ void stripStaleNumRegsAttrs(llvm::Module &TargetModule) {
 /// machine-pass chain. So no LLVM pass runs between TargetModulePatcher
 /// and AsmPrinter; out-of-range branches would be silently emitted
 /// with truncated displacements.
-unsigned detectOutOfRangeBranches(const llvm::MachineFunction &MF) {
+/// One entry per direct branch whose target lies beyond \c s_branch's
+/// signed 16-bit-word range. Populated by \c detectOutOfRangeBranches
+/// and consumed by the eventual \c s_setpc_b64 rewriter (task #26
+/// rewrite phase, not yet implemented).
+struct OutOfRangeBranchRecord {
+  const llvm::MachineFunction *MF;
+  const llvm::MachineInstr *Branch;
+  const llvm::MachineBasicBlock *Target;
+  int64_t BranchOffset;
+  int64_t Delta;
+};
+
+unsigned
+detectOutOfRangeBranches(const llvm::MachineFunction &MF,
+                         llvm::SmallVectorImpl<OutOfRangeBranchRecord> &Out) {
   static constexpr int64_t kSBranchMaxBytes = (1LL << 18) - 4;
   const auto &TII = *MF.getSubtarget().getInstrInfo();
-  // First pass: byte offset of each MBB from the start of the function.
   llvm::DenseMap<const llvm::MachineBasicBlock *, int64_t> MBBOffset;
   int64_t Cursor = 0;
   for (const auto &MBB : MF) {
@@ -521,7 +536,6 @@ unsigned detectOutOfRangeBranches(const llvm::MachineFunction &MF) {
     for (const auto &MI : MBB)
       Cursor += TII.getInstSizeInBytes(MI);
   }
-  // Second pass: for every direct branch MI, measure to its target MBB.
   unsigned NumOutOfRange = 0;
   Cursor = 0;
   for (const auto &MBB : MF) {
@@ -533,11 +547,7 @@ unsigned detectOutOfRangeBranches(const llvm::MachineFunction &MF) {
           int64_t Delta = TgtOff - (MIOffset + TII.getInstSizeInBytes(MI));
           if (Delta > kSBranchMaxBytes || Delta < -kSBranchMaxBytes) {
             ++NumOutOfRange;
-            LLVM_DEBUG(llvm::dbgs()
-                       << "  out-of-range branch in " << MF.getName()
-                       << " at offset " << MIOffset << " → "
-                       << TargetMBB->getName() << " (delta " << Delta
-                       << " bytes)\n");
+            Out.push_back({&MF, &MI, TargetMBB, MIOffset, Delta});
           }
         }
       }
@@ -665,18 +675,47 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // via per-MBB live-ins, falling back to spilling two app SGPRs into the
   // lowest free SVA lanes per StateValueArraySpecs::findLowestFreeLanes) is
   // the next phase.
-  unsigned TotalOutOfRange = 0;
+  // Phase B step 4: invoke LLVM's stock BranchRelaxationPass on every
+  // patched target MF. CodeGenerator::printAssemblyFile takes the MMI
+  // straight to AsmPrinter (no addPassesToEmitFile), so far-jumps need
+  // explicit relaxation here or they'd silently emit with truncated
+  // displacements. The new-PM BranchRelaxationPass::run signature takes
+  // an MFAM but doesn't actually consult it — the body just calls the
+  // internal BranchRelaxation worker which sets up its own RegScavenger
+  // via trackLivenessAfterRegAlloc. We construct an empty MFAM purely
+  // to satisfy the signature. Lit-testable via the AMDGPU backend's
+  // hidden --amdgpu-s-branch-bits=<N> knob (defined in SIInstrInfo.cpp)
+  // which shrinks the s_branch range so small kernels trigger the
+  // long-jump path.
+  llvm::MachineFunctionAnalysisManager MFAM;
+  llvm::BranchRelaxationPass BRPass;
+  for (llvm::Function &F : TargetModule) {
+    if (auto *MF = TargetMMI.getMachineFunction(F))
+      BRPass.run(*MF, MFAM);
+  }
+
+  // Sanity-check: re-run the detector and hard-error if anything
+  // remains out of range. Either the stock relaxer didn't run (e.g.,
+  // AMDGPU-specific corner case) or our offset accounting disagrees
+  // with the asm printer's.
+  llvm::SmallVector<OutOfRangeBranchRecord, 4> OutOfRange;
   for (const llvm::Function &F : TargetModule) {
     if (auto *MF = TargetMMI.getMachineFunction(F))
-      TotalOutOfRange += detectOutOfRangeBranches(*MF);
+      detectOutOfRangeBranches(*MF, OutOfRange);
   }
-  if (TotalOutOfRange > 0) {
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                 "TargetModulePatcherPass: {0} branch(es) in the patched "
-                 "target module exceed s_branch range (±2^18 bytes); "
-                 "s_setpc_b64 relaxation is not yet implemented",
-                 TotalOutOfRange)));
+  if (!OutOfRange.empty()) {
+    std::string Detail;
+    llvm::raw_string_ostream OS(Detail);
+    OS << "TargetModulePatcherPass: " << OutOfRange.size()
+       << " branch(es) remain over-range after BranchRelaxationPass; "
+       << "branches:";
+    for (const auto &R : OutOfRange) {
+      OS << "\n  - " << R.MF->getName() << " offset 0x";
+      OS.write_hex(static_cast<uint64_t>(R.BranchOffset));
+      OS << " → " << R.Target->getName()
+         << " (delta " << R.Delta << " bytes)";
+    }
+    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, LUTHIER_MAKE_GENERIC_ERROR(Detail));
     return Changed;
   }
   return true;
