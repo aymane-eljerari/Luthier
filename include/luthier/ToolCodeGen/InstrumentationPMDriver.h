@@ -77,6 +77,21 @@ struct InstrumentationPMDriverOptions {
                      "file after all pipeline stages complete"),
       llvm::cl::cat(InstrumentationPMDriverOptionsCat)};
 
+  /// Dump the target (application) module's MIR after the IModule codegen
+  /// pipeline completes. The target module is what \c TargetModulePatcherPass
+  /// mutates (non-payload MF clones, stripped num-{vgpr,sgpr} attrs, inlined
+  /// payload MIs); \c --imodule-output only shows the IModule side and
+  /// won't reflect those changes. Use this flag to FileCheck post-patch
+  /// target state. Output is plain MachineFunction print (not YAML
+  /// MIRPrinter) to dodge the post-frame-elim stale-stack-object crash
+  /// the YAML printer trips on.
+  llvm::cl::opt<std::string> TargetModuleOutput{
+      "target-module-output", llvm::cl::init(""),
+      llvm::cl::desc("Dump the target module's MachineFunctions to this "
+                     "file after the IModule codegen pipeline completes "
+                     "(captures TargetModulePatcherPass's effects)."),
+      llvm::cl::cat(InstrumentationPMDriverOptionsCat)};
+
   llvm::cl::opt<unsigned> IModuleOptLevel{
       "imodule-O",
       llvm::cl::desc(

@@ -557,6 +557,41 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
       if (MustDumpMIR)
         OutFile->keep();
 
+      // Dump the post-patch target module if requested. The patcher
+      // mutates target MFs (clones non-payload MFs, strips
+      // num-{vgpr,sgpr}, inlines payloads); imodule-output only shows
+      // the IModule side, so a separate sink is required for lit tests
+      // that need to FileCheck patcher effects.
+      llvm::StringRef TgtOutPath = Options.TargetModuleOutput;
+      if (!TgtOutPath.empty()) {
+        std::error_code TgtEC;
+        llvm::ToolOutputFile TgtFile(TgtOutPath, TgtEC, llvm::sys::fs::OF_Text);
+        if (TgtEC) {
+          LUTHIER_CTX_EMIT_ON_ERROR(
+              Context,
+              LUTHIER_MAKE_GENERIC_ERROR(
+                  "Failed to open target-module-output file '" +
+                  Options.TargetModuleOutput + "': " + TgtEC.message()));
+          return IRStagePA.areAllPreserved() ? llvm::PreservedAnalyses::all()
+                                             : llvm::PreservedAnalyses::none();
+        }
+        // Dump IR (with the stripped attrs visible) + every target-MMI
+        // MachineFunction. Use plain MF::print rather than MIRPrinter so
+        // stale-stack-object indices don't crash the dumper.
+        TgtFile.os() << "; Luthier target-module-output\n";
+        TargetAppM.print(TgtFile.os(), /*AAW=*/nullptr);
+        auto &TargetMMI =
+            TargetMAM.getResult<llvm::MachineModuleAnalysis>(TargetAppM).getMMI();
+        for (const llvm::Function &F : TargetAppM) {
+          if (auto *MF = TargetMMI.getMachineFunction(F)) {
+            TgtFile.os() << "\n# Machine code for function " << F.getName()
+                         << ":\n";
+            MF->print(TgtFile.os());
+          }
+        }
+        TgtFile.keep();
+      }
+
       if (IsLuthierOutput) {
         if (auto Err = writeLuthierFile(OutPath, TargetAppM, *IModule)) {
           LUTHIER_CTX_EMIT_ON_ERROR(Context, std::move(Err));
