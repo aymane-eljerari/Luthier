@@ -35,7 +35,7 @@ class MutableMDTuple : public llvm::MDTuple {
 public:
   static bool classof(const Metadata *Node) { return MDTuple::classof(Node); }
 
-  LLVM_ABI void setOperand(unsigned I, Metadata *New) {
+  void setOperand(unsigned I, Metadata *New) {
     MDTuple::setOperand(I, New);
   };
 };
@@ -116,9 +116,13 @@ TargetMachineInstrMDNode::initializeMDNode(llvm::MachineInstr &MI) {
 
 TargetMachineInstrMDNode &
 TargetMachineInstrMDNode::create(llvm::LLVMContext &Ctx) {
+  /// The Tag entry's aux tuple is the dynamic-annotation index list. Seed
+  /// slot 0 (corresponding to Tag itself) with UndefValue to match the
+  /// padding convention used by getOrCreateMDEntry — Tag is never looked up
+  /// via the index list, so this entry is a placeholder.
   return *llvm::cast<TargetMachineInstrMDNode>(createPCSections(
       Ctx, {{MachineInstrAnnotationInfo<Tag>::MDName,
-             {llvm::ConstantInt::get(llvm::Type::getInt64Ty(Ctx), 0)}}}));
+             {llvm::UndefValue::get(llvm::Type::getInt64Ty(Ctx))}}}));
 }
 
 TargetMachineInstrMDNode *
@@ -126,10 +130,12 @@ TargetMachineInstrMDNode::getInstrMDNodeIfExists(const llvm::MachineInstr &MI) {
   return llvm::dyn_cast<TargetMachineInstrMDNode>(MI.getPCSections());
 }
 
-template <TargetMachineInstrAnnotation Annotation,
-          typename = std::enable_if<Annotation != Tag>>
+template <TargetMachineInstrAnnotation Annotation>
 static std::optional<std::pair<llvm::MDString &, llvm::MDTuple &>>
 getMDEntryIfExists(const TargetMachineInstrMDNode &MDNode) {
+  static_assert(Annotation != Tag,
+                "Tag is not a dynamic annotation slot and cannot be queried "
+                "through the index list");
   auto &IndexList = llvm::cast<llvm::MDTuple>(*MDNode.getOperand(Tag + 1));
   if (IndexList.getNumOperands() < Annotation + 1) {
     return std::nullopt;
@@ -146,10 +152,12 @@ getMDEntryIfExists(const TargetMachineInstrMDNode &MDNode) {
   }
 }
 
-template <TargetMachineInstrAnnotation Annotation,
-          typename = std::enable_if<Annotation != Tag>>
+template <TargetMachineInstrAnnotation Annotation>
 static std::pair<llvm::MDString &, llvm::MDTuple &>
 getOrCreateMDEntry(llvm::LLVMContext &Ctx, TargetMachineInstrMDNode &MDNode) {
+  static_assert(Annotation != Tag,
+                "Tag is not a dynamic annotation slot and cannot be allocated "
+                "through the index list");
   auto &IndexList = llvm::cast<MutableMDTuple>(*MDNode.getOperand(Tag + 1));
   if (IndexList.getNumOperands() < Annotation + 1) {
     llvm::MDBuilder MDB{Ctx};
@@ -221,11 +229,11 @@ void TargetMachineInstrMDNode::setCanRelaxDirectBranch(llvm::LLVMContext &Ctx,
 }
 
 bool TargetMachineInstrMDNode::canRelaxDirectBranch() const {
-  auto TraceAddrHeaderAndEntry =
+  auto CanRelaxHeaderAndEntry =
       getMDEntryIfExists<CanRelaxDirectBranch>(*this);
-  if (!TraceAddrHeaderAndEntry.has_value())
+  if (!CanRelaxHeaderAndEntry.has_value())
     return true;
-  if (auto &ListMD = TraceAddrHeaderAndEntry->second;
+  if (auto &ListMD = CanRelaxHeaderAndEntry->second;
       ListMD.getNumOperands() >= 1) {
     if (auto *CB = llvm::mdconst::extract_or_null<llvm::ConstantInt>(
             ListMD.getOperand(0))) {
