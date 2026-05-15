@@ -18,7 +18,6 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_LUTHIERHSATOOL_H
 #define LUTHIER_TOOLING_LUTHIERHSATOOL_H
-#include "luthier/HSATooling/ToolExecutableLoader.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 /// This Macro needs to be called in the static tool, with the name of the class
 /// inhereting from LuthierHSATool. Variables are marked as used so compiler
@@ -112,9 +111,6 @@ public:
   explicit LuthierHSATool() {}
 
 protected:
-  /// \brief Tool Executable Loader, used to register and load HIP code objects
-  ToolExecutableLoader &TEL;
-
   /// \brief Annotated variables that will hold the information we need to
   /// register everything
   static LUTHIER_ANNOTATE_VARIABLE(HipFatBinariesPtrAttr) void **HipFatBinaries;
