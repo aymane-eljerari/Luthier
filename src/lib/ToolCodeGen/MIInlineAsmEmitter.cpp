@@ -157,10 +157,24 @@ void MIInlineAsmEmitter::emitInlineAsm(
     OpIdx++;
   }
 
+  /// Word-boundary-aware token check: a register-name "match" is only a real
+  /// token when the surrounding characters are not identifier-continuation
+  /// characters. Prevents e.g. "v0" from matching inside "v00" or "myv0_lo".
+  auto IsIdentCont = [](char C) {
+    return std::isalnum(static_cast<unsigned char>(C)) || C == '_';
+  };
+
   for (const auto &RegOp : llvm::concat<RegOperandInfo>(Defs, Uses)) {
     size_t Pos = 0;
     llvm::StringRef RegAsmName = TRI.getRegAsmName(RegOp.Op->getReg());
     while ((Pos = AsmStr.find(RegAsmName, Pos)) != std::string::npos) {
+      bool LeftOK = Pos == 0 || !IsIdentCont(AsmStr[Pos - 1]);
+      size_t End = Pos + RegAsmName.size();
+      bool RightOK = End == AsmStr.size() || !IsIdentCont(AsmStr[End]);
+      if (!LeftOK || !RightOK) {
+        Pos = End;
+        continue;
+      }
       std::string AsmOpIdxAsStr = llvm::formatv("${0}", RegOp.InlineAsmIdx);
       AsmStr.replace(Pos, RegAsmName.size(), AsmOpIdxAsStr);
       Pos += AsmOpIdxAsStr.size();
