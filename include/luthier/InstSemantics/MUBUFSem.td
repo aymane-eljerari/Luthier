@@ -384,12 +384,57 @@ foreach inst = [
 }
 
 foreach inst = [
-    BUFFER_LOAD_SHORT_D16_ADDR64,
-    BUFFER_LOAD_SHORT_D16_BOTHEN,
+    BUFFER_LOAD_SSHORT_LDS_ADDR64,
+    BUFFER_LOAD_SSHORT_LDS_BOTHEN,
+    BUFFER_LOAD_SSHORT_LDS_IDXEN,
+    BUFFER_LOAD_SSHORT_LDS_OFFEN,
+    BUFFER_LOAD_SSHORT_LDS_VBUFFER_ADDR64,
+    BUFFER_LOAD_SSHORT_LDS_VBUFFER_BOTHEN,
+    BUFFER_LOAD_SSHORT_LDS_VBUFFER_IDXEN,
+    BUFFER_LOAD_SSHORT_LDS_VBUFFER_OFFEN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 2), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_USHORT_LDS_ADDR64,
+    BUFFER_LOAD_USHORT_LDS_BOTHEN,
+    BUFFER_LOAD_USHORT_LDS_IDXEN,
+    BUFFER_LOAD_USHORT_LDS_OFFEN,
+    BUFFER_LOAD_USHORT_LDS_VBUFFER_ADDR64,
+    BUFFER_LOAD_USHORT_LDS_VBUFFER_BOTHEN,
+    BUFFER_LOAD_USHORT_LDS_VBUFFER_IDXEN,
+    BUFFER_LOAD_USHORT_LDS_VBUFFER_OFFEN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 2), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
     BUFFER_LOAD_SHORT_D16_HI_ADDR64,
     BUFFER_LOAD_SHORT_D16_HI_BOTHEN,
     BUFFER_LOAD_SHORT_D16_HI_IDXEN,
     BUFFER_LOAD_SHORT_D16_HI_OFFEN,
+    BUFFER_LOAD_SHORT_D16_HI_VBUFFER_ADDR64,
+    BUFFER_LOAD_SHORT_D16_HI_VBUFFER_BOTHEN,
+    BUFFER_LOAD_SHORT_D16_HI_VBUFFER_IDXEN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $tmp, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])),
+    (DefVal $vdata_hi, (LLVMShl (LLVMZExt (GetVal $tmp), si_llvm_i32_ty), 16)),
+    (DefVal $vdata_lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0xFFFF))),
+    (SetNamedOperand $vdata, (LLVMOr (GetVal $vdata_hi), (GetVal $vdata_lo)))];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_SHORT_D16_ADDR64,
+    BUFFER_LOAD_SHORT_D16_BOTHEN,
     BUFFER_LOAD_SHORT_D16_HI_TFE_ADDR64,
     BUFFER_LOAD_SHORT_D16_HI_TFE_BOTHEN,
     BUFFER_LOAD_SHORT_D16_HI_TFE_IDXEN,
@@ -398,20 +443,9 @@ foreach inst = [
     BUFFER_LOAD_SHORT_D16_HI_TFE_VBUFFER_BOTHEN,
     BUFFER_LOAD_SHORT_D16_HI_TFE_VBUFFER_IDXEN,
     BUFFER_LOAD_SHORT_D16_HI_TFE_VBUFFER_OFFEN,
-    BUFFER_LOAD_SHORT_D16_HI_VBUFFER_ADDR64,
-    BUFFER_LOAD_SHORT_D16_HI_VBUFFER_BOTHEN,
-    BUFFER_LOAD_SHORT_D16_HI_VBUFFER_IDXEN,
     BUFFER_LOAD_SSHORT_ADDR64,
     BUFFER_LOAD_SSHORT_BOTHEN,
     BUFFER_LOAD_SSHORT_IDXEN,
-    BUFFER_LOAD_SSHORT_LDS_ADDR64,
-    BUFFER_LOAD_SSHORT_LDS_BOTHEN,
-    BUFFER_LOAD_SSHORT_LDS_IDXEN,
-    BUFFER_LOAD_SSHORT_LDS_OFFEN,
-    BUFFER_LOAD_SSHORT_LDS_VBUFFER_ADDR64,
-    BUFFER_LOAD_SSHORT_LDS_VBUFFER_BOTHEN,
-    BUFFER_LOAD_SSHORT_LDS_VBUFFER_IDXEN,
-    BUFFER_LOAD_SSHORT_LDS_VBUFFER_OFFEN,
     BUFFER_LOAD_SSHORT_OFFEN,
     BUFFER_LOAD_SSHORT_TFE_ADDR64,
     BUFFER_LOAD_SSHORT_TFE_BOTHEN,
@@ -437,14 +471,6 @@ foreach inst = [
     BUFFER_LOAD_USHORT_ADDR64,
     BUFFER_LOAD_USHORT_BOTHEN,
     BUFFER_LOAD_USHORT_IDXEN,
-    BUFFER_LOAD_USHORT_LDS_ADDR64,
-    BUFFER_LOAD_USHORT_LDS_BOTHEN,
-    BUFFER_LOAD_USHORT_LDS_IDXEN,
-    BUFFER_LOAD_USHORT_LDS_OFFEN,
-    BUFFER_LOAD_USHORT_LDS_VBUFFER_ADDR64,
-    BUFFER_LOAD_USHORT_LDS_VBUFFER_BOTHEN,
-    BUFFER_LOAD_USHORT_LDS_VBUFFER_IDXEN,
-    BUFFER_LOAD_USHORT_LDS_VBUFFER_OFFEN,
     BUFFER_LOAD_USHORT_OFFEN,
     BUFFER_LOAD_USHORT_TFE_ADDR64,
     BUFFER_LOAD_USHORT_TFE_BOTHEN,
@@ -464,6 +490,8 @@ foreach inst = [
       (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
+
+
 
 foreach inst = [
     BUFFER_STORE_DWORDX2_ADDR64,
@@ -608,26 +636,145 @@ foreach inst = [
 }
 
 foreach inst = [
-    BUFFER_LOAD_SHORT_D16_BOTHEN_exact,
+    BUFFER_LOAD_SBYTE_LDS_ADDR64,
+    BUFFER_LOAD_SBYTE_LDS_BOTHEN,
+    BUFFER_LOAD_SBYTE_LDS_IDXEN,
+    BUFFER_LOAD_SBYTE_LDS_OFFEN,
+    BUFFER_LOAD_SBYTE_LDS_VBUFFER_ADDR64,
+    BUFFER_LOAD_SBYTE_LDS_VBUFFER_BOTHEN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_UBYTE_LDS_ADDR64,
+    BUFFER_LOAD_UBYTE_LDS_BOTHEN,
+    BUFFER_LOAD_UBYTE_LDS_IDXEN,
+    BUFFER_LOAD_UBYTE_LDS_OFFEN,
+    BUFFER_LOAD_UBYTE_LDS_VBUFFER_ADDR64,
+    BUFFER_LOAD_UBYTE_LDS_VBUFFER_BOTHEN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_SBYTE_ADDR64,
+    BUFFER_LOAD_SBYTE_BOTHEN,
+    BUFFER_LOAD_SBYTE_D16_ADDR64,
+    BUFFER_LOAD_SBYTE_D16_BOTHEN,
+    BUFFER_LOAD_SBYTE_D16_TFE_OFFEN,
+    BUFFER_LOAD_SBYTE_D16_TFE_VBUFFER_ADDR64,
+    BUFFER_LOAD_SBYTE_D16_TFE_VBUFFER_BOTHEN,
+    BUFFER_LOAD_SBYTE_D16_TFE_VBUFFER_IDXEN,
+    BUFFER_LOAD_SBYTE_D16_TFE_VBUFFER_OFFEN,
+    BUFFER_LOAD_SBYTE_D16_VBUFFER_ADDR64,
+    BUFFER_LOAD_SBYTE_D16_VBUFFER_BOTHEN,
+    BUFFER_LOAD_SBYTE_D16_VBUFFER_IDXEN,
+    BUFFER_LOAD_SBYTE_D16_VBUFFER_OFFEN,
+    BUFFER_LOAD_SBYTE_IDXEN,
+    BUFFER_LOAD_SBYTE_OFFEN,
+    BUFFER_LOAD_SBYTE_TFE_ADDR64,
+    BUFFER_LOAD_SBYTE_TFE_BOTHEN,
+    BUFFER_LOAD_SBYTE_TFE_IDXEN,
+    BUFFER_LOAD_SBYTE_TFE_OFFEN,
+    BUFFER_LOAD_SBYTE_TFE_VBUFFER_ADDR64,
+    BUFFER_LOAD_SBYTE_TFE_VBUFFER_BOTHEN,
+    BUFFER_LOAD_SBYTE_TFE_VBUFFER_IDXEN,
+    BUFFER_LOAD_SBYTE_TFE_VBUFFER_OFFEN,
+    BUFFER_LOAD_SBYTE_VBUFFER_ADDR64,
+    BUFFER_LOAD_SBYTE_VBUFFER_BOTHEN,
+    BUFFER_LOAD_SBYTE_VBUFFER_IDXEN,
+    BUFFER_LOAD_SBYTE_VBUFFER_OFFEN,
+    BUFFER_LOAD_UBYTE_D16_TFE_OFFEN,
+    BUFFER_LOAD_UBYTE_D16_TFE_VBUFFER_ADDR64,
+    BUFFER_LOAD_UBYTE_D16_TFE_VBUFFER_BOTHEN,
+    BUFFER_LOAD_UBYTE_D16_TFE_VBUFFER_IDXEN,
+    BUFFER_LOAD_UBYTE_D16_TFE_VBUFFER_OFFEN,
+    BUFFER_LOAD_UBYTE_D16_VBUFFER_ADDR64,
+    BUFFER_LOAD_UBYTE_D16_VBUFFER_BOTHEN,
+    BUFFER_LOAD_UBYTE_D16_VBUFFER_IDXEN,
+    BUFFER_LOAD_UBYTE_D16_VBUFFER_OFFEN,
+    BUFFER_LOAD_UBYTE_IDXEN,
+    BUFFER_LOAD_UBYTE_OFFEN,
+    BUFFER_LOAD_UBYTE_TFE_ADDR64,
+    BUFFER_LOAD_UBYTE_TFE_BOTHEN,
+    BUFFER_LOAD_UBYTE_TFE_IDXEN,
+    BUFFER_LOAD_UBYTE_TFE_OFFEN,
+    BUFFER_LOAD_UBYTE_TFE_VBUFFER_ADDR64,
+    BUFFER_LOAD_UBYTE_TFE_VBUFFER_BOTHEN,
+    BUFFER_LOAD_UBYTE_TFE_VBUFFER_IDXEN,
+    BUFFER_LOAD_UBYTE_TFE_VBUFFER_OFFEN,
+    BUFFER_LOAD_UBYTE_VBUFFER_ADDR64,
+    BUFFER_LOAD_UBYTE_VBUFFER_BOTHEN,
+    BUFFER_LOAD_UBYTE_VBUFFER_IDXEN,
+    BUFFER_LOAD_UBYTE_VBUFFER_OFFEN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdata,
+      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+  }
+}
+
+
+foreach inst = [
+    BUFFER_LOAD_SSHORT_LDS_BOTHEN_exact,
+    BUFFER_LOAD_SSHORT_LDS_IDXEN_exact,
+    BUFFER_LOAD_SSHORT_LDS_OFFEN_exact,
+    BUFFER_LOAD_SSHORT_LDS_VBUFFER_BOTHEN_exact,
+    BUFFER_LOAD_SSHORT_LDS_VBUFFER_IDXEN_exact,
+    BUFFER_LOAD_SSHORT_LDS_VBUFFER_OFFEN_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 2), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_USHORT_LDS_BOTHEN_exact,
+    BUFFER_LOAD_USHORT_LDS_IDXEN_exact,
+    BUFFER_LOAD_USHORT_LDS_OFFEN_exact,
+    BUFFER_LOAD_USHORT_LDS_VBUFFER_BOTHEN_exact,
+    BUFFER_LOAD_USHORT_LDS_VBUFFER_IDXEN_exact,
+    BUFFER_LOAD_USHORT_LDS_VBUFFER_OFFEN_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 2), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
     BUFFER_LOAD_SHORT_D16_HI_BOTHEN_exact,
     BUFFER_LOAD_SHORT_D16_HI_IDXEN_exact,
     BUFFER_LOAD_SHORT_D16_HI_OFFEN_exact,
+    BUFFER_LOAD_SHORT_D16_HI_VBUFFER_BOTHEN_exact,
+    BUFFER_LOAD_SHORT_D16_HI_VBUFFER_IDXEN_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $tmp, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])),
+    (DefVal $vdata_hi, (LLVMShl (LLVMZExt (GetVal $tmp), si_llvm_i32_ty), 16)),
+    (DefVal $vdata_lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0xFFFF))),
+    (SetNamedOperand $vdata, (LLVMOr (GetVal $vdata_hi), (GetVal $vdata_lo)))];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_SHORT_D16_BOTHEN_exact,
     BUFFER_LOAD_SHORT_D16_HI_TFE_BOTHEN_exact,
     BUFFER_LOAD_SHORT_D16_HI_TFE_IDXEN_exact,
     BUFFER_LOAD_SHORT_D16_HI_TFE_OFFEN_exact,
     BUFFER_LOAD_SHORT_D16_HI_TFE_VBUFFER_BOTHEN_exact,
     BUFFER_LOAD_SHORT_D16_HI_TFE_VBUFFER_IDXEN_exact,
     BUFFER_LOAD_SHORT_D16_HI_TFE_VBUFFER_OFFEN_exact,
-    BUFFER_LOAD_SHORT_D16_HI_VBUFFER_BOTHEN_exact,
-    BUFFER_LOAD_SHORT_D16_HI_VBUFFER_IDXEN_exact,
     BUFFER_LOAD_SSHORT_BOTHEN_exact,
     BUFFER_LOAD_SSHORT_IDXEN_exact,
-    BUFFER_LOAD_SSHORT_LDS_BOTHEN_exact,
-    BUFFER_LOAD_SSHORT_LDS_IDXEN_exact,
-    BUFFER_LOAD_SSHORT_LDS_OFFEN_exact,
-    BUFFER_LOAD_SSHORT_LDS_VBUFFER_BOTHEN_exact,
-    BUFFER_LOAD_SSHORT_LDS_VBUFFER_IDXEN_exact,
-    BUFFER_LOAD_SSHORT_LDS_VBUFFER_OFFEN_exact,
     BUFFER_LOAD_SSHORT_OFFEN_exact,
     BUFFER_LOAD_SSHORT_TFE_BOTHEN_exact,
     BUFFER_LOAD_SSHORT_TFE_IDXEN_exact,
@@ -645,12 +792,6 @@ foreach inst = [
     BUFFER_LOAD_UBYTE_D16_HI_OFFEN_exact,
     BUFFER_LOAD_USHORT_BOTHEN_exact,
     BUFFER_LOAD_USHORT_IDXEN_exact,
-    BUFFER_LOAD_USHORT_LDS_BOTHEN_exact,
-    BUFFER_LOAD_USHORT_LDS_IDXEN_exact,
-    BUFFER_LOAD_USHORT_LDS_OFFEN_exact,
-    BUFFER_LOAD_USHORT_LDS_VBUFFER_BOTHEN_exact,
-    BUFFER_LOAD_USHORT_LDS_VBUFFER_IDXEN_exact,
-    BUFFER_LOAD_USHORT_LDS_VBUFFER_OFFEN_exact,
     BUFFER_LOAD_USHORT_OFFEN_exact,
     BUFFER_LOAD_USHORT_TFE_BOTHEN_exact,
     BUFFER_LOAD_USHORT_TFE_IDXEN_exact,
@@ -666,6 +807,8 @@ foreach inst = [
     let Semantic = [(SetNamedOperand ?:$vdata, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand ?:$srsrc), si_llvm_v4i32_ty), (GetNamedOperand ?:$vaddr), (GetNamedOperand ?:$offset), (GetNamedOperand ?:$soffset), (GetNamedOperand ?:$cpol)]))];
   }
 }
+
+
 
 foreach inst = [
     BUFFER_STORE_DWORDX2_BOTHEN_exact,
@@ -723,6 +866,30 @@ foreach inst = [
 }
 
 foreach inst = [
+    BUFFER_LOAD_SBYTE_LDS_BOTHEN_exact,
+    BUFFER_LOAD_SBYTE_LDS_IDXEN_exact,
+    BUFFER_LOAD_SBYTE_LDS_OFFEN_exact,
+    BUFFER_LOAD_SBYTE_LDS_VBUFFER_BOTHEN_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_UBYTE_LDS_BOTHEN_exact,
+    BUFFER_LOAD_UBYTE_LDS_IDXEN_exact,
+    BUFFER_LOAD_UBYTE_LDS_OFFEN_exact,
+    BUFFER_LOAD_UBYTE_LDS_VBUFFER_BOTHEN_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
     BUFFER_LOAD_SBYTE_BOTHEN_exact,
     BUFFER_LOAD_SBYTE_D16_BOTHEN_exact,
     BUFFER_LOAD_SBYTE_D16_TFE_OFFEN_exact,
@@ -733,10 +900,6 @@ foreach inst = [
     BUFFER_LOAD_SBYTE_D16_VBUFFER_IDXEN_exact,
     BUFFER_LOAD_SBYTE_D16_VBUFFER_OFFEN_exact,
     BUFFER_LOAD_SBYTE_IDXEN_exact,
-    BUFFER_LOAD_SBYTE_LDS_BOTHEN_exact,
-    BUFFER_LOAD_SBYTE_LDS_IDXEN_exact,
-    BUFFER_LOAD_SBYTE_LDS_OFFEN_exact,
-    BUFFER_LOAD_SBYTE_LDS_VBUFFER_BOTHEN_exact,
     BUFFER_LOAD_SBYTE_OFFEN_exact,
     BUFFER_LOAD_SBYTE_TFE_BOTHEN_exact,
     BUFFER_LOAD_SBYTE_TFE_IDXEN_exact,
@@ -755,10 +918,6 @@ foreach inst = [
     BUFFER_LOAD_UBYTE_D16_VBUFFER_IDXEN_exact,
     BUFFER_LOAD_UBYTE_D16_VBUFFER_OFFEN_exact,
     BUFFER_LOAD_UBYTE_IDXEN_exact,
-    BUFFER_LOAD_UBYTE_LDS_BOTHEN_exact,
-    BUFFER_LOAD_UBYTE_LDS_IDXEN_exact,
-    BUFFER_LOAD_UBYTE_LDS_OFFEN_exact,
-    BUFFER_LOAD_UBYTE_LDS_VBUFFER_BOTHEN_exact,
     BUFFER_LOAD_UBYTE_OFFEN_exact,
     BUFFER_LOAD_UBYTE_TFE_BOTHEN_exact,
     BUFFER_LOAD_UBYTE_TFE_IDXEN_exact,
@@ -774,6 +933,7 @@ foreach inst = [
     let Semantic = [(SetNamedOperand ?:$vdata, (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand ?:$srsrc), si_llvm_v4i32_ty), (GetNamedOperand ?:$vaddr), (GetNamedOperand ?:$offset), (GetNamedOperand ?:$soffset), (GetNamedOperand ?:$cpol)]))];
   }
 }
+
 
 foreach inst = [
     BUFFER_LOAD_FORMAT_D16_XYZW_BOTHEN_exact,
@@ -964,46 +1124,6 @@ foreach inst = [
 }
 
 foreach inst = [
-    BUFFER_LOAD_SBYTE_D16_TFE_OFFEN,
-    BUFFER_LOAD_SBYTE_D16_TFE_VBUFFER_ADDR64,
-    BUFFER_LOAD_SBYTE_D16_TFE_VBUFFER_BOTHEN,
-    BUFFER_LOAD_SBYTE_D16_TFE_VBUFFER_IDXEN,
-    BUFFER_LOAD_SBYTE_D16_TFE_VBUFFER_OFFEN,
-    BUFFER_LOAD_SBYTE_D16_VBUFFER_ADDR64,
-    BUFFER_LOAD_SBYTE_D16_VBUFFER_BOTHEN,
-    BUFFER_LOAD_SBYTE_D16_VBUFFER_IDXEN,
-    BUFFER_LOAD_SBYTE_D16_VBUFFER_OFFEN,
-    BUFFER_LOAD_SBYTE_IDXEN,
-    BUFFER_LOAD_SBYTE_LDS_ADDR64,
-    BUFFER_LOAD_SBYTE_LDS_BOTHEN,
-    BUFFER_LOAD_SBYTE_LDS_IDXEN,
-    BUFFER_LOAD_SBYTE_LDS_OFFEN,
-    BUFFER_LOAD_SBYTE_LDS_VBUFFER_ADDR64,
-    BUFFER_LOAD_SBYTE_LDS_VBUFFER_BOTHEN,
-    BUFFER_LOAD_UBYTE_D16_TFE_OFFEN,
-    BUFFER_LOAD_UBYTE_D16_TFE_VBUFFER_ADDR64,
-    BUFFER_LOAD_UBYTE_D16_TFE_VBUFFER_BOTHEN,
-    BUFFER_LOAD_UBYTE_D16_TFE_VBUFFER_IDXEN,
-    BUFFER_LOAD_UBYTE_D16_TFE_VBUFFER_OFFEN,
-    BUFFER_LOAD_UBYTE_D16_VBUFFER_ADDR64,
-    BUFFER_LOAD_UBYTE_D16_VBUFFER_BOTHEN,
-    BUFFER_LOAD_UBYTE_D16_VBUFFER_IDXEN,
-    BUFFER_LOAD_UBYTE_D16_VBUFFER_OFFEN,
-    BUFFER_LOAD_UBYTE_IDXEN,
-    BUFFER_LOAD_UBYTE_LDS_ADDR64,
-    BUFFER_LOAD_UBYTE_LDS_BOTHEN,
-    BUFFER_LOAD_UBYTE_LDS_IDXEN,
-    BUFFER_LOAD_UBYTE_LDS_OFFEN,
-    BUFFER_LOAD_UBYTE_LDS_VBUFFER_ADDR64,
-    BUFFER_LOAD_UBYTE_LDS_VBUFFER_BOTHEN
-] in {
-  def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
-  }
-}
-
-foreach inst = [
     BUFFER_STORE_FORMAT_D16_XYZW_OFFSET,
     BUFFER_STORE_FORMAT_D16_XYZW_TFE_OFFSET,
     BUFFER_STORE_FORMAT_D16_XYZW_TFE_VBUFFER_OFFSET,
@@ -1043,40 +1163,40 @@ foreach inst = [
 }
 
 foreach inst = [
-    BUFFER_LOAD_SBYTE_ADDR64,
-    BUFFER_LOAD_SBYTE_BOTHEN,
-    BUFFER_LOAD_SBYTE_D16_ADDR64,
-    BUFFER_LOAD_SBYTE_D16_BOTHEN,
-    BUFFER_LOAD_SBYTE_OFFEN,
-    BUFFER_LOAD_SBYTE_TFE_ADDR64,
-    BUFFER_LOAD_SBYTE_TFE_BOTHEN,
-    BUFFER_LOAD_SBYTE_TFE_IDXEN,
-    BUFFER_LOAD_SBYTE_TFE_OFFEN,
-    BUFFER_LOAD_SBYTE_TFE_VBUFFER_ADDR64,
-    BUFFER_LOAD_SBYTE_TFE_VBUFFER_BOTHEN,
-    BUFFER_LOAD_SBYTE_TFE_VBUFFER_IDXEN,
-    BUFFER_LOAD_SBYTE_TFE_VBUFFER_OFFEN,
-    BUFFER_LOAD_SBYTE_VBUFFER_ADDR64,
-    BUFFER_LOAD_SBYTE_VBUFFER_BOTHEN,
-    BUFFER_LOAD_SBYTE_VBUFFER_IDXEN,
-    BUFFER_LOAD_SBYTE_VBUFFER_OFFEN,
-    BUFFER_LOAD_UBYTE_OFFEN,
-    BUFFER_LOAD_UBYTE_TFE_ADDR64,
-    BUFFER_LOAD_UBYTE_TFE_BOTHEN,
-    BUFFER_LOAD_UBYTE_TFE_IDXEN,
-    BUFFER_LOAD_UBYTE_TFE_OFFEN,
-    BUFFER_LOAD_UBYTE_TFE_VBUFFER_ADDR64,
-    BUFFER_LOAD_UBYTE_TFE_VBUFFER_BOTHEN,
-    BUFFER_LOAD_UBYTE_TFE_VBUFFER_IDXEN,
-    BUFFER_LOAD_UBYTE_TFE_VBUFFER_OFFEN,
-    BUFFER_LOAD_UBYTE_VBUFFER_ADDR64,
-    BUFFER_LOAD_UBYTE_VBUFFER_BOTHEN,
-    BUFFER_LOAD_UBYTE_VBUFFER_IDXEN,
-    BUFFER_LOAD_UBYTE_VBUFFER_OFFEN
+    BUFFER_STORE_SHORT_D16_HI_ADDR64,
+    BUFFER_STORE_SHORT_D16_HI_BOTHEN,
+    BUFFER_STORE_SHORT_D16_HI_IDXEN,
+    BUFFER_STORE_SHORT_D16_HI_OFFEN,
+    BUFFER_STORE_SHORT_D16_HI_TFE_ADDR64,
+    BUFFER_STORE_SHORT_D16_HI_TFE_BOTHEN,
+    BUFFER_STORE_SHORT_D16_HI_TFE_IDXEN,
+    BUFFER_STORE_SHORT_D16_HI_TFE_OFFEN,
+    BUFFER_STORE_SHORT_D16_HI_TFE_VBUFFER_ADDR64,
+    BUFFER_STORE_SHORT_D16_HI_TFE_VBUFFER_BOTHEN,
+    BUFFER_STORE_SHORT_D16_HI_TFE_VBUFFER_IDXEN,
+    BUFFER_STORE_SHORT_D16_HI_TFE_VBUFFER_OFFEN,
+    BUFFER_STORE_SHORT_D16_HI_VBUFFER_ADDR64,
+    BUFFER_STORE_SHORT_D16_HI_VBUFFER_BOTHEN,
+    BUFFER_STORE_SHORT_D16_HI_VBUFFER_IDXEN,
+    BUFFER_STORE_SHORT_D16_HI_VBUFFER_OFFEN,
+    BUFFER_STORE_SHORT_IDXEN,
+    BUFFER_STORE_SHORT_OFFEN,
+    BUFFER_STORE_SHORT_TFE_ADDR64,
+    BUFFER_STORE_SHORT_TFE_BOTHEN,
+    BUFFER_STORE_SHORT_TFE_IDXEN,
+    BUFFER_STORE_SHORT_TFE_OFFEN,
+    BUFFER_STORE_SHORT_TFE_VBUFFER_ADDR64,
+    BUFFER_STORE_SHORT_TFE_VBUFFER_BOTHEN,
+    BUFFER_STORE_SHORT_TFE_VBUFFER_IDXEN,
+    BUFFER_STORE_SHORT_TFE_VBUFFER_OFFEN,
+    BUFFER_STORE_SHORT_VBUFFER_ADDR64,
+    BUFFER_STORE_SHORT_VBUFFER_BOTHEN,
+    BUFFER_STORE_SHORT_VBUFFER_IDXEN,
+    BUFFER_STORE_SHORT_VBUFFER_OFFEN
 ] in {
   def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+    let Semantic = [(DefVal $tmp16, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetVal $tmp16), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])];
   }
 }
 
@@ -1147,9 +1267,6 @@ foreach inst = [
 }
 
 foreach inst = [
-    BUFFER_LOAD_DWORD_ADDR64,
-    BUFFER_LOAD_DWORD_BOTHEN,
-    BUFFER_LOAD_DWORD_IDXEN,
     BUFFER_LOAD_DWORD_LDS_ADDR64,
     BUFFER_LOAD_DWORD_LDS_BOTHEN,
     BUFFER_LOAD_DWORD_LDS_IDXEN,
@@ -1157,7 +1274,18 @@ foreach inst = [
     BUFFER_LOAD_DWORD_LDS_VBUFFER_ADDR64,
     BUFFER_LOAD_DWORD_LDS_VBUFFER_BOTHEN,
     BUFFER_LOAD_DWORD_LDS_VBUFFER_IDXEN,
-    BUFFER_LOAD_DWORD_LDS_VBUFFER_OFFEN,
+    BUFFER_LOAD_DWORD_LDS_VBUFFER_OFFEN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 4), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_DWORD_ADDR64,
+    BUFFER_LOAD_DWORD_BOTHEN,
+    BUFFER_LOAD_DWORD_IDXEN,
     BUFFER_LOAD_DWORD_OFFEN,
     BUFFER_LOAD_DWORD_TFE_ADDR64,
     BUFFER_LOAD_DWORD_TFE_BOTHEN,
@@ -1178,10 +1306,8 @@ foreach inst = [
   }
 }
 
+
 foreach inst = [
-    BUFFER_LOAD_FORMAT_X_ADDR64,
-    BUFFER_LOAD_FORMAT_X_BOTHEN,
-    BUFFER_LOAD_FORMAT_X_IDXEN,
     BUFFER_LOAD_FORMAT_X_LDS_ADDR64,
     BUFFER_LOAD_FORMAT_X_LDS_BOTHEN,
     BUFFER_LOAD_FORMAT_X_LDS_IDXEN,
@@ -1189,7 +1315,18 @@ foreach inst = [
     BUFFER_LOAD_FORMAT_X_LDS_VBUFFER_ADDR64,
     BUFFER_LOAD_FORMAT_X_LDS_VBUFFER_BOTHEN,
     BUFFER_LOAD_FORMAT_X_LDS_VBUFFER_IDXEN,
-    BUFFER_LOAD_FORMAT_X_LDS_VBUFFER_OFFEN,
+    BUFFER_LOAD_FORMAT_X_LDS_VBUFFER_OFFEN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 4), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_FORMAT_X_ADDR64,
+    BUFFER_LOAD_FORMAT_X_BOTHEN,
+    BUFFER_LOAD_FORMAT_X_IDXEN,
     BUFFER_LOAD_FORMAT_X_OFFEN,
     BUFFER_LOAD_FORMAT_X_TFE_ADDR64,
     BUFFER_LOAD_FORMAT_X_TFE_BOTHEN,
@@ -1209,6 +1346,7 @@ foreach inst = [
       (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_load_format, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
+
 
 foreach inst = [
     BUFFER_STORE_SHORT_D16_HI_BOTHEN_exact,
@@ -1241,10 +1379,51 @@ foreach inst = [
 }
 
 foreach inst = [
+    BUFFER_LOAD_SBYTE_D16_HI_ADDR64,
+    BUFFER_LOAD_SBYTE_D16_HI_BOTHEN,
+    BUFFER_LOAD_SBYTE_D16_HI_IDXEN,
+    BUFFER_LOAD_SBYTE_D16_HI_OFFEN,
+    BUFFER_LOAD_SBYTE_D16_HI_TFE_ADDR64,
+    BUFFER_LOAD_SBYTE_D16_HI_TFE_BOTHEN,
+    BUFFER_LOAD_SBYTE_D16_HI_TFE_IDXEN,
+    BUFFER_LOAD_SBYTE_D16_HI_TFE_OFFEN,
+    BUFFER_LOAD_SBYTE_D16_HI_TFE_VBUFFER_ADDR64,
+    BUFFER_LOAD_SBYTE_D16_HI_TFE_VBUFFER_BOTHEN,
+    BUFFER_LOAD_SBYTE_D16_HI_TFE_VBUFFER_IDXEN,
+    BUFFER_LOAD_SBYTE_D16_HI_TFE_VBUFFER_OFFEN,
+    BUFFER_LOAD_SBYTE_D16_HI_VBUFFER_ADDR64,
+    BUFFER_LOAD_SBYTE_D16_HI_VBUFFER_BOTHEN,
+    BUFFER_LOAD_SBYTE_D16_HI_VBUFFER_IDXEN,
+    BUFFER_LOAD_SBYTE_D16_HI_VBUFFER_OFFEN,
+    BUFFER_LOAD_SBYTE_D16_IDXEN,
+    BUFFER_LOAD_SBYTE_D16_OFFEN,
+    BUFFER_LOAD_SBYTE_D16_TFE_ADDR64,
+    BUFFER_LOAD_SBYTE_D16_TFE_BOTHEN,
+    BUFFER_LOAD_SBYTE_D16_TFE_IDXEN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $tmp,
+      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])),
+    (DefVal $sext16, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty)),
+    (DefVal $vdata_hi, (LLVMShl (LLVMZExt (GetVal $sext16), si_llvm_i32_ty), 16)),
+    (DefVal $vdata_lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0xFFFF))),
+    (SetNamedOperand $vdata, (LLVMOr (GetVal $vdata_hi), (GetVal $vdata_lo)))];
+  }
+}
+
+foreach inst = [
     BUFFER_ATOMIC_ADD_ADDR64,
     BUFFER_ATOMIC_ADD_ADDR64_RTN,
     BUFFER_ATOMIC_ADD_BOTHEN,
-    BUFFER_ATOMIC_ADD_BOTHEN_RTN,
+    BUFFER_ATOMIC_ADD_BOTHEN_RTN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdata,
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+  }
+}
+
+foreach inst = [
     BUFFER_ATOMIC_ADD_F32_ADDR64,
     BUFFER_ATOMIC_ADD_F32_ADDR64_RTN,
     BUFFER_ATOMIC_ADD_F32_BOTHEN,
@@ -1262,19 +1441,28 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fadd, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_float_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+  }
+}
+
+
+foreach inst = [
+    BUFFER_LOAD_DWORD_LDS_BOTHEN_exact,
+    BUFFER_LOAD_DWORD_LDS_IDXEN_exact,
+    BUFFER_LOAD_DWORD_LDS_OFFEN_exact,
+    BUFFER_LOAD_DWORD_LDS_VBUFFER_BOTHEN_exact,
+    BUFFER_LOAD_DWORD_LDS_VBUFFER_IDXEN_exact,
+    BUFFER_LOAD_DWORD_LDS_VBUFFER_OFFEN_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 4), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
   }
 }
 
 foreach inst = [
     BUFFER_LOAD_DWORD_BOTHEN_exact,
     BUFFER_LOAD_DWORD_IDXEN_exact,
-    BUFFER_LOAD_DWORD_LDS_BOTHEN_exact,
-    BUFFER_LOAD_DWORD_LDS_IDXEN_exact,
-    BUFFER_LOAD_DWORD_LDS_OFFEN_exact,
-    BUFFER_LOAD_DWORD_LDS_VBUFFER_BOTHEN_exact,
-    BUFFER_LOAD_DWORD_LDS_VBUFFER_IDXEN_exact,
-    BUFFER_LOAD_DWORD_LDS_VBUFFER_OFFEN_exact,
     BUFFER_LOAD_DWORD_OFFEN_exact,
     BUFFER_LOAD_DWORD_TFE_BOTHEN_exact,
     BUFFER_LOAD_DWORD_TFE_IDXEN_exact,
@@ -1291,15 +1479,24 @@ foreach inst = [
   }
 }
 
+
 foreach inst = [
-    BUFFER_LOAD_FORMAT_X_BOTHEN_exact,
-    BUFFER_LOAD_FORMAT_X_IDXEN_exact,
     BUFFER_LOAD_FORMAT_X_LDS_BOTHEN_exact,
     BUFFER_LOAD_FORMAT_X_LDS_IDXEN_exact,
     BUFFER_LOAD_FORMAT_X_LDS_OFFEN_exact,
     BUFFER_LOAD_FORMAT_X_LDS_VBUFFER_BOTHEN_exact,
     BUFFER_LOAD_FORMAT_X_LDS_VBUFFER_IDXEN_exact,
-    BUFFER_LOAD_FORMAT_X_LDS_VBUFFER_OFFEN_exact,
+    BUFFER_LOAD_FORMAT_X_LDS_VBUFFER_OFFEN_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 4), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_FORMAT_X_BOTHEN_exact,
+    BUFFER_LOAD_FORMAT_X_IDXEN_exact,
     BUFFER_LOAD_FORMAT_X_OFFEN_exact,
     BUFFER_LOAD_FORMAT_X_TFE_BOTHEN_exact,
     BUFFER_LOAD_FORMAT_X_TFE_IDXEN_exact,
@@ -1316,13 +1513,25 @@ foreach inst = [
   }
 }
 
+
 foreach inst = [
-    BUFFER_STORE_BYTE_ADDR64,
-    BUFFER_STORE_BYTE_BOTHEN,
     BUFFER_STORE_BYTE_D16_HI_ADDR64,
     BUFFER_STORE_BYTE_D16_HI_BOTHEN,
     BUFFER_STORE_BYTE_D16_HI_IDXEN,
     BUFFER_STORE_BYTE_D16_HI_OFFEN,
+    BUFFER_STORE_BYTE_D16_HI_VBUFFER_ADDR64,
+    BUFFER_STORE_BYTE_D16_HI_VBUFFER_BOTHEN,
+    BUFFER_STORE_BYTE_D16_HI_VBUFFER_IDXEN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i8_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetVal $tmp8), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_STORE_BYTE_ADDR64,
+    BUFFER_STORE_BYTE_BOTHEN,
     BUFFER_STORE_BYTE_D16_HI_TFE_ADDR64,
     BUFFER_STORE_BYTE_D16_HI_TFE_BOTHEN,
     BUFFER_STORE_BYTE_D16_HI_TFE_IDXEN,
@@ -1330,10 +1539,7 @@ foreach inst = [
     BUFFER_STORE_BYTE_D16_HI_TFE_VBUFFER_ADDR64,
     BUFFER_STORE_BYTE_D16_HI_TFE_VBUFFER_BOTHEN,
     BUFFER_STORE_BYTE_D16_HI_TFE_VBUFFER_IDXEN,
-    BUFFER_STORE_BYTE_D16_HI_TFE_VBUFFER_OFFEN,
-    BUFFER_STORE_BYTE_D16_HI_VBUFFER_ADDR64,
-    BUFFER_STORE_BYTE_D16_HI_VBUFFER_BOTHEN,
-    BUFFER_STORE_BYTE_D16_HI_VBUFFER_IDXEN
+    BUFFER_STORE_BYTE_D16_HI_TFE_VBUFFER_OFFEN
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(DefVal $tmp, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i8_ty)),
@@ -1341,9 +1547,18 @@ foreach inst = [
   }
 }
 
+
 foreach inst = [
     BUFFER_ATOMIC_ADD_F32_VBUFFER_OFFEN,
-    BUFFER_ATOMIC_ADD_F32_VBUFFER_OFFEN_RTN,
+    BUFFER_ATOMIC_ADD_F32_VBUFFER_OFFEN_RTN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdata,
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fadd, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_float_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+  }
+}
+
+foreach inst = [
     BUFFER_ATOMIC_ADD_F64_ADDR64,
     BUFFER_ATOMIC_ADD_F64_ADDR64_RTN,
     BUFFER_ATOMIC_ADD_F64_BOTHEN,
@@ -1361,9 +1576,10 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fadd, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fadd, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_double_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
+
 
 foreach inst = [
     BUFFER_ATOMIC_ADD_X2_ADDR64,
@@ -1607,7 +1823,7 @@ foreach inst = [
     let Semantic = [(DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
     (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
     (SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -1633,7 +1849,7 @@ foreach inst = [
     let Semantic = [(DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
     (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
     (SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -1657,7 +1873,7 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fmax, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fmax, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_float_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -1681,7 +1897,7 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fmin, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fmin, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_float_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -1753,7 +1969,7 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fmax, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fmax, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_double_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -1777,7 +1993,7 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fmin, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fmin, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_double_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -1849,7 +2065,7 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_v2bf16_ty, int_amdgcn_struct_buffer_atomic_fadd, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_v2bf16_ty, int_amdgcn_struct_buffer_atomic_fadd, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_v2bf16_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -1873,7 +2089,7 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_v2f16_ty, int_amdgcn_struct_buffer_atomic_fadd, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_v2f16_ty, int_amdgcn_struct_buffer_atomic_fadd, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_v2f16_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -2505,30 +2721,61 @@ foreach inst = [
 }
 
 foreach inst = [
-    BUFFER_LOAD_SBYTE_D16_HI_TFE_BOTHEN,
-    BUFFER_LOAD_SBYTE_D16_HI_TFE_IDXEN,
-    BUFFER_LOAD_SBYTE_D16_HI_TFE_OFFEN,
-    BUFFER_LOAD_SBYTE_D16_HI_TFE_VBUFFER_ADDR64,
-    BUFFER_LOAD_SBYTE_D16_HI_TFE_VBUFFER_BOTHEN,
-    BUFFER_LOAD_SBYTE_D16_HI_TFE_VBUFFER_IDXEN,
-    BUFFER_LOAD_SBYTE_D16_HI_TFE_VBUFFER_OFFEN,
-    BUFFER_LOAD_SBYTE_D16_HI_VBUFFER_ADDR64,
-    BUFFER_LOAD_SBYTE_D16_HI_VBUFFER_BOTHEN,
-    BUFFER_LOAD_SBYTE_D16_HI_VBUFFER_IDXEN,
-    BUFFER_LOAD_SBYTE_D16_HI_VBUFFER_OFFEN,
-    BUFFER_LOAD_SBYTE_D16_IDXEN,
-    BUFFER_LOAD_SBYTE_D16_OFFEN,
-    BUFFER_LOAD_SBYTE_D16_TFE_ADDR64,
-    BUFFER_LOAD_SBYTE_D16_TFE_BOTHEN,
-    BUFFER_LOAD_SBYTE_D16_TFE_IDXEN
+    BUFFER_LOAD_SBYTE_LDS_OFFSET
 ] in {
   def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(DefVal $tmp,
-      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])),
-    (DefVal $sext16, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty)),
-    (DefVal $vdata_hi, (LLVMShl (LLVMZExt (GetVal $sext16), si_llvm_i32_ty), 16)),
-    (DefVal $vdata_lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0xFFFF))),
-    (SetNamedOperand $vdata, (LLVMOr (GetVal $vdata_hi), (GetVal $vdata_lo)))];
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_UBYTE_LDS_OFFSET
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_SBYTE_D16_TFE_OFFSET,
+    BUFFER_LOAD_SBYTE_D16_TFE_VBUFFER_OFFSET,
+    BUFFER_LOAD_SBYTE_D16_VBUFFER_OFFSET,
+    BUFFER_LOAD_SBYTE_OFFSET,
+    BUFFER_LOAD_SBYTE_TFE_OFFSET,
+    BUFFER_LOAD_SBYTE_TFE_VBUFFER_OFFSET,
+    BUFFER_LOAD_SBYTE_VBUFFER_OFFSET,
+    BUFFER_LOAD_UBYTE_D16_TFE_OFFSET,
+    BUFFER_LOAD_UBYTE_D16_TFE_VBUFFER_OFFSET,
+    BUFFER_LOAD_UBYTE_D16_VBUFFER_OFFSET,
+    BUFFER_LOAD_UBYTE_OFFSET,
+    BUFFER_LOAD_UBYTE_TFE_OFFSET,
+    BUFFER_LOAD_UBYTE_TFE_VBUFFER_OFFSET,
+    BUFFER_LOAD_UBYTE_VBUFFER_OFFSET
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdata,
+      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+  }
+}
+
+
+foreach inst = [
+    BUFFER_LOAD_SBYTE_LDS_OFFSET_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_UBYTE_LDS_OFFSET_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
   }
 }
 
@@ -2536,7 +2783,6 @@ foreach inst = [
     BUFFER_LOAD_SBYTE_D16_TFE_OFFSET_exact,
     BUFFER_LOAD_SBYTE_D16_TFE_VBUFFER_OFFSET_exact,
     BUFFER_LOAD_SBYTE_D16_VBUFFER_OFFSET_exact,
-    BUFFER_LOAD_SBYTE_LDS_OFFSET_exact,
     BUFFER_LOAD_SBYTE_OFFSET_exact,
     BUFFER_LOAD_SBYTE_TFE_OFFSET_exact,
     BUFFER_LOAD_SBYTE_TFE_VBUFFER_OFFSET_exact,
@@ -2544,7 +2790,6 @@ foreach inst = [
     BUFFER_LOAD_UBYTE_D16_TFE_OFFSET_exact,
     BUFFER_LOAD_UBYTE_D16_TFE_VBUFFER_OFFSET_exact,
     BUFFER_LOAD_UBYTE_D16_VBUFFER_OFFSET_exact,
-    BUFFER_LOAD_UBYTE_LDS_OFFSET_exact,
     BUFFER_LOAD_UBYTE_OFFSET_exact,
     BUFFER_LOAD_UBYTE_TFE_OFFSET_exact,
     BUFFER_LOAD_UBYTE_TFE_VBUFFER_OFFSET_exact,
@@ -2555,19 +2800,46 @@ foreach inst = [
   }
 }
 
+
 foreach inst = [
-    BUFFER_LOAD_SHORT_D16_HI_OFFSET,
+    BUFFER_LOAD_SSHORT_LDS_OFFSET,
+    BUFFER_LOAD_SSHORT_LDS_VBUFFER_OFFSET
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 2), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_USHORT_LDS_OFFSET,
+    BUFFER_LOAD_USHORT_LDS_VBUFFER_OFFSET
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 2), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_SHORT_D16_HI_OFFSET
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $tmp, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])),
+    (DefVal $vdata_hi, (LLVMShl (LLVMZExt (GetVal $tmp), si_llvm_i32_ty), 16)),
+    (DefVal $vdata_lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0xFFFF))),
+    (SetNamedOperand $vdata, (LLVMOr (GetVal $vdata_hi), (GetVal $vdata_lo)))];
+  }
+}
+
+foreach inst = [
     BUFFER_LOAD_SHORT_D16_HI_TFE_OFFSET,
     BUFFER_LOAD_SHORT_D16_HI_TFE_VBUFFER_OFFSET,
-    BUFFER_LOAD_SSHORT_LDS_OFFSET,
-    BUFFER_LOAD_SSHORT_LDS_VBUFFER_OFFSET,
     BUFFER_LOAD_SSHORT_OFFSET,
     BUFFER_LOAD_SSHORT_TFE_OFFSET,
     BUFFER_LOAD_SSHORT_TFE_VBUFFER_OFFSET,
     BUFFER_LOAD_SSHORT_VBUFFER_OFFSET,
     BUFFER_LOAD_UBYTE_D16_HI_OFFSET,
-    BUFFER_LOAD_USHORT_LDS_OFFSET,
-    BUFFER_LOAD_USHORT_LDS_VBUFFER_OFFSET,
     BUFFER_LOAD_USHORT_OFFSET,
     BUFFER_LOAD_USHORT_TFE_OFFSET,
     BUFFER_LOAD_USHORT_TFE_VBUFFER_OFFSET,
@@ -2579,19 +2851,47 @@ foreach inst = [
   }
 }
 
+
+
 foreach inst = [
-    BUFFER_LOAD_SHORT_D16_HI_OFFSET_exact,
+    BUFFER_LOAD_SSHORT_LDS_OFFSET_exact,
+    BUFFER_LOAD_SSHORT_LDS_VBUFFER_OFFSET_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 2), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_USHORT_LDS_OFFSET_exact,
+    BUFFER_LOAD_USHORT_LDS_VBUFFER_OFFSET_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 2), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_LOAD_SHORT_D16_HI_OFFSET_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $tmp, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])),
+    (DefVal $vdata_hi, (LLVMShl (LLVMZExt (GetVal $tmp), si_llvm_i32_ty), 16)),
+    (DefVal $vdata_lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0xFFFF))),
+    (SetNamedOperand $vdata, (LLVMOr (GetVal $vdata_hi), (GetVal $vdata_lo)))];
+  }
+}
+
+foreach inst = [
     BUFFER_LOAD_SHORT_D16_HI_TFE_OFFSET_exact,
     BUFFER_LOAD_SHORT_D16_HI_TFE_VBUFFER_OFFSET_exact,
-    BUFFER_LOAD_SSHORT_LDS_OFFSET_exact,
-    BUFFER_LOAD_SSHORT_LDS_VBUFFER_OFFSET_exact,
     BUFFER_LOAD_SSHORT_OFFSET_exact,
     BUFFER_LOAD_SSHORT_TFE_OFFSET_exact,
     BUFFER_LOAD_SSHORT_TFE_VBUFFER_OFFSET_exact,
     BUFFER_LOAD_SSHORT_VBUFFER_OFFSET_exact,
     BUFFER_LOAD_UBYTE_D16_HI_OFFSET_exact,
-    BUFFER_LOAD_USHORT_LDS_OFFSET_exact,
-    BUFFER_LOAD_USHORT_LDS_VBUFFER_OFFSET_exact,
     BUFFER_LOAD_USHORT_OFFSET_exact,
     BUFFER_LOAD_USHORT_TFE_OFFSET_exact,
     BUFFER_LOAD_USHORT_TFE_VBUFFER_OFFSET_exact,
@@ -2601,6 +2901,8 @@ foreach inst = [
     let Semantic = [(SetNamedOperand ?:$vdata, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand ?:$srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand ?:$offset), (GetNamedOperand ?:$soffset), (GetNamedOperand ?:$cpol)]))];
   }
 }
+
+
 
 foreach inst = [
     BUFFER_LOAD_UBYTE_D16_HI_TFE_BOTHEN,
@@ -2702,30 +3004,6 @@ foreach inst = [
 }
 
 foreach inst = [
-    BUFFER_STORE_SHORT_D16_HI_VBUFFER_IDXEN,
-    BUFFER_STORE_SHORT_D16_HI_VBUFFER_OFFEN,
-    BUFFER_STORE_SHORT_IDXEN,
-    BUFFER_STORE_SHORT_OFFEN,
-    BUFFER_STORE_SHORT_TFE_ADDR64,
-    BUFFER_STORE_SHORT_TFE_BOTHEN,
-    BUFFER_STORE_SHORT_TFE_IDXEN,
-    BUFFER_STORE_SHORT_TFE_OFFEN,
-    BUFFER_STORE_SHORT_TFE_VBUFFER_ADDR64,
-    BUFFER_STORE_SHORT_TFE_VBUFFER_BOTHEN,
-    BUFFER_STORE_SHORT_TFE_VBUFFER_IDXEN,
-    BUFFER_STORE_SHORT_TFE_VBUFFER_OFFEN,
-    BUFFER_STORE_SHORT_VBUFFER_ADDR64,
-    BUFFER_STORE_SHORT_VBUFFER_BOTHEN,
-    BUFFER_STORE_SHORT_VBUFFER_IDXEN,
-    BUFFER_STORE_SHORT_VBUFFER_OFFEN
-] in {
-  def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(DefVal $tmp16, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetVal $tmp16), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])];
-  }
-}
-
-foreach inst = [
     BUFFER_LOAD_SHORT_D16_HI_VBUFFER_OFFEN,
     BUFFER_LOAD_SHORT_D16_IDXEN,
     BUFFER_LOAD_SHORT_D16_OFFEN,
@@ -2775,8 +3053,6 @@ foreach inst = [
 }
 
 foreach inst = [
-    BUFFER_ATOMIC_ADD_F64_VBUFFER_OFFEN,
-    BUFFER_ATOMIC_ADD_F64_VBUFFER_OFFEN_RTN,
     BUFFER_ATOMIC_ADD_IDXEN,
     BUFFER_ATOMIC_ADD_IDXEN_RTN,
     BUFFER_ATOMIC_ADD_OFFEN,
@@ -2792,31 +3068,20 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fadd, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
 foreach inst = [
-    BUFFER_STORE_SHORT_D16_HI_ADDR64,
-    BUFFER_STORE_SHORT_D16_HI_BOTHEN,
-    BUFFER_STORE_SHORT_D16_HI_IDXEN,
-    BUFFER_STORE_SHORT_D16_HI_OFFEN,
-    BUFFER_STORE_SHORT_D16_HI_TFE_ADDR64,
-    BUFFER_STORE_SHORT_D16_HI_TFE_BOTHEN,
-    BUFFER_STORE_SHORT_D16_HI_TFE_IDXEN,
-    BUFFER_STORE_SHORT_D16_HI_TFE_OFFEN,
-    BUFFER_STORE_SHORT_D16_HI_TFE_VBUFFER_ADDR64,
-    BUFFER_STORE_SHORT_D16_HI_TFE_VBUFFER_BOTHEN,
-    BUFFER_STORE_SHORT_D16_HI_TFE_VBUFFER_IDXEN,
-    BUFFER_STORE_SHORT_D16_HI_TFE_VBUFFER_OFFEN,
-    BUFFER_STORE_SHORT_D16_HI_VBUFFER_ADDR64,
-    BUFFER_STORE_SHORT_D16_HI_VBUFFER_BOTHEN
+    BUFFER_ATOMIC_ADD_F64_VBUFFER_OFFEN,
+    BUFFER_ATOMIC_ADD_F64_VBUFFER_OFFEN_RTN
 ] in {
   def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(DefVal $tmp16, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetVal $tmp16), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])];
+    let Semantic = [(SetNamedOperand $vdata,
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fadd, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_double_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
+
 
 foreach inst = [
     BUFFER_LOAD_UBYTE_D16_HI_TFE_BOTHEN_exact,
@@ -3029,23 +3294,32 @@ foreach inst = [
 }
 
 foreach inst = [
-    BUFFER_STORE_BYTE_BOTHEN_exact,
     BUFFER_STORE_BYTE_D16_HI_BOTHEN_exact,
     BUFFER_STORE_BYTE_D16_HI_IDXEN_exact,
     BUFFER_STORE_BYTE_D16_HI_OFFEN_exact,
+    BUFFER_STORE_BYTE_D16_HI_VBUFFER_BOTHEN_exact,
+    BUFFER_STORE_BYTE_D16_HI_VBUFFER_IDXEN_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i8_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetVal $tmp8), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
+    BUFFER_STORE_BYTE_BOTHEN_exact,
     BUFFER_STORE_BYTE_D16_HI_TFE_BOTHEN_exact,
     BUFFER_STORE_BYTE_D16_HI_TFE_IDXEN_exact,
     BUFFER_STORE_BYTE_D16_HI_TFE_OFFEN_exact,
     BUFFER_STORE_BYTE_D16_HI_TFE_VBUFFER_BOTHEN_exact,
     BUFFER_STORE_BYTE_D16_HI_TFE_VBUFFER_IDXEN_exact,
-    BUFFER_STORE_BYTE_D16_HI_TFE_VBUFFER_OFFEN_exact,
-    BUFFER_STORE_BYTE_D16_HI_VBUFFER_BOTHEN_exact,
-    BUFFER_STORE_BYTE_D16_HI_VBUFFER_IDXEN_exact
+    BUFFER_STORE_BYTE_D16_HI_TFE_VBUFFER_OFFEN_exact
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(DefVal ?:$tmp, (LLVMTrunc (GetNamedOperand ?:$vdata), si_llvm_i8_ty)), (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetVal ?:$tmp), (LLVMBitCast (GetNamedOperand ?:$srsrc), si_llvm_v4i32_ty), (GetNamedOperand ?:$vaddr), (GetNamedOperand ?:$offset), (GetNamedOperand ?:$soffset), (GetNamedOperand ?:$cpol)])];
   }
 }
+
 
 foreach inst = [
     BUFFER_STORE_BYTE_D16_HI_VBUFFER_OFFEN_exact,
@@ -3132,38 +3406,6 @@ foreach inst = [
 }
 
 foreach inst = [
-    BUFFER_LOAD_SBYTE_D16_TFE_OFFSET,
-    BUFFER_LOAD_SBYTE_D16_TFE_VBUFFER_OFFSET,
-    BUFFER_LOAD_SBYTE_D16_VBUFFER_OFFSET,
-    BUFFER_LOAD_SBYTE_LDS_OFFSET,
-    BUFFER_LOAD_UBYTE_D16_TFE_OFFSET,
-    BUFFER_LOAD_UBYTE_D16_TFE_VBUFFER_OFFSET,
-    BUFFER_LOAD_UBYTE_D16_VBUFFER_OFFSET,
-    BUFFER_LOAD_UBYTE_LDS_OFFSET
-] in {
-  def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
-  }
-}
-
-foreach inst = [
-    BUFFER_LOAD_SBYTE_OFFSET,
-    BUFFER_LOAD_SBYTE_TFE_OFFSET,
-    BUFFER_LOAD_SBYTE_TFE_VBUFFER_OFFSET,
-    BUFFER_LOAD_SBYTE_VBUFFER_OFFSET,
-    BUFFER_LOAD_UBYTE_OFFSET,
-    BUFFER_LOAD_UBYTE_TFE_OFFSET,
-    BUFFER_LOAD_UBYTE_TFE_VBUFFER_OFFSET,
-    BUFFER_LOAD_UBYTE_VBUFFER_OFFSET
-] in {
-  def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
-  }
-}
-
-foreach inst = [
     BUFFER_STORE_SHORT_D16_HI_OFFSET_exact,
     BUFFER_STORE_SHORT_D16_HI_TFE_OFFSET_exact,
     BUFFER_STORE_SHORT_D16_HI_TFE_VBUFFER_OFFSET_exact,
@@ -3178,8 +3420,21 @@ foreach inst = [
 }
 
 foreach inst = [
-    BUFFER_ATOMIC_ADD_F64_VBUFFER_OFFSET,
-    BUFFER_ATOMIC_ADD_F64_VBUFFER_OFFSET_RTN,
+    BUFFER_STORE_SHORT_D16_HI_OFFSET,
+    BUFFER_STORE_SHORT_D16_HI_TFE_OFFSET,
+    BUFFER_STORE_SHORT_D16_HI_TFE_VBUFFER_OFFSET,
+    BUFFER_STORE_SHORT_D16_HI_VBUFFER_OFFSET,
+    BUFFER_STORE_SHORT_OFFSET,
+    BUFFER_STORE_SHORT_TFE_OFFSET,
+    BUFFER_STORE_SHORT_TFE_VBUFFER_OFFSET
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $tmp16, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetVal $tmp16), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
     BUFFER_ATOMIC_ADD_OFFSET,
     BUFFER_ATOMIC_ADD_OFFSET_RTN,
     BUFFER_ATOMIC_ADD_VBUFFER_OFFSET,
@@ -3187,13 +3442,32 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fadd, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
 foreach inst = [
+    BUFFER_ATOMIC_ADD_F64_VBUFFER_OFFSET,
+    BUFFER_ATOMIC_ADD_F64_VBUFFER_OFFSET_RTN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdata,
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fadd, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_double_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+  }
+}
+
+
+foreach inst = [
     BUFFER_LOAD_DWORD_LDS_OFFSET,
-    BUFFER_LOAD_DWORD_LDS_VBUFFER_OFFSET,
+    BUFFER_LOAD_DWORD_LDS_VBUFFER_OFFSET
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 4), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
     BUFFER_LOAD_DWORD_OFFSET,
     BUFFER_LOAD_DWORD_TFE_OFFSET,
     BUFFER_LOAD_DWORD_TFE_VBUFFER_OFFSET,
@@ -3205,9 +3479,18 @@ foreach inst = [
   }
 }
 
+
 foreach inst = [
     BUFFER_LOAD_DWORD_LDS_OFFSET_exact,
-    BUFFER_LOAD_DWORD_LDS_VBUFFER_OFFSET_exact,
+    BUFFER_LOAD_DWORD_LDS_VBUFFER_OFFSET_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 4), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
     BUFFER_LOAD_DWORD_OFFSET_exact,
     BUFFER_LOAD_DWORD_TFE_OFFSET_exact,
     BUFFER_LOAD_DWORD_TFE_VBUFFER_OFFSET_exact,
@@ -3218,9 +3501,18 @@ foreach inst = [
   }
 }
 
+
 foreach inst = [
     BUFFER_LOAD_FORMAT_X_LDS_OFFSET,
-    BUFFER_LOAD_FORMAT_X_LDS_VBUFFER_OFFSET,
+    BUFFER_LOAD_FORMAT_X_LDS_VBUFFER_OFFSET
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 4), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
     BUFFER_LOAD_FORMAT_X_OFFSET,
     BUFFER_LOAD_FORMAT_X_TFE_OFFSET,
     BUFFER_LOAD_FORMAT_X_TFE_VBUFFER_OFFSET,
@@ -3232,9 +3524,18 @@ foreach inst = [
   }
 }
 
+
 foreach inst = [
     BUFFER_LOAD_FORMAT_X_LDS_OFFSET_exact,
-    BUFFER_LOAD_FORMAT_X_LDS_VBUFFER_OFFSET_exact,
+    BUFFER_LOAD_FORMAT_X_LDS_VBUFFER_OFFSET_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 4), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
     BUFFER_LOAD_FORMAT_X_OFFSET_exact,
     BUFFER_LOAD_FORMAT_X_TFE_OFFSET_exact,
     BUFFER_LOAD_FORMAT_X_TFE_VBUFFER_OFFSET_exact,
@@ -3245,22 +3546,6 @@ foreach inst = [
   }
 }
 
-foreach inst = [
-    BUFFER_LOAD_SBYTE_D16_HI_ADDR64,
-    BUFFER_LOAD_SBYTE_D16_HI_BOTHEN,
-    BUFFER_LOAD_SBYTE_D16_HI_IDXEN,
-    BUFFER_LOAD_SBYTE_D16_HI_OFFEN,
-    BUFFER_LOAD_SBYTE_D16_HI_TFE_ADDR64
-] in {
-  def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(DefVal $tmp,
-      (LLVMIntrinsic si_llvm_i8_ty, int_amdgcn_struct_buffer_load, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])),
-    (DefVal $sext16, (LLVMSExt (GetVal $tmp), si_llvm_i16_ty)),
-    (DefVal $vdata_hi, (LLVMShl (LLVMZExt (GetVal $sext16), si_llvm_i32_ty), 16)),
-    (DefVal $vdata_lo, (LLVMAnd (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0xFFFF))),
-    (SetNamedOperand $vdata, (LLVMOr (GetVal $vdata_hi), (GetVal $vdata_lo)))];
-  }
-}
 
 foreach inst = [
     BUFFER_LOAD_SHORT_D16_HI_VBUFFER_OFFSET,
@@ -3317,15 +3602,24 @@ foreach inst = [
 
 foreach inst = [
     BUFFER_ATOMIC_ADD_F32_VBUFFER_OFFSET,
-    BUFFER_ATOMIC_ADD_F32_VBUFFER_OFFSET_RTN,
+    BUFFER_ATOMIC_ADD_F32_VBUFFER_OFFSET_RTN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(SetNamedOperand $vdata,
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fadd, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_float_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+  }
+}
+
+foreach inst = [
     BUFFER_ATOMIC_ADD_F64_OFFSET,
     BUFFER_ATOMIC_ADD_F64_OFFSET_RTN
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fadd, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fadd, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_double_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
+
 
 foreach inst = [
     BUFFER_ATOMIC_ADD_X2_OFFSET,
@@ -3449,7 +3743,7 @@ foreach inst = [
     let Semantic = [(DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
     (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
     (SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -3463,7 +3757,7 @@ foreach inst = [
     let Semantic = [(DefVal $src, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 0))),
     (DefVal $cmp, (LLVMExtractElement (GetNamedOperand $vdata), (ConstantInt si_llvm_i32_ty, 1))),
     (SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_struct_buffer_atomic_cmpswap, [(GetVal $src), (GetVal $cmp), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -3475,7 +3769,7 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fmax, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fmax, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_float_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -3487,7 +3781,7 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fmin, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fmin, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_float_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -3523,7 +3817,7 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fmax, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fmax, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_double_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -3535,7 +3829,7 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fmin, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_struct_buffer_atomic_fmin, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_double_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -3571,7 +3865,7 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_v2bf16_ty, int_amdgcn_struct_buffer_atomic_fadd, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_v2bf16_ty, int_amdgcn_struct_buffer_atomic_fadd, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_v2bf16_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -3583,7 +3877,7 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_v2f16_ty, int_amdgcn_struct_buffer_atomic_fadd, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_v2f16_ty, int_amdgcn_struct_buffer_atomic_fadd, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_v2f16_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
@@ -3975,25 +4269,45 @@ foreach inst = [
 
 foreach inst = [
     BUFFER_LOAD_SBYTE_LDS_VBUFFER_IDXEN,
-    BUFFER_LOAD_SBYTE_LDS_VBUFFER_OFFEN,
-    BUFFER_LOAD_UBYTE_LDS_VBUFFER_IDXEN,
-    BUFFER_LOAD_UBYTE_LDS_VBUFFER_OFFEN
+    BUFFER_LOAD_SBYTE_LDS_VBUFFER_OFFEN
 ] in {
   def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 1), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
   }
 }
 
 foreach inst = [
+    BUFFER_LOAD_UBYTE_LDS_VBUFFER_IDXEN,
+    BUFFER_LOAD_UBYTE_LDS_VBUFFER_OFFEN
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+
+foreach inst = [
     BUFFER_LOAD_SBYTE_LDS_VBUFFER_IDXEN_exact,
-    BUFFER_LOAD_SBYTE_LDS_VBUFFER_OFFEN_exact,
+    BUFFER_LOAD_SBYTE_LDS_VBUFFER_OFFEN_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
     BUFFER_LOAD_UBYTE_LDS_VBUFFER_IDXEN_exact,
     BUFFER_LOAD_UBYTE_LDS_VBUFFER_OFFEN_exact
 ] in {
   def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand ?:$srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 1), (GetNamedOperand ?:$vaddr), (GetNamedOperand ?:$offset), (GetNamedOperand ?:$soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand ?:$cpol)])];
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (GetNamedOperand $vaddr), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
   }
 }
+
 
 foreach inst = [
     BUFFER_LOAD_UBYTE_D16_HI_TFE_OFFSET,
@@ -4047,19 +4361,15 @@ foreach inst = [
 }
 
 foreach inst = [
-    BUFFER_STORE_SHORT_D16_HI_VBUFFER_OFFSET,
-    BUFFER_STORE_SHORT_OFFSET,
-    BUFFER_STORE_SHORT_TFE_OFFSET,
-    BUFFER_STORE_SHORT_TFE_VBUFFER_OFFSET
+    BUFFER_STORE_BYTE_D16_HI_OFFSET
 ] in {
   def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(DefVal $tmp16, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetVal $tmp16), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])];
+    let Semantic = [(DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i8_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetVal $tmp8), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])];
   }
 }
 
 foreach inst = [
-    BUFFER_STORE_BYTE_D16_HI_OFFSET,
     BUFFER_STORE_BYTE_D16_HI_TFE_OFFSET,
     BUFFER_STORE_BYTE_D16_HI_TFE_VBUFFER_OFFSET
 ] in {
@@ -4069,8 +4379,17 @@ foreach inst = [
   }
 }
 
+
 foreach inst = [
-    BUFFER_STORE_BYTE_D16_HI_OFFSET_exact,
+    BUFFER_STORE_BYTE_D16_HI_OFFSET_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i8_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetVal $tmp8), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
     BUFFER_STORE_BYTE_D16_HI_TFE_OFFSET_exact,
     BUFFER_STORE_BYTE_D16_HI_TFE_VBUFFER_OFFSET_exact
 ] in {
@@ -4079,16 +4398,6 @@ foreach inst = [
   }
 }
 
-foreach inst = [
-    BUFFER_STORE_SHORT_D16_HI_OFFSET,
-    BUFFER_STORE_SHORT_D16_HI_TFE_OFFSET,
-    BUFFER_STORE_SHORT_D16_HI_TFE_VBUFFER_OFFSET
-] in {
-  def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(DefVal $tmp16, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetVal $tmp16), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)])];
-  }
-}
 
 foreach inst = [
     BUFFER_ATOMIC_ADD_F32_OFFSET,
@@ -4096,27 +4405,47 @@ foreach inst = [
 ] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [(SetNamedOperand $vdata,
-      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_struct_buffer_atomic_add, [(GetNamedOperand $vdata), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_struct_buffer_atomic_fadd, [(LLVMBitCast (GetNamedOperand $vdata), si_llvm_float_ty), (LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (GetNamedOperand $cpol)]))];
   }
 }
 
 foreach inst = [
-    BUFFER_LOAD_SBYTE_LDS_VBUFFER_OFFSET,
+    BUFFER_LOAD_SBYTE_LDS_VBUFFER_OFFSET
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+foreach inst = [
     BUFFER_LOAD_UBYTE_LDS_VBUFFER_OFFSET
 ] in {
   def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 1), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
+  }
+}
+
+
+foreach inst = [
+    BUFFER_LOAD_SBYTE_LDS_VBUFFER_OFFSET_exact
+] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
   }
 }
 
 foreach inst = [
-    BUFFER_LOAD_SBYTE_LDS_VBUFFER_OFFSET_exact,
     BUFFER_LOAD_UBYTE_LDS_VBUFFER_OFFSET_exact
 ] in {
   def inst#_sem : InstSISemantic<inst> {
-    let Semantic = [(LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand ?:$srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (ConstantInt si_llvm_i32_ty, 1), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand ?:$offset), (GetNamedOperand ?:$soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand ?:$cpol)])];
+    let Semantic = [(DefVal $lds, (LLVMIntToPtr (ImplicitUse M0), local_ptr_ty)),
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_load_lds, [(LLVMBitCast (GetNamedOperand $srsrc), si_llvm_v4i32_ty), (GetVal $lds), (ConstantInt si_llvm_i32_ty, 1), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $offset), (GetNamedOperand $soffset), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand $cpol)])];
   }
 }
+
 
 foreach inst = [
     BUFFER_STORE_SHORT_ADDR64,
@@ -4154,3 +4483,7 @@ def BUFFER_STORE_SHORT_VBUFFER_OFFSET_exact_sem : InstSISemantic<BUFFER_STORE_SH
   let Semantic = [(DefVal ?:$tmp, (LLVMTrunc (GetNamedOperand ?:$vdata), si_llvm_i16_ty)), (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_struct_buffer_store, [(GetVal ?:$tmp), (LLVMBitCast (GetNamedOperand ?:$srsrc), si_llvm_v4i32_ty), (ConstantInt si_llvm_i32_ty, 0), (GetNamedOperand ?:$offset), (GetNamedOperand ?:$soffset), (GetNamedOperand ?:$cpol)])];
 }
 
+
+//------------------------------------------------------------------------------
+// gfx12-renamed LDS-target buffer-load forms (BUFFER_LOAD_LDS_{B32,FORMAT_X,I8,U8,I16,U16})
+//------------------------------------------------------------------------------
