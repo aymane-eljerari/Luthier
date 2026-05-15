@@ -349,6 +349,7 @@ bool IModuleIPPredicatedLivenessAnalysis::runOnModule(llvm::Module &IModule) {
   LLVM_DEBUG(llvm::dbgs() << "=== " << getPassName() << " ===\n");
 
   LiveSetsByPayload.clear();
+  LiveInsByPMBB.clear();
   ResultFullyDiscovered = false;
 
   // ---- Plumb analyses --------------------------------------------------
@@ -483,7 +484,8 @@ bool IModuleIPPredicatedLivenessAnalysis::runOnModule(llvm::Module &IModule) {
     }
   }
 
-  // ---- Post-convergence: extract per-payload pre-effects snapshots ----
+  // ---- Post-convergence: extract per-payload pre-effects snapshots +
+  // serialize per-PMBB live-ins for external consumers ----
   // Walk each PMBB once with its converged live-out (from successors'
   // converged live-ins + the exit seed if any), and let walkPMBBBackward
   // populate LiveSetsByPayload at every insertion point.
@@ -494,6 +496,24 @@ bool IModuleIPPredicatedLivenessAnalysis::runOnModule(llvm::Module &IModule) {
         *PMBB->getMBB().getParent()->getSubtarget().getRegisterInfo();
     walkPMBBBackward(*PMBB, OutA, OutI, IPIP, AccessedRegs, TRI,
                      /*CaptureMap=*/&LiveSetsByPayload);
+  }
+
+  // Serialize the converged per-PMBB live-in sets into LiveInsByPMBB so
+  // consumers (e.g. TargetModulePatcherPass for branch-relax scavenging)
+  // can ArrayRef-borrow them without copying the DenseSets we use
+  // internally for fixed-point iteration.
+  LiveInsByPMBB.reserve(State.size());
+  for (const auto &[PMBB, Live] : State) {
+    PMBBLiveIns &Out = LiveInsByPMBB[PMBB];
+    Out.Active.reserve(Live.LiveInActive.size());
+    Out.Inactive.reserve(Live.LiveInInactive.size());
+    for (llvm::MCPhysReg R : Live.LiveInActive)
+      Out.Active.push_back(R);
+    for (llvm::MCPhysReg R : Live.LiveInInactive)
+      Out.Inactive.push_back(R);
+    // Deterministic order for ArrayRef consumers.
+    llvm::sort(Out.Active);
+    llvm::sort(Out.Inactive);
   }
 
   LLVM_DEBUG({

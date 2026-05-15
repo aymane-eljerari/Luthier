@@ -27,6 +27,7 @@ add_library(LuthierToolCodeGen OBJECT
         MemoryAllocationAccessor.cpp
         SVStorageAndLoadLocations.cpp
         SVAPhysVGPRPinPass.cpp
+        TargetModulePatcherPass.cpp
         #        IPPredicatedLiveness.cpp
         IntrinsicMIRLoweringPass.cpp
         InjectedPayloadPEIPass.cpp

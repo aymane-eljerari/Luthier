@@ -89,6 +89,19 @@ public:
 
   static unsigned getArgumentLaneSize(ScalarValueArgument SA);
 
+  /// Return up to \p NumLanes lowest-numbered SVA lanes that are not
+  /// claimed by any of the fixed kernel-prolog slots (lanes 0-2 plus the
+  /// FS / buffer-rsrc region) and not allocated to a scalar-value
+  /// argument. Lanes range over <tt>0 .. WaveSize-1</tt>. Returns fewer
+  /// than \p NumLanes if the SVA is saturated.
+  ///
+  /// Used by \c TargetModulePatcherPass's branch-relaxation fallback: when
+  /// the per-MBB live-in set has no two dead SGPRs available at the
+  /// branch, we spill two app SGPRs into the lowest free SVA lanes around
+  /// the relaxed jump.
+  [[nodiscard]] llvm::SmallVector<uint8_t, 4>
+  findLowestFreeLanes(unsigned NumLanes, unsigned WaveSize) const;
+
   static std::unique_ptr<StateValueArraySpecs>
   getSVASpecs(const llvm::Module &M, const llvm::TargetMachine &TM);
 

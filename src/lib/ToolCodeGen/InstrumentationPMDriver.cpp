@@ -31,6 +31,7 @@
 #include "luthier/ToolCodeGen/RemoveUnusedHooksPass.h"
 #include "luthier/ToolCodeGen/SVAPhysVGPRPinPass.h"
 #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
+#include "luthier/ToolCodeGen/TargetModulePatcherPass.h"
 // #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
 // #include "luthier/ToolCodeGen/InjectedPayloadPEIPass.h"
 // #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
@@ -249,6 +250,7 @@ InstrumentationPMDriver::InstrumentationPMDriver(
   initializeLRStateValueStorageAndLoadLocationsAnalysis(*Registry);
   initializeSVAPhysVGPRPinPass(*Registry);
   initializeInjectedPayloadPEIPass(*Registry);
+  initializeTargetModulePatcherPass(*Registry);
 
   for (const auto &Plugin : PassPlugins) {
     Plugin.registerLegacyCodegenPassesCallback(*Registry);

@@ -19,10 +19,52 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/StateValueArraySpecs.h"
 
+#include <AMDGPU.h>
 #include <AMDGPUTargetMachine.h>
 #include <GCNSubtarget.h>
+#include <MCTargetDesc/AMDGPUMCTargetDesc.h>
 
 namespace luthier {
+
+llvm::SmallVector<uint8_t, 4>
+StateValueArraySpecs::findLowestFreeLanes(unsigned NumLanes,
+                                          unsigned WaveSize) const {
+  // Lane occupancy:
+  //   0       — StackPointerRegSpillLane (SGPR0 of PRIVATE_SEGMENT_BUFFER)
+  //   1       — FramePointerRegSSpillLane (SGPR1)
+  //   2       — StackPointerStoreLane (instrumentation SGPR32)
+  //   3..N-1  — BufferRsrcOrScratchSpillLane region (FS = 2 lanes, buffer
+  //             rsrc = 4 lanes, architected-FS = 0 lanes)
+  //   …       — Each ScalarArguments[SA] entry holds 1, 2, or 4 contiguous
+  //             lanes starting at the stored base.
+  llvm::BitVector Occupied(WaveSize, false);
+
+  auto markRange = [&](unsigned Base, unsigned Count) {
+    for (unsigned i = 0; i < Count; ++i) {
+      unsigned L = Base + i;
+      if (L < WaveSize)
+        Occupied.set(L);
+    }
+  };
+
+  markRange(StackPointerRegSpillLane, 1);
+  markRange(FramePointerRegSSpillLane, 1);
+  markRange(StackPointerStoreLane, 1);
+
+  if (BufferRsrcOrScratchSpillLane != llvm::MCRegister::NoRegister) {
+    unsigned BufferSize =
+        (BufferRsrcOrScratchSpillLane == llvm::AMDGPU::FLAT_SCR) ? 2 : 4;
+    markRange(/*Base=*/3, BufferSize);
+  }
+  for (const auto &[SA, Base] : ScalarArguments)
+    markRange(Base, getArgumentLaneSize(SA));
+
+  llvm::SmallVector<uint8_t, 4> Out;
+  for (unsigned L = 0; L < WaveSize && Out.size() < NumLanes; ++L)
+    if (!Occupied.test(L))
+      Out.push_back(static_cast<uint8_t>(L));
+  return Out;
+}
 
 unsigned StateValueArraySpecs::getArgumentLaneSize(ScalarValueArgument SA) {
   switch (SA) {

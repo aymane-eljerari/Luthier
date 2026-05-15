@@ -25,8 +25,10 @@
 #ifndef LUTHIER_TOOL_CODE_GEN_IP_PREDICATED_LIVENESS_IMODULE_PASS_H
 #define LUTHIER_TOOL_CODE_GEN_IP_PREDICATED_LIVENESS_IMODULE_PASS_H
 #include "luthier/ToolCodeGen/LegacyPassSupport.h"
+#include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/DenseSet.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/MC/MCRegister.h>
 #include <llvm/Pass.h>
 
@@ -36,6 +38,8 @@ class MachineInstr;
 } // namespace llvm
 
 namespace luthier {
+
+class PredicatedMachineBasicBlock;
 
 /// \brief Per-payload live-register record captured at the program point
 /// just before the payload runs (within a chain of payloads at the same
@@ -52,6 +56,17 @@ namespace luthier {
 struct PayloadLiveSets {
   llvm::DenseSet<llvm::MCPhysReg> Active;
   llvm::DenseSet<llvm::MCPhysReg> Inactive;
+};
+
+/// \brief Per-PredicatedMachineBasicBlock live-in record.
+///
+/// Captures the same Active/Inactive lane partition as
+/// \c PayloadLiveSets, but keyed by basic block rather than by payload.
+/// Stored as \c SmallVector so consumers can borrow via \c ArrayRef
+/// without copying.
+struct PMBBLiveIns {
+  llvm::SmallVector<llvm::MCPhysReg, 16> Active;
+  llvm::SmallVector<llvm::MCPhysReg, 16> Inactive;
 };
 
 class IModuleIPPredicatedLivenessAnalysis;
@@ -83,9 +98,12 @@ class IModuleIPPredicatedLivenessAnalysis : public llvm::ModulePass {
 public:
   using PayloadLiveSetsMap =
       llvm::DenseMap<const llvm::Function *, PayloadLiveSets>;
+  using PMBBLiveInsMap =
+      llvm::DenseMap<const PredicatedMachineBasicBlock *, PMBBLiveIns>;
 
 private:
   PayloadLiveSetsMap LiveSetsByPayload;
+  PMBBLiveInsMap LiveInsByPMBB;
   /// True iff the dataflow ran in fully-discovered (inter-procedural) mode.
   /// False means it fell back to per-function local mode.
   bool ResultFullyDiscovered{false};
@@ -118,6 +136,30 @@ public:
 
   [[nodiscard]] const PayloadLiveSetsMap &getMap() const {
     return LiveSetsByPayload;
+  }
+
+  /// \return ArrayRef into the converged per-PMBB Active-lane live-in set,
+  /// or an empty ArrayRef if no entry was recorded for \p PMBB.
+  [[nodiscard]] llvm::ArrayRef<llvm::MCPhysReg>
+  getPMBBLiveInsActive(const PredicatedMachineBasicBlock &PMBB) const {
+    auto It = LiveInsByPMBB.find(&PMBB);
+    return It == LiveInsByPMBB.end() ? llvm::ArrayRef<llvm::MCPhysReg>{}
+                                     : llvm::ArrayRef<llvm::MCPhysReg>(
+                                           It->second.Active);
+  }
+
+  /// \return ArrayRef into the converged per-PMBB Inactive-lane live-in set,
+  /// or an empty ArrayRef if no entry was recorded for \p PMBB.
+  [[nodiscard]] llvm::ArrayRef<llvm::MCPhysReg>
+  getPMBBLiveInsInactive(const PredicatedMachineBasicBlock &PMBB) const {
+    auto It = LiveInsByPMBB.find(&PMBB);
+    return It == LiveInsByPMBB.end() ? llvm::ArrayRef<llvm::MCPhysReg>{}
+                                     : llvm::ArrayRef<llvm::MCPhysReg>(
+                                           It->second.Inactive);
+  }
+
+  [[nodiscard]] const PMBBLiveInsMap &getPMBBLiveInsMap() const {
+    return LiveInsByPMBB;
   }
 };
 

@@ -121,10 +121,22 @@ DEFINE_ENABLE_SGPR_ARGUMENT_WITH_TRI(QueuePtr,
                                      llvm::AMDGPUFunctionArgInfo::QUEUE_PTR,
                                      addQueuePtr)
 
-static llvm::Error
+/// Emits the per-wave scratch setup at the kernel entry: spills the
+/// kernarg-derived PSB.sub0/sub1 and FLAT_SCRATCH_INIT lo/hi into SVA
+/// lanes, adds PRIVATE_SEGMENT_WAVE_BYTE_OFFSET to compute the wave's
+/// scratch base, stores SGPR32 to the instrumentation-stack-start lane,
+/// and reads the spilled kernarg values back into SGPR0/1/FS_LO/HI so
+/// the application's prolog still sees them.
+///
+/// \p UsesDynamicStack and \p PrivateSegmentFixedSize replaced the
+/// previous \c amdgpu::hsamd::Kernel::Metadata reference — both are the
+/// only fields the function reads. Sourcing them is the caller's job
+/// (kernel metadata, per-function attributes, etc.).
+llvm::Error
 emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
                        llvm::MCRegister SVSStorageVGPR,
-                       const amdgpu::hsamd::Kernel::Metadata &KernelMD,
+                       bool UsesDynamicStack,
+                       unsigned PrivateSegmentFixedSize,
                        const StateValueArraySpecs &Specs) {
   auto &MF = *EntryInstr.getMF();
   const auto &TII = *MF.getSubtarget().getInstrInfo();
@@ -235,10 +247,10 @@ emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
       .addImm(0);
 
   unsigned int InstrumentationStackStart{0};
-  if (KernelMD.UsesDynamicStack)
+  if (UsesDynamicStack)
     llvm_unreachable("Not implemented");
   else {
-    InstrumentationStackStart = KernelMD.PrivateSegmentFixedSize;
+    InstrumentationStackStart = PrivateSegmentFixedSize;
   }
   // Set s32 to be the maximum amount of stack requested by the hook
   llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
@@ -291,7 +303,7 @@ emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
   return llvm::Error::success();
 }
 
-static llvm::Error
+llvm::Error
 emitCodeToStoreSGPRKernelArg(llvm::MachineInstr &InsertionPoint,
                              llvm::MCRegister SrcSGPR, llvm::MCRegister SVSVGPR,
                              int SpillSlotStart, int NumSlots,

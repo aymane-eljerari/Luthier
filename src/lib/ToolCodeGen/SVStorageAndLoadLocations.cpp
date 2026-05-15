@@ -29,6 +29,7 @@
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/TargetRegisterInfo.h>
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
+#include <llvm/Support/CommandLine.h>
 
 #include <utility>
 
@@ -37,7 +38,73 @@
 
 namespace luthier {
 
+/// Allow the SVA-storage scavenger to pick physical registers whose
+/// hardware index exceeds the target function's declared
+/// `amdgpu-num-{vgpr,sgpr}` attribute. Default off so that
+/// instrumentation lives inside the original allocation footprint; the
+/// user must opt in (--luthier-exceed-num-regs) for tightly pressured
+/// targets where instrumentation can't fit otherwise. The option is
+/// declared here because the scavenger is the only consumer; the
+/// driver re-exports its current value via a thin getter for diagnostics.
+static llvm::cl::opt<bool> ExceedNumRegs(
+    "luthier-exceed-num-regs", llvm::cl::init(false),
+    llvm::cl::desc("Allow SVA storage scavenging to pick V/SGPRs above the "
+                   "target function's amdgpu-num-{vgpr,sgpr} attribute."));
+
 namespace {
+
+/// Hardware-index of an AMDGPU 32-bit V/A/SGPR within its bank, or
+/// \c std::nullopt when \p Reg is not in one of the three 32-bit
+/// allocatable classes the SVA scavenger considers. AGPRs share the
+/// VGPR budget on the gfx9+ accumulator-style configurations (the
+/// AMDGPU `amdgpu-num-vgpr` attribute names them together), so for
+/// cap-checking purposes AGPR indices are also bounded by the
+/// VGPR cap.
+std::optional<std::pair<unsigned, bool /*isSGPR*/>>
+hwIndexAndKind(llvm::MCRegister Reg) {
+  if (Reg >= llvm::AMDGPU::VGPR0 && Reg <= llvm::AMDGPU::VGPR255)
+    return std::pair<unsigned, bool>{Reg - llvm::AMDGPU::VGPR0, false};
+  if (Reg >= llvm::AMDGPU::AGPR0 && Reg <= llvm::AMDGPU::AGPR255)
+    return std::pair<unsigned, bool>{Reg - llvm::AMDGPU::AGPR0, false};
+  if (Reg >= llvm::AMDGPU::SGPR0 && Reg <= llvm::AMDGPU::SGPR105)
+    return std::pair<unsigned, bool>{Reg - llvm::AMDGPU::SGPR0, true};
+  return std::nullopt;
+}
+
+/// True if picking \p Reg as SVA storage in \p MF would stay within the
+/// MF's declared `amdgpu-num-{vgpr,sgpr}` cap (or if \c --luthier-exceed-num-regs
+/// is enabled, or if the MF carries no such attribute). VGPR/AGPR indices
+/// are bounded by `amdgpu-num-vgpr`; SGPR indices by `amdgpu-num-sgpr`.
+bool isWithinDeclaredCap(const llvm::MachineFunction &MF, llvm::MCRegister Reg) {
+  if (ExceedNumRegs)
+    return true;
+  auto IdxAndKind = hwIndexAndKind(Reg);
+  if (!IdxAndKind)
+    return true; // not in a budgeted class — caller's responsibility.
+  auto [Index, IsSGPR] = *IdxAndKind;
+  llvm::StringRef AttrName =
+      IsSGPR ? llvm::StringRef("amdgpu-num-sgpr")
+             : llvm::StringRef("amdgpu-num-vgpr");
+  if (!MF.getFunction().hasFnAttribute(AttrName))
+    return true; // no declared cap → no constraint.
+  unsigned Cap = MF.getFunction().getFnAttributeAsParsedInteger(AttrName);
+  return Index < Cap;
+}
+
+/// Cross-MF cap check. Equivalent to \c isWithinDeclaredCap applied to
+/// every related function: the scavenger conservatively refuses \p Reg
+/// when any MF's declared cap excludes it.
+bool isWithinDeclaredCap(llvm::ArrayRef<llvm::MachineFunction *> Functions,
+                         llvm::MCRegister Reg) {
+  if (ExceedNumRegs)
+    return true;
+  for (const llvm::MachineFunction *MF : Functions)
+    if (!isWithinDeclaredCap(*MF, Reg))
+      return false;
+  return true;
+}
+
+
 
 /// Build a non-owning set of phys-regs that must NOT be clobbered at the
 /// given AppMI: the union of \c Active and \c Inactive lane live sets
@@ -94,15 +161,16 @@ liveAcrossAllPayloads(const llvm::DenseMap<const llvm::Function *,
 /// sets at the relevant IPs, plus (for function-start scavenging) the
 /// entry-block live-ins of the MF being scavenged.
 static void
-scavengeFreeRegister(const llvm::MachineRegisterInfo &MRI,
+scavengeFreeRegister(const llvm::MachineFunction &MF,
                      const llvm::TargetRegisterClass &RC,
                      const llvm::DenseSet<llvm::MCPhysReg> &DoNotClobber,
                      int NumRegs,
                      llvm::SmallVectorImpl<llvm::MCRegister> &ScavengedRegs) {
+  const auto &MRI = MF.getRegInfo();
   int NumRegsFound = 0;
   for (llvm::MCRegister Reg : reverse(RC)) {
     if (MRI.isAllocatable(Reg) && !MRI.isPhysRegUsed(Reg) &&
-        !DoNotClobber.contains(Reg)) {
+        !DoNotClobber.contains(Reg) && isWithinDeclaredCap(MF, Reg)) {
       ScavengedRegs.push_back(Reg);
       NumRegsFound++;
       if (NumRegsFound == NumRegs)
@@ -115,12 +183,13 @@ scavengeFreeRegister(const llvm::MachineRegisterInfo &MRI,
 /// candidate register satisfying the same predicates, or \c MCRegister{}
 /// if none is found.
 static llvm::MCRegister
-scavengeFreeRegister(const llvm::MachineRegisterInfo &MRI,
+scavengeFreeRegister(const llvm::MachineFunction &MF,
                      const llvm::TargetRegisterClass &RC,
                      const llvm::DenseSet<llvm::MCPhysReg> &DoNotClobber) {
+  const auto &MRI = MF.getRegInfo();
   for (llvm::MCRegister Reg : reverse(RC)) {
     if (MRI.isAllocatable(Reg) && !MRI.isPhysRegUsed(Reg) &&
-        !DoNotClobber.contains(Reg)) {
+        !DoNotClobber.contains(Reg) && isWithinDeclaredCap(MF, Reg)) {
       return Reg;
     }
   }
@@ -137,6 +206,8 @@ scavengeFreeRegister(llvm::ArrayRef<llvm::MachineFunction *> Functions,
                      llvm::SmallVectorImpl<llvm::MCRegister> &Regs) {
   unsigned int NumRegFound = 0;
   for (llvm::MCRegister Reg : *RC) {
+    if (!isWithinDeclaredCap(Functions, Reg))
+      continue;
     bool IsUnused = llvm::all_of(Functions, [&](llvm::MachineFunction *MF) {
       auto &MRI = MF->getRegInfo();
       return MRI.isAllocatable(Reg) && !MRI.isPhysRegUsed(Reg) &&
@@ -156,6 +227,8 @@ scavengeFreeRegister(llvm::ArrayRef<llvm::MachineFunction *> RelatedFunctions,
                      const llvm::TargetRegisterClass *RC,
                      const llvm::DenseSet<llvm::MCPhysReg> &DoNotClobber) {
   for (llvm::MCRegister Reg : *RC) {
+    if (!isWithinDeclaredCap(RelatedFunctions, Reg))
+      continue;
     bool IsUnused =
         llvm::all_of(RelatedFunctions, [&](llvm::MachineFunction *MF) {
           auto &MRI = MF->getRegInfo();
@@ -202,12 +275,12 @@ selectVGPRLoadLocationForInjectedPayload(
     } else {
       auto &InstrumentedMF = *InstPoint.getParent()->getParent();
       // Scavenge a dead VGPR to hold the state value array
-      AVGPRLocation = scavengeFreeRegister(InstrumentedMF.getRegInfo(),
+      AVGPRLocation = scavengeFreeRegister(InstrumentedMF,
                                            llvm::AMDGPU::VGPR_32RegClass,
                                            InstPointDoNotClobber);
       // Fall back to a dead AGPR
       if (AVGPRLocation == 0)
-        AVGPRLocation = scavengeFreeRegister(InstrumentedMF.getRegInfo(),
+        AVGPRLocation = scavengeFreeRegister(InstrumentedMF,
                                              llvm::AMDGPU::AGPR_32RegClass,
                                              InstPointDoNotClobber);
       if (AVGPRLocation == 0) {
@@ -318,23 +391,23 @@ static std::shared_ptr<StateValueArrayStorage> findFixedStateValueArrayStorage(
 }
 
 static std::shared_ptr<StateValueArrayStorage> findStateValueArrayStorageAtMI(
-    const llvm::MachineRegisterInfo &MRI,
+    const llvm::MachineFunction &MF,
     const llvm::DenseSet<llvm::MCPhysReg> &DoNotClobber,
     llvm::ArrayRef<StateValueArrayStorage::StorageKind> SupportedStorage,
     int MaxAGPRsUsedByAllStorage, int MaxSGPRsUsedByAllStorage) {
   // Find the next VGPR available to hold the value state array
   llvm::MCRegister StateValueArrayVGPRLocation =
-      scavengeFreeRegister(MRI, llvm::AMDGPU::VGPR_32RegClass, DoNotClobber);
+      scavengeFreeRegister(MF, llvm::AMDGPU::VGPR_32RegClass, DoNotClobber);
   // If we failed to find a free VGPR, we then have to scavenge for all
   // possible SGPRs and AGPRs that can be used in storing the state value
   // array
   if (StateValueArrayVGPRLocation == 0) {
     llvm::SmallVector<llvm::MCRegister, 3> SGPRsScavenged;
     llvm::SmallVector<llvm::MCRegister, 2> AGPRsScavenged;
-    scavengeFreeRegister(MRI, llvm::AMDGPU::AGPR_32RegClass, DoNotClobber,
+    scavengeFreeRegister(MF, llvm::AMDGPU::AGPR_32RegClass, DoNotClobber,
                          MaxAGPRsUsedByAllStorage, AGPRsScavenged);
 
-    scavengeFreeRegister(MRI, llvm::AMDGPU::SGPR_32RegClass, DoNotClobber,
+    scavengeFreeRegister(MF, llvm::AMDGPU::SGPR_32RegClass, DoNotClobber,
                          MaxSGPRsUsedByAllStorage, SGPRsScavenged);
 
     LLVM_DEBUG(
@@ -502,7 +575,7 @@ llvm::Error SVStorageAndLoadLocations::calculate(
       // The current location of the state value register
       std::shared_ptr<StateValueArrayStorage> SVS =
           findStateValueArrayStorageAtMI(
-              MRI, EntryDoNotClobber, SupportedStorage,
+              *MF, EntryDoNotClobber, SupportedStorage,
               MaxNumAGPRsUsedByAllStorage, MaxNumSGPRsUsedByAllStorage);
 
       LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
@@ -580,7 +653,7 @@ llvm::Error SVStorageAndLoadLocations::calculate(
           }
           if (TryRelocatingValueStateReg || MustRelocateStateValue) {
             SVS = findStateValueArrayStorageAtMI(
-                MRI, MIDoNotClobber, SupportedStorage,
+                *MF, MIDoNotClobber, SupportedStorage,
                 MaxNumAGPRsUsedByAllStorage, MaxNumSGPRsUsedByAllStorage);
             LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
                 SVS != nullptr, "Failed to relocate the SVA storage."));
