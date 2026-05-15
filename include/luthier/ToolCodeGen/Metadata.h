@@ -129,11 +129,11 @@ constexpr char ActualAccQual[] = ".actual_access";
 /// Key for Kernel::Arg::Metadata::mIsConst.
 constexpr char IsConst[] = ".is_const";
 /// Key for Kernel::Arg::Metadata::mIsRestrict.
-constexpr char IsRestrict[] = "is_restrict";
+constexpr char IsRestrict[] = ".is_restrict";
 /// Key for Kernel::Arg::Metadata::mIsVolatile.
-constexpr char IsVolatile[] = "is_volatile";
+constexpr char IsVolatile[] = ".is_volatile";
 /// Key for Kernel::Arg::Metadata::mIsPipe.
-constexpr char IsPipe[] = "is_pipe";
+constexpr char IsPipe[] = ".is_pipe";
 } // end namespace Key
 
 /// In-memory representation of kernel argument metadata.

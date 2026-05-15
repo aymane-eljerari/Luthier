@@ -161,6 +161,7 @@ llvm::Error parseDim3MDRequired(MapDocNode &Map, llvm::StringRef Key,
       llvm::formatv(
           "Failed to find the dim3 metadata node associated with key {0}",
           Key)));
+  Out = *OptionalDim3;
   return llvm::Error::success();
 }
 
@@ -393,10 +394,11 @@ MetadataParser::parseNoteMetaData(llvm::msgpack::Document &Doc) const {
   if (PrintfMD != RootMap.end()) {
     LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         PrintfMD->second.isArray(), "The printf metadata is not an array"));
+    auto &PrintfVec = Out->Printf.emplace();
     for (const auto &P : PrintfMD->second.getArray()) {
       LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
           P.isString(), "Printf entry is not a string"));
-      Out->Printf->emplace_back(P.getString());
+      PrintfVec.emplace_back(P.getString());
     }
   }
   return Out;
