@@ -1470,6 +1470,15 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
   TermInst ? Builder.SetInsertPoint(TermInst) : Builder.SetInsertPoint(BB);
 
   unsigned RegSize = getPhysRegisterSize(Reg);
+  unsigned ValBits = Val->getType()->getPrimitiveSizeInBits();
+  // Zero-extend integer values narrower than the destination register.
+  // This is the AMDGPU wave32 ballot → VCC case: ballot returns
+  // `iWavefrontSize` (i32 on wave32) but VCC is always 64-bit. The
+  // hardware leaves the inactive upper half at zero, which matches a
+  // zext semantically. We only allow widening — a value larger than
+  // the register would be a real bug in the .td semantics.
+  if (ValBits < RegSize && Val->getType()->isIntegerTy())
+    Val = Builder.CreateZExt(Val, Builder.getIntNTy(RegSize));
   assert(Val->getType()->getPrimitiveSizeInBits() == RegSize &&
          "Value type's size is not the same as the type of the register");
   (void)RegSize;

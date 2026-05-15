@@ -147,6 +147,10 @@ StateValueArraySpecs::getSVASpecs(const llvm::Module &M,
     }(SVArgSequence);
     return std::move(Out);
   }
+  // Empty IModule: no SVA layout to derive. Callers
+  // (TargetModulePatcherPass etc.) treat nullptr as "spec unavailable"
+  // and either skip SVA-dependent work or surface an error.
+  return nullptr;
 }
 
 std::unique_ptr<StateValueArraySpecs> StateValueArraySpecs::setModuleSVASpec(
