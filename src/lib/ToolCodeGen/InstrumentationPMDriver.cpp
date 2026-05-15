@@ -47,6 +47,7 @@
 #include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/Analysis/RuntimeLibcallInfo.h>
 #include <llvm/CodeGen/MIRParser/MIRParser.h>
+#include <llvm/CodeGen/MachineFunctionAnalysis.h>
 #include <llvm/CodeGen/MIRPrinter.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/MachinePassManager.h>
@@ -647,9 +648,27 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
     }
   }
 
-  /// imodule was modified
-  bool Modified = IRStagePA.areAllPreserved() || MIRModified;
-  return Modified ? llvm::PreservedAnalyses::none()
-                  : llvm::PreservedAnalyses::all();
+  // Preserve the new-PM MachineFunctionAnalysis (and the module proxy for
+  // it) across our return. If we returned PreservedAnalyses::none() the
+  // MachineFunctionAnalysis cache would invalidate; the next consumer
+  // (e.g., luthier-asm-printer) would re-run MachineFunctionAnalysis on
+  // each Function and produce a *fresh, empty* MachineFunction for any
+  // Function whose IR body is empty — which is the case for every
+  // target kernel CodeDiscoveryPass lifts (the code lives in the MMI,
+  // not in IR BasicBlocks). The result would be an empty MBB list and
+  // an AsmPrinter crash inside emitFunctionHeader.
+  // Same preservation set as CodeDiscoveryPass uses: explicitly hold on
+  // to MachineFunctionAnalysis + its module proxy + the function proxy,
+  // because subsequent passes (notably luthier-asm-printer) re-fetch
+  // each Function's MachineFunction by name. Empty IR bodies (every
+  // target kernel CodeDiscoveryPass lifts has its code in MMI, not
+  // IR) would re-materialize as empty MFs if MachineFunctionAnalysis
+  // weren't held — AsmPrinter then crashes in emitFunctionHeader on
+  // the sentinel MBB iterator.
+  llvm::PreservedAnalyses PA = llvm::PreservedAnalyses::none();
+  PA.preserve<llvm::MachineFunctionAnalysisManagerModuleProxy>();
+  PA.preserve<llvm::FunctionAnalysisManagerModuleProxy>();
+  PA.preserve<llvm::MachineFunctionAnalysis>();
+  return PA;
 }
 } // namespace luthier
