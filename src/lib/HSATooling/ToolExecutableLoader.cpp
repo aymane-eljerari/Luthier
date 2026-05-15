@@ -25,16 +25,179 @@
 #include "luthier/HSATooling/LoadedCodeObjectCache.h"
 #include "luthier/HSATooling/TargetManager.h"
 #include "luthier/Object/AMDGCNObjectFile.h"
+#include "luthier/Object/ObjectFileUtils.h"
+#include "llvm/Object/OffloadBundle.h"
 
-#include <llvm/ADT/SmallVector.h>
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
+#include <cstring>
+
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "luthier-tool-executable-manager"
+
+namespace {
+
+// In uncompressed mode
+constexpr char kOffloadBundleUncompressedMagicStr[] =
+    "__CLANG_OFFLOAD_BUNDLE__";
+static constexpr size_t kOffloadBundleUncompressedMagicStrSize =
+    sizeof(kOffloadBundleUncompressedMagicStr);
+
+// In compressed mode
+constexpr char kOffloadBundleCompressedMagicStr[] = "CCOB";
+static constexpr size_t kOffloadBundleCompressedMagicStrSize =
+    sizeof(kOffloadBundleCompressedMagicStr);
+
+constexpr uint32_t HipFatMAGIC2 = 0x48495046;
+/// Use the same structure as the hipFatBinary
+
+struct HipFatBinary {
+  uint32_t magic;
+  uint32_t version;
+  void *binary;
+  void *dummy1;
+};
+
+bool IsCodeObjectUncompressed(const void *Image) {
+  return std::memcmp(Image,
+                  reinterpret_cast<const void *>(
+                  symbols::kOffloadBundleUncompressedMagicStr),
+                  sizeof(symbols::kOffloadBundleUncompressedMagicStr) - 1) == 0;         
+}
+
+bool IsCodeObjectCompressed(const void *Image) {
+  return std::memcmp(Image,
+									reinterpret_cast<const void *>(
+									symbols::kOffloadBundleCompressedMagicStr),
+									sizeof(symbols::kOffloadBundleCompressedMagicStr) - 1) == 0;
+}
+
+uint64_t CalculateFatBinarySize(const void *Image, bool &IsCompressed) {
+  const char *HeaderPtr = static_cast<const char *>(Image);
+  if (IsCodeObjectCompressed(Image)) {
+    IsCompressed = true;
+    /// Skip the magic
+    HeaderPtr += 4;
+    uint16_t Version = *reinterpret_cast<const uint16_t *>(HeaderPtr);
+    /// Version num consumed and compression method
+    HeaderPtr += 4;
+    if (Version == 2) {
+      uint32_t TotalSize = *reinterpret_cast<const uint32_t *>(HeaderPtr);
+      return TotalSize;
+    } else if (Version == 3)
+      return *reinterpret_cast<const uint64_t *>(HeaderPtr);
+    else
+      return 0;
+  }
+  /// TODO: Add FatBin offsets here for reference and above
+  else if (IsCodeObjectUncompressed(Image)) {
+    // 1. Skip Magic String (24 bytes)
+    HeaderPtr += 24;
+
+    // 2. Read Number of Entries
+    uint64_t NumOfEntries = *reinterpret_cast<const uint64_t *>(HeaderPtr);
+    if (NumOfEntries == 0)
+      return 32; // Magic(24) + Count(8)
+    HeaderPtr += 8;
+
+    // We track the furthest byte reached in the file to determine TotalSize
+    uint64_t FileTail = 0;
+
+    // 3. Walk the Metadata Table
+    for (uint64_t i = 0; i < NumOfEntries; ++i) {
+      // Read fields exactly as laid out in the "Bundled Code Object Layout"
+      uint64_t ObjOffset = *reinterpret_cast<const uint64_t *>(HeaderPtr);
+      uint64_t ObjSize = *reinterpret_cast<const uint64_t *>(HeaderPtr + 8);
+      uint64_t IDLength = *reinterpret_cast<const uint64_t *>(HeaderPtr + 16);
+
+      // Track the end of the actual binary data blobs
+      uint64_t EndOfCurrentBlob = ObjOffset + ObjSize;
+      if (EndOfCurrentBlob > FileTail) 
+        FileTail = EndOfCurrentBlob;
+    
+      // Move HeaderPtr to the start of the next entry:
+      // Offset(8) + Size(8) + IDLength(8) + The ID String itself
+      HeaderPtr += (24 + IDLength);
+    }
+    // The total size is the end of the last code object found
+    return FileTail;
+  }
+  // Was not expecting an ELF here
+  return 0;
+}
+
+unsigned GetMach(const AMDGCNObjectFile &Obj) {
+  // e_flags contains the machine ID in the bits defined by EF_AMDGPU_MACH
+  return Obj.getPlatformFlags() & llvm::ELF::EF_AMDGPU_MACH;
+}
+
+/// Helper to count how many features are explicitly defined in the Target ID
+int GetSpecificityScore(const std::string& TargetID, bool IsGeneric) {
+    int score = 0;
+    /// Base architecture match is the baseline
+    if (!TargetID.empty()) score = 1;
+
+		/// Give high enough score to make sure non-generic ISA always gets picked
+    if(!IsGeneric) score += 10;
+
+    /// Each feature (+ or -) increases the specificity/score
+    for (char c : TargetID) {
+        if (c == '+' || c == '-') score++;
+    }
+    return score;
+}
+
+hsa_isa_t FindMostCompatibleISA(hsa_isa_t Candidate, bool IsCandidateGeneric, hsa_isa_t CurrentBest, bool IsCurrentBestGeneric) {
+
+		auto CandidateStrOrErr = hsa::isaGetName(Candidate);
+		if(!CandidateStrOrErr) return CurrentBest;
+		
+		auto BestStrOrErr = hsa::isaGetName(CurrentBest);
+		if(!BestStrOrErr) return Candidate;
+
+    std::string CandidateStr = std::move(*CandidateStrOrErr);
+    std::string BestStr = std::move(*BestStrOrErr);
+
+    /// Get the specificity scores
+    int CandidateScore = GetSpecificityScore(CandidateStr, IsCandidateGeneric);
+    int BestScore = GetSpecificityScore(BestStr, IsCurrentBestGeneric);
+
+    /// HIP prefers the higher specificity score (more features)
+    /// Example: "gfx908:sramecc+:xnack-" (Score 13) wins over "gfx908" (Score 11)
+    if (CandidateScore > BestScore) 
+        return Candidate;
+    
+    return CurrentBest;
+}
+
+/// Finds the ".llvmbc" section of the host storage ELF
+/// \param StorageELF the \c luthier::object::AMDGCNObjectFile reference
+/// \return an \c llvm::StringRef to the contents of the ".llvmbc" section
+/// if found, or an \c llvm::Error if the bitcode was not found
+llvm::Expected<llvm::StringRef>
+getBitcodeBufferOfAMDGCNObjectFile(luthier::object::AMDGCNObjectFile &StorageELF) {
+  // Find the ".llvmbc" section of the ELF
+  for (const llvm::object::SectionRef &Section : StorageELF.sections()) {
+    auto SectionName = Section.getName();
+    LUTHIER_RETURN_ON_ERROR(SectionName.takeError());
+    
+    if (*SectionName == BCSectionName) {
+      auto SectionContents = Section.getContents();
+      LUTHIER_RETURN_ON_ERROR(SectionContents.takeError());
+      
+      return *SectionContents;
+    }
+  }
+  
+  return llvm::make_error<GenericLuthierError>(
+      "Failed to find the bitcode section (.llvmbc) inside the AMDGCN storage ELF.");
+}
+
+} // namespace
 
 namespace luthier {
 
@@ -333,6 +496,183 @@ bool ToolExecutableLoader::isKernelInstrumented(
              *Kernel.getExecutableSymbol()) &&
          OriginalToInstrumentedKernelsMap.find(*Kernel.getExecutableSymbol())
              ->second.contains(Preset);
+}
+
+llvm::Error
+ToolExecutableLoader::RegisterFatBinary(const void *RawFatBinWrapper) {
+  const HipFatBinary *FatBinWrapper =
+      static_cast<HipFatBinary *>(RawFatBinWrapper);
+
+  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+      FatBinWrapper->version == 1,
+      llvm::formatv("Cannot Register fat binary. Invalid version: {0}",
+                    FatBinWrapper->version)));
+
+  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+      FatBinWrapper->magic == HipFatMAGIC2,
+      llvm::formatv("Fat binary wrapper has {0} magic number instead of {1}",
+                    FatBinWrapper->magic, HipFatMAGIC2)));
+
+  void *Binary = FatBinWrapper->binary;
+  bool IsCompressed = false;
+
+  uint64_t BinarySize = CalculateFatBinarySize(Binary, IsCompressed);
+
+  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+      BinarySize != 0, llvm::formatv("Fat binary is malformed or incorrect")));
+
+  if (IsCompressed && BinarySize == 32)
+    return llvm::Error::success(); // No binaries to be processed???
+
+  const char *FatBinData = static_cast<const char *>(Binary);
+  std::unique_ptr<llvm::MemoryBuffer> RawBuffer =
+      llvm::MemoryBuffer::getMemBuffer(llvm::StringRef(FatBinData, BinarySize),
+                                       "Fat Binary Buffer",
+                                       /*RequiresNullTerminator=*/false);
+
+  std::unique_ptr<llvm::MemoryBuffer> FinalDecompressedBuffer;
+
+  if (IsCompressed) {
+    auto DecompressedOrErr =
+        llvm::object::CompressedOffloadBundle::decompress(*RawBuffer);
+
+  	LUTHIER_RETURN_ON_ERROR(DecompressedOrErr.takeError());
+    // Ownership of the newly allocated, decompressed heap memory is moved here
+    FinalDecompressedBuffer = std::move(*DecompressedOrErr);
+  } else {
+    // If it's not compressed, just pass the raw wrapper right through.
+    // Zero allocations, zero copies.
+    FinalDecompressedBuffer = std::move(RawBuffer);
+  }
+
+	const char *BaseDataPtr = FinalDecompressedBuffer->getBufferStart();
+
+  llvm::MemoryBufferRef FatBinRef = FinalDecompressedBuffer->getMemBufferRef();
+
+  auto FatBinBundleOrErr =
+      llvm::object::OffloadBundleFatBin::create(FatBinRef, 0, "hip-fat-binary");
+
+  LUTHIER_RETURN_ON_ERROR(FatBinBundleOrErr.takeError());
+
+  std::unique_ptr<llvm::object::OffloadBundleFatBin> FatBinBundle =
+      std::move(*FatBinBundleOrErr);
+
+  llvm::SmallVector<llvm::object::OffloadBundleEntry> FatBinEntries =
+      FatBinBundle->GetEntries();
+
+  llvm::SmallVector<hsa_agent_t, 4> AvailableAgents;
+  llvm::DenseMap<hsa_agent_t, llvm::SmallVector<hsa_isa_t, 4>> AgentSupportedISA;
+	/// Also store if MACH of the code object is generic
+  llvm::DenseMap<hsa_agent_t,
+                 std::tuple<llvm::object::OffloadBundleEntry, hsa_isa_t, bool, std::unique_ptr<luthier::object::AMDGCNObjectFile>>> AgentCompatibleCO;
+
+  auto Err =
+      luthier::hsa::getGpuAgents(CoreApiSnapshot.getTable(), AvailableAgents);
+  if (Err != llvm::Error::success())
+    return Err;
+
+  for (auto Agent : AvailableAgents) {
+    auto Err = luthier::hsa::agentGetSupportedISAs(
+        CoreApiSnapshot.getTable(), Agent, AgentSupportedISA[Agent]);
+    if (Err != llvm::Error::success())
+      return Err;
+  }
+
+  for (llvm::object::OffloadBundleEntry BundleEntry : FatBinEntries) {
+    void *COData = const_cast<char*>(BaseDataPtr + BundleEntry.Offset);
+    size_t COSize = BundleEntry.Size;
+
+    llvm::MemoryBufferRef COBufferRef(llvm::StringRef(COData, COSize), "CO object");
+
+    auto COErr =
+        luthier::object::AMDGCNObjectFile::createAMDGCNObjectFile(COBufferRef);
+  	LUTHIER_RETURN_ON_ERROR(COErr.takeError());
+
+    std::unique_ptr<luthier::object::AMDGCNObjectFile> CO = std::move(*COErr);
+
+    auto TargetTupleOrErr = luthier::object::getObjectFileTargetTuple(*CO);
+		LUTHIER_RETURN_ON_ERROR(TargetTupleOrErr.takeError());
+
+    std::tuple<llvm::Triple, llvm::StringRef, llvm::SubtargetFeatures>
+        TargetTuple = std::move(*TargetTupleOrErr);
+
+    // Pluck individual items out using their index (0, 1, 2)
+    llvm::Triple Triple = std::get<0>(TargetTuple);
+    llvm::StringRef CpuName = std::get<1>(TargetTuple);
+    llvm::SubtargetFeatures Features = std::get<2>(TargetTuple);
+
+    auto ISAOrErr = luthier::hsa::isaFromLLVM(CoreApiSnapshot.getTable(),
+                                              Triple, CpuName, Features);
+		LUTHIER_RETURN_ON_ERROR(ISAOrErr.takeError());
+
+    hsa_isa_t CodeObjectISA = *ISAOrErr;
+
+    for (auto Agent : AvailableAgents) {
+      /// Loop through AGENT ISA and compare handles
+      /// hsa_isa_t only holds an integer handle so copies are not detremental
+      for (hsa_isa_t AgentISA : AgentSupportedISA[Agent]) {
+				if (AgentISA.handle != CodeObjectISA.handle) continue;
+				/// If try_emplace fails this means an entry for this agent exists 
+				/// and we need to determine the best CO
+				bool IsGeneric = object::isGenericAMDGPUMach(GetMach(*CO));
+				auto it = AgentCompatibleCO.find(Agent);
+
+				if (it == AgentCompatibleCO.end()) {
+          auto NewCOErr = luthier::object::AMDGCNObjectFile::createAMDGCNObjectFile(COBufferRef);
+          LUTHIER_RETURN_ON_ERROR(NewCOErr.takeError());
+			
+          AgentCompatibleCO[Agent] = { BundleEntry, AgentISA, IsGeneric, std::move(*NewCOErr) };
+        }
+				else {
+					hsa_isa_t ExistingISA = std::get<1>(it->second);
+          bool ExistingIsGeneric = std::get<2>(it->second);
+          hsa_isa_t MostCompatible = FindMostCompatibleISA(AgentISA, IsGeneric, ExistingISA, ExistingIsGeneric);
+
+          if (MostCompatible == AgentISA) {
+            auto NewCOErr = luthier::object::AMDGCNObjectFile::createAMDGCNObjectFile(COBufferRef);
+            LUTHIER_RETURN_ON_ERROR(NewCOErr.takeError());
+						
+            it->second = { BundleEntry, AgentISA, IsGeneric, std::move(*NewCOErr) };
+          }
+				}
+				/// If we found a match no use to loop over the rest of the ISAs
+				break;
+      }
+    }
+  }
+	for(auto& [Agent, COTuple] : AgentCompatibleCO){
+		auto& [COEntry, ISA, IsGeneric, AMDObjectFile] = COTuple;
+
+		void *COData = const_cast<char*>(BaseDataPtr + COEntry.Offset);
+    size_t COSize = COEntry.Size;
+
+		auto CoreApiTable = CoreApiSnapshot.getTable();
+
+		// Create the executable
+		auto Executable = hsa::executableCreate(CoreApiTable);
+		LUTHIER_RETURN_ON_ERROR(Executable.takeError());
+
+		llvm::StringRef CORef{ COData, COSize };        
+		auto Reader =
+				hsa::codeObjectReaderCreateFromMemory(CoreApiTable, CORef);
+		LUTHIER_RETURN_ON_ERROR(Reader.takeError());
+		auto LCO = hsa::executableLoadAgentCodeObject(CoreApiTable, *Executable,
+																									*Reader, Agent);
+		LUTHIER_RETURN_ON_ERROR(LCO.takeError());
+		// Freeze the executable
+		LUTHIER_RETURN_ON_ERROR(hsa::executableFreeze(CoreApiTable, *Executable));
+
+		AgentLoadedExecutables[Agent] = *Executable;
+
+		/// Track Code Object bitcode per agent
+		auto BitcodeOrErr = getBitcodeBufferOfAMDGCNObjectFile(*AMDObjectFile);
+    LUTHIER_RETURN_ON_ERROR(BitcodeOrErr.takeError());
+    AgentExecutableBitcode[Agent] = *BitcodeOrErr;
+	}
+
+	ManagedFatBinBuffers.push_back(std::move(FinalDecompressedBuffer));
+
+	return llvm::Error::success();
 }
 
 ToolExecutableLoader::~ToolExecutableLoader() {

@@ -21,6 +21,68 @@
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include <llvm/TargetParser/SubtargetFeature.h>
+#include <llvm/Object/ELF.h>
+
+namespace {
+
+enum class FeatureState {
+  Off,
+  On,
+  Any
+};
+
+bool GetSramEccAndXnackState(const llvm::object::ObjectFile *ObjFile, 
+                             FeatureState &SramEccEnabled, 
+                             FeatureState &XnackEnabled) {
+
+  SramEccEnabled = FeatureState::Off;
+  XnackEnabled = FeatureState::Off;
+
+  if (!ObjFile) return false;
+
+  if (auto *ElfObj = llvm::dyn_cast<llvm::object::ELFObjectFileBase>(ObjFile)) {
+    uint32_t EFlags = ElfObj->getPlatformFlags();
+
+    // Isolate and compare XNACK
+    uint32_t XnackBits = EFlags & llvm::ELF::EF_AMDGPU_FEATURE_XNACK_ANY_V4;
+    if (XnackBits == llvm::ELF::EF_AMDGPU_FEATURE_XNACK_ANY_V4) {
+        XnackEnabled = FeatureState::Any;
+    } else if (XnackBits == llvm::ELF::EF_AMDGPU_FEATURE_XNACK_ON_V4) {
+        XnackEnabled = FeatureState::On;
+    } else if (XnackBits == llvm::ELF::EF_AMDGPU_FEATURE_XNACK_OFF_V4) {
+        XnackEnabled = FeatureState::Off;
+    }
+
+    // Isolate and compare SRAMECC
+    uint32_t SramEccBits = EFlags & llvm::ELF::EF_AMDGPU_FEATURE_SRAMECC_ANY_V4;
+    if (SramEccBits == llvm::ELF::EF_AMDGPU_FEATURE_SRAMECC_ANY_V4) {
+        SramEccEnabled = FeatureState::Any;
+    } else if (SramEccBits == llvm::ELF::EF_AMDGPU_FEATURE_SRAMECC_ON_V4) {
+        SramEccEnabled = FeatureState::On;
+    } else if (SramEccBits == llvm::ELF::EF_AMDGPU_FEATURE_SRAMECC_OFF_V4) {
+        SramEccEnabled = FeatureState::Off;
+    }
+    return true;  
+  }
+  return false;
+}
+
+void AddFeaturesIfNeeded(llvm::SubtargetFeatures& Features, const llvm::object::ObjectFile &ObjFile) {
+  FeatureState Xnack;
+  FeatureState SramEcc;
+  if (GetSramEccAndXnackState(&ObjFile, SramEcc, Xnack)) {
+    if (SramEcc != FeatureState::Any) {
+      bool SramEccEnabled = (SramEcc == FeatureState::On);
+      Features.AddFeature("sramecc", SramEccEnabled);
+    }
+    if (Xnack != FeatureState::Any) {
+      bool XnackEnabled = (Xnack == FeatureState::On);
+      Features.AddFeature("xnack", XnackEnabled);
+    }
+  }
+}
+
+} // namespace
 
 namespace luthier::object {
 
@@ -39,7 +101,7 @@ getObjectFileTarget(const llvm::object::ObjectFile &ObjFile) {
   llvm::Expected<llvm::SubtargetFeatures> SubTargetFeaturesOrErr =
       ObjFile.getFeatures();
   LUTHIER_RETURN_ON_ERROR(SubTargetFeaturesOrErr.takeError());
-
+  AddFeaturesIfNeeded(*SubTargetFeaturesOrErr, ObjFile);
   std::string Out =
       TT.str() + "--" +
       (CpuNameIfAvailable.has_value() ? std::string(*CpuNameIfAvailable)
@@ -59,6 +121,7 @@ getObjectFileTargetTuple(const llvm::object::ObjectFile &Obj) {
       CPU.has_value(), "Failed to get the CPU name of the object file."));
   llvm::SubtargetFeatures Features;
   LUTHIER_RETURN_ON_ERROR(Obj.getFeatures().moveInto(Features));
+  AddFeaturesIfNeeded(Features, Obj);
   return std::make_tuple(TT, *CPU, Features);
 }
 
