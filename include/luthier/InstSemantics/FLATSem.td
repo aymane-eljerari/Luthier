@@ -168,7 +168,7 @@ foreach desc = [
                             (LLVMSExt (GetVal $raw), si_llvm_i16_ty),
                             (LLVMZExt (GetVal $raw), si_llvm_i16_ty)))),
     (DefVal $half32, (LLVMZExt (GetVal $half), si_llvm_i32_ty)),
-    (DefVal $upper, (LLVMAnd (GetNamedOperand $vdst, si_llvm_i32_ty),
+    (DefVal $upper, (LLVMAnd (GetNamedOperand $vdst_in, si_llvm_i32_ty),
                               (ConstantInt si_llvm_i32_ty, 0xFFFF0000))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $upper), (GetVal $half32)))
   ]>;
@@ -184,7 +184,7 @@ foreach desc = [
                             (LLVMSExt (GetVal $raw), si_llvm_i16_ty),
                             (LLVMZExt (GetVal $raw), si_llvm_i16_ty)))),
     (DefVal $half32, (LLVMZExt (GetVal $half), si_llvm_i32_ty)),
-    (DefVal $upper, (LLVMAnd (GetNamedOperand $vdst, si_llvm_i32_ty),
+    (DefVal $upper, (LLVMAnd (GetNamedOperand $vdst_in, si_llvm_i32_ty),
                               (ConstantInt si_llvm_i32_ty, 0xFFFF0000))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $upper), (GetVal $half32)))
   ]>;
@@ -201,7 +201,7 @@ foreach desc = [
     (DefVal $half32, (LLVMZExt (GetVal $half), si_llvm_i32_ty)),
     (DefVal $shifted, (LLVMShl (GetVal $half32),
                                 (ConstantInt si_llvm_i32_ty, 16))),
-    (DefVal $lower, (LLVMAnd (GetNamedOperand $vdst, si_llvm_i32_ty),
+    (DefVal $lower, (LLVMAnd (GetNamedOperand $vdst_in, si_llvm_i32_ty),
                               (ConstantInt si_llvm_i32_ty, 0x0000FFFF))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $lower), (GetVal $shifted)))
   ]>;
@@ -219,7 +219,7 @@ foreach desc = [
     (DefVal $half32, (LLVMZExt (GetVal $half), si_llvm_i32_ty)),
     (DefVal $shifted, (LLVMShl (GetVal $half32),
                                 (ConstantInt si_llvm_i32_ty, 16))),
-    (DefVal $lower, (LLVMAnd (GetNamedOperand $vdst, si_llvm_i32_ty),
+    (DefVal $lower, (LLVMAnd (GetNamedOperand $vdst_in, si_llvm_i32_ty),
                               (ConstantInt si_llvm_i32_ty, 0x0000FFFF))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $lower), (GetVal $shifted)))
   ]>;
@@ -654,7 +654,7 @@ foreach desc = [
                             (LLVMSExt (GetVal $raw), si_llvm_i16_ty),
                             (LLVMZExt (GetVal $raw), si_llvm_i16_ty)))),
     (DefVal $half32, (LLVMZExt (GetVal $half), si_llvm_i32_ty)),
-    (DefVal $upper, (LLVMAnd (GetNamedOperand $vdst, si_llvm_i32_ty),
+    (DefVal $upper, (LLVMAnd (GetNamedOperand $vdst_in, si_llvm_i32_ty),
                               (ConstantInt si_llvm_i32_ty, 0xFFFF0000))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $upper), (GetVal $half32)))
   ]>;
@@ -669,7 +669,7 @@ foreach desc = [
                             (LLVMSExt (GetVal $raw), si_llvm_i16_ty),
                             (LLVMZExt (GetVal $raw), si_llvm_i16_ty)))),
     (DefVal $half32, (LLVMZExt (GetVal $half), si_llvm_i32_ty)),
-    (DefVal $upper, (LLVMAnd (GetNamedOperand $vdst, si_llvm_i32_ty),
+    (DefVal $upper, (LLVMAnd (GetNamedOperand $vdst_in, si_llvm_i32_ty),
                               (ConstantInt si_llvm_i32_ty, 0xFFFF0000))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $upper), (GetVal $half32)))
   ]>;
@@ -685,7 +685,7 @@ foreach desc = [
     (DefVal $half32, (LLVMZExt (GetVal $half), si_llvm_i32_ty)),
     (DefVal $shifted, (LLVMShl (GetVal $half32),
                                 (ConstantInt si_llvm_i32_ty, 16))),
-    (DefVal $lower, (LLVMAnd (GetNamedOperand $vdst, si_llvm_i32_ty),
+    (DefVal $lower, (LLVMAnd (GetNamedOperand $vdst_in, si_llvm_i32_ty),
                               (ConstantInt si_llvm_i32_ty, 0x0000FFFF))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $lower), (GetVal $shifted)))
   ]>;
@@ -702,7 +702,7 @@ foreach desc = [
     (DefVal $half32, (LLVMZExt (GetVal $half), si_llvm_i32_ty)),
     (DefVal $shifted, (LLVMShl (GetVal $half32),
                                 (ConstantInt si_llvm_i32_ty, 16))),
-    (DefVal $lower, (LLVMAnd (GetNamedOperand $vdst, si_llvm_i32_ty),
+    (DefVal $lower, (LLVMAnd (GetNamedOperand $vdst_in, si_llvm_i32_ty),
                               (ConstantInt si_llvm_i32_ty, 0x0000FFFF))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $lower), (GetVal $shifted)))
   ]>;
@@ -2590,7 +2590,7 @@ class ScratchD16LoadBody<SILLVMType memTy, bit isSigned, bit isHi, dag addr> {
         (DefVal $shifted, (LLVMShl (GetVal $half32),
                                     (ConstantInt si_llvm_i32_ty, 16))),
         (DefVal $shifted, (GetVal $half32))),
-    (DefVal $other, (LLVMAnd (GetNamedOperand $vdst, si_llvm_i32_ty),
+    (DefVal $other, (LLVMAnd (GetNamedOperand $vdst_in, si_llvm_i32_ty),
                               (ConstantInt si_llvm_i32_ty,
                                 !if(isHi, 0x0000FFFF, 0xFFFF0000)))),
     (SetNamedOperand $vdst, (LLVMOr (GetVal $other), (GetVal $shifted)))

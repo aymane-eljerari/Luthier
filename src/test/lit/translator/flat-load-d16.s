@@ -1,21 +1,12 @@
 // RUN: llvm-mc --triple amdgcn-amd-amdhsa -mcpu=gfx908 -filetype=obj %s -o %t.o && \
 // RUN: ld.lld -shared --unresolved-symbols=ignore-all -o %t %t.o && \
-// RUN: (luthier-llc -mtriple=amdgcn-amd-amdhsa -mcpu=gfx908 \
-// RUN:    %luthier_tool_code_gen_plugin \
-// RUN:    '-passes=luthier-mock-load-amdgpu-code-objects,luthier-code-discovery,print' \
-// RUN:    -code-object-paths=%t \
-// RUN:    -initial-entrypoint=0:flat_load_d16_kern.kd \
-// RUN:    -initial-execution-point=0:flat_load_d16_kern.kd \
-// RUN:    -o /dev/null 2>&1 || true) > %t.out && \
-// RUN: FileCheck %s < %t.out
-
-// NOTE: llvm-mc has an upstream bug that omits the tied $vdst_in operand on
-// FLAT_LOAD_*_D16 / _D16_HI instructions when they're parsed from `.s`
-// assembly, causing the MachineVerifier to reject the lifted MI later in
-// the codegen pipeline (after our translator has already emitted correct
-// IR). The `|| true` swallows the non-zero exit from the verifier abort
-// and FileCheck only inspects the IR that the translator successfully
-// produced before the abort.
+// RUN: luthier-llc -mtriple=amdgcn-amd-amdhsa -mcpu=gfx908 \
+// RUN:   %luthier_tool_code_gen_plugin \
+// RUN:   '-passes=luthier-mock-load-amdgpu-code-objects,luthier-code-discovery,print' \
+// RUN:   -code-object-paths=%t \
+// RUN:   -initial-entrypoint=0:flat_load_d16_kern.kd \
+// RUN:   -initial-execution-point=0:flat_load_d16_kern.kd \
+// RUN:   -o - 2>/dev/null | FileCheck %s
 
 // FLAT D16 / D16_HI loads — merge with tied $vdst_in.
 //   Low form : vdst = (vdst_in & 0xFFFF0000) | zext_i32(ext_i16(load))

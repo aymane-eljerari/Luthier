@@ -730,9 +730,20 @@ convertAndAddMCOperandsToMI(llvm::ArrayRef<llvm::MCOperand> MCOperands,
                << "[CodeDiscoveryPass] Num explicit operands added: "
                << NumMCOps << ", "
                << "expected: " << MCID.NumOperands << "\n");
-    // Loop over missing explicit operands (if any) and fixup any missing
-    // immediate operands; We ignore any other missing operand kinds here and
-    // fix it later
+    // Loop over missing explicit operands (if any) and synthesize them.
+    //
+    // Two kinds need fixup here:
+    //  1. Immediate slots (e.g. AMDGPU `op_sel` / `clamp` / `omod` and other
+    //     defaulted-to-zero modifier immediates that aren't part of the asm
+    //     syntax). We emit a 0 immediate.
+    //  2. Tied-input register slots (e.g. FLAT_LOAD_*_D16 / _D16_HI / _t16
+    //     all carry a `$vdst_in` tied to `$vdst`; VOP3 `src2_modifiers` ties
+    //     similarly; many AGPR/D16 partial-write atomics tie `$vdst_in` to
+    //     `$vdst`). MCInst never contains tied operands; we synthesize them
+    //     from the def at the tied-to index and call `tieOperands`.
+    //
+    // Other operand kinds (e.g. expressions) are not synthesizable from this
+    // limited context; we leave them unfilled for later passes.
     for (unsigned int MissingExpOpIdx = NumMCOps;
          MissingExpOpIdx < MCID.NumOperands; MissingExpOpIdx++) {
       LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
@@ -744,27 +755,32 @@ convertAndAddMCOperandsToMI(llvm::ArrayRef<llvm::MCOperand> MCOperands,
         LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Adding 0-immediate for "
                                    "missing operand\n";);
         (void)MIBuilder.addImm(0);
+        continue;
       }
-    }
-  }
-
-  if (Opcode == llvm::AMDGPU::S_BITSET0_B32 ||
-      Opcode == llvm::AMDGPU::S_BITSET0_B64 ||
-      Opcode == llvm::AMDGPU::S_BITSET1_B32 ||
-      Opcode == llvm::AMDGPU::S_BITSET1_B64) {
-    // bitset instructions have a tied def/use that is not reflected in the
-    // MC version
-    if (MIBuilder->getNumOperands() < MIBuilder->getNumExplicitOperands()) {
-      const llvm::MachineOperand &DefMachineOp = MIBuilder->getOperand(0);
-      // Check if the first operand is a register
-      LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-          DefMachineOp.isReg(),
-          "The first operand of a bitset instruction is not a register."));
-      // Add the output reg also as the first input, and tie the first and
-      // second operands together
-      MIBuilder->addOperand(
-          llvm::MachineOperand::CreateReg(DefMachineOp.getReg(), false));
-      MIBuilder->tieOperands(0, 2);
+      // Tied input: the missing slot is tied to an earlier def — read the
+      // same physical register the def writes (live-in value).
+      // `MachineInstr::addOperand` auto-ties uses based on the MCID's
+      // TIED_TO constraint, so just adding the register operand sets up
+      // the tie — no explicit `tieOperands` call needed (calling it would
+      // trip the "Def is already tied" assertion).
+      int TiedToIdx = MCID.getOperandConstraint(MissingExpOpIdx,
+                                                 llvm::MCOI::TIED_TO);
+      if (TiedToIdx >= 0 &&
+          static_cast<unsigned>(TiedToIdx) < MIBuilder->getNumOperands()) {
+        const llvm::MachineOperand &Def = MIBuilder->getOperand(TiedToIdx);
+        if (Def.isReg()) {
+          LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
+                         "[CodeDiscoveryPass] Synthesizing tied use of {0} at "
+                         "operand index {1} (tied to def index {2})\n",
+                         llvm::printReg(Def.getReg(),
+                                        MF->getSubtarget().getRegisterInfo()),
+                         MissingExpOpIdx, TiedToIdx));
+          (void)MIBuilder.addReg(Def.getReg(), 0);
+          continue;
+        }
+      }
+      LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Unhandled missing "
+                                 "operand kind; leaving unfilled\n");
     }
   }
 
