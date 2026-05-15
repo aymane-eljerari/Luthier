@@ -29,6 +29,7 @@
 #include "luthier/Intrinsic/IntrinsicProcessor.h"
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/CodeGen/MachineFunctionPass.h>
+#include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/Support/Error.h>
 
 namespace luthier {

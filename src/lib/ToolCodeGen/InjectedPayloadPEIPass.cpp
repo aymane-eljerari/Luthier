@@ -1,5 +1,5 @@
 //===-- InjectedPayloadPEIPass.cpp ----------------------------------------===//
-// Copyright 2022-2025 @ Northeastern University Computer Architecture Lab
+// Copyright 2022-2026 @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,25 +15,36 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// This file implements Luthier's Injected Payload Prologue and Epilogue
-/// insertion pass.
+/// Implements Luthier's Injected Payload Prologue and Epilogue insertion pass.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/InjectedPayloadPEIPass.h"
+#include "luthier/Common/ErrorCheck.h"
+#include "luthier/Common/GenericLuthierError.h"
 #include "luthier/LLVM/streams.h"
-#include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
-#include "luthier/ToolCodeGen/PhysRegsNotInLiveInsAnalysis.h"
+#include "luthier/ToolCodeGen/FunctionAnnotations.h"
+#include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
+#include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
 #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
 #include "luthier/ToolCodeGen/StateValueArraySpecs.h"
+#include "luthier/ToolCodeGen/StateValueArrayStorage.h"
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
 
+#include <AMDGPU.h>
 #include <GCNSubtarget.h>
-#include <llvm/CodeGen/MachineDominators.h>
 #include <llvm/CodeGen/MachineFrameInfo.h>
+#include <llvm/CodeGen/MachineFunction.h>
 #include <llvm/CodeGen/MachineInstrBuilder.h>
+#include <llvm/CodeGen/MachineModuleInfo.h>
+#include <llvm/CodeGen/MachineRegisterInfo.h>
 #include <llvm/CodeGen/Passes.h>
+#include <llvm/CodeGen/TargetInstrInfo.h>
+#include <llvm/CodeGen/TargetRegisterInfo.h>
+#include <llvm/IR/Function.h>
+#include <llvm/Support/Debug.h>
+#include <llvm/Support/FormatVariadic.h>
 
 #undef DEBUG_TYPE
-#define DEBUG_TYPE "luthier-injected-payload-pei-pass"
+#define DEBUG_TYPE "luthier-injected-payload-pei"
 
 namespace luthier {
 
@@ -41,224 +52,349 @@ char InjectedPayloadPEIPass::ID = 0;
 
 LUTHIER_INITIALIZE_LEGACY_PASS_BODY(InjectedPayloadPEIPass,
                                     "injected-payload-pei",
-                                    "Injected Payload PEI Pass", true, false);
+                                    "Luthier Injected Payload PEI Pass",
+                                    /*CFGOnly=*/false,
+                                    /*IsAnalysis=*/false);
+
+namespace {
+
+/// Discover the post-RA physical VGPR holding the SVA for an injected
+/// payload MF. Implements the read-side discovery scheme from
+/// reference_amdgpu_wwm_pipeline: walk every V_READLANE_B32 in the entry
+/// MBB whose lane immediate is `< K` (where K = total used SA lanes), and
+/// return its VGPR source-operand physreg.
+///
+/// All such reads share the same source VGPR by the single-VGPR-SVA
+/// invariant; we assert that. Returns NoRegister if no V_READLANE_B32
+/// reads exist (the payload uses no SAs).
+llvm::MCRegister discoverSVAVGPR(const llvm::MachineFunction &MF,
+                                 unsigned NumSALanes) {
+  llvm::MCRegister Found;
+  for (const llvm::MachineInstr &MI : MF.front()) {
+    if (MI.getOpcode() != llvm::AMDGPU::V_READLANE_B32)
+      continue;
+    if (MI.getNumOperands() < 3 || !MI.getOperand(2).isImm())
+      continue;
+    int64_t Lane = MI.getOperand(2).getImm();
+    if (Lane < 0 || static_cast<unsigned>(Lane) >= NumSALanes)
+      continue;
+    if (!MI.getOperand(1).isReg() || !MI.getOperand(1).getReg().isPhysical())
+      continue;
+    llvm::MCRegister Src = MI.getOperand(1).getReg().asMCReg();
+    if (!Found) {
+      Found = Src;
+    } else if (Found != Src) {
+      // Single-VGPR-SVA invariant broken — caller will report.
+      return llvm::MCRegister();
+    }
+  }
+  return Found;
+}
+
+/// Returns the set of phys-regs that, when used by an injected payload, must
+/// be saved into SVA lanes on prologue and restored on epilogue: the per-SA
+/// frame regs the kernel prolog set up (FLAT_SCR_LO/HI for absolute-FS
+/// targets, SGPR32 for the instrumentation SP, etc.). For now, the lane
+/// mapping for each phys-reg is the one StateValueArraySpecs records via
+/// its fixed-position constants (StackPointerRegSpillLane,
+/// FramePointerRegSpillLane, etc.). When the user finalizes the
+/// per-phys-reg lane mapping, the dictionary below should move into
+/// StateValueArraySpecs.
+llvm::SmallVector<std::pair<llvm::MCRegister, uint8_t>>
+getFrameSpillSlotsForTarget(const llvm::GCNSubtarget &ST,
+                            const StateValueArraySpecs &Specs) {
+  llvm::SmallVector<std::pair<llvm::MCRegister, uint8_t>> Out;
+  Out.push_back({llvm::AMDGPU::SGPR32, Specs.getStackPointerRegSpillLane()});
+  if (!ST.flatScratchIsArchitected()) {
+    Out.push_back(
+        {llvm::AMDGPU::FLAT_SCR_LO, Specs.getFramePointerRegSpillLane()});
+  }
+  return Out;
+}
+
+/// Returns the lanes from which the instrumentation reads the frame regs
+/// it needs to use during the payload. Symmetric counterpart to
+/// getFrameSpillSlotsForTarget — kernel prolog populated these lanes; the
+/// payload prologue copies them out into SGPR32 / FLAT_SCR.
+llvm::SmallVector<std::pair<llvm::MCRegister, uint8_t>>
+getFrameLoadSlotsForTarget(const llvm::GCNSubtarget &ST,
+                           const StateValueArraySpecs &Specs) {
+  llvm::SmallVector<std::pair<llvm::MCRegister, uint8_t>> Out;
+  Out.push_back({llvm::AMDGPU::SGPR32, Specs.getStackPointerStoreLane()});
+  if (!ST.flatScratchIsArchitected()) {
+    if (auto FrameLane = Specs.getFrameRsrcOrScratchStoreLaneIfExists())
+      Out.push_back({llvm::AMDGPU::FLAT_SCR_LO, *FrameLane});
+  }
+  return Out;
+}
+
+} // namespace
 
 bool InjectedPayloadPEIPass::runOnMachineFunction(llvm::MachineFunction &MF) {
-
-  LLVM_DEBUG(llvm::dbgs() << "Running the injected payload prologue/epilogue "
-                             "insertion pass.\n";
-             llvm::dbgs()
-             << "Contents of the function before adding prologue/epilogue:\n";
-             MF.print(llvm::dbgs()););
-
-  // If the function being processed is not an injected payload (i.e a device
-  // function getting called inside a hook) it does not require the custom
-  // prologue/epilogue insertion pass so skip it.
-  if (!MF.getFunction().hasFnAttribute(HookAttribute) &&
-      !MF.getFunction().hasFnAttribute(InjectedPayloadAttribute)) {
-
-    LLVM_DEBUG(
-        llvm::dbgs()
-            << "Function " << MF.getName()
-            << " is not a hook or an injected payload. skipping it....";);
-
+  // Skip anything that isn't a Luthier injected payload. Hooks (callees
+  // of payloads) keep their normal LLVM-emitted frame and don't need
+  // custom SVA setup.
+  const llvm::Function &F = MF.getFunction();
+  if (!F.hasFnAttribute(InjectedPayloadAttribute)) {
+    LLVM_DEBUG(llvm::dbgs() << F.getName()
+                            << " is not an injected payload; skipping.\n");
     return false;
   }
 
+  // Defensive: payloads MUST be marked Naked. If somebody bypassed
+  // InjectedPayloadCreationPass::assignToInject and forgot the attribute,
+  // stock PEI already ran and emitted a frame we'd be doubling up on.
+  assert(F.hasFnAttribute(llvm::Attribute::Naked) &&
+         "Injected payload must carry Attribute::Naked so stock PEI is a no-op");
+
+  LLVM_DEBUG(llvm::dbgs() << "Running InjectedPayloadPEIPass on " << F.getName()
+                          << "\n");
+
+  llvm::LLVMContext &Ctx = F.getContext();
+  const auto &ST = MF.getSubtarget<llvm::GCNSubtarget>();
+  const auto *TII = ST.getInstrInfo();
+  const llvm::MachineRegisterInfo &MRI = MF.getRegInfo();
+  llvm::MachineFrameInfo &MFI = MF.getFrameInfo();
+
+  // Pull cached analyses from the IModule MAM (set up by the driver).
   auto &IModule = const_cast<llvm::Module &>(
       *getAnalysis<llvm::MachineModuleInfoWrapperPass>().getMMI().getModule());
-
   auto &IMAM = getAnalysis<IModuleMAMWrapperPass>().getMAM();
 
-  const auto &IPIP =
-      *IMAM.getCachedResult<InjectedPayloadAndInstPointAnalysis>(IModule);
+  const auto *IPIP =
+      IMAM.getCachedResult<InjectedPayloadAndInstPointAnalysis>(IModule);
+  if (!IPIP) {
+    LUTHIER_CTX_EMIT_ON_ERROR(
+        Ctx,
+        LUTHIER_MAKE_GENERIC_ERROR(
+            "InjectedPayloadAndInstPointAnalysis is required but not cached."));
+    return false;
+  }
+  if (!IPIP->contains(F)) {
+    LLVM_DEBUG(llvm::dbgs() << F.getName()
+                            << " has no recorded insertion point; skipping.\n");
+    return false;
+  }
+  const llvm::MachineInstr *TargetMI = IPIP->at(F);
 
-  auto &TargetModule =
-      IMAM.getCachedResult<TargetAppModuleAndMAMAnalysis>(IModule)
-          ->getTargetAppModule();
-  auto &TargetMAM = IMAM.getCachedResult<TargetAppModuleAndMAMAnalysis>(IModule)
-                        ->getTargetAppMAM();
+  auto *TargetMAMRes =
+      IMAM.getCachedResult<TargetAppModuleAndMAMAnalysis>(IModule);
+  if (!TargetMAMRes) {
+    LUTHIER_CTX_EMIT_ON_ERROR(
+        Ctx, LUTHIER_MAKE_GENERIC_ERROR(
+                 "TargetAppModuleAndMAMAnalysis is required but not cached."));
+    return false;
+  }
+  auto &TargetModule = TargetMAMRes->getTargetAppModule();
+  auto &TargetMAM = TargetMAMRes->getTargetAppMAM();
 
-  const auto &StateValueLocations =
-      *TargetMAM.getCachedResult<LRStateValueStorageAndLoadLocationsAnalysis>(
+  const auto *StateValueLocations =
+      TargetMAM.getCachedResult<LRStateValueStorageAndLoadLocationsAnalysis>(
           TargetModule);
+  if (!StateValueLocations) {
+    LUTHIER_CTX_EMIT_ON_ERROR(
+        Ctx,
+        LUTHIER_MAKE_GENERIC_ERROR(
+            "LRStateValueStorageAndLoadLocationsAnalysis is required but not "
+            "cached on the target MAM."));
+    return false;
+  }
+  const auto *LoadPlan =
+      StateValueLocations->getStateValueArrayLoadPlanForInstPoint(*TargetMI);
+  if (!LoadPlan) {
+    LUTHIER_CTX_EMIT_ON_ERROR(
+        Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+                 "No SVA load plan recorded for instrumentation point in {0}",
+                 F.getName())));
+    return false;
+  }
+  auto &StateValueStorage = LoadPlan->StateValueStorageLocation;
 
-  auto &PKInfo =
-      TargetMAM.getResult<FunctionPreambleDescriptorAnalysis>(TargetModule);
+  // Pull the finalized SVA specs (set in IntrinsicMIRLoweringPass).
+  auto SpecsPtr = StateValueArraySpecs::getSVASpecs(IModule, MF.getTarget());
+  if (!SpecsPtr) {
+    LUTHIER_CTX_EMIT_ON_ERROR(
+        Ctx, LUTHIER_MAKE_GENERIC_ERROR(
+                 "Failed to read StateValueArraySpecs from IModule metadata"));
+    return false;
+  }
+  const StateValueArraySpecs &Specs = *SpecsPtr;
 
-  const auto &PhysicalRegsNotTobeClobbered =
-      IMAM.getCachedResult<PhysRegsNotInLiveInsAnalysis>(IModule)
-          ->getPhysRegsNotInLiveIns();
-
-  bool Changed{false};
-  // Get the state value location for this hook
-  auto &StateValueLoadPlan =
-      *StateValueLocations.getStateValueArrayLoadPlanForInstPoint(
-          *IPIP.at(MF.getFunction()));
-  // Get the liveness information for the hook
-  PhysicalRegAccessVirtualizationPass &PhysRegVirtAccessPass =
-      getAnalysis<PhysicalRegAccessVirtualizationPass>();
-  auto &InstPointLiveRegs = PhysRegVirtAccessPass.get32BitLiveInRegs();
-  auto *TII = MF.getSubtarget<llvm::GCNSubtarget>().getInstrInfo();
-  auto &StateValueStorage = StateValueLoadPlan.StateValueStorageLocation;
-
-  // Target Machine function which this injected payload will be patched into
-  auto TargetMF = IPIP.at(MF.getFunction())->getMF();
-
-  // We need to first determine if we need to even emit a prologue/epilogue for
-  // this hook; If the hooks makes use of the state value VGPR
-  // (reads from it/writes to it), or is using s[0:3], s32, and FS, then it
-  // requires a prologue/epilogue
-  // If any of the hooks require the presence of the state value register,
-  // a pre-kernel must be emitted in the LR
-  const auto &MRI = MF.getRegInfo();
-  bool HookMakesUseOfStateValueArray{false};
-  // Loop over the uses of the state value array load VGPR, and find one that's
-  // not the implicit use in the last return instruction
-  for (const llvm::MachineInstr &StateValueUse :
-       MRI.reg_instructions(StateValueLoadPlan.StateValueArrayLoadVGPR)) {
-    if (!StateValueUse.isReturn() &&
-        !StateValueUse.hasRegisterImplicitUseOperand(
-            StateValueLoadPlan.StateValueArrayLoadVGPR)) {
-      LLVM_DEBUG(
-          llvm::dbgs()
-              << "Found an explicit use of the state value array VGPR.\n";);
-      HookMakesUseOfStateValueArray = true;
-      break;
-    }
+  // Total used SA lanes drives the V_READLANE_B32-walk lane filter for
+  // post-RA SVA-VGPR discovery: only readlanes hitting an SA lane belong
+  // to Luthier, anything else is the application's.
+  unsigned NumSALanes = 0;
+  for (auto It = Specs.argument_lane_begin(); It != Specs.argument_lane_end();
+       ++It) {
+    unsigned SAEnd =
+        It->second + StateValueArraySpecs::getArgumentLaneSize(It->first);
+    NumSALanes = std::max<unsigned>(NumSALanes, SAEnd);
   }
 
-  for (const auto &[PhysReg, SpillLaneID] :
-       stateValueArray::getFrameSpillSlots()) {
-    if (MRI.isPhysRegUsed(PhysReg)) {
-      HookMakesUseOfStateValueArray = true;
-      LLVM_DEBUG(auto *TRI = MF.getSubtarget().getRegisterInfo();
-                 llvm::dbgs()
-                 << "Found a use of a state value array spill slot. Register "
-                 << llvm::printReg(PhysReg, TRI) << " in spill slot "
-                 << SpillLaneID << ".\n";);
-      break;
+  llvm::MCRegister SVAVGPR = discoverSVAVGPR(MF, NumSALanes);
+  // No SA usage ⇒ no SVA needed at all. The payload might still use stack
+  // (calls/spills) — we'd need an SVA in that case too — so keep going.
+
+  // ---- Decide whether this payload actually uses the SVA -----------------
+  //
+  // Sources of SVA use:
+  //   1. The SVA VGPR has any explicit non-implicit read/write — meaning the
+  //      payload (or its inlined children) referenced an SA via the lowered
+  //      V_READLANE_B32.
+  //   2. The payload uses a frame register (SGPR32 for SP, or FLAT_SCR_*
+  //      for absolute-FS targets) — those values come from / go to SVA lanes.
+  //   3. The MF has a non-empty frame (RA chose to spill) — implies stack
+  //      usage, which needs the instrumentation's SP loaded.
+  //   4. The MF makes calls to other functions — also needs the frame setup.
+  auto FrameSpillSlots = getFrameSpillSlotsForTarget(ST, Specs);
+  auto FrameLoadSlots = getFrameLoadSlotsForTarget(ST, Specs);
+
+  bool UsesSVA = false;
+  if (SVAVGPR && MRI.isPhysRegUsed(SVAVGPR)) {
+    LLVM_DEBUG(llvm::dbgs() << "  SVA VGPR " << llvm::printReg(SVAVGPR, ST.getRegisterInfo())
+                            << " is used\n");
+    UsesSVA = true;
+  }
+  if (!UsesSVA) {
+    for (const auto &[PhysReg, _] : FrameSpillSlots) {
+      if (MRI.isPhysRegUsed(PhysReg)) {
+        LLVM_DEBUG(llvm::dbgs() << "  frame reg "
+                                << llvm::printReg(PhysReg, ST.getRegisterInfo())
+                                << " is used\n");
+        UsesSVA = true;
+        break;
+      }
     }
   }
-
-  if (!HookMakesUseOfStateValueArray) {
-    LLVM_DEBUG(llvm::dbgs()
-                   << "Hook doesn't make use of the state value array load "
-                      "VGPR. Skipping "
-                      "emission of prologue and epiloge for this function.\n";);
+  if (!UsesSVA && MFI.hasStackObjects()) {
+    LLVM_DEBUG(llvm::dbgs() << "  MFI has stack objects\n");
+    UsesSVA = true;
+  }
+  if (!UsesSVA && MFI.hasCalls()) {
+    LLVM_DEBUG(llvm::dbgs() << "  MFI has calls\n");
+    UsesSVA = true;
+  }
+  if (!UsesSVA) {
+    LLVM_DEBUG(llvm::dbgs() << F.getName()
+                            << " doesn't use the SVA; skipping PEI.\n");
     return false;
   }
 
-  // Keep track of the first instruction of the injected payload
-  auto &EntryInstruction = *MF.front().begin();
-  // emit the prologue
-  if (StateValueStorage.requiresLoadAndStoreBeforeUse()) {
-    StateValueStorage.emitCodeToLoadSVA(
-        EntryInstruction, StateValueLoadPlan.StateValueArrayLoadVGPR);
-    Changed |= true;
+  // If the payload uses the SVA but we never discovered an SVA VGPR from
+  // V_READLANE_B32 (meaning no SAs were requested), we still need a VGPR
+  // to materialize the SVA into for frame-reg load/spill. For now, error
+  // out — the design path for "frame-only" usage (calls/spills but no SAs)
+  // needs additional plumbing the user has not yet specified.
+  if (!SVAVGPR) {
+    LUTHIER_CTX_EMIT_ON_ERROR(
+        Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+                 "{0} uses stack/frame regs but requests no SAs; the SVA VGPR "
+                 "is therefore unallocated by IntrinsicMIRLoweringPass. This "
+                 "case requires the payload to consume at least one SA so the "
+                 "SVA VGPR exists, OR explicit no-SA SVA allocation support "
+                 "(not yet implemented).",
+                 F.getName())));
+    return false;
   }
 
-  bool RequiresAccessToStack{false};
-  // If the SVA is stored on the stack, then this function requires access
-  // to FS
+  // ---- Update the FunctionPreambleDescriptor on the target side ----------
+  // PrePostAmbleEmitter consults this to decide which kernel/device-fn
+  // prologues need scratch+stack setup. Mark the target accordingly.
+  auto &PKInfo =
+      TargetMAM.getResult<FunctionPreambleDescriptorAnalysis>(TargetModule);
+  const llvm::MachineFunction *TargetMF = TargetMI->getMF();
+  bool RequiresAccessToStack = false;
   if (StateValueStorage.getStateValueStorageReg() == 0) {
+    // SVA is spilled — payload necessarily needs FS to load it.
     RequiresAccessToStack = true;
-    if (TargetMF->getFunction().getCallingConv() ==
-        llvm::CallingConv::AMDGPU_KERNEL) {
-      PKInfo.Kernels[TargetMF].RequiresScratchAndStackSetup = true;
-      luthier::outs() << "Pre-kernel is set to: "
-                      << PKInfo.Kernels[TargetMF].RequiresScratchAndStackSetup
-                      << "\n";
-    } else
-      PKInfo.DeviceFunctions[TargetMF].RequiresScratchAndStackSetup = true;
   }
-
-  // If the hook has stack usage
-  // then we need to signal the LR pre-kernel inserter that we need them +
-  // Generate code to load it
-  auto &FrameInfo = MF.getFrameInfo();
-  // TODO: Make sure this is correct
-  if (FrameInfo.hasStackObjects() && FrameInfo.getStackSize() != 0) {
-    LLVM_DEBUG(llvm::dbgs() << "Found a use of stack.\n";);
+  if (MFI.hasStackObjects() || MFI.hasCalls())
     RequiresAccessToStack = true;
-    if (TargetMF->getFunction().getCallingConv() ==
-        llvm::CallingConv::AMDGPU_KERNEL) {
-      PKInfo.Kernels[TargetMF].RequiresScratchAndStackSetup = true;
-      luthier::outs() << "Pre-kernel is set to: "
-                      << PKInfo.Kernels[TargetMF].RequiresScratchAndStackSetup
-                      << "\n";
-    } else
-      PKInfo.DeviceFunctions[TargetMF].RequiresScratchAndStackSetup = true;
-  }
-
-  // If the app has either s0, s1, s2, s3, s32, and FLAT_SCRATCH_LO/HI
-  // live/we shouldn't clobber them,
-  // then we need to spill it to the value register before the hook runs
-  for (const auto &[PhysReg, SpillLane] :
-       stateValueArray::getFrameSpillSlots()) {
-    if (InstPointLiveRegs.contains(PhysReg) ||
-        (!PhysicalRegsNotTobeClobbered.empty() &&
-         PhysicalRegsNotTobeClobbered.contains(PhysReg))) {
-      llvm::BuildMI(MF.front(), EntryInstruction, llvm::DebugLoc(),
-                    TII->get(llvm::AMDGPU::V_WRITELANE_B32),
-                    StateValueLoadPlan.StateValueArrayLoadVGPR)
-          .addReg(PhysReg, llvm::RegState::Kill)
-          .addImm(SpillLane)
-          .addReg(StateValueLoadPlan.StateValueArrayLoadVGPR);
-    }
-  }
-  // If the injected payload requires access to stack, then read the
-  // frame registers from the SVA lanes
   if (RequiresAccessToStack) {
-    for (const auto &[PhysReg, SpillLane] :
-         stateValueArray::getFrameStoreSlots()) {
-      llvm::BuildMI(MF.front(), EntryInstruction, llvm::DebugLoc(),
+    if (TargetMF->getFunction().getCallingConv() ==
+        llvm::CallingConv::AMDGPU_KERNEL) {
+      PKInfo.Kernels[TargetMF].RequiresScratchAndStackSetup = true;
+    } else {
+      PKInfo.DeviceFunctions[TargetMF].RequiresScratchAndStackSetup = true;
+    }
+  }
+
+  // ---- Emit the prologue ------------------------------------------------
+  llvm::MachineBasicBlock &EntryMBB = MF.front();
+  auto EntryInsertPt = EntryMBB.SkipPHIsAndLabels(EntryMBB.begin());
+
+  // If the SVS isn't already a free VGPR, load the SVA into the SVA VGPR.
+  // emitCodeToLoadSVA is a no-op for VGPRStateValueArrayStorage; for the
+  // other schemes (spilled / AGPR-based) it materializes the SVA into the
+  // destination VGPR. See project_sva_storage_audit memory note for which
+  // schemes are known-correct as of this commit.
+  if (StateValueStorage.requiresLoadAndStoreBeforeUse()) {
+    StateValueStorage.emitCodeToLoadSVA(*EntryInsertPt, SVAVGPR);
+  }
+
+  // Spill app frame regs into the SVA lanes the kernel prolog reserved.
+  for (const auto &[PhysReg, SpillLane] : FrameSpillSlots) {
+    if (!MRI.isPhysRegUsed(PhysReg))
+      continue;
+    llvm::BuildMI(EntryMBB, EntryInsertPt, llvm::DebugLoc(),
+                  TII->get(llvm::AMDGPU::V_WRITELANE_B32), SVAVGPR)
+        .addReg(PhysReg, llvm::RegState::Kill)
+        .addImm(SpillLane)
+        .addReg(SVAVGPR);
+  }
+
+  // If the payload needs stack, read the instrumentation's frame regs out
+  // of the SVA lanes the kernel prolog populated.
+  if (RequiresAccessToStack) {
+    for (const auto &[PhysReg, LoadLane] : FrameLoadSlots) {
+      llvm::BuildMI(EntryMBB, EntryInsertPt, llvm::DebugLoc(),
                     TII->get(llvm::AMDGPU::V_READLANE_B32), PhysReg)
-          .addReg(StateValueLoadPlan.StateValueArrayLoadVGPR)
+          .addReg(SVAVGPR)
+          .addImm(LoadLane);
+    }
+  }
+
+  // ---- Emit the symmetric epilogue at every return block ----------------
+  for (llvm::MachineBasicBlock &MBB : MF) {
+    if (!MBB.isReturnBlock())
+      continue;
+    auto FirstTerm = MBB.getFirstTerminator();
+    // Reverse order: frame-reg restore, then SVS store.
+    for (const auto &[PhysReg, SpillLane] : FrameSpillSlots) {
+      if (!MRI.isPhysRegUsed(PhysReg))
+        continue;
+      llvm::BuildMI(MBB, FirstTerm, llvm::DebugLoc(),
+                    TII->get(llvm::AMDGPU::V_READLANE_B32), PhysReg)
+          .addReg(SVAVGPR)
           .addImm(SpillLane);
-    }
-  }
-
-  // Emit epilogue (do everything we just did now in reverse for all return
-  // blocks)
-  for (auto &MBB : MF) {
-    if (MBB.isReturnBlock()) {
-      auto FirstTermInst = MBB.getFirstTerminator();
-      // There's no need to save s[0:3]/s32/FS of instrumentation
-      // Restore s[0:3]/s32/FS of the app if saved in the prologue
-      for (const auto &[PhysReg, SpillLane] :
-           stateValueArray::getFrameSpillSlots()) {
-        if (InstPointLiveRegs.contains(PhysReg) ||
-            !PhysicalRegsNotTobeClobbered.empty() &&
-                PhysicalRegsNotTobeClobbered.contains(PhysReg)) {
-          llvm::BuildMI(MBB, FirstTermInst, llvm::DebugLoc(),
-                        TII->get(llvm::AMDGPU::V_READLANE_B32), PhysReg)
-              .addReg(StateValueLoadPlan.StateValueArrayLoadVGPR)
-              .addImm(SpillLane);
-          FirstTermInst->addOperand(
-              llvm::MachineOperand::CreateReg(PhysReg, false, true));
-        }
+      // Tag the terminator so the live-out is visible to anything that
+      // walks operand-level liveness post-PEI.
+      if (FirstTerm != MBB.end()) {
+        FirstTerm->addOperand(llvm::MachineOperand::CreateReg(
+            PhysReg, /*isDef=*/false, /*isImp=*/true));
       }
-      // Restore the app's state
-      if (StateValueStorage.requiresLoadAndStoreBeforeUse()) {
-        StateValueStorage.emitCodeToStoreSVA(
-            EntryInstruction, StateValueLoadPlan.StateValueArrayLoadVGPR);
-        Changed |= true;
+    }
+    if (StateValueStorage.requiresLoadAndStoreBeforeUse()) {
+      // Emit at FirstTerm of THIS return block, not at the entry point —
+      // fixing a long-standing prolog/epilog asymmetry bug in the prior
+      // implementation.
+      if (FirstTerm != MBB.end()) {
+        StateValueStorage.emitCodeToStoreSVA(*FirstTerm, SVAVGPR);
       }
     }
   }
 
-  LLVM_DEBUG(
-      llvm::dbgs()
-          << "Machine function contents after inserting prologue/epilogue:\n";
-      MF.print(llvm::dbgs()););
-
-  return Changed;
+  LLVM_DEBUG({
+    llvm::dbgs() << "After InjectedPayloadPEIPass on " << F.getName() << ":\n";
+    MF.print(llvm::dbgs());
+  });
+  return true;
 }
 
 void InjectedPayloadPEIPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
-  AU.setPreservesAll();
-  AU.addRequiredID(IModuleMAMWrapperPass::ID);
+  AU.addRequired<IModuleMAMWrapperPass>();
+  AU.addRequired<llvm::MachineModuleInfoWrapperPass>();
   llvm::MachineFunctionPass::getAnalysisUsage(AU);
 }
+
 } // namespace luthier

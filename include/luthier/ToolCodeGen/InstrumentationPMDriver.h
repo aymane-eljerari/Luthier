@@ -84,6 +84,17 @@ struct InstrumentationPMDriverOptions {
           "(0=none, 1=less, 2=default, 3=aggressive); defaults to the "
           "global -O level if not specified"),
       llvm::cl::cat(InstrumentationPMDriverOptionsCat)};
+
+  /// Skip inserting Luthier's InjectedPayloadPEIPass. Useful when running a
+  /// truncated codegen pipeline for testing, or when a downstream consumer
+  /// wants to provide its own custom payload PEI variant.
+  llvm::cl::opt<bool> DisableInjectedPayloadPEI{
+      "disable-injected-payload-pei", llvm::cl::init(false),
+      llvm::cl::desc(
+          "When set, the default codegen pipeline does NOT insert Luthier's "
+          "InjectedPayloadPEIPass after PrologEpilogCodeInserterID. The stock "
+          "LLVM PEI still runs (and no-ops for Naked payload functions)."),
+      llvm::cl::cat(InstrumentationPMDriverOptionsCat)};
 };
 
 class InstrumentationPMDriver

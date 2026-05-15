@@ -21,6 +21,7 @@
 #include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
 #include "luthier/Intrinsic/IntrinsicProcessor.h"
 #include "luthier/LLVM/streams.h"
+#include "luthier/ToolCodeGen/SVAFrameLanes.h"
 #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
 #include "luthier/ToolCodeGen/StateValueArraySpecs.h"
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
@@ -133,24 +134,27 @@ DEFINE_ENABLE_SGPR_ARGUMENT_WITH_TRI(QueuePtr,
 static llvm::Error
 emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
                        llvm::MCRegister SVSStorageVGPR,
-                       const amdgpu::hsamd::Kernel::Metadata &KernelMD) {
+                       const amdgpu::hsamd::Kernel::Metadata &KernelMD,
+                       const StateValueArraySpecs &Specs) {
   auto &MF = *EntryInstr.getMF();
   const auto &TII = *MF.getSubtarget().getInstrInfo();
   const auto &TRI = *MF.getSubtarget().getRegisterInfo();
   auto &MFI = *MF.getInfo<llvm::SIMachineFunctionInfo>();
-  // First make a copy of S0 and S1/ FS_lo FS_hi in the state value
-  // register
+  // First make a copy of SGPR0, SGPR1, FLAT_SCR_LO, FLAT_SCR_HI in the state
+  // value register at the lanes the StateValueArraySpecs layout reserves
+  // for them. Layout is documented in SVAFrameLanes.h; we assert the
+  // lookups succeed (they always do on a properly-set-up Specs).
   auto SGPR0SpillSlot =
-      stateValueArray::getFrameSpillSlotLaneId(llvm::AMDGPU::SGPR0);
-
+      getKernelPrologFrameSpillLane(llvm::AMDGPU::SGPR0, Specs);
   auto SGPR1SpillSlot =
-      stateValueArray::getFrameSpillSlotLaneId(llvm::AMDGPU::SGPR1);
-
+      getKernelPrologFrameSpillLane(llvm::AMDGPU::SGPR1, Specs);
   auto SGPRFlatScrLoSpillSlot =
-      stateValueArray::getFrameSpillSlotLaneId(llvm::AMDGPU::FLAT_SCR_LO);
-
+      getKernelPrologFrameSpillLane(llvm::AMDGPU::FLAT_SCR_LO, Specs);
   auto SGPRFlatScrHiSpillSlot =
-      stateValueArray::getFrameSpillSlotLaneId(llvm::AMDGPU::FLAT_SCR_HI);
+      getKernelPrologFrameSpillLane(llvm::AMDGPU::FLAT_SCR_HI, Specs);
+  assert(SGPR0SpillSlot && SGPR1SpillSlot && SGPRFlatScrLoSpillSlot &&
+         SGPRFlatScrHiSpillSlot &&
+         "kernel-prolog SVA lanes must exist for SGPR0/1 + FS_LO/HI");
 
   llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
                 TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
@@ -158,7 +162,7 @@ emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
           MFI.getPreloadedReg(
               llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
           llvm::AMDGPU::sub0))
-      .addImm(SGPR0SpillSlot)
+      .addImm(*SGPR0SpillSlot)
       .addReg(SVSStorageVGPR);
 
   llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
@@ -167,7 +171,7 @@ emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
           MFI.getPreloadedReg(
               llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
           llvm::AMDGPU::sub1))
-      .addImm(SGPR1SpillSlot)
+      .addImm(*SGPR1SpillSlot)
       .addReg(SVSStorageVGPR);
 
   llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
@@ -175,7 +179,7 @@ emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
       .addReg(TRI.getSubReg(
           MFI.getPreloadedReg(llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
           llvm::AMDGPU::sub0))
-      .addImm(SGPRFlatScrLoSpillSlot)
+      .addImm(*SGPRFlatScrLoSpillSlot)
       .addReg(SVSStorageVGPR);
 
   llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
@@ -183,7 +187,7 @@ emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
       .addReg(TRI.getSubReg(
           MFI.getPreloadedReg(llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
           llvm::AMDGPU::sub1))
-      .addImm(SGPRFlatScrHiSpillSlot)
+      .addImm(*SGPRFlatScrHiSpillSlot)
       .addReg(SVSStorageVGPR);
 
   // Add the PSWO to SGPR0/its carry to SGPR1
@@ -251,9 +255,13 @@ emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
                 TII.get(llvm::AMDGPU::S_MOV_B32), llvm::AMDGPU::SGPR32)
       .addImm(InstrumentationStackStart);
 
-  // Store frame registers in their slots
+  // Store frame registers in their slots. The kernel-prolog's "store" table
+  // is the same set of lanes as the spill table (lanes 0-3); the prolog
+  // overwrites the original kernarg values with the per-wave-computed ones
+  // so the payload prologue reads the per-wave values back via the same
+  // lane indices.
   for (const auto &[PhysReg, StoreSlot] :
-       stateValueArray::getFrameStoreSlots()) {
+       getKernelPrologFrameStoreSlots(Specs)) {
     llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
                   TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
         .addReg(PhysReg)
@@ -265,12 +273,12 @@ emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
   llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
                 TII.get(llvm::AMDGPU::V_READLANE_B32), llvm::AMDGPU::SGPR0)
       .addReg(SVSStorageVGPR)
-      .addImm(SGPR0SpillSlot);
+      .addImm(*SGPR0SpillSlot);
 
   llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
                 TII.get(llvm::AMDGPU::V_READLANE_B32), llvm::AMDGPU::SGPR1)
       .addReg(SVSStorageVGPR)
-      .addImm(SGPR1SpillSlot);
+      .addImm(*SGPR1SpillSlot);
 
   llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
                 TII.get(llvm::AMDGPU::V_READLANE_B32))
@@ -279,7 +287,7 @@ emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
                             llvm::AMDGPU::sub0),
               llvm::RegState::Define)
       .addReg(SVSStorageVGPR)
-      .addImm(SGPRFlatScrLoSpillSlot);
+      .addImm(*SGPRFlatScrLoSpillSlot);
 
   llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
                 TII.get(llvm::AMDGPU::V_READLANE_B32))
@@ -288,7 +296,7 @@ emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
                             llvm::AMDGPU::sub1),
               llvm::RegState::Define)
       .addReg(SVSStorageVGPR)
-      .addImm(SGPRFlatScrHiSpillSlot);
+      .addImm(*SGPRFlatScrHiSpillSlot);
 
   return llvm::Error::success();
 }

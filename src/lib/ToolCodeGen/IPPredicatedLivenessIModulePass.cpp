@@ -390,16 +390,27 @@ bool IModuleIPPredicatedLivenessAnalysis::runOnModule(llvm::Module &IModule) {
   for (PredicatedMachineBasicBlock &PMBB : CFG)
     State[&PMBB] = PMBBLive{};
 
-  // Local-mode: seed every return-block live-out with the allocatable GPR
-  // pool of its function. A "return block" here is any PMBB that has no
-  // successors in the CFG (since the CFG is inter-procedural, function
-  // exit blocks have no IP successors when their callee chain ends).
+  // Local-mode: seed every exit PMBB's *live-out* with the function's
+  // allocatable GPR pool. An "exit PMBB" here is any PMBB that has no
+  // successors in the CFG — since the CFG is inter-procedural, function
+  // exit blocks only end up here when their callee chain is incomplete or
+  // they have no callee chain at all (true return blocks).
+  //
+  // The seed must live on the live-OUT side, not on the PMBB's recorded
+  // LiveIn: the fixed-point loop recomputes the per-PMBB OutA/OutI from
+  // its successors' converged LiveInActive/LiveInInactive on every
+  // iteration. If we wrote the seed into State[PMBB].LiveInActive
+  // directly, the first iteration would observe "no successors → OutA
+  // empty," walk backward, and overwrite the seed — leaving local mode
+  // no different from fully-discovered mode for an MF with no IP edges.
+  llvm::DenseMap<const PredicatedMachineBasicBlock *, PMBBLive> ExitSeed;
   if (!IsFullyDiscovered) {
-    llvm::DenseMap<const llvm::MachineFunction *, llvm::DenseSet<llvm::MCPhysReg>>
+    llvm::DenseMap<const llvm::MachineFunction *,
+                   llvm::DenseSet<llvm::MCPhysReg>>
         PerMFAllocSet;
     for (PredicatedMachineBasicBlock &PMBB : CFG) {
       if (PMBB.succs_begin() != PMBB.succs_end())
-        continue; // not an exit
+        continue;
       const llvm::MachineFunction *MF = PMBB.getMBB().getParent();
       auto It = PerMFAllocSet.find(MF);
       if (It == PerMFAllocSet.end()) {
@@ -407,11 +418,9 @@ bool IModuleIPPredicatedLivenessAnalysis::runOnModule(llvm::Module &IModule) {
         buildAllocatableSet(*MF, Set);
         It = PerMFAllocSet.insert({MF, std::move(Set)}).first;
       }
-      // We initialize the PMBB's *live-in* directly with the function's
-      // allocatable set as a starting upper bound; the backward dataflow
-      // will then narrow.
-      State[&PMBB].LiveInActive = It->second;
-      State[&PMBB].LiveInInactive = It->second;
+      auto &Seed = ExitSeed[&PMBB];
+      Seed.LiveInActive = It->second;
+      Seed.LiveInInactive = It->second;
     }
   }
 
@@ -434,19 +443,30 @@ bool IModuleIPPredicatedLivenessAnalysis::runOnModule(llvm::Module &IModule) {
   // walk that calls the same backward routine with CaptureMap set.
   bool AnyChange = true;
   unsigned Iter = 0;
+  auto computeLiveOut = [&](const PredicatedMachineBasicBlock *PMBB,
+                            llvm::DenseSet<llvm::MCPhysReg> &OutA,
+                            llvm::DenseSet<llvm::MCPhysReg> &OutI) {
+    auto SeedIt = ExitSeed.find(PMBB);
+    if (SeedIt != ExitSeed.end()) {
+      OutA = SeedIt->second.LiveInActive;
+      OutI = SeedIt->second.LiveInInactive;
+    }
+    for (const PredicatedMachineBasicBlock &Succ : PMBB->successors()) {
+      auto SIt = State.find(&Succ);
+      if (SIt == State.end())
+        continue;
+      unionInto(OutA, SIt->second.LiveInActive);
+      unionInto(OutI, SIt->second.LiveInInactive);
+    }
+  };
+
   while (AnyChange) {
     AnyChange = false;
     ++Iter;
     LLVM_DEBUG(llvm::dbgs() << "  iter " << Iter << "\n");
     for (PredicatedMachineBasicBlock *PMBB : POOrder) {
       llvm::DenseSet<llvm::MCPhysReg> OutA, OutI;
-      for (const PredicatedMachineBasicBlock &Succ : PMBB->successors()) {
-        auto SIt = State.find(&Succ);
-        if (SIt == State.end())
-          continue;
-        unionInto(OutA, SIt->second.LiveInActive);
-        unionInto(OutI, SIt->second.LiveInInactive);
-      }
+      computeLiveOut(PMBB, OutA, OutI);
       const llvm::TargetRegisterInfo &TRI =
           *PMBB->getMBB().getParent()->getSubtarget().getRegisterInfo();
       walkPMBBBackward(*PMBB, OutA, OutI, IPIP, AccessedRegs, TRI,
@@ -465,17 +485,11 @@ bool IModuleIPPredicatedLivenessAnalysis::runOnModule(llvm::Module &IModule) {
 
   // ---- Post-convergence: extract per-payload pre-effects snapshots ----
   // Walk each PMBB once with its converged live-out (from successors'
-  // converged live-ins), and let walkPMBBBackward populate LiveSetsByPayload
-  // at every insertion point.
+  // converged live-ins + the exit seed if any), and let walkPMBBBackward
+  // populate LiveSetsByPayload at every insertion point.
   for (PredicatedMachineBasicBlock *PMBB : POOrder) {
     llvm::DenseSet<llvm::MCPhysReg> OutA, OutI;
-    for (const PredicatedMachineBasicBlock &Succ : PMBB->successors()) {
-      auto SIt = State.find(&Succ);
-      if (SIt == State.end())
-        continue;
-      unionInto(OutA, SIt->second.LiveInActive);
-      unionInto(OutI, SIt->second.LiveInInactive);
-    }
+    computeLiveOut(PMBB, OutA, OutI);
     const llvm::TargetRegisterInfo &TRI =
         *PMBB->getMBB().getParent()->getSubtarget().getRegisterInfo();
     walkPMBBBackward(*PMBB, OutA, OutI, IPIP, AccessedRegs, TRI,

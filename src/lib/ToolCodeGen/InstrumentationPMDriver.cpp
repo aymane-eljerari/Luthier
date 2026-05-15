@@ -120,7 +120,16 @@ llvm::Expected<LoadedIModule> loadIModuleFromFile(llvm::StringRef Path,
 /// and adds them directly to the legacy \p PM. For ModulePass-level passes with
 /// cross-level analysis dependencies (e.g. IntrinsicMIRLoweringPass
 /// depending on per-function MachineDominatorTree), direct PM.add() is
-/// required
+/// required.
+///
+/// Two special tokens parallel LLVM's TargetPassConfig API:
+///   - "isel" → TPC.addISelPasses()
+///   - "machine-passes" → TPC.addMachinePasses() (the full mid+late MIR
+///     pipeline including RA and stock PEI). Pin Luthier MIR passes to a
+///     specific slot by listing them BEFORE or AFTER this token; the driver
+///     also inserts InjectedPayloadPEIPass via TPC->insertPass(...) so it
+///     fires after PrologEpilogCodeInserterID inside the machine-passes
+///     block automatically (gated by --disable-injected-payload-pei).
 llvm::Error parseCodeGenPipeline(llvm::StringRef PipelineStr,
                                  llvm::legacy::PassManager &PM,
                                  llvm::TargetPassConfig &TPC) {
@@ -129,9 +138,12 @@ llvm::Error parseCodeGenPipeline(llvm::StringRef PipelineStr,
   PipelineStr.split(PassNames, ',', /*MaxSplit=*/-1, /*KeepEmpty=*/false);
   for (llvm::StringRef Name : PassNames) {
     Name = Name.trim();
-    /// Special handling for adding isel passes
     if (Name == "isel") {
       TPC.addISelPasses();
+      continue;
+    }
+    if (Name == "machine-passes") {
+      TPC.addMachinePasses();
       continue;
     }
     const llvm::PassInfo *PI = Registry.getPassInfo(Name);
@@ -178,7 +190,11 @@ InstrumentationPMDriver::InstrumentationPMDriver(
   initializeInjectedPayloadAccessedRegsPrinterPass(*Registry);
   initializeIModuleIPPredicatedLivenessAnalysis(*Registry);
   initializeInjectedPayloadPreserveLiveRegsPass(*Registry);
-  // TODO: uncomment when production-pipeline dependencies are compiled in:
+  // NOTE: InjectedPayloadPEIPass registration intentionally stays commented
+  // out at the driver level until StateValueArrayStorage.cpp is re-enabled
+  // in src/lib/ToolCodeGen/CMakeLists.txt (blocked on defining the
+  // stateValueArray::getInstrumentationStackFrameLaneIdStoreSlot helper,
+  // see project_sva_storage_audit memory note). Once unblocked, uncomment:
   // initializeInjectedPayloadPEIPass(*Registry);
 
   for (const auto &Plugin : PassPlugins) {

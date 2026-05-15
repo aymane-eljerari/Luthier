@@ -31,9 +31,8 @@
 REGISTER_INTRINSIC("luthier::readReg",
                    readRegIRProcessor,
                    readRegMIRProcessor)
-REGISTER_INTRINSIC("luthier::readSVA",
-                   readSVAIRProcessor,
-                   readSVAMIRProcessor)
+// readSVA intrinsic processors are not yet implemented; entry will be
+// re-added once luthier/Intrinsic/ReadSVA.h is restored.
 REGISTER_INTRINSIC("luthier::writeReg",
                    writeRegIRProcessor,
                    writeRegMIRProcessor)

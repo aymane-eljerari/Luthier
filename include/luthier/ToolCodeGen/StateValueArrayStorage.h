@@ -22,7 +22,6 @@
 #include "luthier/HSA/LoadedCodeObject.h"
 #include "luthier/HSA/LoadedCodeObjectDeviceFunction.h"
 #include "luthier/HSA/LoadedCodeObjectKernel.h"
-#include "luthier/ToolCodeGen/IPVectorRegLiveness.h"
 #include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
 #include <llvm/CodeGen/SlotIndexes.h>
 
@@ -212,7 +211,7 @@ public:
 
   /// method for providing LLVM RTTI
   [[nodiscard]] static bool classof(const StateValueArrayStorage *S) {
-    return S->getScheme() == SVS_SINGLE_VGPR;
+    return S->getScheme() == SVS_ONE_AGPR_post_gfx908;
   }
 
   /// Constructor

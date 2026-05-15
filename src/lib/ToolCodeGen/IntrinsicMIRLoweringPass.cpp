@@ -699,19 +699,24 @@ void IntrinsicMIRLoweringPass::materializeReadlanes(
     const llvm::TargetInstrInfo *TII = MF->getSubtarget().getInstrInfo();
     llvm::MachineRegisterInfo &MRI = MF->getRegInfo();
 
-    // Emit a plain V_READLANE_B32 per pending readlane. We use the
-    // low-level instruction directly (not the SI_SPILL_S32_TO_VGPR /
-    // SI_RESTORE_S32_FROM_VGPR pseudos or the higher-level
-    // SI_SPILL_S<x>_RESTORE pseudos) because those pseudos can only be
-    // emitted safely with PHYSICAL-register operands; `SGPRSpillBuilder`
-    // and `SILowerSGPRSpills::run`'s loop body assert on vreg operands
-    // (the former via `getPhysRegBaseClass(vreg)`, the latter via
-    // `getNamedOperand(addr)` returning null for the low-level form).
+    // Emit a plain V_READLANE_B32 per pending readlane.
     //
-    // A future post-RA Luthier pass — the SVA preload pass — will replace
-    // these V_READLANE_B32 reads with SI_RESTORE_S32_FROM_VGPR keyed off
-    // the physical SVA VGPR, register that physreg in `WWMReservedRegs`,
-    // and emit SI_SPILL_S32_TO_VGPR preload writes at function entry.
+    // We cannot pre-RA emit SI_RESTORE_S32_FROM_VGPR nor SI_SPILL_S32_RESTORE
+    // because both crash SILowerSGPRSpills' inner loop:
+    //  - SI_RESTORE_S32_FROM_VGPR matches `isSGPRSpill` (`SIInstrInfo.h:889`),
+    //    so the loop processes it and dereferences a non-existent `addr`
+    //    operand at `SILowerSGPRSpills.cpp:437` -> segfault.
+    //  - SI_SPILL_S32_RESTORE has an `addr` FI operand and matches
+    //    `isSGPRSpill` too, but its dst operand 0 (data) is a vreg that
+    //    SGPRSpillBuilder feeds to `TRI.getPhysRegBaseClass(SuperReg)`
+    //    -> hits the physreg-indexed lookup table OOB assertion.
+    //
+    // PEI-time discovery of the SVA VGPR's physreg therefore can't rely on
+    // MFInfo->WWMReservedRegs. The PEI pass instead uses the read-side
+    // discovery scheme documented in [[reference_amdgpu_wwm_pipeline]]:
+    // walk V_READLANE_B32 MIs whose lane immediate is < K (= total SA
+    // lanes from SVASpecs), and read the VGPR operand. All such reads
+    // share the same source VGPR by construction.
     for (const PendingSVAReadlane &Entry : SVAInfo.Readlanes) {
       auto LaneIt = SVASpecs.findArgumentLane(Entry.SA);
       assert(LaneIt != SVASpecs.argument_lane_end() &&

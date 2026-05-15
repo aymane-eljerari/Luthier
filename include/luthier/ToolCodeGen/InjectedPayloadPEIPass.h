@@ -1,5 +1,5 @@
 //===-- InjectedPayloadPEIPass.h --------------------------------*- C++ -*-===//
-// Copyright 2022-2025 @ Northeastern University Computer Architecture Lab
+// Copyright 2022-2026 @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,25 +15,29 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// This file describes Luthier's Injected Payload Prologue and Epilogue
-/// insertion pass, which replaces the normal prologues and epilogues insertion
-/// by the CodeGen pipeline.
+/// Describes Luthier's Injected Payload Prologue and Epilogue insertion pass.
+/// Runs *after* LLVM's stock PrologEpilogInserter. Payload functions carry
+/// Attribute::Naked (set by InjectedPayloadCreationPass::assignToInject), so
+/// the stock PEI is a no-op for them — this pass emits the actual SVA load,
+/// frame-register spill into SVA lanes, and the symmetric epilogue. Non-
+/// payload device functions still go through the stock PEI normally.
+///
+/// Key dependencies:
+///   - InjectedPayloadAttribute on the MF's Function
+///   - The SVA VGPR allocated by IntrinsicMIRLoweringPass; discovered post-RA
+///     by walking V_READLANE_B32 instructions in the entry MBB whose lane
+///     immediate is < total SA lanes (read-side discovery; MFInfo->WWMReservedRegs
+///     is unusable today, see reference_amdgpu_wwm_pipeline memory note)
+///   - StateValueArraySpecs for the SVA layout (lanes, used SAs)
+///   - StateValueArrayStorage scheme picked by the target-side
+///     SVStorageAndLoadLocations analysis (consumed via MAM cache)
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOL_CODE_GEN_INJECTED_PAYLOAD_PEI_PASS_H
 #define LUTHIER_TOOL_CODE_GEN_INJECTED_PAYLOAD_PEI_PASS_H
-#include "luthier/Intrinsic/IntrinsicProcessor.h"
-#include "luthier/ToolCodeGen/IPVectorRegLiveness.h"
-#include "luthier/ToolCodeGen/LRCallgraph.h"
 #include "luthier/ToolCodeGen/LegacyPassSupport.h"
-#include "luthier/ToolCodeGen/PhysicalRegAccessVirtualizationPass.h"
-#include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
-#include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
 #include <llvm/CodeGen/MachineFunctionPass.h>
-#include <llvm/IR/PassManager.h>
 
 namespace luthier {
-
-class PhysicalRegAccessVirtualizationPass;
 
 class InjectedPayloadPEIPass;
 

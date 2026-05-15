@@ -166,6 +166,13 @@ protected:
           PayloadFn.getName().str() + "'");
 
     PayloadFn.addFnAttr(InjectedPayloadAttribute);
+    // Injected payloads carry their own custom prologue/epilogue emitted by
+    // InjectedPayloadPEIPass — for state-value-array load/store + frame-reg
+    // spill/restore — so suppress LLVM's stock PEI emission for them. RA
+    // still runs normally on Naked functions; Naked only gates the
+    // prologue/epilogue + CSR-save/restore emission inside
+    // PrologEpilogInserter (see PrologEpilogInserter.cpp:259, 679).
+    PayloadFn.addFnAttr(llvm::Attribute::Naked);
 
     if (!TargetMachineInstrMDNode::getInstrMDNodeIfExists(TargetMI)) {
       auto MDOrErr = TargetMachineInstrMDNode::initializeMDNode(

@@ -32,7 +32,7 @@ add_library(LuthierToolCodeGen OBJECT
         #        PrePostAmbleEmitter.cpp
         StateValueArraySpecs.cpp
         IPPredicatedCFG.cpp
-        #        StateValueArrayStorage.cpp
+        StateValueArrayStorage.cpp
         #        RunIRPassesOnIModulePass.cpp
         #        MMISlotIndexesAnalysis.cpp
         ProcessIntrinsicsAtIRLevelPass.cpp
