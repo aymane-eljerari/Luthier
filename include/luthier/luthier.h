@@ -27,7 +27,6 @@
 /// Undef the ill-defined \c ICMP_NE in HIP headers
 #undef ICMP_NE
 #include "HSATooling/InstrumentationTask.h"
-#include "luthier/HSA/Instr.h"
 #include "luthier/HSA/KernelDescriptor.h"
 #include "luthier/HSA/LoadedCodeObjectKernel.h"
 #include "luthier/HSA/LoadedCodeObjectSymbol.h"
@@ -38,30 +37,6 @@ namespace luthier {
 //===----------------------------------------------------------------------===//
 //  Inspection APIs
 //===----------------------------------------------------------------------===//
-
-/// Disassembles the \p Kernel into a list of <tt>hsa::Instr</tt>\n
-/// Disassembly only occurs on the first time this function is invoked on
-/// the \p Kernel. Subsequent calls will use a result cached internally\n
-/// \note This function only provides a raw LLVM MC view of the instructions;
-/// For instrumentation, use <tt>lift</tt> instead
-/// \param Kernel the kernel symbol to be disassembled
-/// \return an \c llvm::ArrayRef to an internally cached vector of
-/// <tt>hsa::Instr</tt>s, or an \c llvm::Error if an issue was encountered
-/// during the process
-llvm::Expected<llvm::ArrayRef<hsa::Instr>>
-disassemble(const hsa::LoadedCodeObjectKernel &Kernel);
-
-/// Disassembles the \p Func into a list of <tt>hsa::Instr</tt>.\n
-/// Disassembly only occurs on the first time this function is invoked on
-/// \p Func. Subsequent calls will use a result cached internally.\n
-/// \note This function only provides a raw LLVM MC view of the instructions;
-/// For instrumentation, use <tt>lift</tt> instead
-/// \param Func the device function to be disassembled
-/// \return an \c llvm::ArrayRef to an internally cached vector of
-/// <tt>hsa::Instr</tt>s, or an \c llvm::Error if an issue was encountered
-/// during the process
-llvm::Expected<llvm::ArrayRef<hsa::Instr>>
-disassemble(const hsa::LoadedCodeObjectDeviceFunction &Func);
 
 /// Lifts the given \p Kernel and return a reference to its
 /// <tt>LiftedRepresentation</tt>.\n

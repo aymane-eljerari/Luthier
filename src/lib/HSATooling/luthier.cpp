@@ -24,7 +24,6 @@
 #include "luthier/HSATooling/CodeLifter.h"
 #include "luthier/HSATooling/ToolExecutableLoader.h"
 #include "luthier/Comgr/Comgr.h"
-#include "luthier/HSA/Instr.h"
 #include "luthier/ToolCodeGen/Context.h"
 #include "luthier/ToolCodeGen/InstrumentationTask.h"
 #include <llvm/ADT/StringExtras.h>
@@ -32,16 +31,6 @@
 #include <optional>
 
 namespace luthier {
-
-llvm::Expected<llvm::ArrayRef<hsa::Instr>>
-disassemble(const hsa::LoadedCodeObjectKernel &Kernel) {
-  return luthier::CodeLifter::instance().disassemble(Kernel);
-}
-
-llvm::Expected<llvm::ArrayRef<hsa::Instr>>
-disassemble(const hsa::LoadedCodeObjectDeviceFunction &Func) {
-  return luthier::CodeLifter::instance().disassemble(Func);
-}
 
 llvm::Expected<const luthier::LiftedRepresentation &>
 lift(const hsa::LoadedCodeObjectKernel &Kernel) {
