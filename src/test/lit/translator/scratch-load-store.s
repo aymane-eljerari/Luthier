@@ -37,6 +37,9 @@ scratch_kern:
   // ST (stack-only — no vaddr, just inst offset)
   scratch_load_dword v4, off, off offset:16
   s_waitcnt vmcnt(0)
+  // SVS (vaddr + saddr) — exercises CalculateScratchSVSAddr (i32 + i32 + offset)
+  scratch_load_dword v7, v0, s0 offset:32
+  s_waitcnt vmcnt(0)
   // Store: standard
   scratch_store_dword v0, v1, off
   s_waitcnt vmcnt(0)

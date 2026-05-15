@@ -720,72 +720,60 @@ foreach desc = [
 
 //==============================================================================
 
-def GLOBAL_STORE_BYTE_sem : InstSISemantic<GLOBAL_STORE_BYTE> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i8_ty)),
-    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
-  ];
+class GLOBALStoreDesc<InstSI base, InstSI sad,
+                      SILLVMType storeTy, bit needsTrunc, bit isD16Hi> {
+  InstSI Base = base;
+  InstSI Sad  = sad;
+  SILLVMType StoreTy = storeTy;
+  bit NeedsTrunc = needsTrunc;
+  bit IsD16Hi    = isD16Hi;
 }
 
-def GLOBAL_STORE_BYTE_D16_HI_sem : InstSISemantic<GLOBAL_STORE_BYTE_D16_HI> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i8_ty)),
-    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
-  ];
-}
-
-def GLOBAL_STORE_SHORT_sem : InstSISemantic<GLOBAL_STORE_SHORT> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i16_ty)),
-    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
-  ];
-}
-
-def GLOBAL_STORE_SHORT_D16_HI_sem : InstSISemantic<GLOBAL_STORE_SHORT_D16_HI> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
-    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
-  ];
-}
-
-def GLOBAL_STORE_DWORD_sem : InstSISemantic<GLOBAL_STORE_DWORD> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
-  ];
-}
-
-def GLOBAL_STORE_DWORDX2_sem : InstSISemantic<GLOBAL_STORE_DWORDX2> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
-  ];
-}
-
-def GLOBAL_STORE_DWORDX3_sem : InstSISemantic<GLOBAL_STORE_DWORDX3> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
-  ];
-}
-
-def GLOBAL_STORE_DWORDX4_sem : InstSISemantic<GLOBAL_STORE_DWORDX4> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
-  ];
+foreach desc = [
+  GLOBALStoreDesc<GLOBAL_STORE_BYTE,         GLOBAL_STORE_BYTE_SADDR,
+                   si_llvm_i8_ty,   1, 0>,
+  GLOBALStoreDesc<GLOBAL_STORE_BYTE_D16_HI,  GLOBAL_STORE_BYTE_D16_HI_SADDR,
+                   si_llvm_i8_ty,   1, 1>,
+  GLOBALStoreDesc<GLOBAL_STORE_SHORT,        GLOBAL_STORE_SHORT_SADDR,
+                   si_llvm_i16_ty,  1, 0>,
+  GLOBALStoreDesc<GLOBAL_STORE_SHORT_D16_HI, GLOBAL_STORE_SHORT_D16_HI_SADDR,
+                   si_llvm_i16_ty,  1, 1>,
+  GLOBALStoreDesc<GLOBAL_STORE_DWORD,        GLOBAL_STORE_DWORD_SADDR,
+                   si_llvm_i32_ty,  0, 0>,
+  GLOBALStoreDesc<GLOBAL_STORE_DWORDX2,      GLOBAL_STORE_DWORDX2_SADDR,
+                   si_llvm_v2i32_ty, 0, 0>,
+  GLOBALStoreDesc<GLOBAL_STORE_DWORDX3,      GLOBAL_STORE_DWORDX3_SADDR,
+                   si_llvm_v3i32_ty, 0, 0>,
+  GLOBALStoreDesc<GLOBAL_STORE_DWORDX4,      GLOBAL_STORE_DWORDX4_SADDR,
+                   si_llvm_v4i32_ty, 0, 0>
+] in {
+  def : InstSISemantic<desc.Base, [
+    (DefVal $addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
+                                        (GetNamedOperand $offset)>.ret),
+    (LLVMStore !if(desc.IsD16Hi,
+                   (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata, si_llvm_i32_ty),
+                                         (ConstantInt si_llvm_i32_ty, 16)),
+                              desc.StoreTy),
+                   !if(desc.NeedsTrunc,
+                       (LLVMTrunc (GetNamedOperand $vdata, si_llvm_i32_ty),
+                                   desc.StoreTy),
+                       (GetNamedOperand $vdata))),
+                (GetVal $addr))
+  ]>;
+  def : InstSISemantic<desc.Sad, [
+    (DefVal $addr, CalculateGlobalSAddr<(GetNamedOperand $saddr),
+                                         (GetNamedOperand $vaddr),
+                                         (GetNamedOperand $offset)>.ret),
+    (LLVMStore !if(desc.IsD16Hi,
+                   (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata, si_llvm_i32_ty),
+                                         (ConstantInt si_llvm_i32_ty, 16)),
+                              desc.StoreTy),
+                   !if(desc.NeedsTrunc,
+                       (LLVMTrunc (GetNamedOperand $vdata, si_llvm_i32_ty),
+                                   desc.StoreTy),
+                       (GetNamedOperand $vdata))),
+                (GetVal $addr))
+  ]>;
 }
 
 //==============================================================================
@@ -978,12 +966,57 @@ foreach desc = [
                                             AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
   ]>;
 
-def GLOBAL_ATOMIC_ORDERED_ADD_B64_sem : InstSISemantic<GLOBAL_ATOMIC_ORDERED_ADD_B64> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty)))
-  ];
+// GLOBAL_ATOMIC_ORDERED_ADD_B64 — inter-wavefront serialized 64-bit add,
+// ordered by an HW sequencer. Modeled via int_amdgcn_global_atomic_ordered_add_b64
+// rather than plain atomicrmw so downstream passes don't reorder/optimize
+// it as a regular memory atomic.
+class OrderedAddDesc<InstSI inst, bit hasOut> {
+  InstSI Inst = inst;
+  bit HasOut = hasOut;
+}
+
+foreach desc = [
+  OrderedAddDesc<GLOBAL_ATOMIC_ORDERED_ADD_B64,           0>,
+  OrderedAddDesc<GLOBAL_ATOMIC_ORDERED_ADD_B64_RTN,       1>,
+  OrderedAddDesc<GLOBAL_ATOMIC_ORDERED_ADD_B64_RTN_agpr,  1>
+] in {
+  def : InstSISemantic<desc.Inst, !if(desc.HasOut,
+    [(DefVal $a, CalculateGlobalAddr<(GetNamedOperand $vaddr),
+                                      (GetNamedOperand $offset)>.ret),
+     (SetNamedOperand $vdst,
+        (LLVMIntrinsic si_llvm_i64_ty,
+                       int_amdgcn_global_atomic_ordered_add_b64,
+                       [(GetVal $a),
+                        (GetNamedOperand $vdata, si_llvm_i64_ty)]))],
+    [(DefVal $a, CalculateGlobalAddr<(GetNamedOperand $vaddr),
+                                      (GetNamedOperand $offset)>.ret),
+     (LLVMIntrinsic si_llvm_i64_ty,
+                    int_amdgcn_global_atomic_ordered_add_b64,
+                    [(GetVal $a),
+                     (GetNamedOperand $vdata, si_llvm_i64_ty)])])>;
+}
+
+foreach desc = [
+  OrderedAddDesc<GLOBAL_ATOMIC_ORDERED_ADD_B64_SADDR,           0>,
+  OrderedAddDesc<GLOBAL_ATOMIC_ORDERED_ADD_B64_SADDR_RTN,       1>,
+  OrderedAddDesc<GLOBAL_ATOMIC_ORDERED_ADD_B64_SADDR_RTN_agpr,  1>
+] in {
+  def : InstSISemantic<desc.Inst, !if(desc.HasOut,
+    [(DefVal $a, CalculateGlobalSAddr<(GetNamedOperand $saddr),
+                                       (GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+     (SetNamedOperand $vdst,
+        (LLVMIntrinsic si_llvm_i64_ty,
+                       int_amdgcn_global_atomic_ordered_add_b64,
+                       [(GetVal $a),
+                        (GetNamedOperand $vdata, si_llvm_i64_ty)]))],
+    [(DefVal $a, CalculateGlobalSAddr<(GetNamedOperand $saddr),
+                                       (GetNamedOperand $vaddr),
+                                       (GetNamedOperand $offset)>.ret),
+     (LLVMIntrinsic si_llvm_i64_ty,
+                    int_amdgcn_global_atomic_ordered_add_b64,
+                    [(GetVal $a),
+                     (GetNamedOperand $vdata, si_llvm_i64_ty)])])>;
 }
 
 //==============================================================================
@@ -1058,20 +1091,26 @@ def GLOBAL_ATOMIC_ORDERED_ADD_B64_sem : InstSISemantic<GLOBAL_ATOMIC_ORDERED_ADD
 
 //==============================================================================
 
-// GLOBAL_INV: Invalidate cache
-def GLOBAL_INV_sem : InstSISemantic<GLOBAL_INV> {
-  let Semantic = [];
-}
+// GLOBAL_INV / GLOBAL_WB / GLOBAL_WBINV — gfx12 scope-parameterized cache
+// fences. The scope (bits[4:3] of cpol) selects CU / SE / device / system
+// level, decoded by Translator.getSyncScope. Semantics:
+//   GLOBAL_INV   → acquire fence (memory becomes visible to this thread)
+//   GLOBAL_WB    → release fence (this thread's writes become visible)
+//   GLOBAL_WBINV → acquire-release fence (both directions)
+def GLOBAL_INV_sem : InstSISemantic<GLOBAL_INV, [
+  (LLVMFence AtomicOrderingAcquire,
+             (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty)))
+]>;
 
-// GLOBAL_WB: Write-back cache
-def GLOBAL_WB_sem : InstSISemantic<GLOBAL_WB> {
-  let Semantic = [];
-}
+def GLOBAL_WB_sem : InstSISemantic<GLOBAL_WB, [
+  (LLVMFence AtomicOrderingRelease,
+             (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty)))
+]>;
 
-// GLOBAL_WBINV: Write-back and invalidate cache
-def GLOBAL_WBINV_sem : InstSISemantic<GLOBAL_WBINV> {
-  let Semantic = [];
-}
+def GLOBAL_WBINV_sem : InstSISemantic<GLOBAL_WBINV, [
+  (LLVMFence AtomicOrderingAcqRel,
+             (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty)))
+]>;
 
 //==============================================================================
 // SCRATCH Instructions - Loads
@@ -1208,114 +1247,6 @@ def GLOBAL_WBINV_sem : InstSISemantic<GLOBAL_WBINV> {
 //   _SADDR: address calc switched from CalculateGlobalAddr to CalculateGlobalSAddr
 //   _agpr:  AGPR destination form; same semantic as VGPR form
 //==============================================================================
-
-def GLOBAL_ATOMIC_ORDERED_ADD_B64_RTN_sem : InstSISemantic<GLOBAL_ATOMIC_ORDERED_ADD_B64_RTN> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
-  ];
-}
-
-def GLOBAL_ATOMIC_ORDERED_ADD_B64_RTN_agpr_sem : InstSISemantic<GLOBAL_ATOMIC_ORDERED_ADD_B64_RTN_agpr> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
-  ];
-}
-
-def GLOBAL_ATOMIC_ORDERED_ADD_B64_SADDR_sem : InstSISemantic<GLOBAL_ATOMIC_ORDERED_ADD_B64_SADDR> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty)))
-  ];
-}
-
-def GLOBAL_ATOMIC_ORDERED_ADD_B64_SADDR_RTN_sem : InstSISemantic<GLOBAL_ATOMIC_ORDERED_ADD_B64_SADDR_RTN> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
-  ];
-}
-
-def GLOBAL_ATOMIC_ORDERED_ADD_B64_SADDR_RTN_agpr_sem : InstSISemantic<GLOBAL_ATOMIC_ORDERED_ADD_B64_SADDR_RTN_agpr> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (SetNamedOperand $vdst, (LLVMAtomicRMW AtomicRMWAdd, (GetVal $tmp_addr), (GetNamedOperand $vdata), AlignNone, (GetOrdering (GetNamedOperand $cpol, si_llvm_i32_ty)), (GetSyncScope (GetNamedOperand $cpol, si_llvm_i32_ty))))
-  ];
-}
-
-def GLOBAL_STORE_BYTE_D16_HI_SADDR_sem : InstSISemantic<GLOBAL_STORE_BYTE_D16_HI_SADDR> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i8_ty)),
-    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
-  ];
-}
-
-def GLOBAL_STORE_BYTE_SADDR_sem : InstSISemantic<GLOBAL_STORE_BYTE_SADDR> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i8_ty)),
-    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
-  ];
-}
-
-def GLOBAL_STORE_DWORDX2_SADDR_sem : InstSISemantic<GLOBAL_STORE_DWORDX2_SADDR> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
-  ];
-}
-
-def GLOBAL_STORE_DWORDX3_SADDR_sem : InstSISemantic<GLOBAL_STORE_DWORDX3_SADDR> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
-  ];
-}
-
-def GLOBAL_STORE_DWORDX4_SADDR_sem : InstSISemantic<GLOBAL_STORE_DWORDX4_SADDR> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
-  ];
-}
-
-def GLOBAL_STORE_DWORD_SADDR_sem : InstSISemantic<GLOBAL_STORE_DWORD_SADDR> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (LLVMStore (GetNamedOperand $vdata), (GetVal $tmp_addr))
-  ];
-}
-
-def GLOBAL_STORE_SHORT_D16_HI_SADDR_sem : InstSISemantic<GLOBAL_STORE_SHORT_D16_HI_SADDR> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (DefVal $tmp8, (LLVMTrunc (LLVMLShr (GetNamedOperand $vdata), 16), si_llvm_i16_ty)),
-    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
-  ];
-}
-
-def GLOBAL_STORE_SHORT_SADDR_sem : InstSISemantic<GLOBAL_STORE_SHORT_SADDR> {
-  let Semantic = [
-    (DefVal $tmp_addr, CalculateGlobalSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
-                                            (GetNamedOperand $offset)>.ret),
-    (DefVal $tmp8, (LLVMTrunc (GetNamedOperand $vdata), si_llvm_i16_ty)),
-    (LLVMStore (GetVal $tmp8), (GetVal $tmp_addr))
-  ];
-}
 
 //==============================================================================
 // GLOBAL_ATOMIC X2 (64-bit) base variants (Phase 6) — cloned from FLAT analogs
@@ -2411,9 +2342,12 @@ class CalculateScratchSAddrAddr<dag saddr, dag offset> {
 }
 
 class CalculateScratchSVSAddr<dag saddr, dag vaddr, dag offset> {
+  // SCRATCH _SVS mode: saddr is SReg_32 (32-bit) and vaddr is VGPR_32. Both
+  // 32 bits — no zero-extension needed. (Pre-refactor records had a
+  // zext-to-i64 here that would have crashed CreateAdd on type mismatch
+  // had any test exercised SVS.)
   dag ret = (LLVMPtrAdd
-    (LLVMIntToPtr (LLVMAdd saddr, (LLVMZExt vaddr, si_llvm_i64_ty)),
-                   scratch_ptr_ty),
+    (LLVMIntToPtr (LLVMAdd saddr, vaddr), scratch_ptr_ty),
     offset);
 }
 
@@ -2769,4 +2703,287 @@ foreach desc = [
     (SetNamedOperand $vdst,
        (LLVMIntrinsic desc.RetTy, desc.Intr, [(GetVal $addr)]))
   ]>;
+}
+
+//------------------------------------------------------------------------------
+// GLOBAL_LOAD/STORE_DWORD_ADDTID (+ SADDR) — per-thread-id global addressing.
+//
+// byte_addr = (SADDR ? saddr : 0) + offset + lane_id * 4
+//   where lane_id = mbcnt_hi(-1, mbcnt_lo(-1, 0))
+//
+// MIR operands per FLAT_Global_Load_AddTid_Pseudo:
+//   (outs $vdst) (ins [$saddr if SADDR,] $offset, $cpol)
+//   No $vaddr — the lane id is derived implicitly via mbcnt.
+//------------------------------------------------------------------------------
+
+class GlobalAddTidAddr<bit hasSaddr> {
+  // Per-thread byte address. mbcnt_hi(-1, mbcnt_lo(-1, 0)) yields the absolute
+  // workitem id within the wave (0..wavesize-1), which is the per-thread
+  // increment in 4-byte units.
+  dag laneId4 = (LLVMMul
+    (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_mbcnt_hi,
+      [(ConstantInt si_llvm_i32_ty, -1),
+       (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_mbcnt_lo,
+         [(ConstantInt si_llvm_i32_ty, -1),
+          (ConstantInt si_llvm_i32_ty, 0)])]),
+    (ConstantInt si_llvm_i32_ty, 4));
+  // Final i64 byte address.
+  dag i64Addr = !if(hasSaddr,
+    (LLVMAdd (GetNamedOperand $saddr),
+              (LLVMZExt (LLVMAdd (GetNamedOperand $offset, si_llvm_i32_ty),
+                                  laneId4),
+                         si_llvm_i64_ty)),
+    (LLVMZExt (LLVMAdd (GetNamedOperand $offset, si_llvm_i32_ty), laneId4),
+              si_llvm_i64_ty));
+  dag ret = (LLVMIntToPtr i64Addr, global_ptr_ty);
+}
+
+def GLOBAL_LOAD_DWORD_ADDTID_sem : InstSISemantic<GLOBAL_LOAD_DWORD_ADDTID, [
+  (SetNamedOperand $vdst, (LLVMLoad si_llvm_i32_ty,
+                                     GlobalAddTidAddr<0>.ret))
+]>;
+
+def GLOBAL_LOAD_DWORD_ADDTID_SADDR_sem :
+    InstSISemantic<GLOBAL_LOAD_DWORD_ADDTID_SADDR, [
+  (SetNamedOperand $vdst, (LLVMLoad si_llvm_i32_ty,
+                                     GlobalAddTidAddr<1>.ret))
+]>;
+
+def GLOBAL_STORE_DWORD_ADDTID_sem :
+    InstSISemantic<GLOBAL_STORE_DWORD_ADDTID, [
+  (LLVMStore (GetNamedOperand $vdata), GlobalAddTidAddr<0>.ret)
+]>;
+
+def GLOBAL_STORE_DWORD_ADDTID_SADDR_sem :
+    InstSISemantic<GLOBAL_STORE_DWORD_ADDTID_SADDR, [
+  (LLVMStore (GetNamedOperand $vdata), GlobalAddTidAddr<1>.ret)
+]>;
+
+//==============================================================================
+// _t16 (true-16) FLAT / GLOBAL / SCRATCH stores + GLOBAL / SCRATCH _D16_t16
+// loads. With t16 the per-channel register is VGPR_16 (i16 wide), so:
+//   * Loads write the loaded value directly to the 16-bit $vdst (no merge
+//     with vdst_in needed — the register is only 16 bits).
+//   * Stores read the 16-bit $vdata and either store it as-is (SHORT) or
+//     truncate to i8 (BYTE).
+//==============================================================================
+
+//------------------------------------------------------------------------------
+// GLOBAL _D16_t16 loads — base + SADDR. Same shape as FLAT _t16 loads,
+// just using global address calc.
+//------------------------------------------------------------------------------
+
+class GlobalT16LoadDesc<InstSI base, InstSI sad, SILLVMType memTy, bit isSigned> {
+  InstSI Base = base;
+  InstSI Sad  = sad;
+  SILLVMType MemTy = memTy;
+  bit IsSigned = isSigned;
+}
+
+foreach desc = [
+  GlobalT16LoadDesc<GLOBAL_LOAD_UBYTE_D16_t16, GLOBAL_LOAD_UBYTE_D16_SADDR_t16,
+                     si_llvm_i8_ty,  0>,
+  GlobalT16LoadDesc<GLOBAL_LOAD_SBYTE_D16_t16, GLOBAL_LOAD_SBYTE_D16_SADDR_t16,
+                     si_llvm_i8_ty,  1>,
+  GlobalT16LoadDesc<GLOBAL_LOAD_SHORT_D16_t16, GLOBAL_LOAD_SHORT_D16_SADDR_t16,
+                     si_llvm_i16_ty, 0>
+] in {
+  def : InstSISemantic<desc.Base, [
+    (DefVal $addr, CalculateGlobalAddr<(GetNamedOperand $vaddr),
+                                        (GetNamedOperand $offset)>.ret),
+    (DefVal $raw, (LLVMLoad desc.MemTy, (GetVal $addr))),
+    (SetNamedOperand $vdst,
+       !if(!eq(desc.MemTy.ElemSize, 16),
+           (GetVal $raw),
+           !if(desc.IsSigned,
+               (LLVMSExt (GetVal $raw), si_llvm_i16_ty),
+               (LLVMZExt (GetVal $raw), si_llvm_i16_ty))))
+  ]>;
+  def : InstSISemantic<desc.Sad, [
+    (DefVal $addr, CalculateGlobalSAddr<(GetNamedOperand $saddr),
+                                         (GetNamedOperand $vaddr),
+                                         (GetNamedOperand $offset)>.ret),
+    (DefVal $raw, (LLVMLoad desc.MemTy, (GetVal $addr))),
+    (SetNamedOperand $vdst,
+       !if(!eq(desc.MemTy.ElemSize, 16),
+           (GetVal $raw),
+           !if(desc.IsSigned,
+               (LLVMSExt (GetVal $raw), si_llvm_i16_ty),
+               (LLVMZExt (GetVal $raw), si_llvm_i16_ty))))
+  ]>;
+}
+
+//------------------------------------------------------------------------------
+// SCRATCH _D16_t16 loads — base + SADDR + ST + SVS.
+//------------------------------------------------------------------------------
+
+class ScratchT16LoadDesc<InstSI base, InstSI sad, InstSI st, InstSI svs,
+                          SILLVMType memTy, bit isSigned> {
+  InstSI Base = base;
+  InstSI Sad  = sad;
+  InstSI ST   = st;
+  InstSI SVS  = svs;
+  SILLVMType MemTy = memTy;
+  bit IsSigned = isSigned;
+}
+
+class ScratchT16LoadBody<SILLVMType memTy, bit isSigned, dag addr> {
+  list<dag> body = [
+    (DefVal $a, addr),
+    (DefVal $raw, (LLVMLoad memTy, (GetVal $a))),
+    (SetNamedOperand $vdst,
+       !if(!eq(memTy.ElemSize, 16),
+           (GetVal $raw),
+           !if(isSigned,
+               (LLVMSExt (GetVal $raw), si_llvm_i16_ty),
+               (LLVMZExt (GetVal $raw), si_llvm_i16_ty))))
+  ];
+}
+
+foreach desc = [
+  ScratchT16LoadDesc<SCRATCH_LOAD_UBYTE_D16_t16,
+                      SCRATCH_LOAD_UBYTE_D16_SADDR_t16,
+                      SCRATCH_LOAD_UBYTE_D16_ST_t16,
+                      SCRATCH_LOAD_UBYTE_D16_SVS_t16,
+                      si_llvm_i8_ty,  0>,
+  ScratchT16LoadDesc<SCRATCH_LOAD_SBYTE_D16_t16,
+                      SCRATCH_LOAD_SBYTE_D16_SADDR_t16,
+                      SCRATCH_LOAD_SBYTE_D16_ST_t16,
+                      SCRATCH_LOAD_SBYTE_D16_SVS_t16,
+                      si_llvm_i8_ty,  1>,
+  ScratchT16LoadDesc<SCRATCH_LOAD_SHORT_D16_t16,
+                      SCRATCH_LOAD_SHORT_D16_SADDR_t16,
+                      SCRATCH_LOAD_SHORT_D16_ST_t16,
+                      SCRATCH_LOAD_SHORT_D16_SVS_t16,
+                      si_llvm_i16_ty, 0>
+] in {
+  def : InstSISemantic<desc.Base, ScratchT16LoadBody<desc.MemTy, desc.IsSigned,
+    CalculateScratchAddr<(GetNamedOperand $vaddr),
+                          (GetNamedOperand $offset)>.ret>.body>;
+  def : InstSISemantic<desc.Sad, ScratchT16LoadBody<desc.MemTy, desc.IsSigned,
+    CalculateScratchSAddrAddr<(GetNamedOperand $saddr),
+                                (GetNamedOperand $offset)>.ret>.body>;
+  def : InstSISemantic<desc.ST,  ScratchT16LoadBody<desc.MemTy, desc.IsSigned,
+    CalculateScratchSTAddr<(GetNamedOperand $offset)>.ret>.body>;
+  def : InstSISemantic<desc.SVS, ScratchT16LoadBody<desc.MemTy, desc.IsSigned,
+    CalculateScratchSVSAddr<(GetNamedOperand $saddr),
+                             (GetNamedOperand $vaddr),
+                             (GetNamedOperand $offset)>.ret>.body>;
+}
+
+//------------------------------------------------------------------------------
+// FLAT / GLOBAL / SCRATCH _t16 stores. $vdata is a 16-bit register; for
+// BYTE_t16 we trunc to i8, for SHORT_t16 store as-is.
+//------------------------------------------------------------------------------
+
+// FLAT _t16 stores: BYTE / SHORT × {base, SADDR}.
+class FLATT16StoreDesc<InstSI base, InstSI sad, SILLVMType storeTy,
+                        bit needsTrunc> {
+  InstSI Base = base;
+  InstSI Sad  = sad;
+  SILLVMType StoreTy = storeTy;
+  bit NeedsTrunc = needsTrunc;
+}
+
+foreach desc = [
+  FLATT16StoreDesc<FLAT_STORE_BYTE_t16,  FLAT_STORE_BYTE_SADDR_t16,
+                    si_llvm_i8_ty,  1>,
+  FLATT16StoreDesc<FLAT_STORE_SHORT_t16, FLAT_STORE_SHORT_SADDR_t16,
+                    si_llvm_i16_ty, 0>
+] in {
+  def : InstSISemantic<desc.Base, [
+    (DefVal $a, CalculateFlatAddr<(GetNamedOperand $vaddr),
+                                   (GetNamedOperand $offset)>.ret),
+    (LLVMStore !if(desc.NeedsTrunc,
+                   (LLVMTrunc (GetNamedOperand $vdata, si_llvm_i16_ty),
+                               desc.StoreTy),
+                   (GetNamedOperand $vdata, si_llvm_i16_ty)),
+                (GetVal $a))
+  ]>;
+  def : InstSISemantic<desc.Sad, [
+    (DefVal $a, CalculateFlatSAddr<(GetNamedOperand $saddr),
+                                    (GetNamedOperand $vaddr),
+                                    (GetNamedOperand $offset)>.ret),
+    (LLVMStore !if(desc.NeedsTrunc,
+                   (LLVMTrunc (GetNamedOperand $vdata, si_llvm_i16_ty),
+                               desc.StoreTy),
+                   (GetNamedOperand $vdata, si_llvm_i16_ty)),
+                (GetVal $a))
+  ]>;
+}
+
+// GLOBAL _t16 stores.
+class GlobalT16StoreDesc<InstSI base, InstSI sad, SILLVMType storeTy,
+                          bit needsTrunc> {
+  InstSI Base = base;
+  InstSI Sad  = sad;
+  SILLVMType StoreTy = storeTy;
+  bit NeedsTrunc = needsTrunc;
+}
+
+foreach desc = [
+  GlobalT16StoreDesc<GLOBAL_STORE_BYTE_t16,  GLOBAL_STORE_BYTE_SADDR_t16,
+                      si_llvm_i8_ty,  1>,
+  GlobalT16StoreDesc<GLOBAL_STORE_SHORT_t16, GLOBAL_STORE_SHORT_SADDR_t16,
+                      si_llvm_i16_ty, 0>
+] in {
+  def : InstSISemantic<desc.Base, [
+    (DefVal $a, CalculateGlobalAddr<(GetNamedOperand $vaddr),
+                                     (GetNamedOperand $offset)>.ret),
+    (LLVMStore !if(desc.NeedsTrunc,
+                   (LLVMTrunc (GetNamedOperand $vdata, si_llvm_i16_ty),
+                               desc.StoreTy),
+                   (GetNamedOperand $vdata, si_llvm_i16_ty)),
+                (GetVal $a))
+  ]>;
+  def : InstSISemantic<desc.Sad, [
+    (DefVal $a, CalculateGlobalSAddr<(GetNamedOperand $saddr),
+                                      (GetNamedOperand $vaddr),
+                                      (GetNamedOperand $offset)>.ret),
+    (LLVMStore !if(desc.NeedsTrunc,
+                   (LLVMTrunc (GetNamedOperand $vdata, si_llvm_i16_ty),
+                               desc.StoreTy),
+                   (GetNamedOperand $vdata, si_llvm_i16_ty)),
+                (GetVal $a))
+  ]>;
+}
+
+// SCRATCH _t16 stores: BYTE / SHORT × {base, SADDR, ST, SVS}.
+class ScratchT16StoreDesc<InstSI base, InstSI sad, InstSI st, InstSI svs,
+                           SILLVMType storeTy, bit needsTrunc> {
+  InstSI Base = base;
+  InstSI Sad  = sad;
+  InstSI ST   = st;
+  InstSI SVS  = svs;
+  SILLVMType StoreTy = storeTy;
+  bit NeedsTrunc = needsTrunc;
+}
+
+class ScratchT16StoreBody<SILLVMType storeTy, bit needsTrunc, dag addr> {
+  list<dag> body = [
+    (DefVal $a, addr),
+    (LLVMStore !if(needsTrunc,
+                   (LLVMTrunc (GetNamedOperand $vdata, si_llvm_i16_ty), storeTy),
+                   (GetNamedOperand $vdata, si_llvm_i16_ty)),
+                (GetVal $a))
+  ];
+}
+
+foreach desc = [
+  ScratchT16StoreDesc<SCRATCH_STORE_BYTE_t16,  SCRATCH_STORE_BYTE_SADDR_t16,
+                       SCRATCH_STORE_BYTE_ST_t16, SCRATCH_STORE_BYTE_SVS_t16,
+                       si_llvm_i8_ty,  1>,
+  ScratchT16StoreDesc<SCRATCH_STORE_SHORT_t16, SCRATCH_STORE_SHORT_SADDR_t16,
+                       SCRATCH_STORE_SHORT_ST_t16, SCRATCH_STORE_SHORT_SVS_t16,
+                       si_llvm_i16_ty, 0>
+] in {
+  def : InstSISemantic<desc.Base, ScratchT16StoreBody<desc.StoreTy, desc.NeedsTrunc,
+    CalculateScratchAddr<(GetNamedOperand $vaddr), (GetNamedOperand $offset)>.ret>.body>;
+  def : InstSISemantic<desc.Sad, ScratchT16StoreBody<desc.StoreTy, desc.NeedsTrunc,
+    CalculateScratchSAddrAddr<(GetNamedOperand $saddr), (GetNamedOperand $offset)>.ret>.body>;
+  def : InstSISemantic<desc.ST, ScratchT16StoreBody<desc.StoreTy, desc.NeedsTrunc,
+    CalculateScratchSTAddr<(GetNamedOperand $offset)>.ret>.body>;
+  def : InstSISemantic<desc.SVS, ScratchT16StoreBody<desc.StoreTy, desc.NeedsTrunc,
+    CalculateScratchSVSAddr<(GetNamedOperand $saddr), (GetNamedOperand $vaddr),
+                             (GetNamedOperand $offset)>.ret>.body>;
 }

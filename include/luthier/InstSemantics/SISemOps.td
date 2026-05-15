@@ -175,6 +175,9 @@ def LLVMLdexp : LLVMOp<"CreateLdexp">;
 
 def LLVMAtomicRMW : LLVMOp<"CreateAtomicRMW">;
 
+/// Emit an `IRBuilder::CreateFence(Ordering, SyncScope::ID)` call.
+def LLVMFence : LLVMOp<"CreateFence">;
+
 /// Decode a cpol immediate (Value*) into a SyncScope::ID per subtarget.
 /// Use: (LLVMAtomicRMW ..., (GetSyncScope (GetNamedOperand $cpol)))
 def GetSyncScope;
