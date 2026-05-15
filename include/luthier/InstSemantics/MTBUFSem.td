@@ -29,6 +29,14 @@
 // symbolic approximation of the addressing computation).
 //
 // $swz is not forwarded (folded into cpol bit 3 by SIMemoryLegalizer).
+//
+// MTBUF has no `_TFE` pseudo variants in luthier's modeled set today, but if
+// future LLVM versions add them (or if subtarget enables them), the same
+// TFE-modeling deferral that applies to MUBUFSem.td applies here: TFE on
+// buffer instructions is a legacy graphics-pipeline feature, removed on
+// CDNA2+ (gfx90a/942/950) and RDNA4 (gfx12), and reserved-zero on RDNA3
+// (gfx11). Only graphics shaders on gfx6–gfx908 + gfx10/10.3 produce TFE=1.
+// See MUBUFSem.td header and memory reference-amdgpu-tfe-per-arch.
 //------------------------------------------------------------------------------
 
 // ---- TBUFFER_LOAD_FORMAT_X (non-D16, vaddr-form) ----

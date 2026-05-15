@@ -175,6 +175,13 @@ def LLVMLdexp : LLVMOp<"CreateLdexp">;
 
 def LLVMAtomicRMW : LLVMOp<"CreateAtomicRMW">;
 
+/// Emit `IRBuilder::CreateAtomicCmpXchg(Ptr, Cmp, New, Align,
+///   SuccessOrdering, FailureOrdering, SyncScope::ID)`.
+/// Returns a {value, i1} struct — use `(LLVMExtractValue $rmw, 0)` to
+/// read the loaded pre-swap value and `(LLVMExtractValue $rmw, 1)` to
+/// read the success flag.
+def LLVMAtomicCmpXchg : LLVMOp<"CreateAtomicCmpXchg">;
+
 /// Emit an `IRBuilder::CreateFence(Ordering, SyncScope::ID)` call.
 def LLVMFence : LLVMOp<"CreateFence">;
 
