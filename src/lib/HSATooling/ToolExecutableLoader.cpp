@@ -615,11 +615,12 @@ ToolExecutableLoader::RegisterFatBinary(const void *RawFatBinWrapper) {
 				/// If try_emplace fails this means an entry for this agent exists 
 				/// and we need to determine the best CO
 				bool IsGeneric = object::isGenericAMDGPUMach(GetMach(*CO));
-				// auto [it, Inserted] = AgentCompatibleCO.try_emplace(Agent, BundleEntry, AgentISA, IsGeneric);
 				auto it = AgentCompatibleCO.find(Agent);
+
 				if (it == AgentCompatibleCO.end()) {
           auto NewCOErr = luthier::object::AMDGCNObjectFile::createAMDGCNObjectFile(COBufferRef);
           LUTHIER_RETURN_ON_ERROR(NewCOErr.takeError());
+			
           AgentCompatibleCO[Agent] = { BundleEntry, AgentISA, IsGeneric, std::move(*NewCOErr) };
         }
 				else {
@@ -630,6 +631,7 @@ ToolExecutableLoader::RegisterFatBinary(const void *RawFatBinWrapper) {
           if (MostCompatible == AgentISA) {
             auto NewCOErr = luthier::object::AMDGCNObjectFile::createAMDGCNObjectFile(COBufferRef);
             LUTHIER_RETURN_ON_ERROR(NewCOErr.takeError());
+						
             it->second = { BundleEntry, AgentISA, IsGeneric, std::move(*NewCOErr) };
           }
 				}
