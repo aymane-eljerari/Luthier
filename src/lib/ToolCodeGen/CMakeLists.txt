@@ -36,7 +36,6 @@ add_library(LuthierToolCodeGen OBJECT
         StateValueArraySpecs.cpp
         IPPredicatedCFG.cpp
         StateValueArrayStorage.cpp
-        #        RunIRPassesOnIModulePass.cpp
         MMISlotIndexesAnalysis.cpp
         ProcessIntrinsicsAtIRLevelPass.cpp
         RemoveUnusedHooksPass.cpp
@@ -44,7 +43,6 @@ add_library(LuthierToolCodeGen OBJECT
         IPPredicatedLivenessIModulePass.cpp
         InjectedPayloadPreserveLiveRegsPass.cpp
         WrapperAnalysisPasses.cpp
-        #        PatchLiftedRepresentationPass.cpp
         MIRConvenience.cpp
         MetadataParserAnalysis.cpp
         IntrinsicProcessorRegistry.cpp
@@ -61,8 +59,6 @@ add_library(LuthierToolCodeGen OBJECT
         NewPMAsmPrinter.cpp
         FunctionAnnotations.cpp
         LuthierCallGraph.cpp
-        #        IPReachingRefAnalysis.cpp
-        #        IPPredicatedLoopTraversal.cpp
         PredicatedMachineBasicBlock.cpp
 
 )

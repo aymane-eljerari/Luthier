@@ -39,7 +39,6 @@
 // #include "luthier/ToolCodeGen/IPVectorRegLiveness.h"
 // #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
 // #include "luthier/ToolCodeGen/IPPredicatedCFG.h"
-// #include "luthier/ToolCodeGen/IPReachingDefAnalysis.h"
 #include "luthier/ToolCodeGen/InitialExecutionPointAnalysis.h"
 #include "luthier/ToolCodeGen/LuthierCallGraph.h"
 #include "luthier/ToolCodeGen/NewPMAsmPrinter.h"
@@ -322,7 +321,6 @@ llvmGetPassPluginInfo() {
       // }); MAM.registerPass(
       // []() { return luthier::IndirectBranchResolverAnalysis(); });
       MAM.registerPass([]() { return luthier::IPPredCFGAnalysis(); });
-      // MAM.registerPass([]() { return luthier::IPReachingDefAnalysis(); });
     });
     /// Register Luthier machine function analysis passes
     PB.registerAnalysisRegistrationCallback(
