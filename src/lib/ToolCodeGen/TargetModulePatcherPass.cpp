@@ -875,6 +875,22 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
           if (!Sub0 || !Sub1)
             return false;
 
+          // SVA VGPR is implicitly live everywhere the SVA is in
+          // scope (set up by the kernel-entry preload) but isn't in
+          // any MBB's live-in set by default. Declare it on SpillMBB
+          // explicitly — the relaxer copies BranchBB's liveins from
+          // its predecessor's successors and doesn't otherwise see
+          // the SVA reg, so MachineVerifier would complain about the
+          // V_WRITELANE's tied-def use. ReloadMBB (RestoreBB) gets
+          // its liveins recomputed by the relaxer via
+          // computeAndAddLiveIns immediately after we return; that
+          // path requires liveins to be empty as a precondition AND
+          // walks V_READLANE backward (so SVAVGPR ends up in the
+          // computed set anyway). Skip the pre-emit addLiveIn for
+          // RestoreBB.
+          if (!SpillMBB.isLiveIn(SVAVGPR))
+            SpillMBB.addLiveIn(SVAVGPR);
+
           // Spill: write each sub-reg into its reserved SVA lane right
           // before the long-branch arithmetic clobbers them. Note that
           // V_WRITELANE_B32 has a tied-def operand for the destination
