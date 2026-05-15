@@ -18,11 +18,14 @@
 
 ; CHECK:     !luthier.intrinsic.placeholders = !{{{.+}}}
 
-; Two SGPR_32 readlanes followed by a REG_SEQUENCE into SGPR_64. They
-; emit in source order in the MIR, so use plain CHECKs rather than CHECK-DAG.
-; CHECK:     %{{[0-9]+}}:sgpr_32 = V_READLANE_B32 %{{[0-9]+}}, {{[0-9]+}}
-; CHECK:     %{{[0-9]+}}:sgpr_32 = V_READLANE_B32 %{{[0-9]+}}, {{[0-9]+}}
-; CHECK:     %{{[0-9]+}}:sgpr_64 = REG_SEQUENCE %{{[0-9]+}}, %subreg.sub0, %{{[0-9]+}}, %subreg.sub1
+; Each SA sub-lane gets its own SGPRSpill-stack-id FI;
+; SI_SPILL_S32_RESTORE loads them and a REG_SEQUENCE merges the two
+; SGPR_32 vregs into an SGPR_64.
+; CHECK:         stack-id: sgpr-spill
+; CHECK:         stack-id: sgpr-spill
+; CHECK:         %{{[0-9]+}}:sgpr_32 = SI_SPILL_S32_RESTORE %stack.{{[0-9]+}}
+; CHECK:         %{{[0-9]+}}:sgpr_32 = SI_SPILL_S32_RESTORE %stack.{{[0-9]+}}
+; CHECK:         %{{[0-9]+}}:sgpr_64 = REG_SEQUENCE %{{[0-9]+}}, %subreg.sub0, %{{[0-9]+}}, %subreg.sub1
 
 target datalayout = "e-m:e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:32:32-p7:160:256:256:32-p8:128:128:128:48-p9:192:256:256:32-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64-S32-A5-G1-ni:7:8:9"
 target triple = "amdgcn-amd-amdhsa"

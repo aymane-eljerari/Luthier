@@ -24,10 +24,13 @@
 #include "luthier/ToolCodeGen/InjectedPayloadAccessedRegsAnalysis.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
 #include "luthier/ToolCodeGen/InjectedPayloadPreserveLiveRegsPass.h"
+#include "luthier/ToolCodeGen/InjectedPayloadPEIPass.h"
 #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
 #include "luthier/ToolCodeGen/IntrinsicProcessorsAnalysis.h"
 #include "luthier/ToolCodeGen/ProcessIntrinsicsAtIRLevelPass.h"
 #include "luthier/ToolCodeGen/RemoveUnusedHooksPass.h"
+#include "luthier/ToolCodeGen/SVAPhysVGPRPinPass.h"
+#include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
 // #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
 // #include "luthier/ToolCodeGen/InjectedPayloadPEIPass.h"
 // #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
@@ -37,6 +40,7 @@
 // #include "luthier/ToolCodeGen/ProcessIntrinsicsAtIRLevelPass.h"
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
 #include "luthier/ToolCodeGenTesting/LuthierFile.h"
+#include <AMDGPU.h>
 #include <AMDGPUTargetMachine.h>
 #include <llvm/Analysis/CGSCCPassManager.h>
 #include <llvm/Analysis/LoopAnalysisManager.h>
@@ -132,7 +136,10 @@ llvm::Expected<LoadedIModule> loadIModuleFromFile(llvm::StringRef Path,
 ///     block automatically (gated by --disable-injected-payload-pei).
 llvm::Error parseCodeGenPipeline(llvm::StringRef PipelineStr,
                                  llvm::legacy::PassManager &PM,
-                                 llvm::TargetPassConfig &TPC) {
+                                 llvm::TargetPassConfig &TPC,
+                                 llvm::raw_ostream *MIRPrintStream,
+                                 bool &UserInsertedMIRPrint) {
+  UserInsertedMIRPrint = false;
   llvm::PassRegistry &Registry = *llvm::PassRegistry::getPassRegistry();
   llvm::SmallVector<llvm::StringRef, 8> PassNames;
   PipelineStr.split(PassNames, ',', /*MaxSplit=*/-1, /*KeepEmpty=*/false);
@@ -143,7 +150,56 @@ llvm::Error parseCodeGenPipeline(llvm::StringRef PipelineStr,
       continue;
     }
     if (Name == "machine-passes") {
+      // Insert SVAPhysVGPRPinPass right before SIPreAllocateWWMRegs so the
+      // WWM greedy regalloc honors our hint pinning the SVA LaneVGPR to
+      // the load-plan physreg. The insertPass call must come BEFORE
+      // addMachinePasses for the AMDGPU TPC to honor it.
+      TPC.insertPass(&llvm::SIPreAllocateWWMRegsLegacyID,
+                     &SVAPhysVGPRPinPass::ID);
       TPC.addMachinePasses();
+      continue;
+    }
+    if (Name == "print-mir") {
+      // Boundary-level MIR dump. Adds the printer at the current position
+      // in the outer pass list (between two `parseCodeGenPipeline` tokens,
+      // NOT inside `machine-passes`). Useful for dumping post-mir-lowering
+      // MIR before kicking off RA.
+      if (!MIRPrintStream)
+        return LUTHIER_MAKE_GENERIC_ERROR(
+            "print-mir token used but no -imodule-output stream configured");
+      PM.add(llvm::createPrintMIRPass(*MIRPrintStream));
+      UserInsertedMIRPrint = true;
+      continue;
+    }
+    if (Name.starts_with("print-mir-after=")) {
+      // Insert a MachineFunction printer AFTER a specific machine pass
+      // inside `addMachinePasses()`. Routed through TPC.insertPass, which
+      // stores the request in the TPC's InsertedPasses map; the actual
+      // scheduling happens when `machine-passes` triggers
+      // `addMachinePasses()`.
+      //
+      // Uses createMachineFunctionPrinterPass (plain MF::print) rather
+      // than createPrintMIRPass (YAML round-trippable). The plain printer
+      // is immune to the YAML printer's stale-stack-object-index crash
+      // when called mid-pipeline (post-RA / pre-frame-elim, MFI can
+      // contain orphan CSI references that MIRPrinter's convertStackObjects
+      // chokes on). Output isn't valid MIR for re-parsing but is fine for
+      // FileCheck.
+      llvm::StringRef PassName = Name.substr(strlen("print-mir-after="));
+      const llvm::PassInfo *AfterPI = Registry.getPassInfo(PassName);
+      if (!AfterPI)
+        return LUTHIER_MAKE_GENERIC_ERROR(
+            "print-mir-after=: unknown pass name '" + PassName.str() + "'");
+      if (!MIRPrintStream)
+        return LUTHIER_MAKE_GENERIC_ERROR(
+            "print-mir-after= used but no -imodule-output stream configured");
+      llvm::AnalysisID AfterID = AfterPI->getTypeInfo();
+      std::string Banner =
+          "After " + std::string(AfterPI->getPassName()) + " (Luthier)";
+      TPC.insertPass(AfterID,
+                     llvm::createMachineFunctionPrinterPass(*MIRPrintStream,
+                                                            Banner));
+      UserInsertedMIRPrint = true;
       continue;
     }
     const llvm::PassInfo *PI = Registry.getPassInfo(Name);
@@ -190,12 +246,9 @@ InstrumentationPMDriver::InstrumentationPMDriver(
   initializeInjectedPayloadAccessedRegsPrinterPass(*Registry);
   initializeIModuleIPPredicatedLivenessAnalysis(*Registry);
   initializeInjectedPayloadPreserveLiveRegsPass(*Registry);
-  // NOTE: InjectedPayloadPEIPass registration intentionally stays commented
-  // out at the driver level until StateValueArrayStorage.cpp is re-enabled
-  // in src/lib/ToolCodeGen/CMakeLists.txt (blocked on defining the
-  // stateValueArray::getInstrumentationStackFrameLaneIdStoreSlot helper,
-  // see project_sva_storage_audit memory note). Once unblocked, uncomment:
-  // initializeInjectedPayloadPEIPass(*Registry);
+  initializeLRStateValueStorageAndLoadLocationsAnalysis(*Registry);
+  initializeSVAPhysVGPRPinPass(*Registry);
+  initializeInjectedPayloadPEIPass(*Registry);
 
   for (const auto &Plugin : PassPlugins) {
     Plugin.registerLegacyCodegenPassesCallback(*Registry);
@@ -431,6 +484,27 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
     bool MustRunCodeGen =
         MIRPassPipelineNotSpecified || MIRPassPipelineSpecifiedAndNotEmpty;
 
+    // Set up the optional output file early so parseCodeGenPipeline has
+    // a stream to attach a user-requested mid-pipeline `print-mir` to.
+    llvm::StringRef OutPath = Options.IModuleOutput;
+    bool IsLuthierOutput = OutPath.ends_with(".luthier");
+    bool MustDumpMIR = MustRunCodeGen && !OutPath.empty() && !IsLuthierOutput;
+    std::unique_ptr<llvm::ToolOutputFile> OutFile;
+    if (MustDumpMIR) {
+      std::error_code EC;
+      OutFile = std::make_unique<llvm::ToolOutputFile>(
+          OutPath, EC, llvm::sys::fs::OF_Text);
+      if (EC) {
+        LUTHIER_CTX_EMIT_ON_ERROR(
+            Context, LUTHIER_MAKE_GENERIC_ERROR(
+                         "Failed to open imodule output file '" +
+                         Options.IModuleOutput + "': " + EC.message()));
+        return IRStagePA.areAllPreserved() ? llvm::PreservedAnalyses::all()
+                                           : llvm::PreservedAnalyses::none();
+      }
+    }
+    bool UserInsertedMIRPrint = false;
+
     if (MIRPassPipelineNotSpecified) {
       // TODO: codegen pipeline — uncomment when deps are available:
       // llvm::TargetLibraryInfoImpl TLII(...);
@@ -459,34 +533,23 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
       // LegacyIPM->run(*IModule);
       // delete LegacyIPM;
     } else if (MIRPassPipelineSpecifiedAndNotEmpty) {
+      llvm::raw_ostream *PrintStream =
+          MustDumpMIR ? &OutFile->os() : nullptr;
       llvm::Error ModifiedOrErr = parseCodeGenPipeline(
-          Options.IModuleMIRPasses.getValue(), *MIRLegacyPM, *TPC);
+          Options.IModuleMIRPasses.getValue(), *MIRLegacyPM, *TPC, PrintStream,
+          UserInsertedMIRPrint);
       if (ModifiedOrErr) {
         LUTHIER_CTX_EMIT_ON_ERROR(Context, std::move(ModifiedOrErr));
         return IRStagePA;
       }
     }
     if (MustRunCodeGen) {
-      llvm::StringRef OutPath = Options.IModuleOutput;
-      bool IsLuthierOutput = OutPath.ends_with(".luthier");
-      bool MustDumpMIR = !OutPath.empty() && !IsLuthierOutput;
-
-      std::unique_ptr<llvm::ToolOutputFile> OutFile;
-      if (MustDumpMIR) {
-        std::error_code EC;
-        OutFile = std::make_unique<llvm::ToolOutputFile>(
-            OutPath, EC, llvm::sys::fs::OF_Text);
-        if (EC) {
-          LUTHIER_CTX_EMIT_ON_ERROR(
-              Context, LUTHIER_MAKE_GENERIC_ERROR(
-                           "Failed to open imodule output file '" +
-                           Options.IModuleOutput + "': " + EC.message()));
-          return IRStagePA.areAllPreserved() ? llvm::PreservedAnalyses::all()
-                                             : llvm::PreservedAnalyses::none();
-        }
-      }
       TPC->setInitialized();
-      if (MustDumpMIR)
+      // Add the default end-of-pipeline MIR dump only if the user didn't
+      // place one mid-pipeline via the `print-mir` token. Skipping the
+      // tail dump avoids the MIRPrinter crash when post-frame-elim
+      // passes leave MFI in a state the YAML printer can't serialize.
+      if (MustDumpMIR && !UserInsertedMIRPrint)
         MIRLegacyPM->add(llvm::createPrintMIRPass(OutFile->os()));
       MIRModified = MIRLegacyPM->run(*IModule);
       if (MustDumpMIR)

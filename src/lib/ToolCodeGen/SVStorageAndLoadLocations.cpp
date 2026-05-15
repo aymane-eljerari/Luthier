@@ -19,14 +19,14 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
 #include "luthier/Common/LuthierError.h"
+#include "luthier/ToolCodeGen/IPPredicatedLivenessIModulePass.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
-#include "luthier/ToolCodeGen/LRCallgraph.h"
 #include "luthier/ToolCodeGen/MMISlotIndexesAnalysis.h"
-#include "luthier/ToolCodeGen/PhysRegsNotInLiveInsAnalysis.h"
 #include "luthier/ToolCodeGen/StateValueArrayStorage.h"
-#include "luthier/ToolCodeGen/IPVectorRegLiveness.h"
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
+#include <AMDGPU.h>
 #include <GCNSubtarget.h>
+#include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/TargetRegisterInfo.h>
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
 
@@ -37,32 +37,72 @@
 
 namespace luthier {
 
-/// Scavenges \p NumRegs registers with class \p RC available in \p MRI
-/// Availability means a register is allocatable and not in \p MRI and
-/// is not in \p AccessedPhysicalRegsNotInLiveIns and not in \p LiveInRegs
-/// \param [in] MRI the \c llvm::MachineRegisterInfo of the function being
-/// scavenged
-/// \param [in] RC the \c llvm::TargetRegisterClass of the register(s) to be
-//// scavenged
-/// \param [in] AccessedPhysicalRegsNotInLiveIns a set of physical registers
-/// that are accessed by injected payloads of the instrumentation module but
-/// at the point of access are not part of the Live-in registers of the
-/// instrumentation points
-/// \param [in] LiveInRegs a set of physical registers that are live at the
-/// app instruction where the register scavenging is taking place
-/// \param [in] NumRegs the number of registers to be scavenged
-/// \param [out] ScavengedRegs the registers scavenged by the function
+namespace {
+
+/// Build a non-owning set of phys-regs that must NOT be clobbered at the
+/// given AppMI: the union of \c Active and \c Inactive lane live sets
+/// across every injected payload attached to \p AppMI. Each payload's
+/// per-lane sets already incorporate that payload's declared Reads/Writes
+/// via \c stepBackwardOverPayload inside
+/// \c IModuleIPPredicatedLivenessAnalysis.
+llvm::DenseSet<llvm::MCPhysReg>
+liveAtAppMI(const llvm::MachineInstr &AppMI,
+            const InjectedPayloadAndInstPoint &IPIP,
+            const llvm::DenseMap<const llvm::Function *, PayloadLiveSets>
+                &PayloadLiveSetsByFn) {
+  llvm::DenseSet<llvm::MCPhysReg> Out;
+  if (!IPIP.contains(AppMI))
+    return Out;
+  for (const llvm::Function *Payload : IPIP.at(AppMI)) {
+    auto It = PayloadLiveSetsByFn.find(Payload);
+    if (It == PayloadLiveSetsByFn.end())
+      continue;
+    for (llvm::MCPhysReg R : It->second.Active)
+      Out.insert(R);
+    for (llvm::MCPhysReg R : It->second.Inactive)
+      Out.insert(R);
+  }
+  return Out;
+}
+
+/// Build the conservative union across every payload's live set in
+/// \p PayloadLiveSetsByFn. Used by the function-start scavenger paths
+/// that don't have an AppMI in hand.
+llvm::DenseSet<llvm::MCPhysReg>
+liveAcrossAllPayloads(const llvm::DenseMap<const llvm::Function *,
+                                           PayloadLiveSets>
+                          &PayloadLiveSetsByFn) {
+  llvm::DenseSet<llvm::MCPhysReg> Out;
+  for (const auto &[F, LS] : PayloadLiveSetsByFn) {
+    for (llvm::MCPhysReg R : LS.Active)
+      Out.insert(R);
+    for (llvm::MCPhysReg R : LS.Inactive)
+      Out.insert(R);
+  }
+  return Out;
+}
+
+} // namespace
+
+/// Scavenges \p NumRegs registers of class \p RC that are:
+///   - allocatable per \p MRI,
+///   - not already used in \p MRI (RA didn't touch them),
+///   - not in \p DoNotClobber.
+///
+/// \p DoNotClobber is the union of every "must-preserve" set the caller
+/// cares about — typically the per-payload \c Active ∪ \c Inactive live
+/// sets at the relevant IPs, plus (for function-start scavenging) the
+/// entry-block live-ins of the MF being scavenged.
 static void
 scavengeFreeRegister(const llvm::MachineRegisterInfo &MRI,
                      const llvm::TargetRegisterClass &RC,
-                     const llvm::LivePhysRegs &AccessedPhysicalRegsNotInLiveIns,
-                     const llvm::LivePhysRegs &LiveInRegs, int NumRegs,
+                     const llvm::DenseSet<llvm::MCPhysReg> &DoNotClobber,
+                     int NumRegs,
                      llvm::SmallVectorImpl<llvm::MCRegister> &ScavengedRegs) {
   int NumRegsFound = 0;
   for (llvm::MCRegister Reg : reverse(RC)) {
     if (MRI.isAllocatable(Reg) && !MRI.isPhysRegUsed(Reg) &&
-        AccessedPhysicalRegsNotInLiveIns.available(MRI, Reg) &&
-        LiveInRegs.available(MRI, Reg)) {
+        !DoNotClobber.contains(Reg)) {
       ScavengedRegs.push_back(Reg);
       NumRegsFound++;
       if (NumRegsFound == NumRegs)
@@ -71,78 +111,42 @@ scavengeFreeRegister(const llvm::MachineRegisterInfo &MRI,
   }
 }
 
-/// Scavenges \p NumRegs registers with class \p RC available in \p MRI
-/// Availability means a register is allocatable and not used in \p MRI and
-/// is not in \p AccessedPhysicalRegsNotInLiveIns and not in \p LiveInRegs
-/// \param MRI the \c llvm::MachineRegisterInfo of the function being
-/// scavenged
-/// \param RC the \c llvm::TargetRegisterClass of the register to be
-//// scavenged
-/// \param AccessedPhysicalRegsNotInLiveIns a set of physical registers
-/// that are accessed by injected payloads of the instrumentation module but
-/// at the point of access are not part of the Live-in registers of the
-/// instrumentation points
-/// \param LiveInRegs a set of physical registers that are live at the
-/// app instruction where the register scavenging is taking place
-/// \return the scavenged register if successful, or zero otherwise
+/// Single-register variant of the scavenger above. Returns the first
+/// candidate register satisfying the same predicates, or \c MCRegister{}
+/// if none is found.
 static llvm::MCRegister
 scavengeFreeRegister(const llvm::MachineRegisterInfo &MRI,
                      const llvm::TargetRegisterClass &RC,
-                     const llvm::LivePhysRegs &AccessedPhysicalRegsNotInLiveIns,
-                     const llvm::LivePhysRegs &LiveInRegs) {
+                     const llvm::DenseSet<llvm::MCPhysReg> &DoNotClobber) {
   for (llvm::MCRegister Reg : reverse(RC)) {
     if (MRI.isAllocatable(Reg) && !MRI.isPhysRegUsed(Reg) &&
-        AccessedPhysicalRegsNotInLiveIns.available(MRI, Reg) &&
-        LiveInRegs.available(MRI, Reg)) {
+        !DoNotClobber.contains(Reg)) {
       return Reg;
     }
   }
   return {};
 }
 
-/// Scavenges \p NumRegs register of class \p RC that are unused across
-/// all \p RelatedFunctions and are not in \p AccessedPhysRegsNotInLiveIns
-/// \param [in] Functions the functions being scavenged for a free register
-/// \param [in] RC the register class of the registers being scavenged
-/// \param [in] AccessedPhysRegsNotInLiveIns a set of physical registers
-/// accessed by the injected payloads that are not in the live-in set of their
-/// injected payload at the point of access
-/// \param [in] NumRegs number of registers to be scavenged
-/// \param [out] Regs the set of registers that were scavenged
+/// Cross-MF variant. Scavenges \p NumRegs registers of class \p RC unused
+/// across every MachineFunction in \p Functions and not in \p DoNotClobber.
 static void
 scavengeFreeRegister(llvm::ArrayRef<llvm::MachineFunction *> Functions,
                      const llvm::TargetRegisterClass *RC,
-                     const llvm::LivePhysRegs &AccessedPhysRegsNotInLiveIns,
+                     const llvm::DenseSet<llvm::MCPhysReg> &DoNotClobber,
                      unsigned int NumRegs,
                      llvm::SmallVectorImpl<llvm::MCRegister> &Regs) {
   unsigned int NumRegFound = 0;
-
   for (llvm::MCRegister Reg : *RC) {
     bool IsUnused = llvm::all_of(Functions, [&](llvm::MachineFunction *MF) {
       auto &MRI = MF->getRegInfo();
-
-      LLVM_DEBUG(auto TRI = MF->getSubtarget().getRegisterInfo();
-                 llvm::dbgs() << "Trying to scavenged register "
-                              << llvm::printReg(Reg, TRI) << "...\n";
-                 llvm::dbgs()
-                 << "Is reg allocatable? " << MRI.isAllocatable(Reg) << ".\n";
-                 llvm::dbgs()
-                 << "Is not used? " << !MRI.isPhysRegUsed(Reg) << ".\n";
-                 llvm::dbgs()
-                 << "Is not in accessed phys regs not in live-ins? "
-                 << AccessedPhysRegsNotInLiveIns.available(MRI, Reg) << ".\n";);
-
       return MRI.isAllocatable(Reg) && !MRI.isPhysRegUsed(Reg) &&
-             AccessedPhysRegsNotInLiveIns.available(MRI, Reg);
+             !DoNotClobber.contains(Reg);
     });
     if (IsUnused) {
       Regs.push_back(Reg);
       NumRegFound++;
-      if (NumRegFound == NumRegs) {
-        LLVM_DEBUG(llvm::dbgs() << "Found " << NumRegFound
-                                << " registers; Scavenging was a success!\n";);
+      if (NumRegFound == NumRegs)
         return;
-      }
     }
   }
 }
@@ -150,20 +154,16 @@ scavengeFreeRegister(llvm::ArrayRef<llvm::MachineFunction *> Functions,
 llvm::MCRegister
 scavengeFreeRegister(llvm::ArrayRef<llvm::MachineFunction *> RelatedFunctions,
                      const llvm::TargetRegisterClass *RC,
-                     const llvm::LivePhysRegs &AccessedPhysRegsNotInLiveIns) {
+                     const llvm::DenseSet<llvm::MCPhysReg> &DoNotClobber) {
   for (llvm::MCRegister Reg : *RC) {
     bool IsUnused =
         llvm::all_of(RelatedFunctions, [&](llvm::MachineFunction *MF) {
           auto &MRI = MF->getRegInfo();
-          bool IsUnusedInMF = MRI.isAllocatable(Reg) && !MRI.isPhysRegUsed(Reg);
-          if (!AccessedPhysRegsNotInLiveIns.empty())
-            IsUnusedInMF = IsUnusedInMF &&
-                           AccessedPhysRegsNotInLiveIns.available(MRI, Reg);
-          return IsUnusedInMF;
+          return MRI.isAllocatable(Reg) && !MRI.isPhysRegUsed(Reg) &&
+                 !DoNotClobber.contains(Reg);
         });
-    if (IsUnused) {
+    if (IsUnused)
       return Reg;
-    }
   }
   return {};
 }
@@ -187,8 +187,7 @@ scavengeFreeRegister(llvm::ArrayRef<llvm::MachineFunction *> RelatedFunctions,
 static std::pair<llvm::MCRegister, bool>
 selectVGPRLoadLocationForInjectedPayload(
     const llvm::MachineInstr &InstPoint, StateValueArrayStorage &SVS,
-    const llvm::LivePhysRegs &InstPointLiveRegs,
-    const llvm::LivePhysRegs &AccessedPhysicalRegsNotInLiveIns,
+    const llvm::DenseSet<llvm::MCPhysReg> &InstPointDoNotClobber,
     bool ScavengeDeadAVGPRs) {
   llvm::MCRegister AVGPRLocation{0};
   bool ClobbersAppRegister{false};
@@ -203,30 +202,28 @@ selectVGPRLoadLocationForInjectedPayload(
     } else {
       auto &InstrumentedMF = *InstPoint.getParent()->getParent();
       // Scavenge a dead VGPR to hold the state value array
-      AVGPRLocation = scavengeFreeRegister(
-          InstrumentedMF.getRegInfo(), llvm::AMDGPU::VGPR_32RegClass,
-          AccessedPhysicalRegsNotInLiveIns, InstPointLiveRegs);
-      // Scavenge a dead AGPR to hold the state value array if no VGPR is
-      // found
+      AVGPRLocation = scavengeFreeRegister(InstrumentedMF.getRegInfo(),
+                                           llvm::AMDGPU::VGPR_32RegClass,
+                                           InstPointDoNotClobber);
+      // Fall back to a dead AGPR
       if (AVGPRLocation == 0)
-        AVGPRLocation = scavengeFreeRegister(
-            InstrumentedMF.getRegInfo(), llvm::AMDGPU::AGPR_32RegClass,
-            AccessedPhysicalRegsNotInLiveIns, InstPointLiveRegs);
+        AVGPRLocation = scavengeFreeRegister(InstrumentedMF.getRegInfo(),
+                                             llvm::AMDGPU::AGPR_32RegClass,
+                                             InstPointDoNotClobber);
       if (AVGPRLocation == 0) {
+        // Last resort: clobber a register the app uses but the payload
+        // doesn't depend on at this IP. The PEI will spill it.
         ClobbersAppRegister = true;
         auto &InstrumentedMFRI = InstrumentedMF.getRegInfo();
         for (llvm::MCRegister Reg : llvm::AMDGPU::VGPR_32RegClass) {
           if (InstrumentedMFRI.isPhysRegUsed(Reg) &&
-              AccessedPhysicalRegsNotInLiveIns.available(InstrumentedMFRI,
-                                                         Reg)) {
+              !InstPointDoNotClobber.contains(Reg)) {
             AVGPRLocation = Reg;
             break;
           }
         }
-        // If we didn't find anything, just pick V0
-        if (AVGPRLocation == 0) {
+        if (AVGPRLocation == 0)
           AVGPRLocation = llvm::AMDGPU::VGPR0;
-        }
       }
     }
   }
@@ -258,25 +255,22 @@ static std::shared_ptr<StateValueArrayStorage> findFixedStateValueArrayStorage(
     llvm::ArrayRef<llvm::MachineFunction *> RelatedFunctions,
     llvm::ArrayRef<StateValueArrayStorage::StorageKind> SupportedStorage,
     int MaxAGPRsUsedByAllStorage, int MaxSGPRsUsedByAllStorage,
-    const llvm::LivePhysRegs &AccessedPhysicalRegistersNotInLiveIns) {
+    const llvm::DenseSet<llvm::MCPhysReg> &DoNotClobber) {
   // Find the next VGPR available to hold the value state array
-  llvm::MCRegister StateValueArrayFixedVGPRLocation =
-      scavengeFreeRegister(RelatedFunctions, &llvm::AMDGPU::VGPR_32RegClass,
-                           AccessedPhysicalRegistersNotInLiveIns);
+  llvm::MCRegister StateValueArrayFixedVGPRLocation = scavengeFreeRegister(
+      RelatedFunctions, &llvm::AMDGPU::VGPR_32RegClass, DoNotClobber);
   // If we failed to find a free VGPR, we then have to scavenge for all
   // possible SGPRs and AGPRs that can be used in storing the state value
   // array
   if (StateValueArrayFixedVGPRLocation == 0) {
     llvm::SmallVector<llvm::MCRegister, 3> SGPRsScavenged;
     llvm::SmallVector<llvm::MCRegister, 2> AGPRsScavenged;
-    // Scavenge the maximum number of AGPRs used by all storage schemes
     scavengeFreeRegister(RelatedFunctions, &llvm::AMDGPU::AGPR_32RegClass,
-                         AccessedPhysicalRegistersNotInLiveIns,
-                         MaxAGPRsUsedByAllStorage, AGPRsScavenged);
-    // Scavenge the maximum number of SGPRs used by all storage schemes
+                         DoNotClobber, MaxAGPRsUsedByAllStorage,
+                         AGPRsScavenged);
     scavengeFreeRegister(RelatedFunctions, &llvm::AMDGPU::SGPR_32RegClass,
-                         AccessedPhysicalRegistersNotInLiveIns,
-                         MaxSGPRsUsedByAllStorage, SGPRsScavenged);
+                         DoNotClobber, MaxSGPRsUsedByAllStorage,
+                         SGPRsScavenged);
 
     LLVM_DEBUG(
 
@@ -324,28 +318,23 @@ static std::shared_ptr<StateValueArrayStorage> findFixedStateValueArrayStorage(
 }
 
 static std::shared_ptr<StateValueArrayStorage> findStateValueArrayStorageAtMI(
-    const llvm::MachineRegisterInfo &MRI, const llvm::LivePhysRegs &MILiveIns,
-    const llvm::LivePhysRegs &AccessedPhysicalRegistersNotInLiveIns,
+    const llvm::MachineRegisterInfo &MRI,
+    const llvm::DenseSet<llvm::MCPhysReg> &DoNotClobber,
     llvm::ArrayRef<StateValueArrayStorage::StorageKind> SupportedStorage,
     int MaxAGPRsUsedByAllStorage, int MaxSGPRsUsedByAllStorage) {
   // Find the next VGPR available to hold the value state array
   llvm::MCRegister StateValueArrayVGPRLocation =
-      scavengeFreeRegister(MRI, llvm::AMDGPU::VGPR_32RegClass,
-                           AccessedPhysicalRegistersNotInLiveIns, MILiveIns);
+      scavengeFreeRegister(MRI, llvm::AMDGPU::VGPR_32RegClass, DoNotClobber);
   // If we failed to find a free VGPR, we then have to scavenge for all
   // possible SGPRs and AGPRs that can be used in storing the state value
   // array
   if (StateValueArrayVGPRLocation == 0) {
     llvm::SmallVector<llvm::MCRegister, 3> SGPRsScavenged;
     llvm::SmallVector<llvm::MCRegister, 2> AGPRsScavenged;
-    // Scavenge the maximum number of AGPRs used by all storage schemes
-    scavengeFreeRegister(MRI, llvm::AMDGPU::AGPR_32RegClass,
-                         AccessedPhysicalRegistersNotInLiveIns, MILiveIns,
+    scavengeFreeRegister(MRI, llvm::AMDGPU::AGPR_32RegClass, DoNotClobber,
                          MaxAGPRsUsedByAllStorage, AGPRsScavenged);
 
-    // Scavenge the maximum number of SGPRs used by all storage schemes
-    scavengeFreeRegister(MRI, llvm::AMDGPU::SGPR_32RegClass,
-                         AccessedPhysicalRegistersNotInLiveIns, MILiveIns,
+    scavengeFreeRegister(MRI, llvm::AMDGPU::SGPR_32RegClass, DoNotClobber,
                          MaxSGPRsUsedByAllStorage, SGPRsScavenged);
 
     LLVM_DEBUG(
@@ -407,9 +396,15 @@ SVStorageAndLoadLocations::getStateValueArrayLoadPlanForInstPoint(
 llvm::Error SVStorageAndLoadLocations::calculate(
     const llvm::MachineModuleInfo &TargetMMI, const llvm::Module &TargetM,
     const MMISlotIndexesAnalysis::Result &SlotIndexes,
-    const VectorRegLiveness &RegLiveness,
     const InjectedPayloadAndInstPoint &IPIP, FunctionPreambleDescriptor &FPD,
-    const llvm::LivePhysRegs &AccessedPhysicalRegistersNotInLiveIns) {
+    const llvm::DenseMap<const llvm::Function *, PayloadLiveSets>
+        &PayloadLiveSetsByFn) {
+  // Module-wide "do not clobber" set: every register that's live in any
+  // payload's Active or Inactive lane set, anywhere in the module. Used by
+  // the fixed-storage scavenger and as a starting point for per-IP queries.
+  llvm::DenseSet<llvm::MCPhysReg> AllPayloadsDoNotClobber =
+      liveAcrossAllPayloads(PayloadLiveSetsByFn);
+
   llvm::SmallVector<llvm::MachineFunction *, 4> MFs;
   for (const auto &F : TargetM) {
     if (auto *MF = TargetMMI.getMachineFunction(F)) {
@@ -448,7 +443,7 @@ llvm::Error SVStorageAndLoadLocations::calculate(
   // Try to find a fixed location to store the state value array
   auto StateValueFixedLocation = findFixedStateValueArrayStorage(
       MFs, SupportedStorage, MaxNumAGPRsUsedByAllStorage,
-      MaxNumSGPRsUsedByAllStorage, AccessedPhysicalRegistersNotInLiveIns);
+      MaxNumSGPRsUsedByAllStorage, AllPayloadsDoNotClobber);
 
   if (StateValueFixedLocation != nullptr) {
     // If a fixed location was found, then all MBB intervals inside all MFs
@@ -471,18 +466,13 @@ llvm::Error SVStorageAndLoadLocations::calculate(
         FPD.DeviceFunctions[MF].RequiresPreAndPostAmble = false;
       }
     }
-    for (const auto &[InsertionPointMI, HookFunction] : IPIP.mi_payload()) {
-      auto *HookLiveRegs =
-          RegLiveness.getMFLevelInstrLiveIns(*InsertionPointMI);
-      LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-          HookLiveRegs != nullptr,
-          llvm::formatv(
-              "Failed to get the Live Physical register set for MI {0}.",
-              *InsertionPointMI)));
+    for (const auto &[InsertionPointMI, HookFunctions] : IPIP.mi_payloads()) {
+      llvm::DenseSet<llvm::MCPhysReg> IPDoNotClobber =
+          liveAtAppMI(*InsertionPointMI, IPIP, PayloadLiveSetsByFn);
       auto [VGPRLocation, ClobbersAppReg] =
           selectVGPRLoadLocationForInjectedPayload(
-              *InsertionPointMI, *StateValueFixedLocation, *HookLiveRegs,
-              AccessedPhysicalRegistersNotInLiveIns, true);
+              *InsertionPointMI, *StateValueFixedLocation, IPDoNotClobber,
+              true);
 
       InstPointSVSLoadPlans.insert(
           {InsertionPointMI, InstPointSVALoadPlan{VGPRLocation, ClobbersAppReg,
@@ -499,23 +489,21 @@ llvm::Error SVStorageAndLoadLocations::calculate(
       auto &MRI = MF->getRegInfo();
       // Pick the highest numbered VGPR not accessed by the Hooks
       // to hold the value state
-      // TODO: is there a more informed way to do initialize this?
+      // TODO: is there a more informed way to initialize this?
       // TODO: if an argument is passed specifying to keep the register
-      // usage of the kernel the same as before, these needs to be initialized
+      // usage of the kernel the same as before, this needs to be initialized
       // to the last available SGPR/VGPR/AGPR
-      auto FirstMILiveIns =
-          RegLiveness.getMFLevelInstrLiveIns(*MF->begin()->begin());
-      LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-          FirstMILiveIns != nullptr,
-          llvm::formatv("Failed to obtain the live physical regs for MI {0}.",
-                        *MF->begin()->begin())));
+      llvm::DenseSet<llvm::MCPhysReg> EntryDoNotClobber =
+          AllPayloadsDoNotClobber;
+      if (!MF->empty())
+        for (const auto &LI : MF->front().liveins())
+          EntryDoNotClobber.insert(LI.PhysReg);
 
       // The current location of the state value register
       std::shared_ptr<StateValueArrayStorage> SVS =
           findStateValueArrayStorageAtMI(
-              MRI, *FirstMILiveIns, AccessedPhysicalRegistersNotInLiveIns,
-              SupportedStorage, MaxNumAGPRsUsedByAllStorage,
-              MaxNumSGPRsUsedByAllStorage);
+              MRI, EntryDoNotClobber, SupportedStorage,
+              MaxNumAGPRsUsedByAllStorage, MaxNumSGPRsUsedByAllStorage);
 
       LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
           SVS != nullptr,
@@ -540,12 +528,16 @@ llvm::Error SVStorageAndLoadLocations::calculate(
         for (const auto &MI : MBB) {
           if (IPIP.contains(MI))
             HookInsertionPointsInCurrentSegment.insert(&MI);
-          auto *InstrLiveRegs = RegLiveness.getMFLevelInstrLiveIns(MI);
-          LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-              InstrLiveRegs != nullptr,
-              llvm::formatv(
-                  "Failed to get the live physical register set for MI {0}.",
-                  MI)));
+          // Per-MI "do not clobber" set: union of every payload-live set
+          // at this MI (if it's an instrumentation point; empty
+          // otherwise). For non-IP MIs we have no live-reg query in the
+          // new design — the conservative AllPayloadsDoNotClobber set
+          // is used as a fallback, mirroring the old code's behavior
+          // when InstrLiveRegs were unavailable.
+          llvm::DenseSet<llvm::MCPhysReg> MIDoNotClobber =
+              IPIP.contains(MI)
+                  ? liveAtAppMI(MI, IPIP, PayloadLiveSetsByFn)
+                  : AllPayloadsDoNotClobber;
           // - If we have spilled the state value reg and this instruction
           // will require a hook to be inserted, then we try to relocate the
           // SVS. In this instance, since the hook will have to load the value
@@ -560,7 +552,7 @@ llvm::Error SVStorageAndLoadLocations::calculate(
           SVS->getAllStorageRegisters(SVSRegs);
           bool MustRelocateStateValue =
               llvm::any_of(SVSRegs, [&](llvm::MCRegister Reg) {
-                return !InstrLiveRegs->available(MF->getRegInfo(), Reg);
+                return MIDoNotClobber.contains(Reg);
               });
           // If we have to relocate something, then create a new interval
           // for it;
@@ -575,11 +567,11 @@ llvm::Error SVStorageAndLoadLocations::calculate(
             CurrentMBBSegments.emplace_back(CurrentIntervalBegin, NextIndex,
                                             SVS);
             for (const auto &HookMI : HookInsertionPointsInCurrentSegment) {
-              auto *HookLiveRegs = RegLiveness.getMFLevelInstrLiveIns(*HookMI);
+              llvm::DenseSet<llvm::MCPhysReg> HookDoNotClobber =
+                  liveAtAppMI(*HookMI, IPIP, PayloadLiveSetsByFn);
               auto [HookSVGPR, ClobbersAppReg] =
                   selectVGPRLoadLocationForInjectedPayload(
-                      *HookMI, *SVS, *HookLiveRegs,
-                      AccessedPhysicalRegistersNotInLiveIns, false);
+                      *HookMI, *SVS, HookDoNotClobber, false);
               InstPointSVSLoadPlans.insert(
                   {HookMI, {HookSVGPR, ClobbersAppReg, *SVS}});
             }
@@ -588,9 +580,8 @@ llvm::Error SVStorageAndLoadLocations::calculate(
           }
           if (TryRelocatingValueStateReg || MustRelocateStateValue) {
             SVS = findStateValueArrayStorageAtMI(
-                MRI, *FirstMILiveIns, AccessedPhysicalRegistersNotInLiveIns,
-                SupportedStorage, MaxNumAGPRsUsedByAllStorage,
-                MaxNumSGPRsUsedByAllStorage);
+                MRI, MIDoNotClobber, SupportedStorage,
+                MaxNumAGPRsUsedByAllStorage, MaxNumSGPRsUsedByAllStorage);
             LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
                 SVS != nullptr, "Failed to relocate the SVA storage."));
           }
@@ -601,28 +592,64 @@ llvm::Error SVStorageAndLoadLocations::calculate(
   return llvm::Error::success();
 }
 
-llvm::AnalysisKey LRStateValueStorageAndLoadLocationsAnalysis::Key;
+char LRStateValueStorageAndLoadLocationsAnalysis::ID = 0;
 
-LRStateValueStorageAndLoadLocationsAnalysis::Result
-LRStateValueStorageAndLoadLocationsAnalysis::run(
-    llvm::Module &TargetModule, llvm::ModuleAnalysisManager &TargetMAM) {
-  SVStorageAndLoadLocations Out;
-  auto &IModuleAndPMRes = TargetMAM.getResult<IModulePMAnalysis>(TargetModule);
-  auto &IModule = IModuleAndPMRes.getModule();
-  auto &IMAM = IModuleAndPMRes.getMAM();
+LUTHIER_INITIALIZE_LEGACY_PASS_BODY(
+    LRStateValueStorageAndLoadLocationsAnalysis, "lr-sv-storage-load-locs",
+    "Luthier LR State Value Array Storage and Load Locations Analysis",
+    /*CFGOnly=*/true, /*IsAnalysis=*/true)
 
-  auto Err = Out.calculate(
-      TargetMAM.getCachedResult<llvm::MachineModuleAnalysis>(TargetModule)
-          ->getMMI(),
-      TargetModule, TargetMAM.getResult<MMISlotIndexesAnalysis>(TargetModule),
-      *TargetMAM.getCachedResult<VectorRegLivenessAnalysis>(TargetModule),
-      *IMAM.getCachedResult<InjectedPayloadAndInstPointAnalysis>(IModule),
-      TargetMAM.getResult<FunctionPreambleDescriptorAnalysis>(TargetModule),
-      IMAM.getResult<PhysRegsNotInLiveInsAnalysis>(IModule)
-          .getPhysRegsNotInLiveIns());
-  if (Err)
-    TargetModule.getContext().emitError(llvm::toString(std::move(Err)));
-
-  return Out;
+void LRStateValueStorageAndLoadLocationsAnalysis::getAnalysisUsage(
+    llvm::AnalysisUsage &AU) const {
+  AU.addRequired<IModuleMAMWrapperPass>();
+  AU.addRequired<IModuleIPPredicatedLivenessAnalysis>();
+  AU.setPreservesAll();
+  ModulePass::getAnalysisUsage(AU);
 }
+
+bool LRStateValueStorageAndLoadLocationsAnalysis::runOnModule(
+    llvm::Module &IModule) {
+  // Wipe stale state in case the pass runs twice in a session.
+  Result = SVStorageAndLoadLocations{};
+
+  llvm::ModuleAnalysisManager &IMAM =
+      getAnalysis<IModuleMAMWrapperPass>().getMAM();
+  auto &TargetModAndMAM =
+      IMAM.getResult<TargetAppModuleAndMAMAnalysis>(IModule);
+  llvm::Module &TargetModule = TargetModAndMAM.getTargetAppModule();
+  llvm::ModuleAnalysisManager &TargetMAM = TargetModAndMAM.getTargetAppMAM();
+
+  auto *MMIAnalysis =
+      TargetMAM.getCachedResult<llvm::MachineModuleAnalysis>(TargetModule);
+  if (!MMIAnalysis) {
+    IModule.getContext().emitError(
+        "LRStateValueStorageAndLoadLocationsAnalysis: target MachineModuleInfo "
+        "is not cached on the target MAM");
+    return false;
+  }
+
+  const auto *IPIP =
+      IMAM.getCachedResult<InjectedPayloadAndInstPointAnalysis>(IModule);
+  if (!IPIP) {
+    IModule.getContext().emitError(
+        "LRStateValueStorageAndLoadLocationsAnalysis: "
+        "InjectedPayloadAndInstPointAnalysis is required but not cached");
+    return false;
+  }
+
+  const auto &IPLiveness = getAnalysis<IModuleIPPredicatedLivenessAnalysis>();
+
+  auto &FPD =
+      TargetMAM.getResult<FunctionPreambleDescriptorAnalysis>(TargetModule);
+
+  auto Err = Result.calculate(
+      MMIAnalysis->getMMI(), TargetModule,
+      TargetMAM.getResult<MMISlotIndexesAnalysis>(TargetModule), *IPIP, FPD,
+      IPLiveness.getMap());
+  if (Err)
+    IModule.getContext().emitError(llvm::toString(std::move(Err)));
+
+  return false;
+}
+
 } // namespace luthier

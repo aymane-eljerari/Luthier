@@ -25,16 +25,17 @@ add_library(LuthierToolCodeGen OBJECT
         CodeDiscoveryPass.cpp
         InstructionTracesAnalysis.cpp
         MemoryAllocationAccessor.cpp
-        #        SVStorageAndLoadLocations.cpp
+        SVStorageAndLoadLocations.cpp
+        SVAPhysVGPRPinPass.cpp
         #        IPPredicatedLiveness.cpp
         IntrinsicMIRLoweringPass.cpp
-        #        InjectedPayloadPEIPass.cpp
-        #        PrePostAmbleEmitter.cpp
+        InjectedPayloadPEIPass.cpp
+        PrePostAmbleEmitter.cpp
         StateValueArraySpecs.cpp
         IPPredicatedCFG.cpp
         StateValueArrayStorage.cpp
         #        RunIRPassesOnIModulePass.cpp
-        #        MMISlotIndexesAnalysis.cpp
+        MMISlotIndexesAnalysis.cpp
         ProcessIntrinsicsAtIRLevelPass.cpp
         RemoveUnusedHooksPass.cpp
         ForwardISAStateToCalleesPass.cpp

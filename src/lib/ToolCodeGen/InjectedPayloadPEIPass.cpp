@@ -58,39 +58,6 @@ LUTHIER_INITIALIZE_LEGACY_PASS_BODY(InjectedPayloadPEIPass,
 
 namespace {
 
-/// Discover the post-RA physical VGPR holding the SVA for an injected
-/// payload MF. Implements the read-side discovery scheme from
-/// reference_amdgpu_wwm_pipeline: walk every V_READLANE_B32 in the entry
-/// MBB whose lane immediate is `< K` (where K = total used SA lanes), and
-/// return its VGPR source-operand physreg.
-///
-/// All such reads share the same source VGPR by the single-VGPR-SVA
-/// invariant; we assert that. Returns NoRegister if no V_READLANE_B32
-/// reads exist (the payload uses no SAs).
-llvm::MCRegister discoverSVAVGPR(const llvm::MachineFunction &MF,
-                                 unsigned NumSALanes) {
-  llvm::MCRegister Found;
-  for (const llvm::MachineInstr &MI : MF.front()) {
-    if (MI.getOpcode() != llvm::AMDGPU::V_READLANE_B32)
-      continue;
-    if (MI.getNumOperands() < 3 || !MI.getOperand(2).isImm())
-      continue;
-    int64_t Lane = MI.getOperand(2).getImm();
-    if (Lane < 0 || static_cast<unsigned>(Lane) >= NumSALanes)
-      continue;
-    if (!MI.getOperand(1).isReg() || !MI.getOperand(1).getReg().isPhysical())
-      continue;
-    llvm::MCRegister Src = MI.getOperand(1).getReg().asMCReg();
-    if (!Found) {
-      Found = Src;
-    } else if (Found != Src) {
-      // Single-VGPR-SVA invariant broken — caller will report.
-      return llvm::MCRegister();
-    }
-  }
-  return Found;
-}
-
 /// Returns the set of phys-regs that, when used by an injected payload, must
 /// be saved into SVA lanes on prologue and restored on epilogue: the per-SA
 /// frame regs the kernel prolog set up (FLAT_SCR_LO/HI for absolute-FS
@@ -188,19 +155,13 @@ bool InjectedPayloadPEIPass::runOnMachineFunction(llvm::MachineFunction &MF) {
   auto &TargetModule = TargetMAMRes->getTargetAppModule();
   auto &TargetMAM = TargetMAMRes->getTargetAppMAM();
 
-  const auto *StateValueLocations =
-      TargetMAM.getCachedResult<LRStateValueStorageAndLoadLocationsAnalysis>(
-          TargetModule);
-  if (!StateValueLocations) {
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx,
-        LUTHIER_MAKE_GENERIC_ERROR(
-            "LRStateValueStorageAndLoadLocationsAnalysis is required but not "
-            "cached on the target MAM."));
-    return false;
-  }
+  // LRStateValueStorageAndLoadLocationsAnalysis is now a legacy ModulePass on
+  // the IModule's legacy codegen PM. It computes per-IP load plans by
+  // consulting IModuleIPPredicatedLivenessAnalysis (also legacy).
+  const auto &StateValueLocations =
+      getAnalysis<LRStateValueStorageAndLoadLocationsAnalysis>().getResult();
   const auto *LoadPlan =
-      StateValueLocations->getStateValueArrayLoadPlanForInstPoint(*TargetMI);
+      StateValueLocations.getStateValueArrayLoadPlanForInstPoint(*TargetMI);
   if (!LoadPlan) {
     LUTHIER_CTX_EMIT_ON_ERROR(
         Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
@@ -220,20 +181,13 @@ bool InjectedPayloadPEIPass::runOnMachineFunction(llvm::MachineFunction &MF) {
   }
   const StateValueArraySpecs &Specs = *SpecsPtr;
 
-  // Total used SA lanes drives the V_READLANE_B32-walk lane filter for
-  // post-RA SVA-VGPR discovery: only readlanes hitting an SA lane belong
-  // to Luthier, anything else is the application's.
-  unsigned NumSALanes = 0;
-  for (auto It = Specs.argument_lane_begin(); It != Specs.argument_lane_end();
-       ++It) {
-    unsigned SAEnd =
-        It->second + StateValueArraySpecs::getArgumentLaneSize(It->first);
-    NumSALanes = std::max<unsigned>(NumSALanes, SAEnd);
-  }
-
-  llvm::MCRegister SVAVGPR = discoverSVAVGPR(MF, NumSALanes);
-  // No SA usage ⇒ no SVA needed at all. The payload might still use stack
-  // (calls/spills) — we'd need an SVA in that case too — so keep going.
+  // The SVA physreg is the load-plan's canonical destination VGPR. The
+  // pin pass (SVAPhysVGPRPinPass) guarantees that whichever VGPR
+  // SVStorageAndLoadLocations picked here is what the WWM regalloc
+  // assigns to our LaneVGPR in this payload MF — so this read is the
+  // single source of truth for "where the SVA lives at this IP."
+  // No V_READLANE_B32-walk needed.
+  llvm::MCRegister SVAVGPR = LoadPlan->StateValueArrayLoadVGPR;
 
   // ---- Decide whether this payload actually uses the SVA -----------------
   //
@@ -394,6 +348,7 @@ bool InjectedPayloadPEIPass::runOnMachineFunction(llvm::MachineFunction &MF) {
 void InjectedPayloadPEIPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
   AU.addRequired<IModuleMAMWrapperPass>();
   AU.addRequired<llvm::MachineModuleInfoWrapperPass>();
+  AU.addRequired<LRStateValueStorageAndLoadLocationsAnalysis>();
   llvm::MachineFunctionPass::getAnalysisUsage(AU);
 }
 

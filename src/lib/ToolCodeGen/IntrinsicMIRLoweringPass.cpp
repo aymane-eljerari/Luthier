@@ -30,10 +30,14 @@
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
 #include <AMDGPU.h>
 #include <SIInstrInfo.h>
+#include <SIMachineFunctionInfo.h>
+#include <SIRegisterInfo.h>
 #include <llvm/CodeGen/LivePhysRegs.h>
+#include <llvm/CodeGen/MachineFrameInfo.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/MachineSSAUpdater.h>
 #include <llvm/CodeGen/SlotIndexes.h>
+#include <llvm/CodeGen/TargetFrameLowering.h>
 #include <llvm/CodeGen/TargetInstrInfo.h>
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
 #include <llvm/Support/FormatVariadic.h>
@@ -696,47 +700,131 @@ void IntrinsicMIRLoweringPass::materializeReadlanes(
     if (SVAInfo.Readlanes.empty())
       continue;
 
+    llvm::LLVMContext &Ctx = MF->getFunction().getContext();
     const llvm::TargetInstrInfo *TII = MF->getSubtarget().getInstrInfo();
     llvm::MachineRegisterInfo &MRI = MF->getRegInfo();
+    llvm::MachineFrameInfo &MFI = MF->getFrameInfo();
+    auto *MFInfo = MF->getInfo<llvm::SIMachineFunctionInfo>();
 
-    // Emit a plain V_READLANE_B32 per pending readlane.
+    // The high-level emission contract for SGPR-from-VGPR-lane reads:
     //
-    // We cannot pre-RA emit SI_RESTORE_S32_FROM_VGPR nor SI_SPILL_S32_RESTORE
-    // because both crash SILowerSGPRSpills' inner loop:
-    //  - SI_RESTORE_S32_FROM_VGPR matches `isSGPRSpill` (`SIInstrInfo.h:889`),
-    //    so the loop processes it and dereferences a non-existent `addr`
-    //    operand at `SILowerSGPRSpills.cpp:437` -> segfault.
-    //  - SI_SPILL_S32_RESTORE has an `addr` FI operand and matches
-    //    `isSGPRSpill` too, but its dst operand 0 (data) is a vreg that
-    //    SGPRSpillBuilder feeds to `TRI.getPhysRegBaseClass(SuperReg)`
-    //    -> hits the physreg-indexed lookup table OOB assertion.
+    //   1. CreateStackObject + setStackID(SGPRSpill) gives us an FI.
+    //   2. MFInfo->allocateSGPRSpillToVGPRLane reserves K lanes on a fresh
+    //      framework-owned LaneVGPR (single LaneVGPR shared across all
+    //      SA-lane FIs because the monotonic NumVirtualVGPRSpillLanes
+    //      counter advances per allocation).
+    //   3. TII->loadRegFromStackSlot emits SI_SPILL_S32_RESTORE
+    //      %placeholder_sgpr_vreg, FI — the canonical high-level pseudo
+    //      that LLVM's RegAlloc path emits and SILowerSGPRSpills knows how
+    //      to lower. Vreg operand 0 is fine pre-RA: VirtRegRewriter rewrites
+    //      it to a physreg before SILowerSGPRSpills runs.
+    //   4. SILowerSGPRSpills eliminates the FI, lowering to
+    //      SI_RESTORE_S32_FROM_VGPR $physreg, $lane_vgpr, <lane>, AND emits
+    //      IMPLICIT_DEF for LaneVGPR + setFlag(WWM_REG). The downstream
+    //      WWM regalloc pool then handles physreg assignment.
     //
-    // PEI-time discovery of the SVA VGPR's physreg therefore can't rely on
-    // MFInfo->WWMReservedRegs. The PEI pass instead uses the read-side
-    // discovery scheme documented in [[reference_amdgpu_wwm_pipeline]]:
-    // walk V_READLANE_B32 MIs whose lane immediate is < K (= total SA
-    // lanes from SVASpecs), and read the VGPR operand. All such reads
-    // share the same source VGPR by construction.
+    // The placeholder vreg machinery (IMPLICIT_DEF VGPR_32 +
+    // replaceRegWith) from the previous design is unneeded — there's no
+    // per-MF SVA-VGPR handle to track because the LaneVGPR is fully owned
+    // by SILowerSGPRSpills' SpillVGPRs[] list. See
+    // [[reference_amdgpu_wwm_pipeline]] for the verified pass sequence.
+
+    // Gather the unique SAs this MF uses, in canonical SVASpecs lane order
+    // so the framework's per-MF monotonic lane counter matches our
+    // per-lane immediates.
+    llvm::SmallDenseSet<ScalarValueArgument> SAsSeen;
+    llvm::SmallVector<ScalarValueArgument> SAsUsed;
     for (const PendingSVAReadlane &Entry : SVAInfo.Readlanes) {
-      auto LaneIt = SVASpecs.findArgumentLane(Entry.SA);
-      assert(LaneIt != SVASpecs.argument_lane_end() &&
+      if (SAsSeen.insert(Entry.SA).second)
+        SAsUsed.push_back(Entry.SA);
+    }
+    llvm::sort(SAsUsed, [&](ScalarValueArgument A, ScalarValueArgument B) {
+      auto LA = SVASpecs.findArgumentLane(A);
+      auto LB = SVASpecs.findArgumentLane(B);
+      assert(LA != SVASpecs.argument_lane_end() &&
+             LB != SVASpecs.argument_lane_end() &&
              "SA was requested but not found in SVASpecs");
-      uint8_t AbsLane = LaneIt->second + Entry.LaneWithinSA;
+      return LA->second < LB->second;
+    });
 
-      llvm::MachineInstr *ImplDef = MRI.getUniqueVRegDef(Entry.SGPRPlaceholder);
+    // Allocate one SGPRSpill FI per SA + record the per-SA lane base for
+    // step (3) below. We don't need to inspect getSGPRSpillToVirtualVGPRLanes
+    // because each SA-lane has a 1:1 FI ↔ (LaneVGPR, lane) binding the
+    // framework manages; we just hand the FI to loadRegFromStackSlot and
+    // pass the within-SA offset as a separate FI per sub-lane.
+    struct SALaneSlot {
+      int FI;
+      uint8_t LaneIndexWithinFI;
+    };
+    llvm::DenseMap<std::pair<ScalarValueArgument, uint8_t>, SALaneSlot>
+        SubLaneToFI;
+    bool AllocFailed = false;
+
+    for (ScalarValueArgument SA : SAsUsed) {
+      unsigned NumLanes = StateValueArraySpecs::getArgumentLaneSize(SA);
+      // Each sub-lane gets its own FI so loadRegFromStackSlot can target
+      // a single 32-bit slot. The framework still shares the underlying
+      // LaneVGPR across all of them via NumVirtualVGPRSpillLanes.
+      for (uint8_t Lane = 0; Lane < NumLanes; ++Lane) {
+        int FI = MFI.CreateStackObject(/*Size=*/4, llvm::Align(4),
+                                       /*isSpillSlot=*/true);
+        MFI.setStackID(FI, llvm::TargetStackID::SGPRSpill);
+        if (!MFInfo->allocateSGPRSpillToVGPRLane(
+                *MF, FI, /*SpillToPhysVGPRLane=*/false)) {
+          LUTHIER_CTX_EMIT_ON_ERROR(
+              Ctx,
+              LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+                  "Failed to allocate SGPR-to-VGPR-lane spill for SVA SA "
+                  "{0} lane {1} in MF {2} (target may not support "
+                  "SGPR-to-VGPR spilling, or the SVA exceeds wave width)",
+                  static_cast<int>(SA), Lane, MF->getName())));
+          AllocFailed = true;
+          break;
+        }
+        SubLaneToFI[{SA, Lane}] = {FI, /*LaneIndexWithinFI=*/0};
+      }
+      if (AllocFailed)
+        break;
+    }
+
+    if (AllocFailed)
+      continue;
+
+    // Emit SI_SPILL_S32_RESTORE %placeholder, FI for each pending readlane.
+    // TII->loadRegFromStackSlot constrains the dest vreg to
+    // SReg_32_XM0_XEXEC and stamps TargetStackID::SGPRSpill on the FI
+    // (idempotent with what we already did above).
+    for (const PendingSVAReadlane &Entry : SVAInfo.Readlanes) {
+      auto It = SubLaneToFI.find({Entry.SA, Entry.LaneWithinSA});
+      assert(It != SubLaneToFI.end() && "SA sub-lane must have an FI");
+      int FI = It->second.FI;
+
+      llvm::MachineInstr *ImplDef =
+          MRI.getUniqueVRegDef(Entry.SGPRPlaceholder);
       assert(ImplDef && ImplDef->isImplicitDef() &&
              "SVA lane placeholder must be defined by an IMPLICIT_DEF");
-
       llvm::MachineBasicBlock *DefMBB = ImplDef->getParent();
       llvm::MachineBasicBlock::iterator InsertPt = ImplDef->getIterator();
 
-      (void)llvm::BuildMI(*DefMBB, InsertPt, llvm::MIMetadata(),
-                          TII->get(llvm::AMDGPU::V_READLANE_B32),
-                          Entry.SGPRPlaceholder)
-          .addReg(SVAInfo.SVAVGPRPlaceholder)
-          .addImm(AbsLane);
+      TII->loadRegFromStackSlot(*DefMBB, InsertPt, Entry.SGPRPlaceholder, FI,
+                                &llvm::AMDGPU::SReg_32RegClass,
+                                /*VReg=*/{});
 
       ImplDef->eraseFromParent();
+      Changed = true;
+    }
+
+    // The per-MF SVA placeholder is no longer load-bearing — the LaneVGPR
+    // is fully owned by MFInfo->SpillVGPRs[]. Erase the placeholder
+    // IMPLICIT_DEF VGPR_32 and clear the handle. Downstream consumers (PEI)
+    // discover the SVA physreg via the SVStorageAndLoadLocations load plan,
+    // not via a per-MF vreg.
+    if (SVAInfo.SVAVGPRPlaceholder.isValid()) {
+      llvm::MachineInstr *PlaceholderDef =
+          MRI.getUniqueVRegDef(SVAInfo.SVAVGPRPlaceholder);
+      if (PlaceholderDef && PlaceholderDef->isImplicitDef())
+        PlaceholderDef->eraseFromParent();
+      SVAInfo.SVAVGPRPlaceholder = llvm::Register();
       Changed = true;
     }
   }

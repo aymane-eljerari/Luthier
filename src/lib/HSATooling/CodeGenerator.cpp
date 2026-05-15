@@ -141,9 +141,10 @@ CodeGenerator::applyInstrumentationTask(const InstrumentationTask &Task,
   TargetMAM.registerPass([&]() { return LRCallGraphAnalysis(); });
   // Add the MMI-wide Slot indexes analysis pass
   TargetMAM.registerPass([&]() { return MMISlotIndexesAnalysis(); });
-  // Add the State Value Array storage and load analysis pass
-  TargetMAM.registerPass(
-      [&]() { return LRStateValueStorageAndLoadLocationsAnalysis(); });
+  // LRStateValueStorageAndLoadLocationsAnalysis is no longer a target-MAM
+  // analysis; it runs as a legacy ModulePass on the IModule's codegen PM
+  // (initialized in InstrumentationPMDriver) so it can consume the legacy
+  // IModuleIPPredicatedLivenessAnalysis directly.
   // Add the Function Preamble Descriptor Analysis pass
   TargetMAM.registerPass(
       [&]() { return FunctionPreambleDescriptorAnalysis(); });

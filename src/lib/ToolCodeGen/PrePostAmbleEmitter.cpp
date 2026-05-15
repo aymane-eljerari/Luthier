@@ -39,21 +39,11 @@ getArgReg(const llvm::MachineFunction &MF,
   return MF.getInfo<llvm::SIMachineFunctionInfo>()->getPreloadedReg(ArgReg);
 }
 
-static bool doesLRRequireSVA(const LiftedRepresentation &LR,
-                             const FunctionPreambleDescriptor &PKInfo) {
-
-  auto &SVAKernelInfo = PKInfo.Kernels.at(&LR.getKernelMF());
-  if (SVAKernelInfo.usesSVA()) {
-    return true;
-  }
-  for (const auto &[FuncSymbol, MF] : LR.functions()) {
-    auto &SVADeviceFuncInfo = PKInfo.DeviceFunctions.at(MF);
-    if (SVADeviceFuncInfo.UsesStateValueArray) {
-      return true;
-    }
-  }
-  return false;
-}
+// `doesLRRequireSVA` previously consumed `LiftedRepresentation` (which has
+// been removed from this header chain). The function was only called from
+// commented-out emit code further down; restore alongside the LR refactor
+// that re-introduces the type, or rewrite to query the FPD's Kernels +
+// DeviceFunctions maps directly.
 
 /// \returns the kernel arguments of the \p MF and the SGPR it is positioned
 /// in
@@ -487,9 +477,11 @@ bool PrePostAmbleEmitter::runOnModule(llvm::Module &IModule) {
       *TargetMAM.getCachedResult<FunctionPreambleDescriptorAnalysis>(
           TargetModule);
 
-  auto &SVLocations =
-      *TargetMAM.getCachedResult<LRStateValueStorageAndLoadLocationsAnalysis>(
-          TargetModule);
+  // LRStateValueStorageAndLoadLocationsAnalysis is a legacy ModulePass on the
+  // IModule; consume it via getAnalysis<> from this legacy ModulePass too.
+  const auto &SVLocations =
+      getAnalysis<LRStateValueStorageAndLoadLocationsAnalysis>().getResult();
+  (void)SVLocations;
 
   // First we need to figure out if we need to set up the state value array
   // at all
@@ -649,6 +641,7 @@ bool PrePostAmbleEmitter::runOnModule(llvm::Module &IModule) {
 }
 void PrePostAmbleEmitter::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
   AU.addRequired<IModuleMAMWrapperPass>();
+  AU.addRequired<LRStateValueStorageAndLoadLocationsAnalysis>();
   ModulePass::getAnalysisUsage(AU);
 }
 

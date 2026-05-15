@@ -26,12 +26,13 @@
 #include "luthier/HSA/LoadedCodeObjectDeviceFunction.h"
 #include "luthier/HSA/LoadedCodeObjectKernel.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
+#include "luthier/ToolCodeGen/LegacyPassSupport.h"
 #include "luthier/ToolCodeGen/MMISlotIndexesAnalysis.h"
 #include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
 #include "luthier/ToolCodeGen/StateValueArrayStorage.h"
-#include "luthier/ToolCodeGen/IPVectorRegLiveness.h"
 #include <llvm/CodeGen/SlotIndexes.h>
 #include <llvm/IR/PassManager.h>
+#include <llvm/Pass.h>
 
 namespace luthier {
 
@@ -122,15 +123,23 @@ private:
 public:
   SVStorageAndLoadLocations() = default;
 
-  /// calculates the storage and load locations of the state value array
+  /// calculates the storage and load locations of the state value array.
+  ///
+  /// The "do not clobber" set at each instrumentation point is derived from
+  /// \p IPLiveness — the union of \c Active and \c Inactive lane live sets
+  /// across every injected payload attached to that AppMI, per
+  /// \c IModuleIPPredicatedLivenessAnalysis. That analysis already folds in
+  /// each payload's declared Reads/Writes via \c stepBackwardOverPayload,
+  /// so no separate accessed-regs input is needed.
+  ///
   /// \return an \c llvm::Error indication the success of failure of the
   /// operation
   llvm::Error calculate(
       const llvm::MachineModuleInfo &TargetMMI, const llvm::Module &TargetM,
       const MMISlotIndexesAnalysis::Result &SlotIndexes,
-      const VectorRegLiveness &RegLiveness,
       const InjectedPayloadAndInstPoint &IPIP, FunctionPreambleDescriptor &FPD,
-      const llvm::LivePhysRegs &AccessedPhysicalRegistersNotInLiveIns);
+      const llvm::DenseMap<const llvm::Function *, struct PayloadLiveSets>
+          &PayloadLiveSetsByFn);
 
   /// Given the \p MBB of the \c LiftedRepresentation being worked on by this
   /// analysis, returns the state value array storage of every instruction
@@ -155,17 +164,39 @@ public:
   }
 };
 
-class LRStateValueStorageAndLoadLocationsAnalysis
-    : public llvm::AnalysisInfoMixin<
-          LRStateValueStorageAndLoadLocationsAnalysis> {
-  friend llvm::AnalysisInfoMixin<LRStateValueStorageAndLoadLocationsAnalysis>;
+class LRStateValueStorageAndLoadLocationsAnalysis;
 
-  static llvm::AnalysisKey Key;
+LUTHIER_INITIALIZE_LEGACY_PASS_PROTOTYPE(LRStateValueStorageAndLoadLocationsAnalysis);
 
+/// \brief Legacy module analysis pass: SVA storage + load locations across
+/// the target module's MachineFunctions, consumed by InjectedPayloadPEIPass
+/// and PrePostAmbleEmitter.
+///
+/// Runs in the IModule's legacy codegen PM AFTER
+/// \c IModuleIPPredicatedLivenessAnalysis so the scavenger can consult the
+/// per-payload \c PayloadLiveSets at each instrumentation point. The
+/// target module + MAM are reached via \c IModuleMAMWrapperPass →
+/// \c TargetAppModuleAndMAMAnalysis (see WrapperAnalysisPasses.h).
+class LRStateValueStorageAndLoadLocationsAnalysis : public llvm::ModulePass {
 public:
-  using Result = SVStorageAndLoadLocations;
+  static char ID;
 
-  Result run(llvm::Module &M, llvm::ModuleAnalysisManager &);
+  LRStateValueStorageAndLoadLocationsAnalysis() : llvm::ModulePass(ID) {}
+
+  [[nodiscard]] llvm::StringRef getPassName() const override {
+    return "Luthier LR State Value Array Storage and Load Locations Analysis";
+  }
+
+  bool runOnModule(llvm::Module &IModule) override;
+
+  void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
+
+  [[nodiscard]] const SVStorageAndLoadLocations &getResult() const {
+    return Result;
+  }
+
+private:
+  SVStorageAndLoadLocations Result;
 };
 
 } // namespace luthier
