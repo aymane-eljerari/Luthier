@@ -45,7 +45,6 @@
 #include <llvm/MC/TargetRegistry.h>
 // #include <luthier/ToolCodeGen/IPVectorRegLiveness.h>
 // #include <luthier/ToolCodeGen/IndirectBranchResolverAnalysis.h>
-// #include <luthier/ToolCodeGen/MachineFunctionEntryPoint.h>
 #include "luthier/ToolCodeGen/InitialExecutionPointAnalysis.h"
 #include "luthier/ToolCodeGen/LuthierCallGraph.h"
 #include "luthier/ToolCodeGen/MIRToIRTranslator.h"

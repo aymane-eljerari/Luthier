@@ -37,7 +37,6 @@
 // #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
 // #include "luthier/ToolCodeGen/IntrinsicProcessorsAnalysis.h"
 // #include "luthier/ToolCodeGen/PatchLiftedRepresentationPass.h"
-// #include "luthier/ToolCodeGen/PhysRegsNotInLiveInsAnalysis.h"
 // #include "luthier/ToolCodeGen/ProcessIntrinsicsAtIRLevelPass.h"
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
 #include "luthier/ToolCodeGenTesting/LuthierFile.h"
@@ -393,7 +392,6 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
 
   // TODO: re-enable when production-pipeline deps are compiled in:
   // IMAM.registerPass([&]() { return IntrinsicIRLoweringInfoMapAnalysis(); });
-  // IMAM.registerPass([&]() { return PhysRegsNotInLiveInsAnalysis(); });
   IMAM.registerPass([&]() { return InjectedPayloadAndInstPointAnalysis(); });
   IMAM.registerPass([&]() { return IntrinsicsProcessorsAnalysis(); });
 

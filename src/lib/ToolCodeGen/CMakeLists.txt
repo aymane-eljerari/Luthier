@@ -30,7 +30,6 @@ add_library(LuthierToolCodeGen OBJECT
         TargetModulePatcherPass.cpp
         LuthierRegScavenger.cpp
         LuthierBranchRelaxation.cpp
-        #        IPPredicatedLiveness.cpp
         IntrinsicMIRLoweringPass.cpp
         InjectedPayloadPEIPass.cpp
         PrePostAmbleEmitter.cpp
@@ -44,7 +43,6 @@ add_library(LuthierToolCodeGen OBJECT
         ForwardISAStateToCalleesPass.cpp
         IPPredicatedLivenessIModulePass.cpp
         InjectedPayloadPreserveLiveRegsPass.cpp
-        #        PhysRegsNotInLiveInsAnalysis.cpp
         WrapperAnalysisPasses.cpp
         #        PatchLiftedRepresentationPass.cpp
         MIRConvenience.cpp
@@ -65,7 +63,6 @@ add_library(LuthierToolCodeGen OBJECT
         LuthierCallGraph.cpp
         #        IPReachingRefAnalysis.cpp
         #        IPPredicatedLoopTraversal.cpp
-        #        IPRegScavenger.cpp
         PredicatedMachineBasicBlock.cpp
 
 )
