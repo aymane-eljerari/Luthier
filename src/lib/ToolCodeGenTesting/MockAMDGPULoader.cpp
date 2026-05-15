@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file
+/// \file MockAMDGPULoader.cpp
 /// Implements the \c MockAMDGPULoader and \c MockLoadedCodeObject
 /// classes.
 //===----------------------------------------------------------------------===//
@@ -73,7 +73,8 @@ MockLoadedCodeObject::MockLoadedCodeObject(MockAMDGPULoader &Owner,
           (*SymbolIfExists)->getBinding() == llvm::ELF::STB_GLOBAL) {
         Err = LUTHIER_MAKE_GENERIC_ERROR(
             llvm::formatv("Code object defines symbol named {0} already "
-                          "defined by an earlier code object"));
+                          "defined by an earlier code object",
+                          *SymNameOrErr));
         return;
       }
     }
@@ -81,7 +82,8 @@ MockLoadedCodeObject::MockLoadedCodeObject(MockAMDGPULoader &Owner,
         It != Parent.external_symbol_end()) {
       Err = LUTHIER_MAKE_GENERIC_ERROR(
           llvm::formatv("Code object defines symbol {0} already defined as an "
-                        "external symbol in its parent executable"));
+                        "external symbol in its parent executable",
+                        *SymNameOrErr));
       return;
     }
   }
@@ -136,6 +138,12 @@ MockLoadedCodeObject::MockLoadedCodeObject(MockAMDGPULoader &Owner,
   }
 }
 
+MockLoadedCodeObject::~MockLoadedCodeObject() {
+  if (LoadedRegion.data())
+    ::operator delete[](LoadedRegion.data(),
+                        std::align_val_t{AMD_ISA_ALIGN_BYTES});
+}
+
 llvm::Error MockLoadedCodeObject::finalize() {
 
   /// Apply static relocations
@@ -178,8 +186,8 @@ llvm::Error MockLoadedCodeObject::applyRelocation(
       LUTHIER_RETURN_ON_ERROR([&]() -> llvm::Error {
         for (const auto &LCO : Parent.loaded_code_objects()) {
           auto SymbolIfExists = LCO.getCodeObject().lookupSymbol(*SymNameOrErr);
-          if (SymbolIfExists)
-            return SymbolIfExists.takeError();
+          if (auto E = SymbolIfExists.takeError())
+            return E;
 
           if (*SymbolIfExists != std::nullopt &&
               (*SymbolIfExists)->getBinding() == llvm::ELF::STB_GLOBAL) {

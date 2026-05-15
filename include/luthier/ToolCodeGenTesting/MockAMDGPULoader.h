@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file Defines the \c MockAMDGPULoader and \c MockLoadedCodeObject
-/// classes.
+/// \file MockAMDGPULoader.h 
+/// Defines the \c MockAMDGPULoader and \c MockLoadedCodeObject classes.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOL_CODE_GEN_TESTING_MOCK_AMDGPU_LOADER_H
 #define LUTHIER_TOOL_CODE_GEN_TESTING_MOCK_AMDGPU_LOADER_H
@@ -53,10 +53,7 @@ public:
 
   MockLoadedCodeObject &operator=(const MockLoadedCodeObject &) = delete;
 
-  ~MockLoadedCodeObject() {
-    if (LoadedRegion.data())
-      delete LoadedRegion.data();
-  }
+  ~MockLoadedCodeObject();
 
   [[nodiscard]] const object::AMDGCNObjectFile &getCodeObject() const {
     return *Elf;
