@@ -1263,3 +1263,14 @@ def S_CBRANCH_G_FORK_sem : InstSISemantic<S_CBRANCH_G_FORK> {
 //    (LLVMIndirectBranch (GetVal $csp_val))
 //  ];
 //}
+
+// S_RFE_RESTORE_B64 (gfx8/9 only) — Return From Exception with restore.
+// Pops the exception state (src1 holds the restored TTMP value) and jumps
+// to PC in src0. From an analysis perspective the jump is structurally
+// the same as S_RFE_B64 / S_SETPC_B64; the state restore is HW-internal
+// with no IR analog.
+def S_RFE_RESTORE_B64_sem : InstSISemantic<S_RFE_RESTORE_B64> {
+  let Semantic = [
+    (IndirectTailCall (GetNamedOperand $src0))
+  ];
+}

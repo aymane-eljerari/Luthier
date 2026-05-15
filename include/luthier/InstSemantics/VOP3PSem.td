@@ -36,7 +36,7 @@
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 363.
 //   rdna4-instruction-set-architecture.pdf, page 402.
 def V_PK_ADD_F16_sem : InstSISemantic<V_PK_ADD_F16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMFAdd (GetNamedOperand $src0, si_llvm_v2f16_ty), (GetNamedOperand $src1, si_llvm_v2f16_ty)))];
 }
 
 // D.v2f32 = S0.v2f32 + S1.v2f32 (packed f32 add, GFX10+).
@@ -45,7 +45,7 @@ def V_PK_ADD_F16_sem : InstSISemantic<V_PK_ADD_F16> {
 //   amd-instinct-mi300-cdna3-instruction-set-architecture.pdf, page 271.
 //   amd-instinct-cdna4-instruction-set-architecture.pdf, page 287.
 def V_PK_ADD_F32_sem : InstSISemantic<V_PK_ADD_F32> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMFAdd (GetNamedOperand $src0, si_llvm_v2f32_ty), (GetNamedOperand $src1, si_llvm_v2f32_ty)))];
 }
 
 // D.v2i16 = S0.v2i16 + S1.v2i16 (packed i16 add).
@@ -60,7 +60,7 @@ def V_PK_ADD_F32_sem : InstSISemantic<V_PK_ADD_F32> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 360.
 //   rdna4-instruction-set-architecture.pdf, page 399.
 def V_PK_ADD_I16_sem : InstSISemantic<V_PK_ADD_I16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMAdd (GetNamedOperand $src0, si_llvm_v2i16_ty), (GetNamedOperand $src1, si_llvm_v2i16_ty)))];
 }
 
 // D.v2u16 = S0.v2u16 + S1.v2u16 (packed u16 add).
@@ -75,7 +75,7 @@ def V_PK_ADD_I16_sem : InstSISemantic<V_PK_ADD_I16> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 362.
 //   rdna4-instruction-set-architecture.pdf, page 401.
 def V_PK_ADD_U16_sem : InstSISemantic<V_PK_ADD_U16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMAdd (GetNamedOperand $src0, si_llvm_v2i16_ty), (GetNamedOperand $src1, si_llvm_v2i16_ty)))];
 }
 
 // D.v2i16 = S0.v2i16 - S1.v2i16.
@@ -90,7 +90,7 @@ def V_PK_ADD_U16_sem : InstSISemantic<V_PK_ADD_U16> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 360.
 //   rdna4-instruction-set-architecture.pdf, page 399.
 def V_PK_SUB_I16_sem : InstSISemantic<V_PK_SUB_I16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMSub (GetNamedOperand $src0, si_llvm_v2i16_ty), (GetNamedOperand $src1, si_llvm_v2i16_ty)))];
 }
 
 // D.v2u16 = S0.v2u16 - S1.v2u16.
@@ -105,7 +105,7 @@ def V_PK_SUB_I16_sem : InstSISemantic<V_PK_SUB_I16> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 362.
 //   rdna4-instruction-set-architecture.pdf, page 401.
 def V_PK_SUB_U16_sem : InstSISemantic<V_PK_SUB_U16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMSub (GetNamedOperand $src0, si_llvm_v2i16_ty), (GetNamedOperand $src1, si_llvm_v2i16_ty)))];
 }
 
 // D.v2f16 = S0.v2f16 * S1.v2f16.
@@ -120,7 +120,7 @@ def V_PK_SUB_U16_sem : InstSISemantic<V_PK_SUB_U16> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 363.
 //   rdna4-instruction-set-architecture.pdf, page 403.
 def V_PK_MUL_F16_sem : InstSISemantic<V_PK_MUL_F16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMFMul (GetNamedOperand $src0, si_llvm_v2f16_ty), (GetNamedOperand $src1, si_llvm_v2f16_ty)))];
 }
 
 // D.v2f32 = S0.v2f32 * S1.v2f32 (GFX10+).
@@ -129,7 +129,7 @@ def V_PK_MUL_F16_sem : InstSISemantic<V_PK_MUL_F16> {
 //   amd-instinct-mi300-cdna3-instruction-set-architecture.pdf, page 271.
 //   amd-instinct-cdna4-instruction-set-architecture.pdf, page 287.
 def V_PK_MUL_F32_sem : InstSISemantic<V_PK_MUL_F32> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMFMul (GetNamedOperand $src0, si_llvm_v2f32_ty), (GetNamedOperand $src1, si_llvm_v2f32_ty)))];
 }
 
 // D.v2u16 = S0.v2u16 * S1.v2u16 (low 16 bits of each lane).
@@ -144,7 +144,7 @@ def V_PK_MUL_F32_sem : InstSISemantic<V_PK_MUL_F32> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 360.
 //   rdna4-instruction-set-architecture.pdf, page 399.
 def V_PK_MUL_LO_U16_sem : InstSISemantic<V_PK_MUL_LO_U16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMMul (GetNamedOperand $src0, si_llvm_v2i16_ty), (GetNamedOperand $src1, si_llvm_v2i16_ty)))];
 }
 
 //------------------------------------------------------------------------------
@@ -163,7 +163,7 @@ def V_PK_MUL_LO_U16_sem : InstSISemantic<V_PK_MUL_LO_U16> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 362.
 //   rdna4-instruction-set-architecture.pdf, page 402.
 def V_PK_FMA_F16_sem : InstSISemantic<V_PK_FMA_F16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMFMA (GetNamedOperand $src0, si_llvm_v2f16_ty), (GetNamedOperand $src1, si_llvm_v2f16_ty), (GetNamedOperand $src2, si_llvm_v2f16_ty)))];
 }
 
 // D.v2f32 = FMA(S0.v2f32, S1.v2f32, S2.v2f32) (GFX10+).
@@ -172,7 +172,7 @@ def V_PK_FMA_F16_sem : InstSISemantic<V_PK_FMA_F16> {
 //   amd-instinct-mi300-cdna3-instruction-set-architecture.pdf, page 270.
 //   amd-instinct-cdna4-instruction-set-architecture.pdf, page 287.
 def V_PK_FMA_F32_sem : InstSISemantic<V_PK_FMA_F32> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMFMA (GetNamedOperand $src0, si_llvm_v2f32_ty), (GetNamedOperand $src1, si_llvm_v2f32_ty), (GetNamedOperand $src2, si_llvm_v2f32_ty)))];
 }
 
 // D.v2i16 = S0.v2i16 * S1.v2i16 + S2.v2i16.
@@ -187,7 +187,7 @@ def V_PK_FMA_F32_sem : InstSISemantic<V_PK_FMA_F32> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 360.
 //   rdna4-instruction-set-architecture.pdf, page 399.
 def V_PK_MAD_I16_sem : InstSISemantic<V_PK_MAD_I16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMAdd (LLVMMul (GetNamedOperand $src0, si_llvm_v2i16_ty), (GetNamedOperand $src1, si_llvm_v2i16_ty)), (GetNamedOperand $src2, si_llvm_v2i16_ty)))];
 }
 
 // D.v2u16 = S0.v2u16 * S1.v2u16 + S2.v2u16.
@@ -202,7 +202,7 @@ def V_PK_MAD_I16_sem : InstSISemantic<V_PK_MAD_I16> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 361.
 //   rdna4-instruction-set-architecture.pdf, page 401.
 def V_PK_MAD_U16_sem : InstSISemantic<V_PK_MAD_U16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMAdd (LLVMMul (GetNamedOperand $src0, si_llvm_v2i16_ty), (GetNamedOperand $src1, si_llvm_v2i16_ty)), (GetNamedOperand $src2, si_llvm_v2i16_ty)))];
 }
 
 //------------------------------------------------------------------------------
@@ -220,7 +220,7 @@ def V_PK_MAD_U16_sem : InstSISemantic<V_PK_MAD_U16> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 172.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 363.
 def V_PK_MAX_F16_sem : InstSISemantic<V_PK_MAX_F16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMBinaryIntrinsic int_maxnum, (GetNamedOperand $src0, si_llvm_v2f16_ty), (GetNamedOperand $src1, si_llvm_v2f16_ty)))];
 }
 
 // D.v2f16 = min(S0.v2f16, S1.v2f16).
@@ -234,7 +234,7 @@ def V_PK_MAX_F16_sem : InstSISemantic<V_PK_MAX_F16> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 172.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 363.
 def V_PK_MIN_F16_sem : InstSISemantic<V_PK_MIN_F16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMBinaryIntrinsic int_minnum, (GetNamedOperand $src0, si_llvm_v2f16_ty), (GetNamedOperand $src1, si_llvm_v2f16_ty)))];
 }
 
 // D.v2i16 = max(S0.v2i16, S1.v2i16).
@@ -249,7 +249,7 @@ def V_PK_MIN_F16_sem : InstSISemantic<V_PK_MIN_F16> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 361.
 //   rdna4-instruction-set-architecture.pdf, page 400.
 def V_PK_MAX_I16_sem : InstSISemantic<V_PK_MAX_I16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMBinaryIntrinsic int_smax, (GetNamedOperand $src0, si_llvm_v2i16_ty), (GetNamedOperand $src1, si_llvm_v2i16_ty)))];
 }
 
 // D.v2i16 = min(S0.v2i16, S1.v2i16).
@@ -264,7 +264,7 @@ def V_PK_MAX_I16_sem : InstSISemantic<V_PK_MAX_I16> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 361.
 //   rdna4-instruction-set-architecture.pdf, page 401.
 def V_PK_MIN_I16_sem : InstSISemantic<V_PK_MIN_I16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMBinaryIntrinsic int_smin, (GetNamedOperand $src0, si_llvm_v2i16_ty), (GetNamedOperand $src1, si_llvm_v2i16_ty)))];
 }
 
 // D.v2u16 = max(S0.v2u16, S1.v2u16).
@@ -279,7 +279,7 @@ def V_PK_MIN_I16_sem : InstSISemantic<V_PK_MIN_I16> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 362.
 //   rdna4-instruction-set-architecture.pdf, page 402.
 def V_PK_MAX_U16_sem : InstSISemantic<V_PK_MAX_U16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMBinaryIntrinsic int_umax, (GetNamedOperand $src0, si_llvm_v2i16_ty), (GetNamedOperand $src1, si_llvm_v2i16_ty)))];
 }
 
 // D.v2u16 = min(S0.v2u16, S1.v2u16).
@@ -294,21 +294,21 @@ def V_PK_MAX_U16_sem : InstSISemantic<V_PK_MAX_U16> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 362.
 //   rdna4-instruction-set-architecture.pdf, page 402.
 def V_PK_MIN_U16_sem : InstSISemantic<V_PK_MIN_U16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMBinaryIntrinsic int_umin, (GetNamedOperand $src0, si_llvm_v2i16_ty), (GetNamedOperand $src1, si_llvm_v2i16_ty)))];
 }
 
 // D.v2f16 = maximum(S0.v2f16, S1.v2f16) (IEEE 754-2019).
 // Sources:
 //   rdna4-instruction-set-architecture.pdf, page 406.
 def V_PK_MAXIMUM_F16_sem : InstSISemantic<V_PK_MAXIMUM_F16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMBinaryIntrinsic int_maximum, (GetNamedOperand $src0, si_llvm_v2f16_ty), (GetNamedOperand $src1, si_llvm_v2f16_ty)))];
 }
 
 // D.v2f16 = minimum(S0.v2f16, S1.v2f16) (IEEE 754-2019).
 // Sources:
 //   rdna4-instruction-set-architecture.pdf, page 406.
 def V_PK_MINIMUM_F16_sem : InstSISemantic<V_PK_MINIMUM_F16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMBinaryIntrinsic int_minimum, (GetNamedOperand $src0, si_llvm_v2f16_ty), (GetNamedOperand $src1, si_llvm_v2f16_ty)))];
 }
 
 //------------------------------------------------------------------------------
@@ -327,7 +327,7 @@ def V_PK_MINIMUM_F16_sem : InstSISemantic<V_PK_MINIMUM_F16> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 360.
 //   rdna4-instruction-set-architecture.pdf, page 400.
 def V_PK_LSHLREV_B16_sem : InstSISemantic<V_PK_LSHLREV_B16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMShl (GetNamedOperand $src1, si_llvm_v2i16_ty), (GetNamedOperand $src0, si_llvm_v2i16_ty)))];
 }
 
 // D.v2u16 = S1.v2u16 >> S0.v2u16 (logical).
@@ -342,7 +342,7 @@ def V_PK_LSHLREV_B16_sem : InstSISemantic<V_PK_LSHLREV_B16> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 361.
 //   rdna4-instruction-set-architecture.pdf, page 400.
 def V_PK_LSHRREV_B16_sem : InstSISemantic<V_PK_LSHRREV_B16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMLShr (GetNamedOperand $src1, si_llvm_v2i16_ty), (GetNamedOperand $src0, si_llvm_v2i16_ty)))];
 }
 
 // D.v2i16 = S1.v2i16 >> S0.v2u16 (arithmetic).
@@ -357,7 +357,7 @@ def V_PK_LSHRREV_B16_sem : InstSISemantic<V_PK_LSHRREV_B16> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 361.
 //   rdna4-instruction-set-architecture.pdf, page 400.
 def V_PK_ASHRREV_I16_sem : InstSISemantic<V_PK_ASHRREV_I16> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (LLVMAShr (GetNamedOperand $src1, si_llvm_v2i16_ty), (GetNamedOperand $src0, si_llvm_v2i16_ty)))];
 }
 
 //------------------------------------------------------------------------------
@@ -370,7 +370,7 @@ def V_PK_ASHRREV_I16_sem : InstSISemantic<V_PK_ASHRREV_I16> {
 //   amd-instinct-mi300-cdna3-instruction-set-architecture.pdf, page 271.
 //   amd-instinct-cdna4-instruction-set-architecture.pdf, page 288.
 def V_PK_MOV_B32_sem : InstSISemantic<V_PK_MOV_B32> {
-  let Semantic = [];
+  let Semantic = [(SetNamedOperand $vdst, (GetNamedOperand $src0, si_llvm_v2i32_ty))];
 }
 
 //==============================================================================

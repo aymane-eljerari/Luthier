@@ -814,33 +814,79 @@ foreach i = 0-7 in {
 // VCC[lane] = isClassOf(S0.f, S1.u). Tests float for NaN, Inf, zero, etc.
 // S1 is a bitmask specifying which classes to test for.
 
-// V_CMP_CLASS → VCC
-foreach inst = [V_CMP_CLASS_F32_e32, V_CMP_CLASS_F64_e32,
-                V_CMP_CLASS_F16_e32, V_CMP_CLASS_F16_t16_e32] in {
-  def inst#_sem : InstSISemantic<inst> {
+// V_CMP_CLASS → VCC. int_amdgcn_class returns i1 from (anyfloat, i32 mask).
+// Use BallotWaveMask to broadcast per-lane i1 → wave-wide VCC mask.
+class ClassFloatTy<string suffix, SILLVMType ty> {
+  string Suffix = suffix;
+  SILLVMType Ty = ty;
+}
+foreach c = [ClassFloatTy<"F32", si_llvm_float_ty>,
+             ClassFloatTy<"F64", si_llvm_double_ty>,
+             ClassFloatTy<"F16", si_llvm_half_ty>] in {
+  def V_CMP_CLASS_#c.Suffix#_e32_sem
+    : InstSISemantic<!cast<InstSI>("V_CMP_CLASS_"#c.Suffix#"_e32")> {
     let Semantic = [
-      
+      (ImplicitDef VCC, BallotWaveMask<
+        (LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class,
+          [(LLVMBitCast (GetNamedOperand $src0), c.Ty),
+           (GetNamedOperand $src1, si_llvm_i32_ty)])>.ret)
+    ];
+  }
+
+  def V_CMPX_CLASS_#c.Suffix#_e32_sem
+    : InstSISemantic<!cast<InstSI>("V_CMPX_CLASS_"#c.Suffix#"_e32")> {
+    let Semantic = [
+      (DefVal $r, BallotWaveMask<
+        (LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class,
+          [(LLVMBitCast (GetNamedOperand $src0), c.Ty),
+           (GetNamedOperand $src1, si_llvm_i32_ty)])>.ret),
+      (ImplicitDef VCC,  (GetVal $r)),
+      (ImplicitDef EXEC, (GetVal $r))
+    ];
+  }
+
+  def V_CMPX_CLASS_#c.Suffix#_nosdst_e32_sem
+    : InstSISemantic<!cast<InstSI>("V_CMPX_CLASS_"#c.Suffix#"_nosdst_e32")> {
+    let Semantic = [
+      (ImplicitDef EXEC, BallotWaveMask<
+        (LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class,
+          [(LLVMBitCast (GetNamedOperand $src0), c.Ty),
+           (GetNamedOperand $src1, si_llvm_i32_ty)])>.ret)
     ];
   }
 }
 
-// V_CMPX_CLASS → VCC + EXEC
-foreach inst = [V_CMPX_CLASS_F32_e32, V_CMPX_CLASS_F64_e32,
-                V_CMPX_CLASS_F16_e32, V_CMPX_CLASS_F16_t16_e32] in {
+// V_CMP_CLASS_F16_t16 variants (gfx11+): same semantics, separate def for
+// the _t16 forms that exist alongside the legacy F16 forms.
+foreach inst = [V_CMP_CLASS_F16_t16_e32] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
-      
+      (ImplicitDef VCC, BallotWaveMask<
+        (LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class,
+          [(LLVMBitCast (GetNamedOperand $src0), si_llvm_half_ty),
+           (GetNamedOperand $src1, si_llvm_i32_ty)])>.ret)
     ];
   }
 }
-
-// V_CMPX_CLASS_nosdst → EXEC only
-foreach inst = [V_CMPX_CLASS_F32_nosdst_e32, V_CMPX_CLASS_F64_nosdst_e32,
-                V_CMPX_CLASS_F16_nosdst_e32,
-                V_CMPX_CLASS_F16_t16_nosdst_e32] in {
+foreach inst = [V_CMPX_CLASS_F16_t16_e32] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
-      (LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class, [(GetNamedOperand $src0), (GetNamedOperand $src1)])
+      (DefVal $r, BallotWaveMask<
+        (LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class,
+          [(LLVMBitCast (GetNamedOperand $src0), si_llvm_half_ty),
+           (GetNamedOperand $src1, si_llvm_i32_ty)])>.ret),
+      (ImplicitDef VCC,  (GetVal $r)),
+      (ImplicitDef EXEC, (GetVal $r))
+    ];
+  }
+}
+foreach inst = [V_CMPX_CLASS_F16_t16_nosdst_e32] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (ImplicitDef EXEC, BallotWaveMask<
+        (LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class,
+          [(LLVMBitCast (GetNamedOperand $src0), si_llvm_half_ty),
+           (GetNamedOperand $src1, si_llvm_i32_ty)])>.ret)
     ];
   }
 }

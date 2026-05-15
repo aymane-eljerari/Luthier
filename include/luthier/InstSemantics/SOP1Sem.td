@@ -141,8 +141,11 @@ def S_ABS_I32_sem : InstSISemantic<S_ABS_I32> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 225.
 //   rdna4-instruction-set-architecture.pdf, page 238.
 def S_WQM_B32_sem : InstSISemantic<S_WQM_B32> {
+  // int_amdgcn_s_wqm is [anyint], [anyint] — same two-overload issue as
+  // quadmask. Use explicit LLVMIntrinsic form.
   let Semantic = [
-    (DefVal $result, (LLVMUnaryIntrinsic int_amdgcn_s_wqm, (GetNamedOperand $src0))),
+    (DefVal $result, (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_s_wqm,
+                                    [(GetNamedOperand $src0, si_llvm_i32_ty)])),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $result))
   ];
@@ -162,8 +165,10 @@ def S_WQM_B32_sem : InstSISemantic<S_WQM_B32> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 225.
 //   rdna4-instruction-set-architecture.pdf, page 238.
 def S_WQM_B64_sem : InstSISemantic<S_WQM_B64> {
+  // See note on S_WQM_B32.
   let Semantic = [
-    (DefVal $result, (LLVMUnaryIntrinsic int_amdgcn_s_wqm, (GetNamedOperand $src0))),
+    (DefVal $result, (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_wqm,
+                                    [(GetNamedOperand $src0, si_llvm_i64_ty)])),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt si_llvm_i64_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $result))
   ];
@@ -261,8 +266,14 @@ def S_CMOV_B64_sem : InstSISemantic<S_CMOV_B64> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 224.
 //   rdna4-instruction-set-architecture.pdf, page 237.
 def S_QUADMASK_B32_sem : InstSISemantic<S_QUADMASK_B32> {
+  // int_amdgcn_s_quadmask is [anyint], [anyint] — two independent overloads.
+  // `LLVMUnaryIntrinsic` only fills the first overload slot and crashes when
+  // resolving the second; use the explicit `LLVMIntrinsic` form so both
+  // overloads are filled from the explicit result type + the arg's type.
   let Semantic = [
-    (DefVal $result, (LLVMUnaryIntrinsic int_amdgcn_s_quadmask, (GetNamedOperand $src0))),
+    (DefVal $result, (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_s_quadmask,
+                                    [(GetNamedOperand $src0, si_llvm_i32_ty)])),
+    SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt si_llvm_i32_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $result))
   ];
 }
@@ -280,8 +291,12 @@ def S_QUADMASK_B32_sem : InstSISemantic<S_QUADMASK_B32> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 225.
 //   rdna4-instruction-set-architecture.pdf, page 238.
 def S_QUADMASK_B64_sem : InstSISemantic<S_QUADMASK_B64> {
+  // See note on S_QUADMASK_B32: int_amdgcn_s_quadmask has two independent
+  // overloads — must use explicit LLVMIntrinsic form.
   let Semantic = [
-    (DefVal $result, (LLVMUnaryIntrinsic int_amdgcn_s_quadmask, (GetNamedOperand $src0))),
+    (DefVal $result, (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_quadmask,
+                                    [(GetNamedOperand $src0, si_llvm_i64_ty)])),
+    SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt si_llvm_i64_ty, 0))>.ret,
     (SetNamedOperand $sdst, (GetVal $result))
   ];
 }
@@ -1625,6 +1640,17 @@ def S_SWAPPC_B64_sem : InstSISemantic<S_SWAPPC_B64> {
 }
 
 def S_SETPC_B64_sem : InstSISemantic<S_SETPC_B64> {
+  let Semantic = [
+    (IndirectTailCall (GetNamedOperand $src0))
+  ];
+}
+
+// S_RFE_B64: Return From Exception — privileged op that pops the exception
+// state and jumps to the address in $src0. From an analysis perspective the
+// jump is structurally identical to S_SETPC_B64 (indirect branch); the
+// exception-state restore is HW-internal and has no IR analog. Conservative
+// modeling: same IndirectTailCall as S_SETPC_B64.
+def S_RFE_B64_sem : InstSISemantic<S_RFE_B64> {
   let Semantic = [
     (IndirectTailCall (GetNamedOperand $src0))
   ];

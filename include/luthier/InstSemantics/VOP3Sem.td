@@ -4768,8 +4768,18 @@ foreach inst = [
 // VOP3 PK_FMAC — empty semantic
 //------------------------------------------------------------------------------
 
+// V_PK_FMAC_F16 — fused-multiply-accumulate with tied accumulator:
+//   vdst = src0 * src1 + vdst    (per-lane v2f16 FMA)
+// $vdst is both def and use; the tied input is synthesized by
+// CodeDiscoveryPass's MCID-driven tied-operand fix (see memory:
+// reference-mir-tied-operand-synthesis).
 def V_PK_FMAC_F16_e64_sem : InstSISemantic<V_PK_FMAC_F16_e64> {
-  let Semantic = [];
+  let Semantic = [
+    (SetNamedOperand $vdst,
+      (LLVMFMA (GetNamedOperand $src0, si_llvm_v2f16_ty),
+               (GetNamedOperand $src1, si_llvm_v2f16_ty),
+               (GetNamedOperand $vdst, si_llvm_v2f16_ty)))
+  ];
 }
 
 //------------------------------------------------------------------------------

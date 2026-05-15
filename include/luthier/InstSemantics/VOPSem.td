@@ -3684,8 +3684,17 @@ def V_MOVRELSD_2_B32_e32_sem : InstSISemantic<V_MOVRELSD_2_B32_e32> {
 //   rdna2-shader-instruction-set-architecture.pdf, page 157.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 300.
 //   rdna4-instruction-set-architecture.pdf, page 342.
+// V_SWAP_B32 — swap values in two VGPRs (per CDNA4 ISA p.81). MIR shape:
+// outs (vdst, vdst1), ins (src0, src1) with vdst tied to src1 and vdst1
+// tied to src0 (see VOP_SWAP_I32 in VOP1Instructions.td). Snapshot both
+// inputs first, then write swapped to the two outputs.
 def V_SWAP_B32_sem : InstSISemantic<V_SWAP_B32> {
-  let Semantic = [];
+  let Semantic = [
+    (DefVal $tmp0, (GetNamedOperand $src0, si_llvm_i32_ty)),
+    (DefVal $tmp1, (GetNamedOperand $src1, si_llvm_i32_ty)),
+    (SetNamedOperand $vdst,  (GetVal $tmp1)),
+    (SetNamedOperand $vdst1, (GetVal $tmp0))
+  ];
 }
 
 // Register-relative swap.

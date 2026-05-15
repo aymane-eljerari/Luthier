@@ -224,8 +224,9 @@ def S_TRAP_sem : InstSISemantic<S_TRAP> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 254.
 //   rdna4-instruction-set-architecture.pdf, page 287.
 def S_ICACHE_INV_sem : InstSISemantic<S_ICACHE_INV> {
-  /// TODO: Define a Luthier intrinsic for this
+  // No IR analog for I-cache invalidate. Modeled as a barrier.
   let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
@@ -307,8 +308,10 @@ def S_DECPERFLEVEL_sem : InstSISemantic<S_DECPERFLEVEL> {
 //   rdna4-instruction-set-architecture.pdf, page 286.
 //   (Not present in GCN3.)
 def S_WAKEUP_sem : InstSISemantic<S_WAKEUP> {
-  /// TODO: Model with Luthier intrinsic
-  let Semantic = [];
+  // Wake neighboring waves. HW-only side effect; no IR analog. Barrier.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
 }
 
 //------------------------------------------------------------------------------
@@ -322,8 +325,11 @@ def S_WAKEUP_sem : InstSISemantic<S_WAKEUP> {
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 248.
 //   rdna4-instruction-set-architecture.pdf, page 282.
 def S_DENORM_MODE_sem : InstSISemantic<S_DENORM_MODE> {
-  /// TODO: Model with Luthier intrinsic
-  let Semantic = [];
+  // FP denormal mode register write. HW-only effect on MODE; LLVM has no
+  // direct intrinsic. Modeled as barrier so the write is sequenced.
+  let Semantic = [
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+  ];
 }
 
 // S_ROUND_MODE: Set float rounding mode register.
@@ -332,8 +338,10 @@ def S_DENORM_MODE_sem : InstSISemantic<S_DENORM_MODE> {
 //   rdna4-instruction-set-architecture.pdf, page 282.
 //   (Introduced in GFX11/RDNA3.)
 def S_ROUND_MODE_sem : InstSISemantic<S_ROUND_MODE> {
+  // FP rounding-mode register write. HW-only effect; LLVM's
+  // float-control intrinsics don't map cleanly. Barrier.
   let Semantic = [
-    /// TODO use LLVM's floating point control instructions
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
   ];
 }
 
@@ -834,9 +842,13 @@ def EXP_ROW_DONE_sem : InstSISemantic<EXP_ROW_DONE> {
 // S_* system / scheduler / mode-config ops (Phase 14) — fence placeholders
 //==============================================================================
 
+// S_ALLOC_VGPR (gfx12) — dynamic VGPR allocation. Per LLVM `Defs = [SCC]`:
+// SCC indicates allocation success. Conservatively model as a barrier
+// + SCC=0 (always-succeed approximation; HW resource state has no IR analog).
 def S_ALLOC_VGPR_sem : InstSISemantic<S_ALLOC_VGPR> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_waitcnt, [(ConstantInt si_llvm_i32_ty, 0)]),
+    SetSCCImplicit<(ConstantInt si_llvm_i1_ty, 0)>.ret
   ];
 }
 
