@@ -10,8 +10,7 @@ target triple = "amdgcn-amd-amdhsa"
 @.str.intr = private unnamed_addr constant [18 x i8] c"luthier.intrinsic\00", section "llvm.metadata"
 @.str.file = private unnamed_addr constant [4 x i8] c"f.c\00", section "llvm.metadata"
 
-@llvm.global.annotations = appending global [2 x { ptr, ptr, ptr, i32, ptr }] [
-  { ptr, ptr, ptr, i32, ptr } { ptr @my_hook, ptr @.str.hook, ptr @.str.file, i32 1, ptr null },
+@llvm.global.annotations = appending global [1 x { ptr, ptr, ptr, i32, ptr }] [
   { ptr, ptr, ptr, i32, ptr } { ptr @my_intrinsic, ptr @.str.intr, ptr @.str.file, i32 2, ptr null }
 ], section "llvm.metadata"
 
@@ -30,8 +29,6 @@ define i32 @my_intrinsic() {
 ; CHECK-NOT: @llvm.used
 ; CHECK-NOT: @llvm.compiler.used
 
-; CHECK: define void @my_hook() #[[HOOK:[0-9]+]]
 ; CHECK: define i32 @my_intrinsic() #[[INTR:[0-9]+]]
 
-; CHECK-DAG: attributes #[[HOOK]] = {{.*}}"luthier.function.hook"
 ; CHECK-DAG: attributes #[[INTR]] = {{.*}}"luthier.intrinsic"
