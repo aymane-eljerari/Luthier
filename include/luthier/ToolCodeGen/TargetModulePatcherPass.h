@@ -1,4 +1,4 @@
-//===-- TargetModulePatcherPass.h --------------------------------*- C++ -*-===//
+//===-- TargetModulePatcherPass.h -------------------------------*- C++ -*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,16 +14,14 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 /// \file TargetModulePatcherPass.h
-/// Master pass that bridges the IModule and the target module to produce
-/// a fully-instrumented target. Runs as the final IModule legacy
-/// ModulePass — everything before it has prepared analyses and per-MF
-/// MIR; this pass:
+/// Master pass that patches the IModule into the target module to produce
+/// a fully-instrumented target code. Runs as the final IModule legacy
+/// ModulePass. This pass consists of two stages:
 ///
-/// **Phase A — SVA Setup & Storage Code Emission**
+/// - **SVA Setup & Storage Code Emission**:
 ///   - For the initial-entry-point kernel: emit the SVA-setup sequence
-///     that populates the SVA lanes from kernarg-preloaded SGPRs (uses
-///     PrePostAmbleEmitter's migrated helpers — emitCodeToSetupScratch,
-///     emitCodeToStoreSGPRKernelArg).
+///     that populates the SVA lanes from kernarg-preloaded SGPRs (see
+///     \c emitCodeToSetupScratch \c emitCodeToStoreSGPRKernelArg)
 ///   - For each target MF: walk SVStorageAndLoadLocations'
 ///     StateValueStorageIntervals and emit
 ///     `currentSVS.emitCodeToSwitchSVS(MI, nextSVS)` at every interval

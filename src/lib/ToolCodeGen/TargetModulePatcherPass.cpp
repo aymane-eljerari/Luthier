@@ -14,6 +14,7 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 /// \file TargetModulePatcherPass.cpp
+/// Implements the \c TargetModuelPatcherPass class.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/TargetModulePatcherPass.h"
 #include "luthier/Common/ErrorCheck.h"
@@ -24,21 +25,21 @@
 #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
 #include "luthier/ToolCodeGen/LuthierBranchRelaxation.h"
 #include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
+#include "luthier/ToolCodeGen/SVAFrameLanes.h"
 #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
 #include "luthier/ToolCodeGen/StateValueArraySpecs.h"
 #include "luthier/ToolCodeGen/StateValueArrayStorage.h"
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
-
 #include <AMDGPU.h>
 #include <AMDGPUTargetMachine.h>
 #include <GCNSubtarget.h>
 #include <SIInstrInfo.h>
 #include <SIMachineFunctionInfo.h>
-#include <llvm/CodeGen/MachineBasicBlock.h>
 #include <llvm/CodeGen/LivePhysRegs.h>
-#include <llvm/CodeGen/MachineFunctionAnalysis.h>
+#include <llvm/CodeGen/MachineBasicBlock.h>
 #include <llvm/CodeGen/MachineFrameInfo.h>
 #include <llvm/CodeGen/MachineFunction.h>
+#include <llvm/CodeGen/MachineFunctionAnalysis.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/MachinePassManager.h>
 #include <llvm/CodeGen/SlotIndexes.h>
@@ -77,6 +78,224 @@ void TargetModulePatcherPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
 }
 
 namespace {
+
+/// Emits the per-wave scratch setup at the kernel entry: spills the
+/// kernarg-derived PSB.sub0/sub1 and FLAT_SCRATCH_INIT lo/hi into SVA
+/// lanes, adds PRIVATE_SEGMENT_WAVE_BYTE_OFFSET to compute the wave's
+/// scratch base, stores SGPR32 to the instrumentation-stack-start lane,
+/// and reads the spilled kernarg values back into SGPR0/1/FS_LO/HI so
+/// the application's prolog still sees them.
+///
+/// \p UsesDynamicStack and \p PrivateSegmentFixedSize replaced the
+/// previous \c amdgpu::hsamd::Kernel::Metadata reference — both are the
+/// only fields the function reads. Sourcing them is the caller's job
+/// (kernel metadata, per-function attributes, etc.).
+llvm::Error emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
+                                   llvm::MCRegister SVSStorageVGPR,
+                                   bool UsesDynamicStack,
+                                   unsigned PrivateSegmentFixedSize,
+                                   const StateValueArraySpecs &Specs) {
+  auto &MF = *EntryInstr.getMF();
+  const auto &TII = *MF.getSubtarget().getInstrInfo();
+  const auto &TRI = *MF.getSubtarget().getRegisterInfo();
+  auto &MFI = *MF.getInfo<llvm::SIMachineFunctionInfo>();
+  // First make a copy of SGPR0, SGPR1, FLAT_SCR_LO, FLAT_SCR_HI in the state
+  // value register at the lanes the StateValueArraySpecs layout reserves
+  // for them. Layout is documented in SVAFrameLanes.h; we assert the
+  // lookups succeed (they always do on a properly-set-up Specs).
+  auto SGPR0SpillSlot =
+      getKernelPrologFrameSpillLane(llvm::AMDGPU::SGPR0, Specs);
+  auto SGPR1SpillSlot =
+      getKernelPrologFrameSpillLane(llvm::AMDGPU::SGPR1, Specs);
+  auto SGPRFlatScrLoSpillSlot =
+      getKernelPrologFrameSpillLane(llvm::AMDGPU::FLAT_SCR_LO, Specs);
+  auto SGPRFlatScrHiSpillSlot =
+      getKernelPrologFrameSpillLane(llvm::AMDGPU::FLAT_SCR_HI, Specs);
+  assert(SGPR0SpillSlot && SGPR1SpillSlot && SGPRFlatScrLoSpillSlot &&
+         SGPRFlatScrHiSpillSlot &&
+         "kernel-prolog SVA lanes must exist for SGPR0/1 + FS_LO/HI");
+
+  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
+      .addReg(TRI.getSubReg(
+          MFI.getPreloadedReg(
+              llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
+          llvm::AMDGPU::sub0))
+      .addImm(*SGPR0SpillSlot)
+      .addReg(SVSStorageVGPR);
+
+  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
+      .addReg(TRI.getSubReg(
+          MFI.getPreloadedReg(
+              llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
+          llvm::AMDGPU::sub1))
+      .addImm(*SGPR1SpillSlot)
+      .addReg(SVSStorageVGPR);
+
+  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
+      .addReg(TRI.getSubReg(
+          MFI.getPreloadedReg(llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+          llvm::AMDGPU::sub0))
+      .addImm(*SGPRFlatScrLoSpillSlot)
+      .addReg(SVSStorageVGPR);
+
+  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
+      .addReg(TRI.getSubReg(
+          MFI.getPreloadedReg(llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+          llvm::AMDGPU::sub1))
+      .addImm(*SGPRFlatScrHiSpillSlot)
+      .addReg(SVSStorageVGPR);
+
+  // Add the PSWO to SGPR0/its carry to SGPR1
+  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                TII.get(llvm::AMDGPU::S_ADD_U32))
+      .addReg(TRI.getSubReg(
+                  MFI.getPreloadedReg(
+                      llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
+                  llvm::AMDGPU::sub0),
+              llvm::RegState::Define)
+      .addReg(TRI.getSubReg(
+                  MFI.getPreloadedReg(
+                      llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
+                  llvm::AMDGPU::sub0),
+              llvm::RegState::Kill)
+      .addReg(MFI.getPreloadedReg(
+          llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_WAVE_BYTE_OFFSET));
+
+  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                TII.get(llvm::AMDGPU::S_ADDC_U32))
+      .addReg(TRI.getSubReg(
+                  MFI.getPreloadedReg(
+                      llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
+                  llvm::AMDGPU::sub1),
+              llvm::RegState::Define)
+      .addReg(TRI.getSubReg(
+                  MFI.getPreloadedReg(
+                      llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
+                  llvm::AMDGPU::sub1),
+              llvm::RegState::Kill)
+      .addImm(0);
+  // Add the PSWO to FS_init_lo/its carry to FS_init_hi
+  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                TII.get(llvm::AMDGPU::S_ADD_U32))
+      .addReg(TRI.getSubReg(MFI.getPreloadedReg(
+                                llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                            llvm::AMDGPU::sub0),
+              llvm::RegState::Define)
+      .addReg(TRI.getSubReg(MFI.getPreloadedReg(
+                                llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                            llvm::AMDGPU::sub0),
+              llvm::RegState::Kill)
+      .addReg(MFI.getPreloadedReg(
+          llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_WAVE_BYTE_OFFSET));
+  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                TII.get(llvm::AMDGPU::S_ADDC_U32))
+      .addReg(TRI.getSubReg(MFI.getPreloadedReg(
+                                llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                            llvm::AMDGPU::sub1),
+              llvm::RegState::Define)
+      .addReg(TRI.getSubReg(MFI.getPreloadedReg(
+                                llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                            llvm::AMDGPU::sub1),
+              llvm::RegState::Kill)
+      .addImm(0);
+
+  unsigned int InstrumentationStackStart{0};
+  if (UsesDynamicStack)
+    llvm_unreachable("Not implemented");
+  else {
+    InstrumentationStackStart = PrivateSegmentFixedSize;
+  }
+  // Set s32 to be the maximum amount of stack requested by the hook
+  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                TII.get(llvm::AMDGPU::S_MOV_B32), llvm::AMDGPU::SGPR32)
+      .addImm(InstrumentationStackStart);
+
+  // Store frame registers in their slots. The kernel-prolog's "store" table
+  // is the same set of lanes as the spill table (lanes 0-3); the prolog
+  // overwrites the original kernarg values with the per-wave-computed ones
+  // so the payload prologue reads the per-wave values back via the same
+  // lane indices.
+  for (const auto &[PhysReg, StoreSlot] :
+       getKernelPrologFrameStoreSlots(Specs)) {
+    llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
+        .addReg(PhysReg)
+        .addImm(StoreSlot)
+        .addReg(SVSStorageVGPR);
+  }
+
+  // Restore S0, S1, FS_init_lo, and FS_init_hi
+  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                TII.get(llvm::AMDGPU::V_READLANE_B32), llvm::AMDGPU::SGPR0)
+      .addReg(SVSStorageVGPR)
+      .addImm(*SGPR0SpillSlot);
+
+  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                TII.get(llvm::AMDGPU::V_READLANE_B32), llvm::AMDGPU::SGPR1)
+      .addReg(SVSStorageVGPR)
+      .addImm(*SGPR1SpillSlot);
+
+  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                TII.get(llvm::AMDGPU::V_READLANE_B32))
+      .addReg(TRI.getSubReg(MFI.getPreloadedReg(
+                                llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                            llvm::AMDGPU::sub0),
+              llvm::RegState::Define)
+      .addReg(SVSStorageVGPR)
+      .addImm(*SGPRFlatScrLoSpillSlot);
+
+  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                TII.get(llvm::AMDGPU::V_READLANE_B32))
+      .addReg(TRI.getSubReg(MFI.getPreloadedReg(
+                                llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                            llvm::AMDGPU::sub1),
+              llvm::RegState::Define)
+      .addReg(SVSStorageVGPR)
+      .addImm(*SGPRFlatScrHiSpillSlot);
+
+  return llvm::Error::success();
+}
+
+llvm::Error emitCodeToStoreSGPRKernelArg(llvm::MachineInstr &InsertionPoint,
+                                         llvm::MCRegister SrcSGPR,
+                                         llvm::MCRegister SVSVGPR,
+                                         int SpillSlotStart, int NumSlots,
+                                         bool KillAfterUse) {
+  const auto &TRI = *InsertionPoint.getMF()->getSubtarget().getRegisterInfo();
+  const auto &TII = *InsertionPoint.getMF()->getSubtarget().getInstrInfo();
+  size_t Size = TRI.getRegSizeInBits(*TRI.getPhysRegBaseClass(SrcSGPR));
+  auto &InsertionPointMBB = *InsertionPoint.getParent();
+  if (Size == 32) {
+    LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+        NumSlots == 1, "Mismatch between number of SGPRs in the argument and "
+                       "save slot lanes."));
+    llvm::BuildMI(InsertionPointMBB, InsertionPoint, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSVGPR)
+        .addReg(KillAfterUse ? llvm::RegState::Kill : 0)
+        .addImm(SpillSlotStart)
+        .addReg(SVSVGPR);
+  } else {
+    size_t NumChannels = Size / 32;
+    LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+        NumSlots == NumChannels,
+        "Mismatch between number of SGPRs in the argument and "
+        "save slot lanes."));
+    for (int i = 0; i < NumSlots; i++) {
+      auto SubIdx = llvm::SIRegisterInfo::getSubRegFromChannel(i);
+      llvm::BuildMI(InsertionPointMBB, InsertionPoint, llvm::DebugLoc(),
+                    TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSVGPR)
+          .addReg(TRI.getSubReg(SrcSGPR, SubIdx),
+                  KillAfterUse ? llvm::RegState::Kill : 0)
+          .addImm(SpillSlotStart + i)
+          .addReg(SVSVGPR);
+    }
+  }
+  return llvm::Error::success();
+}
 
 /// Walk the target MF's per-MBB storage intervals from
 /// \c SVStorageAndLoadLocations and emit
@@ -159,16 +378,16 @@ preloadedValueForSVA(ScalarValueArgument SA) {
 /// \c emitCodeToStoreSGPRKernelArg for each \c ScalarValueArgument in
 /// \c KernelInfo.RequestedKernelArguments. The SVA storage register for
 /// the entry MBB comes from \c SVLocations.
-llvm::Error emitInitialEntryKernelSetup(
-    llvm::MachineModuleInfo &TargetMMI, llvm::Module &TargetModule,
-    const FunctionPreambleDescriptor &FPD,
-    const SVStorageAndLoadLocations &SVLocations,
-    const StateValueArraySpecs &Specs) {
+llvm::Error
+emitInitialEntryKernelSetup(llvm::MachineModuleInfo &TargetMMI,
+                            llvm::Module &TargetModule,
+                            const FunctionPreambleDescriptor &FPD,
+                            const SVStorageAndLoadLocations &SVLocations,
+                            const StateValueArraySpecs &Specs) {
   for (const auto &[KernelMF, KernelInfo] : FPD.Kernels) {
     if (!KernelInfo.usesSVA())
       continue;
-    llvm::MachineFunction *MF =
-        const_cast<llvm::MachineFunction *>(KernelMF);
+    llvm::MachineFunction *MF = const_cast<llvm::MachineFunction *>(KernelMF);
     if (!MF || MF->empty())
       continue;
     llvm::MachineBasicBlock &EntryMBB = MF->front();
@@ -220,9 +439,10 @@ llvm::Error emitInitialEntryKernelSetup(
             MF->getName(), static_cast<unsigned>(SA)));
       int NumSlots =
           static_cast<int>(StateValueArraySpecs::getArgumentLaneSize(SA));
-      if (auto Err = emitCodeToStoreSGPRKernelArg(
-              EntryInstr, SrcSGPR, SVSStorageReg, /*SpillSlotStart=*/LaneIt->second,
-              NumSlots, /*KillAfterUse=*/false))
+      if (auto Err =
+              emitCodeToStoreSGPRKernelArg(EntryInstr, SrcSGPR, SVSStorageReg,
+                                           /*SpillSlotStart=*/LaneIt->second,
+                                           NumSlots, /*KillAfterUse=*/false))
         return Err;
     }
   }
@@ -288,12 +508,11 @@ void patchFrameInfo(const llvm::MachineFunction &InjectedPayloadMF,
 /// resolve. Verbatim port of the prior PatchLiftedRepresentationPass
 /// helper, scoped down to the inline path (per the new design
 /// decision to always inline payloads at their IP).
-void inlineInjectedPayload(
-    const llvm::MachineFunction &InjectedPayloadMF,
-    llvm::MachineInstr &InsertionPointMI,
-    llvm::DenseMap<const llvm::MachineBasicBlock *,
-                   llvm::MachineBasicBlock *> &MBBMap,
-    const llvm::ValueToValueMapTy &VMap) {
+void inlineInjectedPayload(const llvm::MachineFunction &InjectedPayloadMF,
+                           llvm::MachineInstr &InsertionPointMI,
+                           llvm::DenseMap<const llvm::MachineBasicBlock *,
+                                          llvm::MachineBasicBlock *> &MBBMap,
+                           const llvm::ValueToValueMapTy &VMap) {
   auto &InsertionPointMBB = *InsertionPointMI.getParent();
   auto &ToBeInstrumentedMF = *InsertionPointMI.getMF();
   unsigned NumReturnBlocksInHook = 0;
@@ -402,8 +621,9 @@ void inlineInjectedPayload(
       if (SrcMI.isBundle())
         continue;
       const auto &MCID = TII->get(SrcMI.getOpcode());
-      auto *DstMI = ToBeInstrumentedMF.CreateMachineInstr(MCID, llvm::DebugLoc(),
-                                                          /*NoImplicit=*/true);
+      auto *DstMI =
+          ToBeInstrumentedMF.CreateMachineInstr(MCID, llvm::DebugLoc(),
+                                                /*NoImplicit=*/true);
       DstMI->setFlags(SrcMI.getFlags());
       DstMI->setAsmPrinterFlag(SrcMI.getAsmPrinterFlags());
       DstMBB->insert(InsertionPoint, DstMI);
@@ -447,11 +667,11 @@ void inlineInjectedPayload(
 /// per-payload inliner can resolve cross-module operands. This subsumes
 /// the previous Linker-based approach: we need explicit MF cloning for
 /// the non-payload functions, not just IR handles.
-llvm::Error
-cloneIModuleIntoTarget(llvm::Module &IModule, llvm::Module &TargetModule,
-                       const llvm::MachineModuleInfo &IMMI,
-                       llvm::FunctionAnalysisManager &TargetFAM,
-                       llvm::ValueToValueMapTy &VMap) {
+llvm::Error cloneIModuleIntoTarget(llvm::Module &IModule,
+                                   llvm::Module &TargetModule,
+                                   const llvm::MachineModuleInfo &IMMI,
+                                   llvm::FunctionAnalysisManager &TargetFAM,
+                                   llvm::ValueToValueMapTy &VMap) {
   for (auto &GV : IModule.globals()) {
     auto *NewGV = new llvm::GlobalVariable(
         TargetModule, GV.getValueType(), GV.isConstant(), GV.getLinkage(),
@@ -602,7 +822,8 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   llvm::MachineModuleInfo &IMMI =
       getAnalysis<llvm::MachineModuleInfoWrapperPass>().getMMI();
 
-  auto &TargetModAndMAM = IMAM.getResult<TargetAppModuleAndMAMAnalysis>(IModule);
+  auto &TargetModAndMAM =
+      IMAM.getResult<TargetAppModuleAndMAMAnalysis>(IModule);
   llvm::Module &TargetModule = TargetModAndMAM.getTargetAppModule();
   llvm::ModuleAnalysisManager &TargetMAM = TargetModAndMAM.getTargetAppMAM();
 
@@ -611,7 +832,8 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // CodeDiscoveryPass lifted (or constructs an empty one if missing,
   // which only happens for Functions we created post-CodeDiscovery).
   llvm::FunctionAnalysisManager &TargetFAM =
-      TargetMAM.getResult<llvm::FunctionAnalysisManagerModuleProxy>(TargetModule)
+      TargetMAM
+          .getResult<llvm::FunctionAnalysisManagerModuleProxy>(TargetModule)
           .getManager();
   auto getTargetMF = [&](llvm::Function &F) -> llvm::MachineFunction & {
     return TargetFAM.getResult<llvm::MachineFunctionAnalysis>(F).getMF();
@@ -620,8 +842,7 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   const SVStorageAndLoadLocations &SVLocations =
       getAnalysis<LRStateValueStorageAndLoadLocationsAnalysis>().getResult();
 
-  const llvm::TargetMachine &TM =
-      IMMI.getTarget();
+  const llvm::TargetMachine &TM = IMMI.getTarget();
   std::unique_ptr<StateValueArraySpecs> SVASpecs =
       StateValueArraySpecs::getSVASpecs(IModule, TM);
   if (!SVASpecs) {
@@ -637,8 +858,9 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
       TargetMAM.getResult<FunctionPreambleDescriptorAnalysis>(TargetModule);
 
   llvm::MachineFunctionAnalysisManager &TargetMFAM =
-      TargetMAM.getResult<llvm::MachineFunctionAnalysisManagerModuleProxy>(
-                  TargetModule)
+      TargetMAM
+          .getResult<llvm::MachineFunctionAnalysisManagerModuleProxy>(
+              TargetModule)
           .getManager();
 
   // ============= Phase A: SVA Setup & Storage Code Emission ===============
@@ -655,9 +877,8 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
     if (F.isDeclaration())
       continue;
     llvm::MachineFunction &MF = getTargetMF(F);
-    emitSVSSwitchesForMF(
-        MF, SVLocations,
-        TargetMFAM.getResult<llvm::SlotIndexesAnalysis>(MF));
+    emitSVSSwitchesForMF(MF, SVLocations,
+                         TargetMFAM.getResult<llvm::SlotIndexesAnalysis>(MF));
     Changed = true;
   }
 
@@ -683,8 +904,8 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // cloneMFInto, so they're visible to subsequent target-side loops
   // and to NewPMAsmPrinter's per-Function MF lookup.
   llvm::ValueToValueMapTy VMap;
-  if (auto Err =
-          cloneIModuleIntoTarget(IModule, TargetModule, IMMI, TargetFAM, VMap)) {
+  if (auto Err = cloneIModuleIntoTarget(IModule, TargetModule, IMMI, TargetFAM,
+                                        VMap)) {
     LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
     return Changed;
   }
@@ -717,7 +938,8 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
                    InjectedPayloadFunc->getName())));
       return Changed;
     }
-    patchFrameInfo(*InjectedPayloadMF, *InsertionPointMI->getParent()->getParent());
+    patchFrameInfo(*InjectedPayloadMF,
+                   *InsertionPointMI->getParent()->getParent());
     inlineInjectedPayload(*InjectedPayloadMF, *InsertionPointMI, MBBMap, VMap);
   }
 
@@ -838,91 +1060,89 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
     llvm::MachineFunction *MFPtr = MF;
     const StateValueArraySpecs *SpecsPtr = SVASpecs.get();
     const SVStorageAndLoadLocations *SVLocPtr = &SVLocations;
-    auto SpillSink =
-        [MFPtr, SpecsPtr, SVLocPtr](
-            llvm::MachineBasicBlock &SpillMBB,
-            llvm::MachineBasicBlock::iterator SpillBefore,
-            llvm::MachineBasicBlock &ReloadMBB,
-            llvm::MachineBasicBlock::iterator ReloadBefore,
-            llvm::MCRegister Reg,
-            const llvm::TargetRegisterClass &RC) -> bool {
-          // Only the SReg_64 case is supported (the only class the
-          // long-branch scavenger ever asks for).
-          if (&RC != &llvm::AMDGPU::SReg_64RegClass)
-            return false;
+    auto SpillSink = [MFPtr, SpecsPtr,
+                      SVLocPtr](llvm::MachineBasicBlock &SpillMBB,
+                                llvm::MachineBasicBlock::iterator SpillBefore,
+                                llvm::MachineBasicBlock &ReloadMBB,
+                                llvm::MachineBasicBlock::iterator ReloadBefore,
+                                llvm::MCRegister Reg,
+                                const llvm::TargetRegisterClass &RC) -> bool {
+      // Only the SReg_64 case is supported (the only class the
+      // long-branch scavenger ever asks for).
+      if (&RC != &llvm::AMDGPU::SReg_64RegClass)
+        return false;
 
-          // Resolve SVA VGPR from the MF's entry MBB's first segment.
-          if (MFPtr->empty())
-            return false;
-          auto EntrySegs = SVLocPtr->getStorageIntervals(MFPtr->front());
-          if (EntrySegs.empty())
-            return false;
-          llvm::MCRegister SVAVGPR =
-              EntrySegs.front().getSVS().getStateValueStorageReg();
-          if (!SVAVGPR)
-            return false;
+      // Resolve SVA VGPR from the MF's entry MBB's first segment.
+      if (MFPtr->empty())
+        return false;
+      auto EntrySegs = SVLocPtr->getStorageIntervals(MFPtr->front());
+      if (EntrySegs.empty())
+        return false;
+      llvm::MCRegister SVAVGPR =
+          EntrySegs.front().getSVS().getStateValueStorageReg();
+      if (!SVAVGPR)
+        return false;
 
-          const auto &ST = MFPtr->getSubtarget<llvm::GCNSubtarget>();
-          unsigned WaveSize = ST.getWavefrontSize();
-          auto FreeLanes = SpecsPtr->findLowestFreeLanes(2, WaveSize);
-          if (FreeLanes.size() < 2)
-            return false;
+      const auto &ST = MFPtr->getSubtarget<llvm::GCNSubtarget>();
+      unsigned WaveSize = ST.getWavefrontSize();
+      auto FreeLanes = SpecsPtr->findLowestFreeLanes(2, WaveSize);
+      if (FreeLanes.size() < 2)
+        return false;
 
-          const auto *TII = ST.getInstrInfo();
-          const auto *TRI = ST.getRegisterInfo();
-          llvm::MCRegister Sub0 = TRI->getSubReg(Reg, llvm::AMDGPU::sub0);
-          llvm::MCRegister Sub1 = TRI->getSubReg(Reg, llvm::AMDGPU::sub1);
-          if (!Sub0 || !Sub1)
-            return false;
+      const auto *TII = ST.getInstrInfo();
+      const auto *TRI = ST.getRegisterInfo();
+      llvm::MCRegister Sub0 = TRI->getSubReg(Reg, llvm::AMDGPU::sub0);
+      llvm::MCRegister Sub1 = TRI->getSubReg(Reg, llvm::AMDGPU::sub1);
+      if (!Sub0 || !Sub1)
+        return false;
 
-          // SVA VGPR is implicitly live everywhere the SVA is in
-          // scope (set up by the kernel-entry preload) but isn't in
-          // any MBB's live-in set by default. Declare it on SpillMBB
-          // explicitly — the relaxer copies BranchBB's liveins from
-          // its predecessor's successors and doesn't otherwise see
-          // the SVA reg, so MachineVerifier would complain about the
-          // V_WRITELANE's tied-def use. ReloadMBB (RestoreBB) gets
-          // its liveins recomputed by the relaxer via
-          // computeAndAddLiveIns immediately after we return; that
-          // path requires liveins to be empty as a precondition AND
-          // walks V_READLANE backward (so SVAVGPR ends up in the
-          // computed set anyway). Skip the pre-emit addLiveIn for
-          // RestoreBB.
-          if (!SpillMBB.isLiveIn(SVAVGPR))
-            SpillMBB.addLiveIn(SVAVGPR);
+      // SVA VGPR is implicitly live everywhere the SVA is in
+      // scope (set up by the kernel-entry preload) but isn't in
+      // any MBB's live-in set by default. Declare it on SpillMBB
+      // explicitly — the relaxer copies BranchBB's liveins from
+      // its predecessor's successors and doesn't otherwise see
+      // the SVA reg, so MachineVerifier would complain about the
+      // V_WRITELANE's tied-def use. ReloadMBB (RestoreBB) gets
+      // its liveins recomputed by the relaxer via
+      // computeAndAddLiveIns immediately after we return; that
+      // path requires liveins to be empty as a precondition AND
+      // walks V_READLANE backward (so SVAVGPR ends up in the
+      // computed set anyway). Skip the pre-emit addLiveIn for
+      // RestoreBB.
+      if (!SpillMBB.isLiveIn(SVAVGPR))
+        SpillMBB.addLiveIn(SVAVGPR);
 
-          // Spill: write each sub-reg into its reserved SVA lane right
-          // before the long-branch arithmetic clobbers them. Note that
-          // V_WRITELANE_B32 has a tied-def operand for the destination
-          // VGPR so the read-modify-write of unrelated lanes is encoded
-          // explicitly.
-          llvm::DebugLoc DL;
-          llvm::BuildMI(SpillMBB, SpillBefore, DL,
-                        TII->get(llvm::AMDGPU::V_WRITELANE_B32), SVAVGPR)
-              .addReg(Sub0)
-              .addImm(FreeLanes[0])
-              .addReg(SVAVGPR);
-          llvm::BuildMI(SpillMBB, SpillBefore, DL,
-                        TII->get(llvm::AMDGPU::V_WRITELANE_B32), SVAVGPR)
-              .addReg(Sub1)
-              .addImm(FreeLanes[1])
-              .addReg(SVAVGPR);
+      // Spill: write each sub-reg into its reserved SVA lane right
+      // before the long-branch arithmetic clobbers them. Note that
+      // V_WRITELANE_B32 has a tied-def operand for the destination
+      // VGPR so the read-modify-write of unrelated lanes is encoded
+      // explicitly.
+      llvm::DebugLoc DL;
+      llvm::BuildMI(SpillMBB, SpillBefore, DL,
+                    TII->get(llvm::AMDGPU::V_WRITELANE_B32), SVAVGPR)
+          .addReg(Sub0)
+          .addImm(FreeLanes[0])
+          .addReg(SVAVGPR);
+      llvm::BuildMI(SpillMBB, SpillBefore, DL,
+                    TII->get(llvm::AMDGPU::V_WRITELANE_B32), SVAVGPR)
+          .addReg(Sub1)
+          .addImm(FreeLanes[1])
+          .addReg(SVAVGPR);
 
-          // Reload: pull each lane back into the sub-reg in the
-          // RestoreBB that runs after the long jump lands.
-          llvm::BuildMI(ReloadMBB, ReloadBefore, DL,
-                        TII->get(llvm::AMDGPU::V_READLANE_B32), Sub0)
-              .addReg(SVAVGPR)
-              .addImm(FreeLanes[0]);
-          llvm::BuildMI(ReloadMBB, ReloadBefore, DL,
-                        TII->get(llvm::AMDGPU::V_READLANE_B32), Sub1)
-              .addReg(SVAVGPR)
-              .addImm(FreeLanes[1]);
-          return true;
-        };
+      // Reload: pull each lane back into the sub-reg in the
+      // RestoreBB that runs after the long jump lands.
+      llvm::BuildMI(ReloadMBB, ReloadBefore, DL,
+                    TII->get(llvm::AMDGPU::V_READLANE_B32), Sub0)
+          .addReg(SVAVGPR)
+          .addImm(FreeLanes[0]);
+      llvm::BuildMI(ReloadMBB, ReloadBefore, DL,
+                    TII->get(llvm::AMDGPU::V_READLANE_B32), Sub1)
+          .addReg(SVAVGPR)
+          .addImm(FreeLanes[1]);
+      return true;
+    };
 
-    LuthierBranchRelaxation BR(std::move(ReservedForSVA),
-                               std::move(SpillSink));
+    LuthierBranchRelaxation BR(std::move(ReservedForSVA), std::move(SpillSink));
     BR.run(*MF);
   }
 
@@ -945,8 +1165,7 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
     for (const auto &R : OutOfRange) {
       OS << "\n  - " << R.MF->getName() << " offset 0x";
       OS.write_hex(static_cast<uint64_t>(R.BranchOffset));
-      OS << " → " << R.Target->getName()
-         << " (delta " << R.Delta << " bytes)";
+      OS << " → " << R.Target->getName() << " (delta " << R.Delta << " bytes)";
     }
     LUTHIER_CTX_EMIT_ON_ERROR(Ctx, LUTHIER_MAKE_GENERIC_ERROR(Detail));
     return Changed;
