@@ -13,63 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-///
-/// \file
-/// This file describes a set of analysis passes that wrap around data
-/// structures commonly used by the instrumentation passes in Luthier.
+/// \file WrapperAnalysisPasses.h
+/// Describes a set of analysis passes that wrap around pass managers and
+/// analysis managers in order for instrumentation passes to access them.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOL_CODE_GEN_WRAPPER_ANALYSIS_PASSES_H
 #define LUTHIER_TOOL_CODE_GEN_WRAPPER_ANALYSIS_PASSES_H
 #include "luthier/Intrinsic/IntrinsicProcessor.h"
 #include "luthier/ToolCodeGen/LegacyPassSupport.h"
-#include <llvm/Analysis/CGSCCPassManager.h>
-#include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/IR/PassManager.h>
+#include <llvm/Pass.h>
 
 namespace luthier {
 
-/// \brief holds the mapping between the intrinsic inline assembly place holder
-/// indices and their \c IntrinsicIRLoweringInfo
-class IntrinsicIRLoweringInfoMapAnalysis
-    : public llvm::AnalysisInfoMixin<IntrinsicIRLoweringInfoMapAnalysis> {
-private:
-  friend llvm::AnalysisInfoMixin<IntrinsicIRLoweringInfoMapAnalysis>;
-
-  static llvm::AnalysisKey Key;
-
-public:
-  class Result {
-    std::vector<IntrinsicIRLoweringInfo> LoweringInfo{};
-    Result() = default;
-    friend class IntrinsicIRLoweringInfoMapAnalysis;
-
-  public:
-    [[nodiscard]] const std::vector<IntrinsicIRLoweringInfo> &
-    getLoweringInfo() const {
-      return LoweringInfo;
-    }
-
-    std::vector<IntrinsicIRLoweringInfo> &getLoweringInfo() {
-      return LoweringInfo;
-    }
-
-    __attribute__((used)) bool
-    invalidate(llvm::Module &, const llvm::PreservedAnalyses &,
-               llvm::ModuleAnalysisManager::Invalidator &) {
-      return false;
-    }
-  };
-
-  IntrinsicIRLoweringInfoMapAnalysis() = default;
-
-  Result run(llvm::Module &, llvm::ModuleAnalysisManager &) { return {}; }
-};
-
 /// \brief an analysis used by the instrumentation module passes that gives
 /// access to the Target App's \c llvm::Module and
-/// <tt>llvm::ModuleAnalysisManager</tt>, which in turn give access to
-/// important analysis such as register liveness or state value storage
-/// locations
+/// \c llvm::ModuleAnalysisManager
 class TargetAppModuleAndMAMAnalysis
     : public llvm::AnalysisInfoMixin<TargetAppModuleAndMAMAnalysis> {
 private:
@@ -115,83 +74,13 @@ public:
   }
 };
 
-/// \brief An analysis which provides all the pass manager constructs
-/// used for running IR passes and analysis on the instrumentation module
-class IModulePMAnalysis : public llvm::AnalysisInfoMixin<IModulePMAnalysis> {
-private:
-  friend llvm::AnalysisInfoMixin<IModulePMAnalysis>;
-
-  static llvm::AnalysisKey Key;
-
-  llvm::Module &IModule;
-
-  llvm::ModulePassManager &IPM;
-
-  llvm::ModuleAnalysisManager &IMAM;
-
-  llvm::LoopAnalysisManager &ILAM;
-
-  llvm::FunctionAnalysisManager &IFAM;
-
-  llvm::CGSCCAnalysisManager &ICGAM;
-
-public:
-  class Result {
-    friend class IModulePMAnalysis;
-
-    llvm::Module &IModule;
-    llvm::ModulePassManager &IPM;
-    llvm::ModuleAnalysisManager &IMAM;
-    llvm::LoopAnalysisManager &ILAM;
-    llvm::FunctionAnalysisManager &IFAM;
-    llvm::CGSCCAnalysisManager &ICGAM;
-
-    Result(llvm::Module &IModule, llvm::ModulePassManager &IPM,
-           llvm::ModuleAnalysisManager &IMAM, llvm::LoopAnalysisManager &ILAM,
-           llvm::FunctionAnalysisManager &IFAM,
-           llvm::CGSCCAnalysisManager &ICGAM)
-        : IModule(IModule), IPM(IPM), IMAM(IMAM), ILAM(ILAM), IFAM(IFAM),
-          ICGAM(ICGAM) {};
-
-  public:
-    [[nodiscard]] llvm::Module &getModule() const { return IModule; }
-
-    [[nodiscard]] llvm::ModulePassManager &getPM() const { return IPM; }
-
-    [[nodiscard]] llvm::ModuleAnalysisManager &getMAM() const { return IMAM; }
-
-    [[nodiscard]] llvm::LoopAnalysisManager &getLAM() const { return ILAM; }
-
-    [[nodiscard]] llvm::FunctionAnalysisManager &getFAM() const { return IFAM; }
-
-    [[nodiscard]] llvm::CGSCCAnalysisManager &getCGAM() const { return ICGAM; }
-
-    __attribute__((used)) bool
-    invalidate(llvm::Module &, const llvm::PreservedAnalyses &,
-               llvm::ModuleAnalysisManager::Invalidator &) {
-      return false;
-    }
-  };
-
-  IModulePMAnalysis(llvm::Module &IModule, llvm::ModulePassManager &IPM,
-                    llvm::ModuleAnalysisManager &IMAM,
-                    llvm::LoopAnalysisManager &ILAM,
-                    llvm::FunctionAnalysisManager &IFAM,
-                    llvm::CGSCCAnalysisManager &ICGAM)
-      : IModule(IModule), IPM(IPM), IMAM(IMAM), ILAM(ILAM), IFAM(IFAM),
-        ICGAM(ICGAM) {};
-
-  Result run(llvm::Module &M, llvm::ModuleAnalysisManager &) {
-    return {IModule, IPM, IMAM, ILAM, IFAM, ICGAM};
-  }
-};
-
 class IModuleMAMWrapperPass;
 
 LUTHIER_INITIALIZE_LEGACY_PASS_PROTOTYPE(IModuleMAMWrapperPass);
 
-/// \brief a legacy immutable pass that provides the instrumentation module's
-/// \c llvm::ModueAnalysisManager to the legacy code gen passes
+/// \brief Provides the instrumentation module's \c llvm::ModuleAnalysisManager
+/// from the instrumentation's IR optimization pipeline to the legacy CodeGen
+/// instrumentation pipeline
 class IModuleMAMWrapperPass : public llvm::ImmutablePass {
 private:
   llvm::ModuleAnalysisManager &IMAM;
@@ -199,7 +88,8 @@ private:
 public:
   static char ID;
 
-  explicit IModuleMAMWrapperPass(llvm::ModuleAnalysisManager *IMAM = nullptr);
+  explicit IModuleMAMWrapperPass(llvm::ModuleAnalysisManager *IMAM = nullptr)
+      : llvm::ImmutablePass(ID), IMAM(*IMAM) {}
 
   [[nodiscard]] llvm::ModuleAnalysisManager &getMAM() const { return IMAM; }
 };

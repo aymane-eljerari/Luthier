@@ -22,6 +22,7 @@
 #include "luthier/Common/GenericLuthierError.h"
 #include <llvm/TargetParser/SubtargetFeature.h>
 #include <llvm/Object/ELF.h>
+#include <llvm/Object/ELFObjectFile.h>
 
 namespace {
 

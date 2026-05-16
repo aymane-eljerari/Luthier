@@ -1,0 +1,118 @@
+//===-- HSATool.h - Luthier HSA Tool Base -----------------------*- C++ -*-===//
+// Copyright @ Northeastern University Computer Architecture Lab
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//===----------------------------------------------------------------------===//
+///
+/// \file
+/// CRTP base class for static Luthier tools that intercept HSA. Composes the
+/// per-tool traits (target manager, LCO cache, executable loader, packet
+/// monitor, intrinsic registry, injected-payload creation) and exposes
+/// \c buildPipeline / \c runInstrumentationPipeline as the user-facing entry
+/// to the instrumentation codegen.
+///
+/// Step 1 status: the trait bases are empty stubs. The inheritance order is
+/// fixed now so subsequent steps fill traits in place without churning the
+/// public API.
+//===----------------------------------------------------------------------===//
+#ifndef LUTHIER_TOOLING_HSA_TOOL_H
+#define LUTHIER_TOOLING_HSA_TOOL_H
+
+#include "luthier/Common/Singleton.h"
+#include "luthier/HSATooling/InjectedPayloadCreationPassTrait.h"
+#include "luthier/HSATooling/LLVMUserTrait.h"
+#include "luthier/HSATooling/LoadedCodeObjectCacheTrait.h"
+#include "luthier/HSATooling/LuthierHSATool.h"
+#include "luthier/HSATooling/PacketMonitorTrait.h"
+#include "luthier/HSATooling/ToolExecutableLoaderTrait.h"
+#include "luthier/PassPlugin/LuthierPassPlugin.h"
+#include "luthier/Rocprofiler/ApiTableSnapshot.h"
+#include "luthier/ToolCodeGen/InstrumentationPMDriver.h"
+#include <llvm/ADT/ArrayRef.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/Support/Error.h>
+
+namespace luthier {
+
+namespace detail {
+
+/// Stub trait base for the intrinsic-processor registry. To be filled in a
+/// later step.
+template <typename Derived> class IntrinsicProcessorRegistryTraitBase {};
+
+} // namespace detail
+
+/// \brief CRTP base for static HSA tools. Inherits the HIP fat-binary
+/// registration slots from \c LuthierHSATool and the per-process singleton
+/// identity from \c Singleton<Derived>; composes the per-subsystem traits.
+///
+/// \c Singleton<Derived> is listed first so its constructor runs before any
+/// trait's constructor. The traits' destructors run in reverse-inheritance
+/// order, i.e. before \c Singleton<Derived>'s destructor clears
+/// \c Singleton<Derived>::Instance. This invariant matters once the traits
+/// install HSA API-table interceptors that look the tool up via
+/// \c Singleton<Derived>::instance().
+///
+/// Installed HSA API-table wrappers are NOT uninstalled at tool teardown.
+/// Trait wrappers are expected to consult \c Singleton<Derived>::isInitialized
+/// before doing any tool-specific work; uninstalling a wrapper while the
+/// HSA runtime may still call it would be racy and unsafe.
+template <typename Derived>
+class HSATool : public Singleton<Derived>,
+                public LLVMUserTrait<Derived>,
+                public LoadedCodeObjectCacheTrait<Derived>,
+                public ToolExecutableLoaderTrait<Derived>,
+                public InjectedPayloadCreationPassTrait<Derived>,
+                public detail::IntrinsicProcessorRegistryTraitBase<Derived>,
+                public PacketMonitorTrait<Derived>,
+                public LuthierHSATool<Derived> {
+public:
+  HSATool(const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
+          const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
+          const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
+              &VenLoader,
+          llvm::Error &Err)
+      : LLVMUserTrait<Derived>(CoreApi),
+        LoadedCodeObjectCacheTrait<Derived>(CoreApi, VenLoader, Err),
+        ToolExecutableLoaderTrait<Derived>(CoreApi, AmdExt, VenLoader),
+        PacketMonitorTrait<Derived>(CoreApi, AmdExt, VenLoader, Err) {}
+
+  /// Build the instrumentation pass pipeline driver for a target application
+  /// module. The returned \c InstrumentationPMDriver is a
+  /// \c PassInfoMixin-shaped pass to be added to a target module pass manager
+  /// by the caller (\c MPM.addPass(tool.buildPipeline(opts, plugins))). The
+  /// driver internally materializes an IModule, runs the IR-level
+  /// instrumentation stages, lowers Luthier intrinsics, and drives the
+  /// per-IModule MIR codegen pipeline.
+  InstrumentationPMDriver
+  buildPipeline(const InstrumentationPMDriverOptions &Opts,
+                llvm::ArrayRef<PassPlugin> Plugins = {}) {
+    return InstrumentationPMDriver(Opts, Plugins);
+  }
+
+  /// Convenience: build the pipeline and immediately run it against \p
+  /// TargetAppM. Equivalent to constructing a one-pass MPM that contains
+  /// \c buildPipeline() and invoking it. Returned \c PreservedAnalyses
+  /// reflects what the driver preserved on the target module's analyses.
+  llvm::PreservedAnalyses
+  runInstrumentationPipeline(llvm::Module &TargetAppM,
+                             llvm::ModuleAnalysisManager &TargetMAM,
+                             const InstrumentationPMDriverOptions &Opts,
+                             llvm::ArrayRef<PassPlugin> Plugins = {}) {
+    return buildPipeline(Opts, Plugins).run(TargetAppM, TargetMAM);
+  }
+};
+
+} // namespace luthier
+
+#endif // LUTHIER_TOOLING_HSA_TOOL_H

@@ -13,28 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-///
-/// \file
-/// This file implements a set of analysis passes that wrap around data
+/// \file WrapperAnalysisPasses.cpp
+/// Implements a set of analysis passes that wrap around immutable data
 /// structures commonly used by the instrumentation passes in Luthier.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
 
 namespace luthier {
 
-llvm::AnalysisKey IntrinsicIRLoweringInfoMapAnalysis::Key;
-
 llvm::AnalysisKey TargetAppModuleAndMAMAnalysis::Key;
-
-llvm::AnalysisKey IModulePMAnalysis::Key;
 
 LUTHIER_INITIALIZE_LEGACY_PASS_BODY(IModuleMAMWrapperPass,
                                     "Instrumentation Module MAM Wrapper Pass",
                                     "imam-wrapper-pass", false, true);
 
 char IModuleMAMWrapperPass::ID;
-
-IModuleMAMWrapperPass::IModuleMAMWrapperPass(llvm::ModuleAnalysisManager *IMAM)
-    : llvm::ImmutablePass(ID), IMAM(*IMAM) {}
 
 } // namespace luthier

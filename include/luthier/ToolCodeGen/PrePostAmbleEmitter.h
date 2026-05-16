@@ -24,8 +24,6 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOL_CODE_GEN_PRE_POST_AMBLE_EMITTER_H
 #define LUTHIER_TOOL_CODE_GEN_PRE_POST_AMBLE_EMITTER_H
-#include "luthier/HSA/LoadedCodeObjectDeviceFunction.h"
-#include "luthier/HSA/LoadedCodeObjectKernel.h"
 #include "luthier/Intrinsic/IntrinsicProcessor.h"
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/CodeGen/MachineFunctionPass.h>
@@ -108,44 +106,6 @@ public:
   Result run(llvm::Module &TargetModule,
              llvm::ModuleAnalysisManager &TargetMAM);
 };
-
-class PrePostAmbleEmitter : public llvm::ModulePass {
-
-public:
-  static char ID;
-
-  explicit PrePostAmbleEmitter() : llvm::ModulePass(ID) {};
-
-  bool runOnModule(llvm::Module &IModule) override;
-
-  void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
-};
-
-class StateValueArraySpecs;
-
-/// Emits the per-wave scratch setup at \p EntryInstr's kernel entry:
-/// spills PSB.sub0/sub1 + FLAT_SCRATCH_INIT lo/hi into SVA lanes, adds
-/// the wave's PRIVATE_SEGMENT_WAVE_BYTE_OFFSET, writes the
-/// instrumentation stack pointer into the SP-store lane, and restores
-/// the kernarg-derived SGPRs so the application's prolog still sees
-/// them. Returns an error on misconfiguration (e.g., SVA lane lookups
-/// fail). Consumed by \c TargetModulePatcherPass's Phase A initial-entry
-/// kernel setup.
-llvm::Error
-emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
-                       llvm::MCRegister SVSStorageVGPR,
-                       bool UsesDynamicStack,
-                       unsigned PrivateSegmentFixedSize,
-                       const StateValueArraySpecs &Specs);
-
-/// Spills \p SrcSGPR (1, 2, or 4 32-bit lanes) into the SVA at lane
-/// range [\p SpillSlotStart, \p SpillSlotStart + \p NumSlots).
-llvm::Error
-emitCodeToStoreSGPRKernelArg(llvm::MachineInstr &InsertionPoint,
-                             llvm::MCRegister SrcSGPR,
-                             llvm::MCRegister SVSVGPR,
-                             int SpillSlotStart, int NumSlots,
-                             bool KillAfterUse);
 
 } // namespace luthier
 

@@ -1,4 +1,4 @@
-//===-- LoadedCodeObjectDeviceFunction.cpp --------------------------------===//
+//===-- HSAToolCompileCheck.cpp ---------------------------------*- C++ -*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,20 +15,23 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// This file implements the \c LoadedCodeObjectDeviceFunction under the \c
-/// luthier::hsa namespace.
+/// Compile-only verification that \c HSATool<Derived> and all of its trait
+/// bases parse and instantiate. Forces explicit instantiation against a
+/// dummy \c Derived so trait method bodies are concretely typed.
 //===----------------------------------------------------------------------===//
-#include "luthier/HSA/LoadedCodeObjectDeviceFunction.h"
-#include "luthier/Object/AMDGCNObjectFile.h"
+#include "luthier/HSATooling/HSATool.h"
 
-namespace luthier::hsa {
+namespace luthier::detail {
 
-llvm::Expected<std::unique_ptr<LoadedCodeObjectDeviceFunction>>
-LoadedCodeObjectDeviceFunction::create(
-    hsa_loaded_code_object_t LCO, luthier::object::AMDGCNObjectFile &StorageElf,
-    llvm::object::ELFSymbolRef FuncSymbol) {
-  return std::unique_ptr<LoadedCodeObjectDeviceFunction>(
-      new LoadedCodeObjectDeviceFunction(LCO, StorageElf, FuncSymbol));
-}
+struct CompileCheckTool : public luthier::HSATool<CompileCheckTool> {
+  using HSATool::HSATool;
 
-} // namespace luthier::hsa
+  /// Required by \c PacketMonitorTrait.
+  void onPackets(const hsa_queue_t &, uint64_t,
+                 llvm::ArrayRef<luthier::hsa::AqlPacket>,
+                 hsa_amd_queue_intercept_packet_writer) {}
+};
+
+} // namespace luthier::detail
+
+template class luthier::HSATool<luthier::detail::CompileCheckTool>;
