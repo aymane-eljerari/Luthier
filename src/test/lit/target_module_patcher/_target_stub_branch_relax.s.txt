@@ -1,0 +1,227 @@
+// Target stub for the SVA-lane spill long-branch test.
+//
+// Kernel layout:
+//   1. Def s0..s101 + vcc_lo + vcc_hi via s_mov_b32 — every SReg_64
+//      pair in the allocation order that the scavenger could pick.
+//      (TTMP* pairs are reserved by the calling convention, EXEC /
+//      FLAT_SCR / XNACK_MASK are reserved physregs MRI.isReserved
+//      already excludes.)
+//   2. s_cmp_eq_u32 + s_cbranch_scc0 to a far label. Combined with
+//      --amdgpu-s-branch-bits=4 this is over-range and triggers
+//      LuthierBranchRelaxation.
+//   3. Use every pair at the target so they're all live across the
+//      branch insertion point. Scavenger inside emitLuthierLongBranch
+//      finds no free SReg_64 → spill path → SVASpillCallback fires.
+	.amdgcn_target "amdgcn-amd-amdhsa--gfx908"
+	.amdhsa_code_object_version 6
+	.text
+	.globl	stub_kernel
+	.p2align	8
+	.type	stub_kernel,@function
+stub_kernel:
+	s_mov_b32 s0, 0
+	s_mov_b32 s1, 0
+	s_mov_b32 s2, 0
+	s_mov_b32 s3, 0
+	s_mov_b32 s4, 0
+	s_mov_b32 s5, 0
+	s_mov_b32 s6, 0
+	s_mov_b32 s7, 0
+	s_mov_b32 s8, 0
+	s_mov_b32 s9, 0
+	s_mov_b32 s10, 0
+	s_mov_b32 s11, 0
+	s_mov_b32 s12, 0
+	s_mov_b32 s13, 0
+	s_mov_b32 s14, 0
+	s_mov_b32 s15, 0
+	s_mov_b32 s16, 0
+	s_mov_b32 s17, 0
+	s_mov_b32 s18, 0
+	s_mov_b32 s19, 0
+	s_mov_b32 s20, 0
+	s_mov_b32 s21, 0
+	s_mov_b32 s22, 0
+	s_mov_b32 s23, 0
+	s_mov_b32 s24, 0
+	s_mov_b32 s25, 0
+	s_mov_b32 s26, 0
+	s_mov_b32 s27, 0
+	s_mov_b32 s28, 0
+	s_mov_b32 s29, 0
+	s_mov_b32 s30, 0
+	s_mov_b32 s31, 0
+	s_mov_b32 s32, 0
+	s_mov_b32 s33, 0
+	s_mov_b32 s34, 0
+	s_mov_b32 s35, 0
+	s_mov_b32 s36, 0
+	s_mov_b32 s37, 0
+	s_mov_b32 s38, 0
+	s_mov_b32 s39, 0
+	s_mov_b32 s40, 0
+	s_mov_b32 s41, 0
+	s_mov_b32 s42, 0
+	s_mov_b32 s43, 0
+	s_mov_b32 s44, 0
+	s_mov_b32 s45, 0
+	s_mov_b32 s46, 0
+	s_mov_b32 s47, 0
+	s_mov_b32 s48, 0
+	s_mov_b32 s49, 0
+	s_mov_b32 s50, 0
+	s_mov_b32 s51, 0
+	s_mov_b32 s52, 0
+	s_mov_b32 s53, 0
+	s_mov_b32 s54, 0
+	s_mov_b32 s55, 0
+	s_mov_b32 s56, 0
+	s_mov_b32 s57, 0
+	s_mov_b32 s58, 0
+	s_mov_b32 s59, 0
+	s_mov_b32 s60, 0
+	s_mov_b32 s61, 0
+	s_mov_b32 s62, 0
+	s_mov_b32 s63, 0
+	s_mov_b32 s64, 0
+	s_mov_b32 s65, 0
+	s_mov_b32 s66, 0
+	s_mov_b32 s67, 0
+	s_mov_b32 s68, 0
+	s_mov_b32 s69, 0
+	s_mov_b32 s70, 0
+	s_mov_b32 s71, 0
+	s_mov_b32 s72, 0
+	s_mov_b32 s73, 0
+	s_mov_b32 s74, 0
+	s_mov_b32 s75, 0
+	s_mov_b32 s76, 0
+	s_mov_b32 s77, 0
+	s_mov_b32 s78, 0
+	s_mov_b32 s79, 0
+	s_mov_b32 s80, 0
+	s_mov_b32 s81, 0
+	s_mov_b32 s82, 0
+	s_mov_b32 s83, 0
+	s_mov_b32 s84, 0
+	s_mov_b32 s85, 0
+	s_mov_b32 s86, 0
+	s_mov_b32 s87, 0
+	s_mov_b32 s88, 0
+	s_mov_b32 s89, 0
+	s_mov_b32 s90, 0
+	s_mov_b32 s91, 0
+	s_mov_b32 s92, 0
+	s_mov_b32 s93, 0
+	s_mov_b32 s94, 0
+	s_mov_b32 s95, 0
+	s_mov_b32 s96, 0
+	s_mov_b32 s97, 0
+	s_mov_b32 s98, 0
+	s_mov_b32 s99, 0
+	s_mov_b32 s100, 0
+	s_mov_b32 s101, 0
+	s_mov_b32 vcc_lo, 0
+	s_mov_b32 vcc_hi, 0
+	s_cmp_eq_u32 s4, 0
+	s_cbranch_scc0 .Ltarget
+
+	s_nop 0
+	s_nop 0
+	s_nop 0
+	s_nop 0
+	s_nop 0
+	s_nop 0
+	s_nop 0
+	s_nop 0
+	s_nop 0
+	s_nop 0
+	s_nop 0
+	s_nop 0
+	s_nop 0
+	s_nop 0
+	s_nop 0
+	s_nop 0
+
+.Ltarget:
+	s_add_u32 s0, s0, s1
+	s_add_u32 s2, s2, s3
+	s_add_u32 s4, s4, s5
+	s_add_u32 s6, s6, s7
+	s_add_u32 s8, s8, s9
+	s_add_u32 s10, s10, s11
+	s_add_u32 s12, s12, s13
+	s_add_u32 s14, s14, s15
+	s_add_u32 s16, s16, s17
+	s_add_u32 s18, s18, s19
+	s_add_u32 s20, s20, s21
+	s_add_u32 s22, s22, s23
+	s_add_u32 s24, s24, s25
+	s_add_u32 s26, s26, s27
+	s_add_u32 s28, s28, s29
+	s_add_u32 s30, s30, s31
+	s_add_u32 s32, s32, s33
+	s_add_u32 s34, s34, s35
+	s_add_u32 s36, s36, s37
+	s_add_u32 s38, s38, s39
+	s_add_u32 s40, s40, s41
+	s_add_u32 s42, s42, s43
+	s_add_u32 s44, s44, s45
+	s_add_u32 s46, s46, s47
+	s_add_u32 s48, s48, s49
+	s_add_u32 s50, s50, s51
+	s_add_u32 s52, s52, s53
+	s_add_u32 s54, s54, s55
+	s_add_u32 s56, s56, s57
+	s_add_u32 s58, s58, s59
+	s_add_u32 s60, s60, s61
+	s_add_u32 s62, s62, s63
+	s_add_u32 s64, s64, s65
+	s_add_u32 s66, s66, s67
+	s_add_u32 s68, s68, s69
+	s_add_u32 s70, s70, s71
+	s_add_u32 s72, s72, s73
+	s_add_u32 s74, s74, s75
+	s_add_u32 s76, s76, s77
+	s_add_u32 s78, s78, s79
+	s_add_u32 s80, s80, s81
+	s_add_u32 s82, s82, s83
+	s_add_u32 s84, s84, s85
+	s_add_u32 s86, s86, s87
+	s_add_u32 s88, s88, s89
+	s_add_u32 s90, s90, s91
+	s_add_u32 s92, s92, s93
+	s_add_u32 s94, s94, s95
+	s_add_u32 s96, s96, s97
+	s_add_u32 s98, s98, s99
+	s_add_u32 s100, s100, s101
+	s_add_u32 vcc_lo, vcc_lo, vcc_hi
+	s_endpgm
+.Lfunc_end0:
+	.size stub_kernel, .Lfunc_end0-stub_kernel
+	.section	.rodata,"a",@progbits
+	.p2align	6, 0x0
+	.amdhsa_kernel stub_kernel
+		.amdhsa_next_free_vgpr 1
+		.amdhsa_next_free_sgpr 102
+	.end_amdhsa_kernel
+	.amdgpu_metadata
+---
+amdhsa.kernels:
+  - .agpr_count:     0
+    .group_segment_fixed_size: 0
+    .kernarg_segment_align: 8
+    .kernarg_segment_size: 0
+    .max_flat_workgroup_size: 1024
+    .name:           stub_kernel
+    .private_segment_fixed_size: 0
+    .sgpr_count:     102
+    .symbol:         stub_kernel.kd
+    .vgpr_count:     1
+    .wavefront_size: 64
+amdhsa.target:   amdgcn-amd-amdhsa--gfx908
+amdhsa.version:
+  - 1
+  - 2
+...
+	.end_amdgpu_metadata
