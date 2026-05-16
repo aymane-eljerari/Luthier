@@ -26,8 +26,7 @@ llvm::PreservedAnalyses
 ExternalizeGlobalsPass::run(llvm::Module &M, llvm::ModuleAnalysisManager &) {
   for (llvm::GlobalVariable &GV : llvm::make_early_inc_range(M.globals())) {
     llvm::StringRef GVName = GV.getName();
-    if (GVName.ends_with(".managed") || GVName == ReservedManagedVar ||
-        GV.getSection() == "llvm.metadata") {
+    if (GVName.ends_with(".managed") || GV.getSection() == "llvm.metadata") {
       GV.dropAllReferences();
       GV.eraseFromParent();
     } else if (!GVName.starts_with(HipCUIDPrefix)) {

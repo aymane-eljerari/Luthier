@@ -34,7 +34,7 @@ set(LUTHIER_TEST_IMODULE_NAMES
         RegLogger)
 
 set(_ir_worker_pipeline
-        "luthier-mark-annotations,luthier-finalize-hooks,luthier-finalize-intrinsics,luthier-strip-kernels,luthier-externalize-globals,luthier-substitute-amdgcn-intrinsics")
+        "luthier-mark-annotations,luthier-finalize-intrinsics,luthier-strip-kernels,luthier-externalize-globals,luthier-substitute-amdgcn-intrinsics")
 
 set(_imodule_fixture_outputs "")
 

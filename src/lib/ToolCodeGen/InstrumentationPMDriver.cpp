@@ -28,7 +28,6 @@
 #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
 #include "luthier/ToolCodeGen/IntrinsicProcessorsAnalysis.h"
 #include "luthier/ToolCodeGen/ProcessIntrinsicsAtIRLevelPass.h"
-#include "luthier/ToolCodeGen/RemoveUnusedHooksPass.h"
 #include "luthier/ToolCodeGen/SVAPhysVGPRPinPass.h"
 #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
 #include "luthier/ToolCodeGen/TargetModulePatcherPass.h"
@@ -376,10 +375,6 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
           MPM.addPass(ProcessIntrinsicsAtIRLevelPass(*ITM));
           return true;
         }
-        if (Name == "luthier-remove-unused-hooks") {
-          MPM.addPass(RemoveUnusedHooksPass());
-          return true;
-        }
         if (Name == "luthier-forward-isa-state-to-callees") {
           MPM.addPass(ForwardISAStateToCalleesPass(*ITM));
           return true;
@@ -424,7 +419,6 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
       for (const auto &Plugin : PassPlugins)
         Plugin.registerPreIROptimizationPasses(IMPM);
 
-      IMPM.addPass(RemoveUnusedHooksPass());
       IMPM.addPass(
           PB.buildPerModuleDefaultPipeline(optLevelFromUnsigned(OptLevelVal)));
       PreIRIntrinsicLoweringCallback(IMPM);

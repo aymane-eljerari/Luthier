@@ -37,7 +37,6 @@ add_library(LuthierToolCodeGen OBJECT
         IPPredicatedCFG.cpp
         StateValueArrayStorage.cpp
         ProcessIntrinsicsAtIRLevelPass.cpp
-        RemoveUnusedHooksPass.cpp
         ForwardISAStateToCalleesPass.cpp
         IPPredicatedLivenessIModulePass.cpp
         InjectedPayloadPreserveLiveRegsPass.cpp

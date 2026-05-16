@@ -18,7 +18,6 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolIRCompilation/CreateAndEmbedIModulePass.h"
 #include "luthier/ToolIRCompilation/ExternalizeGlobalsPass.h"
-#include "luthier/ToolIRCompilation/FinalizeHooksPass.h"
 #include "luthier/ToolIRCompilation/FinalizeIntrinsicsPass.h"
 #include "luthier/ToolIRCompilation/MarkAnnotationsPass.h"
 #include "luthier/ToolIRCompilation/StripKernelsPass.h"
@@ -42,7 +41,7 @@ namespace luthier {
 
 llvm::PreservedAnalyses
 CreateAndEmbedIModulePass::run(llvm::Module &M,
-                                  llvm::ModuleAnalysisManager &AM) {
+                               llvm::ModuleAnalysisManager &AM) {
   if (M.getGlobalVariable("llvm.embedded.object", /*AllowInternal=*/true))
     llvm::report_fatal_error(
         "Attempted to embed bitcode twice. Are you passing -fembed-bitcode?",
@@ -60,7 +59,6 @@ CreateAndEmbedIModulePass::run(llvm::Module &M,
 
   llvm::ModulePassManager InnerMPM;
   InnerMPM.addPass(MarkAnnotationsPass());
-  InnerMPM.addPass(FinalizeHooksPass());
   InnerMPM.addPass(FinalizeIntrinsicsPass());
   InnerMPM.addPass(StripKernelsPass());
   InnerMPM.addPass(ExternalizeGlobalsPass());

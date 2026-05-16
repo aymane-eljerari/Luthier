@@ -46,10 +46,7 @@ MarkAnnotationsPass::run(llvm::Module &M, llvm::ModuleAnalysisManager &) {
           CS->getOperand(1)->stripPointerCasts());
       llvm::StringRef Content;
       llvm::getConstantStringInfo(GV, Content);
-      if (Content == HookAttribute) {
-        F->addFnAttr(HookAttribute);
-        LLVM_DEBUG(llvm::dbgs() << "Marked hook " << F->getName() << ".\n");
-      } else if (Content == IntrinsicAttribute) {
+      if (Content == IntrinsicAttribute) {
         F->addFnAttr(IntrinsicAttribute);
         LLVM_DEBUG(llvm::dbgs()
                    << "Marked intrinsic " << F->getName() << ".\n");

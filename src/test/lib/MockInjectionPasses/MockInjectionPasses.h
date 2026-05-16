@@ -36,8 +36,6 @@
 
 namespace luthier::test {
 
-llvm::Function *findHookByName(llvm::Module &IModule, llvm::StringRef HookName);
-
 llvm::StringRef getMockHookNameOpt();
 llvm::StringRef getMockOpcodeMnemonicOpt();
 

@@ -365,8 +365,6 @@ bool isRewriteCandidate(const llvm::Function &F) {
     return false;
   if (F.hasFnAttribute(InjectedPayloadAttribute))
     return false;
-  if (F.hasFnAttribute(HookAttribute))
-    return false;
   if (F.hasAddressTaken())
     return false;
   return true;

@@ -19,7 +19,6 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolIRCompilation/CreateAndEmbedIModulePass.h"
 #include "luthier/ToolIRCompilation/ExternalizeGlobalsPass.h"
-#include "luthier/ToolIRCompilation/FinalizeHooksPass.h"
 #include "luthier/ToolIRCompilation/FinalizeIntrinsicsPass.h"
 #include "luthier/ToolIRCompilation/LoadHIPFATBinaryInfoPass.h"
 #include "luthier/ToolIRCompilation/MarkAnnotationsPass.h"
@@ -47,7 +46,6 @@ void registerEmbedIModulePasses(llvm::PassBuilder &PB) {
       [](llvm::StringRef Name, llvm::ModulePassManager &MPM,
          llvm::ArrayRef<llvm::PassBuilder::PipelineElement>) {
         return tryParsePass<luthier::MarkAnnotationsPass>(Name, MPM) ||
-               tryParsePass<luthier::FinalizeHooksPass>(Name, MPM) ||
                tryParsePass<luthier::FinalizeIntrinsicsPass>(Name, MPM) ||
                tryParsePass<luthier::StripKernelsPass>(Name, MPM) ||
                tryParsePass<luthier::ExternalizeGlobalsPass>(Name, MPM) ||

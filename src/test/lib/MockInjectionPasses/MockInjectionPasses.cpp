@@ -56,22 +56,6 @@ namespace luthier::test {
 llvm::StringRef getMockHookNameOpt() { return MockHookName; }
 llvm::StringRef getMockOpcodeMnemonicOpt() { return MockOpcodeMnemonic; }
 
-llvm::Function *findHookByName(llvm::Module &IModule,
-                               llvm::StringRef HookName) {
-  for (llvm::Function &F : IModule) {
-    if (!F.hasFnAttribute(HookAttribute))
-      continue;
-    llvm::Attribute Attr = F.getFnAttribute(HookAttribute);
-    llvm::StringRef Value = Attr.isStringAttribute() ? Attr.getValueAsString()
-                                                     : llvm::StringRef();
-    // FinalizeIntrinsicsPass / MarkAnnotationsPass leave HookAttribute
-    // without a value. Fall back to matching the function name in that case.
-    if (Value.empty() ? F.getName() == HookName : Value == HookName)
-      return &F;
-  }
-  return nullptr;
-}
-
 namespace {
 
 /// Returns the unique VGPR Register defined by \p MI, or an invalid Register
@@ -99,7 +83,7 @@ InstrumentationPreservedAnalyses
 MockInjectAtFunctionEntryPass::runInstrumentationPass(
     llvm::Module &IModule, llvm::ModuleAnalysisManager &,
     llvm::MachineFunction &TargetMF, llvm::FunctionAnalysisManager &) {
-  llvm::Function *Hook = findHookByName(IModule, MockHookName);
+  llvm::Function *Hook = IModule.getFunction(MockHookName);
   if (!Hook || TargetMF.empty())
     return {};
   for (llvm::MachineInstr &MI : TargetMF.front()) {
@@ -113,7 +97,7 @@ InstrumentationPreservedAnalyses
 MockInjectAtMBBEntryPass::runInstrumentationPass(
     llvm::Module &IModule, llvm::ModuleAnalysisManager &,
     llvm::MachineFunction &TargetMF, llvm::FunctionAnalysisManager &) {
-  llvm::Function *Hook = findHookByName(IModule, MockHookName);
+  llvm::Function *Hook = IModule.getFunction(MockHookName);
   if (!Hook)
     return {};
   for (llvm::MachineBasicBlock &MBB : TargetMF) {
@@ -128,7 +112,7 @@ InstrumentationPreservedAnalyses
 MockInjectAtMBBTerminatorPass::runInstrumentationPass(
     llvm::Module &IModule, llvm::ModuleAnalysisManager &,
     llvm::MachineFunction &TargetMF, llvm::FunctionAnalysisManager &) {
-  llvm::Function *Hook = findHookByName(IModule, MockHookName);
+  llvm::Function *Hook = IModule.getFunction(MockHookName);
   if (!Hook)
     return {};
   for (llvm::MachineBasicBlock &MBB : TargetMF) {
@@ -144,7 +128,7 @@ InstrumentationPreservedAnalyses
 MockInjectAtAllVALUPass::runInstrumentationPass(
     llvm::Module &IModule, llvm::ModuleAnalysisManager &,
     llvm::MachineFunction &TargetMF, llvm::FunctionAnalysisManager &) {
-  llvm::Function *Hook = findHookByName(IModule, MockHookName);
+  llvm::Function *Hook = IModule.getFunction(MockHookName);
   if (!Hook)
     return {};
   const auto *TII = TargetMF.getSubtarget<llvm::GCNSubtarget>().getInstrInfo();
@@ -161,7 +145,7 @@ InstrumentationPreservedAnalyses
 MockInjectAtAllScalarPass::runInstrumentationPass(
     llvm::Module &IModule, llvm::ModuleAnalysisManager &,
     llvm::MachineFunction &TargetMF, llvm::FunctionAnalysisManager &) {
-  llvm::Function *Hook = findHookByName(IModule, MockHookName);
+  llvm::Function *Hook = IModule.getFunction(MockHookName);
   if (!Hook)
     return {};
   const auto *TII = TargetMF.getSubtarget<llvm::GCNSubtarget>().getInstrInfo();
@@ -178,7 +162,7 @@ InstrumentationPreservedAnalyses
 MockInjectAtOpcodePass::runInstrumentationPass(
     llvm::Module &IModule, llvm::ModuleAnalysisManager &,
     llvm::MachineFunction &TargetMF, llvm::FunctionAnalysisManager &) {
-  llvm::Function *Hook = findHookByName(IModule, MockHookName);
+  llvm::Function *Hook = IModule.getFunction(MockHookName);
   if (!Hook || MockOpcodeMnemonic.empty())
     return {};
   const auto *TII = TargetMF.getSubtarget<llvm::GCNSubtarget>().getInstrInfo();
@@ -196,7 +180,7 @@ InstrumentationPreservedAnalyses
 MockInjectAtAllVGPRDefsWithRegArgPass::runInstrumentationPass(
     llvm::Module &IModule, llvm::ModuleAnalysisManager &,
     llvm::MachineFunction &TargetMF, llvm::FunctionAnalysisManager &) {
-  llvm::Function *Hook = findHookByName(IModule, MockHookName);
+  llvm::Function *Hook = IModule.getFunction(MockHookName);
   if (!Hook)
     return {};
   const auto &MRI = TargetMF.getRegInfo();

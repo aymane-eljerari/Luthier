@@ -687,8 +687,7 @@ llvm::Error cloneIModuleIntoTarget(llvm::Module &IModule,
     // target binary). Payloads are inlined separately at each AppMI
     // via Phase B step 3; cloning their handles here would create a
     // dead duplicate in the target module.
-    if (F.hasFnAttribute(HookAttribute) ||
-        F.hasFnAttribute(InjectedPayloadAttribute))
+    if (F.hasFnAttribute(InjectedPayloadAttribute))
       continue;
 
     // Always clone the IR-level handle into the target module — even

@@ -14,13 +14,14 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 /// \file FunctionAnnotations.h
-/// Defines a set of function annotations used throughout Luthier's code
-/// generation process, as well as methods to set/extract information related
-/// to them from the IR function.
+/// Defines a set of function annotations, prefixes and suffixes used throughout
+/// the code generation process, as well as methods to set/extract information
+/// related to them from the IR function.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOL_CODE_GEN_FUNCTION_ANNOTATIONS_H
 #define LUTHIER_TOOL_CODE_GEN_FUNCTION_ANNOTATIONS_H
 #include "luthier/ToolCodeGen/EntryPoint.h"
+#include <llvm/ADT/StringRef.h>
 #include <optional>
 
 namespace llvm {
@@ -40,19 +41,11 @@ namespace luthier {
 #define LUTHIER_CAT(a, ...) LUTHIER_PRIMITIVE_CAT(a, __VA_ARGS__)
 #define LUTHIER_PRIMITIVE_CAT(a, ...) a##__VA_ARGS__
 
-//===----------------------------------------------------------------------===//
-// Luthier attributes and constants
-//===----------------------------------------------------------------------===//
-
-/// Prefix appended to all hook handle kernels
-#define LUTHIER_HOOK_HANDLE_PREFIX __luthier_builtin_hook_handle_
+/// Prefix appended to all host-accessible device functions' handle kernels
+#define LUTHIER_DEVICE_FUNCTION_HANDLE_PREFIX __luthier_builtin_dev_func_handle_
 
 /// All hooks in instrumentation modules must have this attribute
 #define LUTHIER_HOOK_ATTRIBUTE luthier.function.hook
-
-/// Name of the reserved managed variable defined in all Luthier tools so
-/// that its device module can be easily identified at runtime
-#define LUTHIER_RESERVED_MANAGED_VAR __luthier_builtin_reserved
 
 /// All bindings to Luthier intrinsics must have this attribute. The
 /// value of this attribute must be the base name of the intrinsic e.g.
@@ -67,23 +60,17 @@ namespace luthier {
 /// have this attribute
 #define LUTHIER_INJECTED_PAYLOAD_ATTRIBUTE luthier.function.injected_payload
 
-static constexpr const char *HookHandlePrefix =
-    LUTHIER_STRINGIFY(LUTHIER_HOOK_HANDLE_PREFIX);
+static constexpr llvm::StringLiteral DevFuncHandlePrefix{
+    LUTHIER_STRINGIFY(LUTHIER_DEVICE_FUNCTION_HANDLE_PREFIX)};
 
-static constexpr const char *ReservedManagedVar =
-    LUTHIER_STRINGIFY(LUTHIER_RESERVED_MANAGED_VAR);
+static constexpr llvm::StringLiteral HipCUIDPrefix{
+    LUTHIER_STRINGIFY(LUTHIER_HIP_CUID_PREFIX)};
 
-static constexpr const char *HipCUIDPrefix =
-    LUTHIER_STRINGIFY(LUTHIER_HIP_CUID_PREFIX);
+static constexpr llvm::StringLiteral IntrinsicAttribute{
+    LUTHIER_STRINGIFY(LUTHIER_INTRINSIC_ATTRIBUTE)};
 
-static constexpr const char *HookAttribute =
-    LUTHIER_STRINGIFY(LUTHIER_HOOK_ATTRIBUTE);
-
-static constexpr const char *IntrinsicAttribute =
-    LUTHIER_STRINGIFY(LUTHIER_INTRINSIC_ATTRIBUTE);
-
-static constexpr const char *InjectedPayloadAttribute =
-    LUTHIER_STRINGIFY(LUTHIER_INJECTED_PAYLOAD_ATTRIBUTE);
+static constexpr llvm::StringLiteral InjectedPayloadAttribute{
+    LUTHIER_STRINGIFY(LUTHIER_INJECTED_PAYLOAD_ATTRIBUTE)};
 
 #define EntryPointAddrAttr      "luthier.function.entrypoint.addr"
 
