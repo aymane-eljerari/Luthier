@@ -1,4 +1,4 @@
-//===-- CodeDiscoveryPass.h -  ------------------------------------*-C++-*-===//
+//===-- CodeDiscoveryPass.h ---------------------------------------*-C++-*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-///
 /// \file CodeDiscoveryPass.h
 /// Defines the \c CodeDiscoveryPass class.
 //===----------------------------------------------------------------------===//
@@ -26,10 +25,13 @@ namespace luthier {
 struct CodeDiscoveryPassOptions {};
 
 /// \brief Target module pass in charge of:
-/// - Discovering all statically reachable code and entry points from a starting
-/// entry point
+/// - Discovering all statically reachable code and entry points from an
+/// initial entry point. The entry point can be any function
+/// (entry or non-entry)
 /// - Disassembling and creating equivalent machine functions for each entry
 /// point
+/// - Translating each recovered machine function to equivalent LLVM IR for
+/// further semantics analysis
 class CodeDiscoveryPass : public llvm::PassInfoMixin<CodeDiscoveryPass> {
 
 public:
