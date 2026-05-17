@@ -213,16 +213,36 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
 static inline llvm::Error
 parseKDRsrc2(const llvm::amdhsa::kernel_descriptor_t &KD,
              const llvm::GCNTargetMachine &TM, llvm::Function &F) {
+  auto &ST = TM.getSubtarget<llvm::GCNSubtarget>(F);
   /// ENABLE_PRIVATE_SEGMENT is set if the stack size of the kernel is set to
   /// non-zero value
 
   /// USER_SGPR_COUNT is automatically set based on the user sgprs requested
   /// from the MFI
 
-  /// ENABLE_TRAP_HANDLER is not set in HSA; For other OSes, it should be set
-  /// when creating the target
+  /// ENABLE_TRAP_HANDLER (gfx6-gfx11) is not set in HSA; For other OSes, it
+  /// should be set when creating the target. Capture the original bit as a
+  /// harmless \c amdgpu.kd.* attribute for the post-AsmPrinter patcher
+  if (!llvm::AMDGPU::isGFX12Plus(ST)) {
+    F.addFnAttr(
+        "amdgpu.kd.enable_trap_handler",
+        AMDHSA_BITS_GET(
+            KD.compute_pgm_rsrc2,
+            llvm::amdhsa::COMPUTE_PGM_RSRC2_GFX6_GFX11_ENABLE_TRAP_HANDLER)
+            ? "1"
+            : "0");
+  }
 
-  /// ENABLE_DYNAMIC_VGPR does not seem to have a handle neither in MIR or MC
+  /// ENABLE_DYNAMIC_VGPR (gfx12.0 in rsrc2; gfx12.5 lives in rsrc3) has no
+  /// MIR / MC handle. Capture the bit for the post-AsmPrinter patcher
+  if (llvm::AMDGPU::isGFX12Plus(ST) && !llvm::AMDGPU::isGFX1250(ST)) {
+    F.addFnAttr("amdgpu.kd.enable_dynamic_vgpr",
+                AMDHSA_BITS_GET(
+                    KD.compute_pgm_rsrc2,
+                    llvm::amdhsa::COMPUTE_PGM_RSRC2_GFX120_ENABLE_DYNAMIC_VGPR)
+                    ? "1"
+                    : "0");
+  }
 
   /// Lift ENABLE_SGPR_WORKGROUP_ID_X, Y and Z
   if (AMDHSA_BITS_GET(
@@ -241,8 +261,15 @@ parseKDRsrc2(const llvm::amdhsa::kernel_descriptor_t &KD,
           llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_SGPR_WORKGROUP_ID_Z) == 0) {
     F.addFnAttr("amdgpu-no-workgroup-id-z");
   }
-  /// ENABLE_SGPR_WORKGROUP_INFO is represented in MFI, but it is always set to
-  /// false and there is no way to set it
+  /// ENABLE_SGPR_WORKGROUP_INFO is represented in MFI, but it is always set
+  /// to false and there is no way to set it. Capture the original bit for the
+  /// post-AsmPrinter patcher
+  F.addFnAttr("amdgpu.kd.enable_sgpr_workgroup_info",
+              AMDHSA_BITS_GET(
+                  KD.compute_pgm_rsrc2,
+                  llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_SGPR_WORKGROUP_INFO)
+                  ? "1"
+                  : "0");
 
   /// Lift ENABLE_VGPR_WORKITEM_ID
   switch (AMDHSA_BITS_GET(
@@ -255,23 +282,82 @@ parseKDRsrc2(const llvm::amdhsa::kernel_descriptor_t &KD,
   case 2:
     break;
   default:
-    return llvm::make_error<GenericLuthierError>(
-        "KD's VGPR workitem ID is not valid");
+    return LUTHIER_MAKE_GENERIC_ERROR("KD's VGPR workitem ID is not valid");
   }
-  /// ENABLE_EXCEPTION_ADDRESS_WATCH is always set to zero
+  /// ENABLE_EXCEPTION_ADDRESS_WATCH / ENABLE_EXCEPTION_MEMORY are always set
+  /// to zero by the AsmPrinter. Capture the original bits for the
+  /// post-AsmPrinter patcher
+  F.addFnAttr(
+      "amdgpu.kd.enable_exception_address_watch",
+      AMDHSA_BITS_GET(
+          KD.compute_pgm_rsrc2,
+          llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_ADDRESS_WATCH)
+          ? "1"
+          : "0");
+  F.addFnAttr(
+      "amdgpu.kd.enable_exception_memory",
+      AMDHSA_BITS_GET(KD.compute_pgm_rsrc2,
+                      llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_MEMORY)
+          ? "1"
+          : "0");
 
-  /// ENABLE_EXCEPTION_MEMORY is always set to zero
+  /// GRANULATED_LDS_SIZE is automatically set via the dispatch packet
 
-  /// GRANULATED_LDS_SIZE is automatically set via the lds-size attribute
-
-  /// ENABLE_EXCEPTION_IEEE_754_FP_INVALID_OPERATION,
-  /// ENABLE_EXCEPTION_FP_DENORMAL_SOURCE,
-  /// ENABLE_EXCEPTION_IEEE_754_FP_DIVISION_BY_ZERO,
-  /// ENABLE_EXCEPTION_IEEE_754_FP_OVERFLOW,
-  /// ENABLE_EXCEPTION_IEEE_754_FP_UNDERFLOW
-  /// ENABLE_EXCEPTION_IEEE_754_FP_INEXACT
-  /// ENABLE_EXCEPTION_INT_DIVIDE_BY_ZERO are all set to zero; Must be fixed
-  /// after printing the assembly
+  /// The six IEEE_754_FP exception-enable bits and
+  /// ENABLE_EXCEPTION_INT_DIVIDE_BY_ZERO are all written as zero by the
+  /// AsmPrinter. Capture each original bit so the post-AsmPrinter patcher can
+  /// restore them.
+  F.addFnAttr(
+      "amdgpu.kd.enable_exception_ieee_754_fp_invalid_operation",
+      AMDHSA_BITS_GET(
+          KD.compute_pgm_rsrc2,
+          llvm::amdhsa::
+              COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_IEEE_754_FP_INVALID_OPERATION)
+          ? "1"
+          : "0");
+  F.addFnAttr(
+      "amdgpu.kd.enable_exception_fp_denormal_source",
+      AMDHSA_BITS_GET(
+          KD.compute_pgm_rsrc2,
+          llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_FP_DENORMAL_SOURCE)
+          ? "1"
+          : "0");
+  F.addFnAttr(
+      "amdgpu.kd.enable_exception_ieee_754_fp_division_by_zero",
+      AMDHSA_BITS_GET(
+          KD.compute_pgm_rsrc2,
+          llvm::amdhsa::
+              COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_IEEE_754_FP_DIVISION_BY_ZERO)
+          ? "1"
+          : "0");
+  F.addFnAttr(
+      "amdgpu.kd.enable_exception_ieee_754_fp_overflow",
+      AMDHSA_BITS_GET(
+          KD.compute_pgm_rsrc2,
+          llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_IEEE_754_FP_OVERFLOW)
+          ? "1"
+          : "0");
+  F.addFnAttr("amdgpu.kd.enable_exception_ieee_754_fp_underflow",
+              AMDHSA_BITS_GET(
+                  KD.compute_pgm_rsrc2,
+                  llvm::amdhsa::
+                      COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_IEEE_754_FP_UNDERFLOW)
+                  ? "1"
+                  : "0");
+  F.addFnAttr(
+      "amdgpu.kd.enable_exception_ieee_754_fp_inexact",
+      AMDHSA_BITS_GET(
+          KD.compute_pgm_rsrc2,
+          llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_IEEE_754_FP_INEXACT)
+          ? "1"
+          : "0");
+  F.addFnAttr(
+      "amdgpu.kd.enable_exception_int_divide_by_zero",
+      AMDHSA_BITS_GET(
+          KD.compute_pgm_rsrc2,
+          llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_INT_DIVIDE_BY_ZERO)
+          ? "1"
+          : "0");
 
   return llvm::Error::success();
 }
