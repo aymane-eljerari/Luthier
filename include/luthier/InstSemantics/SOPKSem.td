@@ -560,7 +560,7 @@ def S_CALL_B64_sem : InstSISemantic<S_CALL_B64> {
   let Semantic = [
     (SetNamedOperand $sdst,
       (LLVMIntrinsic si_llvm_i64_ty, int_amdgcn_s_getpc, []<dag>)),
-    (DirectCall (GetNamedOperandAsFunction $simm16))
+    (DirectCall (GetNamedOperand $sdst), (GetNamedOperand $simm16, si_llvm_i16_ty))
   ];
 }
 

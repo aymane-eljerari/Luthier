@@ -157,8 +157,16 @@ LuthierCallGraph LuthierCallGraphAnalysis::run(llvm::Module &M,
       auto *CI = llvm::dyn_cast<llvm::CallInst>(&I);
       if (!CI)
         continue;
-      if (auto *Callee = CI->getCalledFunction())
-        KnownCallers[Callee].emplace_back(CI, &F);
+      auto *Callee = CI->getCalledFunction();
+      if (!Callee)
+        continue;
+      KnownCallers[Callee].emplace_back(CI, &F);
+      // Record direct call edges in the global call graph
+      if (Callee->isIntrinsic() || Callee->isDeclaration())
+        continue;
+      Out.CallTargets[CI].push_back(Callee);
+      if (auto EP = getFunctionEntryPoint(*Callee))
+        Out.DiscoveredCallTargetAddresses.insert(EP->getRawAddress());
     }
   }
 
@@ -270,18 +278,17 @@ LuthierCallGraphPrinter::run(llvm::Module &M,
                              llvm::ModuleAnalysisManager &MAM) {
   const LuthierCallGraph &CG = MAM.getResult<LuthierCallGraphAnalysis>(M);
 
-  OS << "LuthierCallGraph (fully_recovered=" << (CG.FullyRecovered ? "yes" : "no")
-     << "):\n";
+  OS << "LuthierCallGraph (fully_recovered="
+     << (CG.isFullyRecovered() ? "yes" : "no") << "):\n";
 
-  OS << "  Resolved call sites (" << CG.CallTargets.size() << "):\n";
+  OS << "  Resolved call sites (" << CG.call_targets_size() << "):\n";
   for (llvm::Function &F : M) {
     for (llvm::Instruction &I : llvm::instructions(F)) {
       auto *CI = llvm::dyn_cast<llvm::CallInst>(&I);
-      if (!CI || CI->getCalledFunction() ||
-          llvm::isa<llvm::InlineAsm>(CI->getCalledOperand()))
+      if (!CI)
         continue;
-      auto It = CG.CallTargets.find(CI);
-      if (It == CG.CallTargets.end())
+      auto It = CG.findCallTargets(CI);
+      if (It == CG.call_targets_end())
         continue;
       OS << "    " << F.getName() << " -> [";
       llvm::interleaveComma(It->second, OS,
@@ -290,16 +297,17 @@ LuthierCallGraphPrinter::run(llvm::Module &M,
     }
   }
 
-  OS << "  Incomplete call sites (" << CG.IncompleteCallSites.size() << "):\n";
-  for (llvm::CallInst *CI : CG.IncompleteCallSites) {
+  OS << "  Incomplete call sites (" << CG.incomplete_call_sites_size()
+     << "):\n";
+  for (llvm::CallInst *CI : CG.incomplete_call_sites()) {
     llvm::Function *F = CI->getFunction();
     OS << "    " << F->getName() << "\n";
   }
 
-  OS << "  Discovered call target addresses ("
-     << CG.DiscoveredCallTargetAddresses.size() << "):\n";
-  llvm::SmallVector<uint64_t> Sorted(CG.DiscoveredCallTargetAddresses.begin(),
-                                     CG.DiscoveredCallTargetAddresses.end());
+  OS << "  Discovered call target addresses (" << CG.discovered_addrs_size()
+     << "):\n";
+  llvm::SmallVector<uint64_t> Sorted(CG.discovered_addrs_begin(),
+                                     CG.discovered_addrs_end());
   llvm::sort(Sorted);
   for (uint64_t Addr : Sorted)
     OS << "    " << llvm::format("0x%" PRIx64 "\n", Addr);

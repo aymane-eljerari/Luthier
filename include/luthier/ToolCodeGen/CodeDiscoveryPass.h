@@ -19,10 +19,19 @@
 #ifndef LUTHIER_TOOL_CODE_GEN_CODE_DISCOVERY_PASS_H
 #define LUTHIER_TOOL_CODE_GEN_CODE_DISCOVERY_PASS_H
 #include <llvm/IR/PassManager.h>
+#include <llvm/Support/CommandLine.h>
 
 namespace luthier {
 
-struct CodeDiscoveryPassOptions {};
+/// \brief Command-line options for \c CodeDiscoveryPass.
+struct CodeDiscoveryPassOptions {
+  llvm::cl::opt<bool> EagerDiscoverCallReturnEntryPoint{
+      "eager-discover-call-ret-entry-point",
+      llvm::cl::desc(
+          "Eagerly enqueue the post-call return PC as an entry point to "
+          "be added to the set of entry points for the code discovery pass."),
+      llvm::cl::init(true)};
+};
 
 /// \brief Target module pass in charge of:
 /// - Discovering all statically reachable code and entry points from an
@@ -33,9 +42,11 @@ struct CodeDiscoveryPassOptions {};
 /// - Translating each recovered machine function to equivalent LLVM IR for
 /// further semantics analysis
 class CodeDiscoveryPass : public llvm::PassInfoMixin<CodeDiscoveryPass> {
+  const CodeDiscoveryPassOptions &Opts;
 
 public:
-  CodeDiscoveryPass() = default;
+  explicit CodeDiscoveryPass(const CodeDiscoveryPassOptions &Opts)
+      : Opts(Opts) {}
 
   llvm::PreservedAnalyses run(llvm::Module &TargetModule,
                               llvm::ModuleAnalysisManager &TargetMAM);

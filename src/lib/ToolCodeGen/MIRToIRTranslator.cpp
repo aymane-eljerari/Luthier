@@ -37,8 +37,6 @@
 #include <llvm/Analysis/CallGraph.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/Analysis/InstructionSimplify.h>
-#include <llvm/IR/ValueHandle.h>
-#include <llvm/Transforms/Utils/Local.h>
 #include <llvm/CodeGen/AsmPrinter.h>
 #include <llvm/CodeGen/LivePhysRegs.h>
 #include <llvm/CodeGen/MachineDominators.h>
@@ -47,8 +45,10 @@
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/IntrinsicsAMDGPU.h>
+#include <llvm/IR/ValueHandle.h>
 #include <llvm/IR/ValueMap.h>
 #include <llvm/MC/TargetRegistry.h>
+#include <llvm/Transforms/Utils/Local.h>
 
 #undef DEBUG_TYPE
 
@@ -101,6 +101,38 @@ getRegisterFileArgOrder(const llvm::GCNSubtarget &ST,
   ABIRegFileIdx.push_back(llvm::AMDGPU::VGPR0);
   if (ST.hasMAIInsts())
     ABIRegFileIdx.push_back(llvm::AMDGPU::AGPR0);
+}
+
+/// Populates \p RegFileSize with the canonical half-slot size of each register
+/// file base used by the translator's IR ABI, derived from \p ST and the
+/// declared \p NumSGPRs / \p NumVGPRs. Also reports the subtarget-dependent
+/// TTMP and EXEC region base registers via \p TTMPBaseReg / \p ExecBaseReg.
+/// Shared by \c initRegFileLayouts (instance setup) and
+/// \c computeStandardDeviceFunctionType (stateless prototype factory) so both
+/// paths agree on the same table.
+static void computeRegFileSizes(
+    const llvm::GCNSubtarget &ST, unsigned NumSGPRs, unsigned NumVGPRs,
+    llvm::SmallDenseMap<llvm::MCRegister, unsigned> &RegFileSize,
+    llvm::MCRegister &TTMPBaseReg, unsigned &ExecBaseReg) {
+  TTMPBaseReg =
+      llvm::AMDGPU::isGFX9Plus(ST) ? llvm::AMDGPU::TTMP0 : llvm::AMDGPU::TBA_LO;
+  ExecBaseReg = llvm::AMDGPU::isNotGFX10Plus(ST) ? llvm::AMDGPU::M0
+                                                 : llvm::AMDGPU::SGPR_NULL;
+  unsigned NumApertureSregs = llvm::AMDGPU::isGFX9_GFX10(ST)  ? 10
+                              : llvm::AMDGPU::isGFX11Plus(ST) ? 8
+                                                              : 0;
+  RegFileSize[llvm::AMDGPU::SGPR0] = 2u * NumSGPRs;
+  /// TTMP region has 16 registers across all targets; if a new generation
+  /// comes with a different encoding, this must be updated
+  RegFileSize[TTMPBaseReg] = 2u * 16;
+  /// There are 4 slots in the exec mask reg file; we keep SGPR_NULL even on
+  /// targets that don't support it
+  RegFileSize[ExecBaseReg] = 2u * 4;
+  RegFileSize[llvm::AMDGPU::SRC_VCCZ] = 6;
+  RegFileSize[llvm::AMDGPU::SRC_SHARED_BASE] = NumApertureSregs;
+  RegFileSize[llvm::AMDGPU::VGPR0] = 2u * NumVGPRs;
+  RegFileSize[llvm::AMDGPU::AGPR0] = ST.hasMAIInsts() ? 2u * NumVGPRs : 0u;
+  RegFileSize[llvm::AMDGPU::MODE] = 1 << 7;
 }
 
 /// Decode the "denormal-fp-math[-f32]" attribute value (e.g.
@@ -269,8 +301,7 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
       const uint32_t RightSize = SEnd - WEnd;    // may be 0
       // std::gcd treats 0 as the identity, so this works whether LeftSize or
       // RightSize is zero.
-      uint32_t OptHalves =
-          std::gcd(std::gcd(LeftSize, RightSize), WNumHalves);
+      uint32_t OptHalves = std::gcd(std::gcd(LeftSize, RightSize), WNumHalves);
 
       const unsigned ElemWidth = OptHalves * RegGranule;
       llvm::Value *Vec =
@@ -912,29 +943,9 @@ llvm::Error MIRToIRTranslator::initRegFileLayouts() {
     return LUTHIER_MAKE_GENERIC_ERROR("amdgpu-num-vgpr must be a non-zero.");
   }
 
-  TTMPBaseReg =
-      llvm::AMDGPU::isGFX9Plus(ST) ? llvm::AMDGPU::TTMP0 : llvm::AMDGPU::TBA_LO;
-
-  ExecBaseReg = llvm::AMDGPU::isNotGFX10Plus(ST) ? llvm::AMDGPU::M0
-                                                 : llvm::AMDGPU::SGPR_NULL;
-
-  unsigned NumApertureSregs = llvm::AMDGPU::isGFX9_GFX10(ST)  ? 10
-                              : llvm::AMDGPU::isGFX11Plus(ST) ? 8
-                                                              : 0;
   getRegisterFileArgOrder(ST, FunctionCallArgOrder);
-
-  RegFileSize[llvm::AMDGPU::SGPR0] = 2u * NumSGPRs;
-  /// TTMP region has 16 register across all targets; If a new generation
-  /// comes with a different encoding, this must be updated
-  RegFileSize[TTMPBaseReg] = 2u * 16;
-  /// There are 4 slots in the exec mask reg file; We keep the SGPR null even
-  /// on targets that don't support it
-  RegFileSize[ExecBaseReg] = 2u * 4;
-  RegFileSize[llvm::AMDGPU::SRC_VCCZ] = 6;
-  RegFileSize[llvm::AMDGPU::SRC_SHARED_BASE] = NumApertureSregs;
-  RegFileSize[llvm::AMDGPU::VGPR0] = 2u * NumVGPRs;
-  RegFileSize[llvm::AMDGPU::AGPR0] = ST.hasMAIInsts() ? 2u * NumVGPRs : 0u;
-  RegFileSize[llvm::AMDGPU::MODE] = 1 << 7;
+  computeRegFileSizes(ST, NumSGPRs, NumVGPRs, RegFileSize, TTMPBaseReg,
+                      ExecBaseReg);
 
   /// Reserve two SGPR slots at the top of the kernel SGPR allocation for each
   /// SGPR-aliased special on pre-GFX10, in the order the GPU allocates them:
@@ -1106,8 +1117,7 @@ llvm::Value *MIRToIRTranslator::getRegisterFile(
   unsigned TotalHalves = RegFileSize[RegFileBaseReg];
   assert(TotalHalves != 0 &&
          "register file is not modeled for the current target");
-  assert(StartHalves <= TotalHalves &&
-         "register offset exceeds file size");
+  assert(StartHalves <= TotalHalves && "register offset exceeds file size");
 
   if (!LaneTy)
     LaneTy = Builder.getInt32Ty();
@@ -1120,8 +1130,7 @@ llvm::Value *MIRToIRTranslator::getRegisterFile(
   unsigned FullNumLanes = TotalHalves * RegGranule / LaneSize;
   auto *FullVecTy = llvm::FixedVectorType::get(LaneTy, FullNumLanes);
   RegFileKey FullKey = std::make_tuple(RegFileBaseReg, 0u, TotalHalves);
-  llvm::Value *FullVec =
-      &getOperandAsValue(MBB, FullKey, Builder, FullVecTy);
+  llvm::Value *FullVec = &getOperandAsValue(MBB, FullKey, Builder, FullVecTy);
 
   unsigned StartLane = StartHalves * RegGranule / LaneSize;
   unsigned SliceNumLanes = FullNumLanes - StartLane;
@@ -1187,10 +1196,9 @@ void MIRToIRTranslator::setRegisterFile(const llvm::MachineInstr &MI,
   setRegisterFile(*MBB, Reg, Builder, NewVec);
 }
 
-llvm::Value *
-MIRToIRTranslator::getRegisterFile(const llvm::MachineInstr &MI,
-                                   llvm::AMDGPU::OpName OpName,
-                                   llvm::Type *LaneTy) {
+llvm::Value *MIRToIRTranslator::getRegisterFile(const llvm::MachineInstr &MI,
+                                                llvm::AMDGPU::OpName OpName,
+                                                llvm::Type *LaneTy) {
   const llvm::MachineOperand *Op = TII.getNamedOperand(MI, OpName);
   assert(Op && Op->isReg() &&
          "GetRegisterFile target operand is not a register operand");
@@ -1218,8 +1226,7 @@ void MIRToIRTranslator::setRegisterFile(const llvm::MachineBasicBlock &MBB,
   llvm::MCRegister RegFileBaseReg = std::get<0>(Key);
   unsigned StartHalves = std::get<1>(Key);
   unsigned TotalHalves = RegFileSize[RegFileBaseReg];
-  assert(StartHalves <= TotalHalves &&
-         "register offset exceeds file size");
+  assert(StartHalves <= TotalHalves && "register offset exceeds file size");
 
   auto *SliceVecTy = llvm::cast<llvm::FixedVectorType>(Val->getType());
   llvm::Type *LaneTy = SliceVecTy->getElementType();
@@ -1238,8 +1245,7 @@ void MIRToIRTranslator::setRegisterFile(const llvm::MachineBasicBlock &MBB,
     /// Read the current full file, then insertelement each slice lane
     /// at its absolute position. Adjacent insertelements collapse
     /// cleanly under InstCombine when many lanes are unchanged.
-    llvm::Value *OldFull =
-        &getOperandAsValue(MBB, FullKey, Builder, FullVecTy);
+    llvm::Value *OldFull = &getOperandAsValue(MBB, FullKey, Builder, FullVecTy);
     NewFull = OldFull;
     unsigned SliceLanes = SliceVecTy->getNumElements();
     for (unsigned I = 0; I < SliceLanes; ++I) {
@@ -1255,30 +1261,47 @@ llvm::FunctionType *MIRToIRTranslator::getStandardDeviceFunctionType() const {
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Getting standard device "
                              "function type for '"
                           << MF.getName() << "'\n");
-  llvm::Function &F = MF.getFunction();
+  const llvm::Function &F = MF.getFunction();
   if (F.getCallingConv() != llvm::CallingConv::AMDGPU_KERNEL)
     return F.getFunctionType();
-  llvm::LLVMContext &Ctx = F.getContext();
-  std::vector<llvm::Type *> Fields;
+  const auto &ST = MF.getSubtarget<llvm::GCNSubtarget>();
+  /// The translator only exists once \c initRegFileLayouts has validated
+  /// non-zero \c amdgpu-num-sgpr / \c amdgpu-num-vgpr, so the static call
+  /// here is infallible for any well-formed instance.
+  return llvm::cantFail(computeStandardDeviceFunctionType(
+      F.getContext(), ST, F.getFnAttributeAsParsedInteger("amdgpu-num-sgpr"),
+      F.getFnAttributeAsParsedInteger("amdgpu-num-vgpr")));
+}
+
+llvm::Expected<llvm::FunctionType *>
+MIRToIRTranslator::computeStandardDeviceFunctionType(
+    llvm::LLVMContext &Ctx, const llvm::GCNSubtarget &ST, unsigned NumSGPRs,
+    unsigned NumVGPRs) {
+  if (NumSGPRs == 0)
+    return LUTHIER_MAKE_GENERIC_ERROR("amdgpu-num-sgpr must be non-zero.");
+  if (NumVGPRs == 0)
+    return LUTHIER_MAKE_GENERIC_ERROR("amdgpu-num-vgpr must be non-zero.");
+
+  llvm::SmallVector<llvm::MCRegister> ArgOrder;
+  getRegisterFileArgOrder(ST, ArgOrder);
+
+  llvm::SmallDenseMap<llvm::MCRegister, unsigned> RegFileSize;
+  llvm::MCRegister TTMPBaseReg;
+  unsigned ExecBaseReg = 0;
+  computeRegFileSizes(ST, NumSGPRs, NumVGPRs, RegFileSize, TTMPBaseReg,
+                      ExecBaseReg);
+
   unsigned TotalNumArgs = 0;
-  for (llvm::MCRegister RegFileBase : FunctionCallArgOrder) {
+  for (llvm::MCRegister RegFileBase : ArgOrder)
     TotalNumArgs += RegFileSize.at(RegFileBase) / 2;
-  }
 
-  Fields.reserve(TotalNumArgs);
   auto *I32 = llvm::Type::getInt32Ty(Ctx);
-  for (unsigned I = 0; I < TotalNumArgs; ++I) {
-    Fields.push_back(I32);
-  }
+  llvm::SmallVector<llvm::Type *> Fields(TotalNumArgs, I32);
+  llvm::FunctionType *FuncTy = llvm::FunctionType::get(
+      llvm::Type::getVoidTy(Ctx), Fields, /*isVarArg=*/false);
 
-  llvm::FunctionType *FuncTy =
-      llvm::FunctionType::get(llvm::Type::getVoidTy(Ctx), Fields,
-                              /*isVarArg=*/false);
-
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] device "
-                             "function type: "
+  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] device function type: "
                           << *FuncTy << "\n");
-
   return FuncTy;
 }
 
@@ -1309,6 +1332,28 @@ void MIRToIRTranslator::initDeviceFunctionEntryRegs(
     }
     CurrentArgPos += NumLanes32;
   }
+}
+
+void MIRToIRTranslator::emitDirectTailCall(const llvm::MachineInstr &MI,
+                                           llvm::Value *InstAddr,
+                                           llvm::Value *Target) {
+  llvm::Value *FinalTarget{nullptr};
+  if (auto *TargetConst = dyn_cast<llvm::ConstantInt>(Target);
+      TargetConst && MI.getOpcode() == llvm::AMDGPU::S_CALL_B64) {
+    const llvm::MachineBasicBlock *MBB = MI.getParent();
+    assert(MBB && "MI has no parent MBB");
+    auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
+    llvm::IRBuilder<> Builder(BB);
+    FinalTarget = Builder.CreateAdd(
+        InstAddr, Builder.getInt64(4 * TargetConst->getSExtValue()));
+  } else if (llvm::isa<llvm::Function>(Target)) {
+    FinalTarget = Target;
+  } else {
+    llvm_unreachable("Unsupported direct call target operand");
+  }
+  assert(FinalTarget && "Target does not have a called target");
+
+  emitIndirectTailCall(MI, FinalTarget);
 }
 
 void MIRToIRTranslator::emitIndirectTailCall(const llvm::MachineInstr &MI,
@@ -1413,6 +1458,8 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineOperand &Op,
     }
     return *llvm::ConstantInt::getSigned(OutType, Op.getImm());
   }
+  case llvm::MachineOperand::MO_GlobalAddress:
+    return *const_cast<llvm::GlobalValue *>(Op.getGlobal());
   default:
     llvm_unreachable("Unhandled operand type");
   }
@@ -1577,20 +1624,30 @@ MIRToIRTranslator::getSyncScope(const llvm::Value *CPolVal) const {
     // gfx12: bits[4:3] = scope. 00=CU, 01=SE, 10=DEV, 11=SYS.
     unsigned Scope = (CPol >> 3) & 0x3;
     switch (Scope) {
-    case 0: return Ctx.getOrInsertSyncScopeID("wavefront");
-    case 1: return Ctx.getOrInsertSyncScopeID("workgroup");
-    case 2: return Ctx.getOrInsertSyncScopeID("agent");
-    case 3: default: return llvm::SyncScope::System;
+    case 0:
+      return Ctx.getOrInsertSyncScopeID("wavefront");
+    case 1:
+      return Ctx.getOrInsertSyncScopeID("workgroup");
+    case 2:
+      return Ctx.getOrInsertSyncScopeID("agent");
+    case 3:
+    default:
+      return llvm::SyncScope::System;
     }
   }
   if (llvm::AMDGPU::isGFX940(ST)) {
     // CDNA3: bits[1:0] = SC1:SC0. 00=wavefront, 01=workgroup, 10=agent, 11=sys.
     unsigned Scope = CPol & 0x3;
     switch (Scope) {
-    case 0: return Ctx.getOrInsertSyncScopeID("wavefront");
-    case 1: return Ctx.getOrInsertSyncScopeID("workgroup");
-    case 2: return Ctx.getOrInsertSyncScopeID("agent");
-    case 3: default: return llvm::SyncScope::System;
+    case 0:
+      return Ctx.getOrInsertSyncScopeID("wavefront");
+    case 1:
+      return Ctx.getOrInsertSyncScopeID("workgroup");
+    case 2:
+      return Ctx.getOrInsertSyncScopeID("agent");
+    case 3:
+    default:
+      return llvm::SyncScope::System;
     }
   }
   // gfx7-gfx11 (pre-CDNA3, pre-gfx12): bit 0 = GLC, bit 1 = SLC.
@@ -1763,7 +1820,6 @@ void MIRToIRTranslator::translate() {
           const_cast<llvm::BasicBlock *>(MBB.getNextNode()->getBasicBlock());
       llvm::IRBuilder{BB}.CreateBr(NextBB);
     }
-
   }
 
   /// Pass 3: insert an EXEC-mask predicate check before every vector MBB's
@@ -1868,16 +1924,16 @@ void MIRToIRTranslator::emitExecPredicateCheck(
       I32, llvm::Intrinsic::amdgcn_mbcnt_lo,
       {Builder.getInt32(-1), Builder.getInt32(0)}, nullptr, "mbcnt.lo");
   if (ExecWidth == 64)
-    LaneId = Builder.CreateIntrinsic(
-        I32, llvm::Intrinsic::amdgcn_mbcnt_hi,
-        {Builder.getInt32(-1), LaneId}, nullptr, "mbcnt.hi");
+    LaneId = Builder.CreateIntrinsic(I32, llvm::Intrinsic::amdgcn_mbcnt_hi,
+                                     {Builder.getInt32(-1), LaneId}, nullptr,
+                                     "mbcnt.hi");
 
   llvm::Value *LaneIdExt = Builder.CreateZExtOrTrunc(LaneId, ExecTy);
   llvm::Value *Shifted = Builder.CreateLShr(ExecVal, LaneIdExt, "exec.shifted");
   llvm::Value *Bit =
       Builder.CreateAnd(Shifted, llvm::ConstantInt::get(ExecTy, 1), "exec.bit");
-  llvm::Value *IsActive = Builder.CreateTrunc(Bit, Builder.getInt1Ty(),
-                                              "exec.is.active");
+  llvm::Value *IsActive =
+      Builder.CreateTrunc(Bit, Builder.getInt1Ty(), "exec.is.active");
   Builder.CreateCondBr(IsActive, BodyBB, SkipBB);
 
   /// Skip-path PHI: kept anchored at the vector MBB so that fixupPhis pulls
@@ -1889,7 +1945,7 @@ void MIRToIRTranslator::emitExecPredicateCheck(
 }
 
 bool MIRToIRTranslator::shouldEmitGPRIndexAccess(const llvm::MachineInstr &MI,
-                                                  llvm::MCRegister Reg) const {
+                                                 llvm::MCRegister Reg) const {
   if (!ST.hasVGPRIndexMode())
     return false;
   if (!llvm::SIInstrInfo::isVALU(MI))
@@ -1903,10 +1959,9 @@ bool MIRToIRTranslator::shouldEmitGPRIndexAccess(const llvm::MachineInstr &MI,
   return TRI.isVGPR(MF.getRegInfo(), Reg);
 }
 
-llvm::Value &
-MIRToIRTranslator::emitIndexedVGPRSrc(const llvm::MachineInstr &MI,
-                                       llvm::MCRegister Reg,
-                                       llvm::Type *OutType) {
+llvm::Value &MIRToIRTranslator::emitIndexedVGPRSrc(const llvm::MachineInstr &MI,
+                                                   llvm::MCRegister Reg,
+                                                   llvm::Type *OutType) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI has no parent MBB");
   auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
@@ -1925,17 +1980,14 @@ MIRToIRTranslator::emitIndexedVGPRSrc(const llvm::MachineInstr &MI,
     OutType = I32;
 
   /// MODE.GPR_IDX_EN is bit 27. M0[7:0] is the index.
-  llvm::Value *Mode =
-      &getOperandAsValue(*MBB, llvm::AMDGPU::MODE, I32);
+  llvm::Value *Mode = &getOperandAsValue(*MBB, llvm::AMDGPU::MODE, I32);
   llvm::Value *EnBit = Builder.CreateAnd(
       Builder.CreateLShr(Mode, llvm::ConstantInt::get(I32, 27)),
       llvm::ConstantInt::get(I32, 1));
   llvm::Value *En = Builder.CreateTrunc(EnBit, Builder.getInt1Ty());
 
-  llvm::Value *M0 =
-      &getOperandAsValue(*MBB, llvm::AMDGPU::M0, I32);
-  llvm::Value *Idx =
-      Builder.CreateAnd(M0, llvm::ConstantInt::get(I32, 0xFF));
+  llvm::Value *M0 = &getOperandAsValue(*MBB, llvm::AMDGPU::M0, I32);
+  llvm::Value *Idx = Builder.CreateAnd(M0, llvm::ConstantInt::get(I32, 0xFF));
 
   /// Per-slot select chain across the VGPR file from Reg to end-of-file:
   /// start with the direct read (`Reg + 0`) and, for each subsequent
@@ -1949,8 +2001,7 @@ MIRToIRTranslator::emitIndexedVGPRSrc(const llvm::MachineInstr &MI,
   llvm::MCRegister BaseReg = std::get<0>(Key);
   unsigned BaseHalves = std::get<1>(Key);
   unsigned TotalHalves = RegFileSize[BaseReg];
-  assert(BaseHalves <= TotalHalves &&
-         "Base offset exceeds file allocation");
+  assert(BaseHalves <= TotalHalves && "Base offset exceeds file allocation");
 
   /// Direct read at base register — first slot of the chain.
   llvm::Value *Acc = &getOperandAsValue(*MBB, Reg, OutType);
@@ -1960,8 +2011,7 @@ MIRToIRTranslator::emitIndexedVGPRSrc(const llvm::MachineInstr &MI,
 
   unsigned NumSlots = (TotalHalves - BaseHalves) / 2;
   for (unsigned k = 1; k < NumSlots; ++k) {
-    RegFileKey SlotKey =
-        std::make_tuple(BaseReg, BaseHalves + 2 * k, 2u);
+    RegFileKey SlotKey = std::make_tuple(BaseReg, BaseHalves + 2 * k, 2u);
     llvm::Value *Slot = &getOperandAsValue(*MBB, SlotKey, Builder, I32);
     llvm::Value *KEq =
         Builder.CreateICmpEQ(Idx, llvm::ConstantInt::get(I32, k));
@@ -1974,8 +2024,8 @@ MIRToIRTranslator::emitIndexedVGPRSrc(const llvm::MachineInstr &MI,
 }
 
 void MIRToIRTranslator::emitIndexedVGPRDst(const llvm::MachineInstr &MI,
-                                            llvm::MCRegister Reg,
-                                            llvm::Value *Val) {
+                                           llvm::MCRegister Reg,
+                                           llvm::Value *Val) {
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI has no parent MBB");
   auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
@@ -1990,17 +2040,14 @@ void MIRToIRTranslator::emitIndexedVGPRDst(const llvm::MachineInstr &MI,
   TermInst ? Builder.SetInsertPoint(TermInst) : Builder.SetInsertPoint(BB);
 
   llvm::Type *I32 = Builder.getInt32Ty();
-  llvm::Value *Mode =
-      &getOperandAsValue(*MBB, llvm::AMDGPU::MODE, I32);
+  llvm::Value *Mode = &getOperandAsValue(*MBB, llvm::AMDGPU::MODE, I32);
   llvm::Value *EnBit = Builder.CreateAnd(
       Builder.CreateLShr(Mode, llvm::ConstantInt::get(I32, 27)),
       llvm::ConstantInt::get(I32, 1));
   llvm::Value *En = Builder.CreateTrunc(EnBit, Builder.getInt1Ty());
 
-  llvm::Value *M0 =
-      &getOperandAsValue(*MBB, llvm::AMDGPU::M0, I32);
-  llvm::Value *Idx =
-      Builder.CreateAnd(M0, llvm::ConstantInt::get(I32, 0xFF));
+  llvm::Value *M0 = &getOperandAsValue(*MBB, llvm::AMDGPU::M0, I32);
+  llvm::Value *Idx = Builder.CreateAnd(M0, llvm::ConstantInt::get(I32, 0xFF));
   /// final_idx = en ? Idx : 0
   llvm::Value *FinalIdx =
       Builder.CreateSelect(En, Idx, llvm::ConstantInt::get(I32, 0));
@@ -2027,16 +2074,14 @@ void MIRToIRTranslator::emitIndexedVGPRDst(const llvm::MachineInstr &MI,
   llvm::MCRegister BaseReg = std::get<0>(Key);
   unsigned BaseHalves = std::get<1>(Key);
   unsigned TotalHalves = RegFileSize[BaseReg];
-  assert(BaseHalves <= TotalHalves &&
-         "Base offset exceeds file allocation");
+  assert(BaseHalves <= TotalHalves && "Base offset exceeds file allocation");
   /// 32-bit slots: each occupies 2 halves.
   unsigned NumSlots = (TotalHalves - BaseHalves) / 2;
   for (unsigned k = 0; k < NumSlots; ++k) {
-    RegFileKey SlotKey =
-        std::make_tuple(BaseReg, BaseHalves + 2 * k, 2u);
+    RegFileKey SlotKey = std::make_tuple(BaseReg, BaseHalves + 2 * k, 2u);
     llvm::Value *OldVal = &getOperandAsValue(*MBB, SlotKey, Builder, I32);
-    llvm::Value *Cond = Builder.CreateICmpEQ(
-        FinalIdx, llvm::ConstantInt::get(I32, k));
+    llvm::Value *Cond =
+        Builder.CreateICmpEQ(FinalIdx, llvm::ConstantInt::get(I32, k));
     llvm::Value *NewVal = Builder.CreateSelect(Cond, ValI32, OldVal);
     setRegOperandValue(*MBB, SlotKey, Builder, NewVal);
   }
@@ -2134,8 +2179,7 @@ void MIRToIRTranslator::foldHwregIntrinsics() {
 
     llvm::Intrinsic::ID IID = Call->getIntrinsicID();
 
-    uint32_t FieldMask =
-        (D.Width >= 32 ? ~0u : ((1u << D.Width) - 1u));
+    uint32_t FieldMask = (D.Width >= 32 ? ~0u : ((1u << D.Width) - 1u));
 
     if (IID == llvm::Intrinsic::amdgcn_s_getreg) {
       /// result = (reg_val >> offset) & field_mask

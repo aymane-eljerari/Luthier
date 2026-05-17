@@ -31,10 +31,10 @@
 // #include "luthier/ToolCodeGen/LRCallgraph.h"
 #include "luthier/ToolCodeGen/MemoryAllocationAccessor.h"
 #include "luthier/ToolCodeGen/MetadataParserAnalysis.h"
+#include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
 #include "luthier/ToolCodeGenTesting/MockAMDGPULoader.h"
 #include "luthier/ToolCodeGenTesting/MockLoadAMDGPUCodeObjects.h"
 #include "luthier/ToolCodeGenTesting/MockLoaderMemoryAccessor.h"
-#include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
 // #include "luthier/ToolCodeGen/IPVectorRegLiveness.h"
 // #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
 // #include "luthier/ToolCodeGen/IPPredicatedCFG.h"
@@ -58,6 +58,8 @@ static InstrumentationPMDriverOptions InstrumentationPMOptions;
 static amdgpu::hsamd::MetadataParser MetadataParser;
 
 static MockAMDGPULoaderAnalysisOptions MockLoaderOptions;
+
+static CodeDiscoveryPassOptions CodeDiscoveryOptions;
 
 /// Initialize the intrinsic processor registry here
 static IntrinsicProcessorRegistry IntrinsicProcessorRegistrySingleton;
@@ -345,7 +347,8 @@ llvmGetPassPluginInfo() {
             return true;
           };
           if (Name == "luthier-code-discovery") {
-            MPM.addPass(luthier::CodeDiscoveryPass());
+            MPM.addPass(
+                luthier::CodeDiscoveryPass(luthier::CodeDiscoveryOptions));
             return true;
           }
           if (Name == "luthier-callgraph-printer") {

@@ -342,8 +342,7 @@ class MIRToIRTranslator {
   /// the indexed branch becomes dead and the optimizer collapses the
   /// select to the direct read.
   llvm::Value &emitIndexedVGPRSrc(const llvm::MachineInstr &MI,
-                                  llvm::MCRegister Reg,
-                                  llvm::Type *OutType);
+                                  llvm::MCRegister Reg, llvm::Type *OutType);
 
   /// Emit IR for an indexed VGPR write:
   /// \c VGPR[Reg + (gpr_idx_en ? M0[7:0] : 0)] = Val. Implemented by
@@ -624,18 +623,35 @@ class MIRToIRTranslator {
   void setRegisterFile(const llvm::MachineBasicBlock &MBB, llvm::MCRegister Reg,
                        llvm::IRBuilderBase &Builder, llvm::Value *Val);
 
-public:
+  /// Emits a direct tail call. \p InstAddr is the instruction's PC-value
+  /// (used to compute the absolute call target when \p Target is still a raw
+  /// displacement). \p Target is either an \c llvm::Function* (post-callgraph
+  /// fixup) or a \c ConstantInt displacement (pre-fixup); the implementation
+  /// dispatches on the runtime type.
+  void emitDirectTailCall(const llvm::MachineInstr &MI, llvm::Value *InstAddr,
+                          llvm::Value *Target);
+
   /// Like \c emitIndirectCall but the call is a tail call followed by
-  /// \c ret of the call's return value. Public so post-translation passes
-  /// (e.g. CodeDiscoveryPass's S_CALL_B64 fixup) can re-emit calls after
-  /// late operand resolution.
+  /// \c ret of the call's return value.
   void emitIndirectTailCall(const llvm::MachineInstr &MI, llvm::Value *Target);
 
+public:
   MIRToIRTranslator(llvm::MachineFunction &MF, llvm::Error &Err);
 
-  /// Provides the function type used to create new trace functions with the
-  /// correct prototype by the \p CodeDiscoveryPass
+  /// Provides the function type used for trace device functions; Useful to
+  /// know when creating new device function for translation in the same
+  /// module
   llvm::FunctionType *getStandardDeviceFunctionType() const;
+
+  /// Stateless version of \c getStandardDeviceFunctionType that builds the
+  /// canonical device-function \c FunctionType used for trace functions.
+  /// Can be used to obtain the estimated prototype for a trace function before
+  /// discovering and populating it with machine instructions.
+  /// Returns an \c llvm::Error if \p NumSGPRs or \p NumVGPRs is zero.
+  static llvm::Expected<llvm::FunctionType *>
+  computeStandardDeviceFunctionType(llvm::LLVMContext &Ctx,
+                                    const llvm::GCNSubtarget &ST,
+                                    unsigned NumSGPRs, unsigned NumVGPRs);
 
   /// Main function for performing the IR translation
   void translate();

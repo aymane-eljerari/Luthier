@@ -762,8 +762,8 @@ convertAndAddMCOperandsToMI(llvm::ArrayRef<llvm::MCOperand> MCOperands,
       // TIED_TO constraint, so just adding the register operand sets up
       // the tie — no explicit `tieOperands` call needed (calling it would
       // trip the "Def is already tied" assertion).
-      int TiedToIdx = MCID.getOperandConstraint(MissingExpOpIdx,
-                                                 llvm::MCOI::TIED_TO);
+      int TiedToIdx =
+          MCID.getOperandConstraint(MissingExpOpIdx, llvm::MCOI::TIED_TO);
       if (TiedToIdx >= 0 &&
           static_cast<unsigned>(TiedToIdx) < MIBuilder->getNumOperands()) {
         const llvm::MachineOperand &Def = MIBuilder->getOperand(TiedToIdx);
@@ -1062,19 +1062,40 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
   const llvm::amdhsa::kernel_descriptor_t &InitialExecutionPoint =
       TargetMAM.getResult<InitialExecutionPointAnalysis>(TargetModule)
           .getInitialExecutionPoint();
-
+  /// Initialize the handle for the initial execution point (i.e. the entry
+  /// point used to launch the currently running/about to be launched
+  /// shared/kernel)
   auto InitialExecPointMFAndSymbol = initKernelEntryPointFunction(
       InitialExecutionPoint, SegAccessor, TargetModule, TM, FAM);
-  LUTHIER_CTX_EMIT_ON_ERROR(Ctx, InitialExecPointMFAndSymbol.takeError());
+  if (llvm::Error Err = InitialExecPointMFAndSymbol.takeError()) {
+    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
+    return llvm::PreservedAnalyses::all();
+  }
 
   InitialExecPointMFAndSymbol->first.getFunction().addFnAttr(
-      InitialEntryPointAttr);
+      InitialExecutionPointAttr);
+
+  /// Start of the code discovery loop
 
   llvm::SmallDenseSet<EntryPoint> UnvisitedPointsOfEntry{InitialEntryPoint};
 
   llvm::SmallDenseSet<EntryPoint> VisitedPointsOfEntry{};
 
-  llvm::FunctionType *DeviceFuncTy{nullptr};
+  /// Prototype of the device functions, computed up front via the stateless
+  /// MIRToIRTranslator factory so we don't construct (and re-construct) a
+  /// translator over the initial entry-point MF before the worklist loop.
+  const llvm::MachineFunction &InitialExecPointMF =
+      InitialExecPointMFAndSymbol->first;
+  const llvm::Function &InitialExecPointFn = InitialExecPointMF.getFunction();
+  llvm::Expected<llvm::FunctionType *> DeviceFuncPrototypeOrErr =
+      MIRToIRTranslator::computeStandardDeviceFunctionType(
+          Ctx, InitialExecPointMF.getSubtarget<llvm::GCNSubtarget>(),
+          InitialExecPointFn.getFnAttributeAsParsedInteger("amdgpu-num-sgpr"),
+          InitialExecPointFn.getFnAttributeAsParsedInteger("amdgpu-num-vgpr"));
+  if (llvm::Error Err = DeviceFuncPrototypeOrErr.takeError()) {
+    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
+    return llvm::PreservedAnalyses::all();
+  }
 
   /// Collected across iterations. For each S_CALL_B64 encountered, the MI
   /// initially has a raw 16-bit signed displacement (\c MO_Immediate) as
@@ -1086,6 +1107,8 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
 
   while (!UnvisitedPointsOfEntry.empty()) {
     EntryPoint CurrentEntryPoint = *UnvisitedPointsOfEntry.begin();
+
+    /// Early exit if we've already visited the entry point
     if (VisitedPointsOfEntry.contains(CurrentEntryPoint)) {
       UnvisitedPointsOfEntry.erase(CurrentEntryPoint);
       continue;
@@ -1096,22 +1119,30 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
                << llvm::formatv("{0:x}\n",
                                 CurrentEntryPoint.getEntryPointAddress()));
 
+    /// Initialize the function handle associated with the entry point
     const auto *KDOnDevice = CurrentEntryPoint.getKernelDescriptor();
-    auto [MF, FuncSymRef] =
-        [&]() -> std::pair<llvm::MachineFunction &,
-                           std::optional<object::AMDGCNElfSymbolRef>> {
-      /// Initialize the function handle associated with the entry point
+
+    auto MFAndFuncSymRefOrErr = [&]() -> decltype(InitialExecPointMFAndSymbol) {
       if (KDOnDevice) {
+        if (KDOnDevice != &InitialExecutionPoint)
+          return LUTHIER_MAKE_GENERIC_ERROR(
+              "Initial execution point does not "
+              "match the kernel initial entry point");
         return *InitialExecPointMFAndSymbol;
       } else {
-        auto MFOrAndSymOrErr = initLiftedDeviceFunctionEntry(
+        return initLiftedDeviceFunctionEntry(
             CurrentEntryPoint.getEntryPointAddress(), SegAccessor, TargetModule,
             InitialExecPointMFAndSymbol->first.getFunction(), FAM,
-            DeviceFuncTy);
-        LUTHIER_CTX_EMIT_ON_ERROR(Ctx, MFOrAndSymOrErr.takeError());
-        return *MFOrAndSymOrErr;
+            *DeviceFuncPrototypeOrErr);
       }
     }();
+
+    if (!MFAndFuncSymRefOrErr) {
+      LUTHIER_CTX_EMIT_ON_ERROR(Ctx, MFAndFuncSymRefOrErr.takeError());
+      return llvm::PreservedAnalyses::all();
+    }
+    auto [MF, FuncSymRef] = *MFAndFuncSymRefOrErr;
+
     /// Set the function's entry point as an attribute
     setFunctionEntryPoint(MF.getFunction(), CurrentEntryPoint);
     if (CurrentEntryPoint == InitialEntryPoint) {
@@ -1126,12 +1157,16 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
           Ctx,
           LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
               "Failed to get trace results for function {0}", MF.getName())));
+      return llvm::PreservedAnalyses::all();
     }
-    llvm::SmallVector<llvm::MachineInstr *> UnresolvedTraceTermInstructions{};
+    llvm::SmallVector<llvm::MachineInstr *> TraceTermInstructions{};
     /// Populate the current machine function using the trace info we just
     /// obtained
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, populateMF(*TraceResults.getTraces(), MF,
-                                              UnresolvedTraceTermInstructions));
+    if (llvm::Error Err =
+            populateMF(*TraceResults.getTraces(), MF, TraceTermInstructions)) {
+      LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
+      return llvm::PreservedAnalyses::all();
+    }
 
     /// Invalidate all module-level analysis not related to Functions and
     /// Machine Functions proxies because we just added a new machine function
@@ -1141,82 +1176,61 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     PA.preserve<llvm::FunctionAnalysisManagerModuleProxy>();
     TargetMAM.invalidate(TargetModule, PA);
 
-    // Note: the cross-iteration UnresolvedShortCallInsts is declared above
-    // outside the loop. This local was the legacy per-iteration set —
-    // intentionally unused now; kept as a stub to minimize diff in this file.
-
-    /// TODO: IR translation and indirect branch/call analysis goes here
     llvm::Error Err = llvm::Error::success();
+
+    /// Translate the machine function to LLVM IR
     MIRToIRTranslator Translator{MF, Err};
 
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
-
-    if (MF.getFunction().getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL)
-      DeviceFuncTy = Translator.getStandardDeviceFunctionType();
+    if (Err) {
+      LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
+      return llvm::PreservedAnalyses::all();
+    }
 
     Translator.translate();
 
-    // Invalidate the call graph so it is recomputed over the newly translated
-    // function, then use it to enqueue new entry points.
-    {
-      llvm::PreservedAnalyses CGPA = llvm::PreservedAnalyses::none();
-      CGPA.preserve<llvm::MachineFunctionAnalysisManagerModuleProxy>();
-      CGPA.preserve<llvm::FunctionAnalysisManagerModuleProxy>();
-      TargetMAM.invalidate(TargetModule, CGPA);
-    }
+    /// Go over all discovered call target addresses and add them to be visited
+    /// (if not visited already)
     const LuthierCallGraph &CG =
         TargetMAM.getResult<LuthierCallGraphAnalysis>(TargetModule);
-    for (uint64_t Addr : CG.DiscoveredCallTargetAddresses) {
+    for (uint64_t Addr : CG.discovered_addrs()) {
       LLVM_DEBUG(llvm::dbgs()
                  << "[CodeDiscoveryPass] Callgraph discovered target 0x"
                  << llvm::utohexstr(Addr) << "\n");
-      UnvisitedPointsOfEntry.insert(EntryPoint{Addr});
+      if (EntryPoint DiscoveredEP{Addr};
+          !VisitedPointsOfEntry.contains(DiscoveredEP))
+        UnvisitedPointsOfEntry.insert(DiscoveredEP);
     }
 
-    /// Go over all unresolved trace terminator instructions and process
-    /// them accordingly
-    LLVM_DEBUG(llvm::dbgs() << "[CodeDiscoveryPass] Processing "
-                            << UnresolvedTraceTermInstructions.size()
-                            << " unresolved trace terminators\n");
-    for (llvm::MachineInstr *TraceTermMI : UnresolvedTraceTermInstructions) {
+    LLVM_DEBUG(llvm::dbgs()
+               << "[CodeDiscoveryPass] Processing "
+               << TraceTermInstructions.size() << " trace terminators\n");
+
+    const llvm::TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
+    for (llvm::MachineInstr *TraceTermMI : TraceTermInstructions) {
       /// If a terminator is a call, then it is likely that the instruction
       /// after the call is reachable. Add it to the list of unvisited entry
-      /// points
-      if (TraceTermMI->isCall()) {
+      /// points if it is a trace instruction
+      if (TraceTermMI->isCall() && Opts.EagerDiscoverCallReturnEntryPoint) {
         TargetMachineInstrMDNode *TraceTermMD =
             TargetMachineInstrMDNode::getInstrMDNodeIfExists(*TraceTermMI);
-        assert(TraceTermMD &&
-               "The terminator instruction's MD has not been initialized");
+        if (!TraceTermMD)
+          continue;
         std::optional<uint64_t> TraceTermAddr =
             TraceTermMD->getTraceInstrAddress();
-        assert(TraceTermAddr.has_value() &&
-               "The terminator instruction doesn't have an address");
-        UnvisitedPointsOfEntry.insert(EntryPoint{*TraceTermAddr + 4});
+        if (!TraceTermAddr.has_value())
+          continue;
+        UnvisitedPointsOfEntry.insert(
+            EntryPoint{*TraceTermAddr + TII->getInstSizeInBytes(*TraceTermMI)});
 
         if (TraceTermMI->getOpcode() == llvm::AMDGPU::S_CALL_B64) {
           uint64_t CallTarget =
               InstructionTracesAnalysis::evaluateDirectBranchOrCall(
                   TraceTermMI->getOperand(1).getImm(), *TraceTermAddr);
-          UnvisitedPointsOfEntry.insert(EntryPoint{CallTarget});
           UnresolvedShortCallInsts.emplace_back(TraceTermMI, CallTarget);
           LLVM_DEBUG(llvm::dbgs()
                      << "[CodeDiscoveryPass] Direct call found, target: "
                      << llvm::formatv("{0:x}\n", CallTarget));
-        } else {
-          LLVM_DEBUG(
-              llvm::dbgs()
-              << "[CodeDiscoveryPass] Call instruction target not recovered\n");
-          if (!TargetModule.getModuleFlag("luthier.cg.not_recovered"))
-            TargetModule.addModuleFlag(llvm::Module::Warning,
-                                       "luthier.cg.not_recovered", false);
         }
-      } else if (TraceTermMI->isIndirectBranch()) {
-        LLVM_DEBUG(
-            llvm::dbgs()
-            << "[CodeDiscoveryPass] Indirect branch target not recovered\n");
-        if (!TargetModule.getModuleFlag("luthier.cg.not_recovered"))
-          TargetModule.addModuleFlag(llvm::Module::Warning,
-                                     "luthier.cg.not_recovered", false);
       }
     }
 
@@ -1224,11 +1238,8 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     VisitedPointsOfEntry.insert(CurrentEntryPoint);
   }
 
-  /// All entry points discovered. Rewrite each S_CALL_B64's $simm16 operand
-  /// from a raw 16-bit displacement (\c MO_Immediate) to \c MO_GlobalAddress
-  /// pointing at the resolved callee \c Function. Build an address→Function
-  /// map by scanning the module for functions whose entry-point attribute
-  /// matches.
+  /// Rewrite each S_CALL_B64's $simm16 operand from the raw 16-bit
+  /// displacement immediate to the resolved callee Function
   llvm::DenseMap<uint64_t, llvm::Function *> AddrToFunction;
   for (llvm::Function &F : TargetModule) {
     if (auto EP = getFunctionEntryPoint(F))
@@ -1237,13 +1248,14 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
   for (auto [MI, TargetAddr] : UnresolvedShortCallInsts) {
     auto It = AddrToFunction.find(TargetAddr);
     if (It == AddrToFunction.end()) {
-      LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
-                     "[CodeDiscoveryPass] S_CALL_B64 target {0:x} did not "
-                     "resolve to a Function; leaving operand as imm\n",
-                     TargetAddr));
-      continue;
+      LUTHIER_CTX_EMIT_ON_ERROR(
+          Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+                   "[CodeDiscoveryPass] S_CALL_B64 target {0:x} did not "
+                   "resolve to a Function",
+                   TargetAddr)));
+      return llvm::PreservedAnalyses::all();
     }
-    // Operand 1 is $simm16. Replace with MO_GlobalAddress(F, 0).
+    // Replace call target with MO_GlobalAddress(F, 0).
     assert(MI->getNumOperands() >= 2 &&
            "S_CALL_B64 must have at least 2 operands");
     MI->getOperand(1).ChangeToGA(It->second, /*Offset=*/0);
@@ -1252,24 +1264,29 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
                    "Function '{0}' (addr {1:x})\n",
                    It->second->getName(), TargetAddr));
 
-    // Emit the call instruction now that the target is resolved. During the
-    // main translation pass the operand was still an Imm, so the
-    // `DirectCall (GetNamedOperandAsFunction $simm16)` body no-op'd. We
-    // construct an IRBuilder at the right insertion point (end of the MI's
-    // IR BasicBlock, before the terminator) and use the existing
-    // emitIndirectTailCall plumbing with the resolved Function.
+    /// Replace the original indirect call emitted with a direct call for
+    /// S_CALL_B64
     const llvm::MachineBasicBlock *MBB = MI->getParent();
     auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
-    if (!BB) continue;
-    llvm::Function &ContainingFn = *BB->getParent();
-    llvm::MachineFunction *ContainingMF =
-        const_cast<llvm::MachineFunction *>(MBB->getParent());
-    llvm::Error Err = llvm::Error::success();
-    MIRToIRTranslator FixupTranslator{*ContainingMF, Err};
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
-    if (ContainingFn.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL)
-      DeviceFuncTy = FixupTranslator.getStandardDeviceFunctionType();
-    FixupTranslator.emitIndirectTailCall(*MI, It->second);
+    /// In cases where the call is not a trace instruction, it might be
+    /// optimized away; No need to freak out if we can't find its associated
+    /// terminator instruction
+    if (!BB)
+      continue;
+    /// Walk BB backwards from the terminator to find the tail call emitted
+    /// by the translation pass. The terminator itself is the trailing
+    /// \c unreachable; the CallInst we want sits just before it.
+    llvm::CallInst *CallTerm = nullptr;
+    for (llvm::Instruction &I : llvm::reverse(*BB)) {
+      if (auto *Call = llvm::dyn_cast<llvm::CallInst>(&I);
+          Call && Call->isTailCall()) {
+        CallTerm = Call;
+        break;
+      }
+    }
+    if (!CallTerm)
+      continue;
+    CallTerm->setCalledFunction(It->second);
   }
 
   llvm::PreservedAnalyses PA = llvm::PreservedAnalyses::none();

@@ -14,25 +14,25 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 /// \file LuthierCallGraph.h
-/// Declares the \c LuthierCallGraph module analysis that recovers the call
-/// graph of a Luthier-translated IR module.
+/// Declares the \c LuthierCallGraph target module analysis that recovers the
+/// call graph of a Luthier-translated target IR module.
 ///
 /// Unlike LLVM's LazyCallGraph, this analysis resolves indirect call targets
 /// by symbolically evaluating the callee operands, handling
-/// \c amdgcn_s_getpc intrinsic chains (whose folded value is read from
+/// \c amdgcn_s_getpc intrinsic chains (whose folded value is read from the
 /// \c MD_pcsections metadata) and performing inter-procedural constant
-/// propagation through function arguments.  A single call site may map to
+/// propagation through function arguments. A single call site may map to
 /// multiple target \c Function* values; call sites that cannot be fully
 /// resolved are flagged as incomplete.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOL_CODE_GEN_LUTHIER_CALL_GRAPH_H
 #define LUTHIER_TOOL_CODE_GEN_LUTHIER_CALL_GRAPH_H
-
+#include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/DenseSet.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/iterator_range.h>
 #include <llvm/IR/PassManager.h>
-#include <llvm/Support/raw_os_ostream.h>
 
 namespace llvm {
 class CallInst;
@@ -42,32 +42,112 @@ class Module;
 
 namespace luthier {
 
-/// TODO: Make these fields private, and provide public accessors instead.
 /// Result of the \c LuthierCallGraphAnalysis.
-struct LuthierCallGraph {
-  /// Map from an indirect \c CallInst to its discovered \c Function targets.
-  /// Only indirect calls (those without a compile-time \c Function* callee)
-  /// appear here; direct calls are already resolved by the IR.
-  llvm::DenseMap<llvm::CallInst *, llvm::SmallVector<llvm::Function *>>
-      CallTargets;
+class LuthierCallGraph {
+public:
+  using CallTargetsMapT =
+      llvm::DenseMap<llvm::CallInst *, llvm::SmallVector<llvm::Function *>>;
+  using DiscoveredAddrsSetT = llvm::DenseSet<uint64_t>;
+  using IncompleteCallSitesSetT = llvm::DenseSet<llvm::CallInst *>;
 
-  /// All binary addresses discovered as indirect call targets, regardless of
-  /// whether the corresponding \c Function* already exists in the module.
-  /// This is used by the \c CodeDiscoveryPass to enqueue new entry points
-  /// before the callee stubs have been created.
-  llvm::DenseSet<uint64_t> DiscoveredCallTargetAddresses;
+private:
+  friend class LuthierCallGraphAnalysis;
 
-  /// Call sites for which the analysis could not determine ALL targets.
-  /// A call site may be partially resolved (some targets in \c CallTargets)
-  /// yet still appear here if other targets remain unknown.
-  llvm::DenseSet<llvm::CallInst *> IncompleteCallSites;
+  CallTargetsMapT CallTargets;
 
-  /// True iff every indirect call site in the module has been fully resolved.
+  DiscoveredAddrsSetT DiscoveredCallTargetAddresses;
+
+  IncompleteCallSitesSetT IncompleteCallSites;
+
   bool FullyRecovered = true;
 
-  /// Standard LLVM invalidation protocol.
+public:
+  /// == Call targets (indirect CallInst → list of resolved Function*) =========
+  /// Only indirect calls (those without a compile-time Function* callee) appear
+  /// here; direct calls are already resolved by the IR.
+
+  using call_targets_iterator = CallTargetsMapT::const_iterator;
+
+  call_targets_iterator call_targets_begin() const {
+    return CallTargets.begin();
+  }
+  call_targets_iterator call_targets_end() const { return CallTargets.end(); }
+  llvm::iterator_range<call_targets_iterator> call_targets() const {
+    return {call_targets_begin(), call_targets_end()};
+  }
+  size_t call_targets_size() const { return CallTargets.size(); }
+  bool call_targets_empty() const { return CallTargets.empty(); }
+
+  /// Lookup by call site; returns end() if \p CI has no resolved targets.
+  call_targets_iterator findCallTargets(llvm::CallInst *CI) const {
+    return CallTargets.find(CI);
+  }
+  /// Returns the resolved targets of \p CI. Asserts that \p CI is present.
+  llvm::ArrayRef<llvm::Function *> atCallTargets(llvm::CallInst *CI) const {
+    return CallTargets.at(CI);
+  }
+
+  /// == Discovered call-target addresses ======================================
+  /// All binary addresses discovered as indirect call targets, regardless of
+  /// whether the corresponding Function* already exists in the module. Used by
+  /// CodeDiscoveryPass to enqueue new entry points before the callee stubs
+  /// have been created.
+
+  using discovered_addrs_iterator = DiscoveredAddrsSetT::const_iterator;
+
+  discovered_addrs_iterator discovered_addrs_begin() const {
+    return DiscoveredCallTargetAddresses.begin();
+  }
+  discovered_addrs_iterator discovered_addrs_end() const {
+    return DiscoveredCallTargetAddresses.end();
+  }
+  llvm::iterator_range<discovered_addrs_iterator> discovered_addrs() const {
+    return {discovered_addrs_begin(), discovered_addrs_end()};
+  }
+  size_t discovered_addrs_size() const {
+    return DiscoveredCallTargetAddresses.size();
+  }
+  bool discovered_addrs_empty() const {
+    return DiscoveredCallTargetAddresses.empty();
+  }
+  bool containsDiscoveredAddr(uint64_t Addr) const {
+    return DiscoveredCallTargetAddresses.contains(Addr);
+  }
+
+  /// == Incomplete call sites =================================================
+  /// Call sites for which the analysis could not determine ALL targets. A call
+  /// site may be partially resolved (some targets in the call-targets map) yet
+  /// still appear here if other targets remain unknown.
+
+  using incomplete_call_sites_iterator =
+      IncompleteCallSitesSetT::const_iterator;
+
+  incomplete_call_sites_iterator incomplete_call_sites_begin() const {
+    return IncompleteCallSites.begin();
+  }
+  incomplete_call_sites_iterator incomplete_call_sites_end() const {
+    return IncompleteCallSites.end();
+  }
+  llvm::iterator_range<incomplete_call_sites_iterator>
+  incomplete_call_sites() const {
+    return {incomplete_call_sites_begin(), incomplete_call_sites_end()};
+  }
+  size_t incomplete_call_sites_size() const {
+    return IncompleteCallSites.size();
+  }
+  bool incomplete_call_sites_empty() const {
+    return IncompleteCallSites.empty();
+  }
+  bool containsIncompleteCallSite(llvm::CallInst *CI) const {
+    return IncompleteCallSites.contains(CI);
+  }
+
+  /// \return \c True iff every indirect call site in the module has been fully
+  /// resolved
+  bool isFullyRecovered() const { return FullyRecovered; }
+
   /// The analysis is invalidated whenever the module IR is modified
-  /// (e.g. a new function is added or a CFG edge changes).
+  /// (e.g. a new function is added or a CFG edge changes)
   bool invalidate(llvm::Module &M, const llvm::PreservedAnalyses &PA,
                   llvm::ModuleAnalysisManager::Invalidator &Inv);
 };

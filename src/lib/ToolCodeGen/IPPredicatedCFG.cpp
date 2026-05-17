@@ -120,7 +120,7 @@ IPPredicatedCFG::getIPPredCFG(llvm::Module &M,
   // ── Phase 3: inter-procedural edges from LuthierCallGraph ───────────────
   auto &CG = MAM.getResult<LuthierCallGraphAnalysis>(M);
 
-  for (auto &[CI, Targets] : CG.CallTargets) {
+  for (auto &[CI, Targets] : CG.call_targets()) {
     auto *SrcMBB = IRBBToMBB.lookup(CI->getParent());
     if (!SrcMBB)
       continue;
@@ -135,7 +135,7 @@ IPPredicatedCFG::getIPPredCFG(llvm::Module &M,
     }
   }
 
-  for (llvm::CallInst *CI : CG.IncompleteCallSites) {
+  for (llvm::CallInst *CI : CG.incomplete_call_sites()) {
     auto *SrcMBB = IRBBToMBB.lookup(CI->getParent());
     if (!SrcMBB)
       continue;

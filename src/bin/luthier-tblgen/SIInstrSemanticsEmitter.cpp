@@ -172,19 +172,24 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
       OS << ")";
     }
 
-    // --- DirectCall <function-expr> ---
-    // Emits a direct call instruction targeting the given llvm::Function*.
-    // Reuses emitIndirectTailCall plumbing (constructs the standard
-    // device-function-typed argument tuple and emits the call).
+    // --- DirectCall <inst-addr> <callee-expr> ---
+    // Emits a direct call. The first argument is the instruction's PC-value
+    // (used to compute the absolute target when the callee operand is still
+    // a raw displacement); the second is the callee, which may be either an
+    // llvm::Function* (post-callgraph fixup) or a ConstantInt displacement
+    // (pre-fixup). Dispatches to MIRToIRTranslator::emitDirectTailCall, which
+    // picks the right lowering based on the callee's runtime type.
     else if (OpName == "DirectCall") {
-      if (unsigned NumArgs = Dag->getNumArgs(); NumArgs != 1)
+      if (unsigned NumArgs = Dag->getNumArgs(); NumArgs != 2)
         llvm::PrintFatalError(
             Loc,
-            "Expected `DirectCall` to have 1 argument (the callee function), "
-            "got " +
+            "Expected `DirectCall` to have 2 arguments (instruction PC, "
+            "callee Function* or displacement), got " +
                 llvm::Twine(NumArgs) + " instead");
-      OS << "Translator.emitIndirectTailCall(MI, ";
+      OS << "Translator.emitDirectTailCall(MI, ";
       emitSemanticStatement(OS, Dag->getArg(0), Loc);
+      OS << ", ";
+      emitSemanticStatement(OS, Dag->getArg(1), Loc);
       OS << ")";
     }
 

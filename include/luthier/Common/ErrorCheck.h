@@ -20,6 +20,8 @@
 #ifndef LUTHIER_COMMON_ERROR_CHECK_H
 #define LUTHIER_COMMON_ERROR_CHECK_H
 
+/// TODO: Rework these macros, and unify their uses across the project
+
 /// \brief Reports a fatal error if the passed \p llvm::Error argument is not
 /// equal to \c llvm::ErrorSuccess
 #define LUTHIER_REPORT_FATAL_ON_ERROR(Error)                                   \
