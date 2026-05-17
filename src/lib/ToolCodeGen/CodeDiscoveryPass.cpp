@@ -813,8 +813,6 @@ initLiftedDeviceFunctionEntry(uint64_t DeviceEntryPointAddr,
                               const llvm::Function &InitialExecutionPoint,
                               llvm::FunctionAnalysisManager &FAM,
                               llvm::FunctionType *DevFuncTy) {
-
-  llvm::LLVMContext &LLVMContext = TargetModule.getContext();
   auto SegmentOrErr = SegAccessor.getAllocationDescriptor(DeviceEntryPointAddr);
   LUTHIER_RETURN_ON_ERROR(SegmentOrErr.takeError());
   if (SegmentOrErr->empty())
@@ -878,8 +876,6 @@ initLiftedDeviceFunctionEntry(uint64_t DeviceEntryPointAddr,
   return std::make_pair(std::ref(MF), FuncSymRef);
 }
 
-// shouldImplicitReadExec is shared with other passes via MIRConvenience.h.
-
 /// Walks over the \p MCOperands and converts them to \c llvm::MachineOperand
 /// instances before adding them to the \c llvm::MachineInstr managed
 /// by the \p MIBuilder
@@ -931,7 +927,7 @@ convertAndAddMCOperandsToMI(llvm::ArrayRef<llvm::MCOperand> MCOperands,
         if (llvm::SIInstrInfo::isSOPK(*MIBuilder)) {
           LLVM_DEBUG(llvm::dbgs()
                      << "[CodeDiscoveryPass] Instruction is in SOPK format\n");
-          if (llvm::SIInstrInfo::sopkIsZext(MIBuilder->getOpcode())) {
+          if (llvm::SIInstrInfo::sopkIsZext(Opcode)) {
             auto Imm = static_cast<uint16_t>(MCOp.getImm());
             LLVM_DEBUG(
                 llvm::dbgs() << llvm::formatv(
@@ -997,20 +993,20 @@ convertAndAddMCOperandsToMI(llvm::ArrayRef<llvm::MCOperand> MCOperands,
                << "[CodeDiscoveryPass] Num explicit operands added: "
                << NumMCOps << ", "
                << "expected: " << MCID.NumOperands << "\n");
-    // Loop over missing explicit operands (if any) and synthesize them.
+    // Loop over missing explicit operands (if any) and synthesize them
     //
     // Two kinds need fixup here:
     //  1. Immediate slots (e.g. AMDGPU `op_sel` / `clamp` / `omod` and other
     //     defaulted-to-zero modifier immediates that aren't part of the asm
-    //     syntax). We emit a 0 immediate.
+    //     syntax). We emit a 0 immediate
     //  2. Tied-input register slots (e.g. FLAT_LOAD_*_D16 / _D16_HI / _t16
     //     all carry a `$vdst_in` tied to `$vdst`; VOP3 `src2_modifiers` ties
     //     similarly; many AGPR/D16 partial-write atomics tie `$vdst_in` to
     //     `$vdst`). MCInst never contains tied operands; we synthesize them
-    //     from the def at the tied-to index and call `tieOperands`.
+    //     from the def at the tied-to index and call `tieOperands`
     //
     // Other operand kinds (e.g. expressions) are not synthesizable from this
-    // limited context; we leave them unfilled for later passes.
+    // limited context; we leave them unfilled for later passes
     for (unsigned int MissingExpOpIdx = NumMCOps;
          MissingExpOpIdx < MCID.NumOperands; MissingExpOpIdx++) {
       LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
@@ -1025,11 +1021,11 @@ convertAndAddMCOperandsToMI(llvm::ArrayRef<llvm::MCOperand> MCOperands,
         continue;
       }
       // Tied input: the missing slot is tied to an earlier def — read the
-      // same physical register the def writes (live-in value).
+      // same physical register the def writes (live-in value)
       // `MachineInstr::addOperand` auto-ties uses based on the MCID's
       // TIED_TO constraint, so just adding the register operand sets up
       // the tie — no explicit `tieOperands` call needed (calling it would
-      // trip the "Def is already tied" assertion).
+      // trip the "Def is already tied" assertion)
       int TiedToIdx =
           MCID.getOperandConstraint(MissingExpOpIdx, llvm::MCOI::TIED_TO);
       if (TiedToIdx >= 0 &&
