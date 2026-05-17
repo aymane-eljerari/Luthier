@@ -726,10 +726,21 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
   auto &ST = TM.getSubtarget<llvm::GCNSubtarget>(*F);
 
   /// Set pre-loaded kernel argument field for targets that support it
+  /// For now only the length part is supported by the backend so the offset
+  /// is captured for Luthier use only
   if (ST.hasKernargPreload()) {
-    /// TODO: It seems the AMDGPU backend doesn't support the offset field of
-    /// kernarg_preload for now. Fix it once it is added to LLVM upstream
-    MFI->getUserSGPRInfo().allocKernargPreloadSGPRs(KDOnHost.kernarg_preload);
+    unsigned PreloadLength = AMDHSA_BITS_GET(
+        KDOnHost.kernarg_preload, llvm::amdhsa::KERNARG_PRELOAD_SPEC_LENGTH);
+    MFI->getUserSGPRInfo().allocKernargPreloadSGPRs(PreloadLength);
+
+    F->addFnAttr("amdgpu.kd.kernarg_preload_length",
+                 llvm::formatv("{0}", PreloadLength).str());
+    F->addFnAttr(
+        "amdgpu.kd.kernarg_preload_offset",
+        llvm::formatv(
+            "{0}", AMDHSA_BITS_GET(KDOnHost.kernarg_preload,
+                                   llvm::amdhsa::KERNARG_PRELOAD_SPEC_OFFSET))
+            .str());
   }
 
   /// Fix up some of the MFI fields that have a direct IR attribute but doesn't
