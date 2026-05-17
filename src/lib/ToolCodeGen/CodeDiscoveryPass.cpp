@@ -362,41 +362,107 @@ parseKDRsrc2(const llvm::amdhsa::kernel_descriptor_t &KD,
   return llvm::Error::success();
 }
 
-// static llvm::Error parseKDRsrc3(const llvm::amdhsa::kernel_descriptor_t &KD,
-//                                 const llvm::GCNTargetMachine &TM,
-//                                 llvm::Function &F) {
-//   auto &ST = TM.getSubtarget<llvm::GCNSubtarget>(F);
-//   auto Generation = ST.getGeneration();
-/// Rsrc3 for GFX90A and GFX942 ==============================================
+static inline llvm::Error
+parseKDRsrc3(const llvm::amdhsa::kernel_descriptor_t &KD,
+             const llvm::GCNTargetMachine &TM, llvm::Function &F) {
+  auto &ST = TM.getSubtarget<llvm::GCNSubtarget>(F);
 
-/// ACCUM_OFFSET is automatically calculated based off of vgpr and agpr usage
-/// of the MF
+  /// Rsrc3 for GFX90A and GFX942 ==============================================
+  /// ACCUM_OFFSET is automatically set by the backend from vgpr/agpr usage of
+  /// the MF
+  /// TG_SPLIT is set by the backend via the cumode subtarget feature
 
-/// TG_SPLIT is set by the TM cumode feature
+  /// Rsrc3 for GFX10 and GFX11 ================================================
+  /// SHARED_VGPR_COUNT (4 bits) is not written by the AsmPrinter into the
+  /// binary KD. Capture for the post-AsmPrinter patcher
+  if (llvm::AMDGPU::isGFX10_GFX11(ST)) {
+    F.addFnAttr(
+        "amdgpu.kd.shared_vgpr_count",
+        llvm::formatv(
+            "{0}",
+            AMDHSA_BITS_GET(
+                KD.compute_pgm_rsrc3,
+                llvm::amdhsa::COMPUTE_PGM_RSRC3_GFX10_GFX11_SHARED_VGPR_COUNT))
+            .str());
+  }
 
-/// Rsrc3 for GFX10 and 11 ===================================================
+  /// Rsrc3 for GFX11 only =====================================================
+  /// INST_PREF_SIZE is automatically calculated by the backend from the
+  /// kernel code size — no capture.
+  /// TRAP_ON_START / TRAP_ON_END are HW/CP-managed bits not written by the
+  /// AsmPrinter. Capture for round-trip fidelity.
+  if (llvm::AMDGPU::isGFX11(ST)) {
+    F.addFnAttr(
+        "amdgpu.kd.trap_on_start",
+        AMDHSA_BITS_GET(KD.compute_pgm_rsrc3,
+                        llvm::amdhsa::COMPUTE_PGM_RSRC3_GFX11_TRAP_ON_START)
+            ? "1"
+            : "0");
+    F.addFnAttr(
+        "amdgpu.kd.trap_on_end",
+        AMDHSA_BITS_GET(KD.compute_pgm_rsrc3,
+                        llvm::amdhsa::COMPUTE_PGM_RSRC3_GFX11_TRAP_ON_END)
+            ? "1"
+            : "0");
+  }
 
-/// SHARED_VGPR_COUNT is not set by the backend; Must be manually fixed
-/// after the assembly is printed
+  /// Rsrc3 for GFX11+ =========================================================
+  /// IMAGE_OP is not set by the backend. Capture for the post-AsmPrinter
+  /// patcher
+  if (llvm::AMDGPU::isGFX11Plus(ST)) {
+    F.addFnAttr(
+        "amdgpu.kd.image_op",
+        AMDHSA_BITS_GET(KD.compute_pgm_rsrc3,
+                        llvm::amdhsa::COMPUTE_PGM_RSRC3_GFX11_PLUS_IMAGE_OP)
+            ? "1"
+            : "0");
+  }
 
-/// INST_PREF_SIZE is automatically calculated according to the size of the
-/// code of the kernel
+  /// Rsrc3 for GFX12+ =========================================================
+  /// INST_PREF_SIZE is automatically calculated by the backend — no capture.
+  /// GLG_EN is not set by either the backend or MC. Capture
+  if (llvm::AMDGPU::isGFX12Plus(ST)) {
+    F.addFnAttr(
+        "amdgpu.kd.glg_en",
+        AMDHSA_BITS_GET(KD.compute_pgm_rsrc3,
+                        llvm::amdhsa::COMPUTE_PGM_RSRC3_GFX12_PLUS_GLG_EN)
+            ? "1"
+            : "0");
+  }
 
-/// TRAP_ON_START and TRAP_ON_END are filled in by the CP
+  /// Rsrc3 for GFX12.5 only ===================================================
+  /// NAMED_BAR_CNT is set by the backend from \c ProgInfo.NamedBarCnt after
+  /// counting the named barriers
+  ///
+  /// ENABLE_DYNAMIC_VGPR (gfx12.5 puts this in rsrc3; gfx12.0 puts the same
+  /// flag in rsrc2 — captured there). Not written by the AsmPrinter
+  /// TCP_SPLIT (3 bits) and ENABLE_DIDT_THROTTLE (1 bit) likewise only appear
+  /// in the disassembler's pseudo-directive output and are not written by the
+  /// AsmPrinter. Capture all three for the post-AsmPrinter patcher
+  if (llvm::AMDGPU::isGFX1250(ST)) {
+    F.addFnAttr("amdgpu.kd.enable_dynamic_vgpr",
+                AMDHSA_BITS_GET(
+                    KD.compute_pgm_rsrc3,
+                    llvm::amdhsa::COMPUTE_PGM_RSRC3_GFX125_ENABLE_DYNAMIC_VGPR)
+                    ? "1"
+                    : "0");
+    F.addFnAttr(
+        "amdgpu.kd.tcp_split",
+        llvm::formatv(
+            "{0}",
+            AMDHSA_BITS_GET(KD.compute_pgm_rsrc3,
+                            llvm::amdhsa::COMPUTE_PGM_RSRC3_GFX125_TCP_SPLIT))
+            .str());
+    F.addFnAttr("amdgpu.kd.enable_didt_throttle",
+                AMDHSA_BITS_GET(
+                    KD.compute_pgm_rsrc3,
+                    llvm::amdhsa::COMPUTE_PGM_RSRC3_GFX125_ENABLE_DIDT_THROTTLE)
+                    ? "1"
+                    : "0");
+  }
 
-/// IMAGE_OP is not set by the backend; Must be manually fixed after the
-/// assembly is printed
-
-/// Rsrc3 for GFX12 ==========================================================
-
-/// INST_PREF_SIZE is automatically calculated according to the size of the
-/// code of the kernel
-
-/// GLG_EN is not set either by the backend or MC
-
-/// IMAGE_OP is not set by the backend; Must be manually fixed after the
-/// assembly is printed
-// }
+  return llvm::Error::success();
+}
 
 inline llvm::Error
 parseKDKernelCode(const llvm::amdhsa::kernel_descriptor_t &KD,
@@ -501,11 +567,9 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
   std::optional<object::AMDGCNKernelDescSymbolRef> KDSymbolIfPresent{
       std::nullopt};
 
-  auto *ObjFile = SegmentOrErr->getAllocationCodeObject();
-
   /// If the KD allocation has a code object associated with it,
   /// locate the KD's symbol
-  if (ObjFile) {
+  if (auto *ObjFile = SegmentOrErr->getAllocationCodeObject()) {
     /// Lambda is used instead of a plain loop for easier break/error checking
     llvm::Expected<object::AMDGCNKernelDescSymbolRef> KDSymbolOrErr =
         [&]() -> llvm::Expected<object::AMDGCNKernelDescSymbolRef> {
@@ -522,7 +586,7 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
         }
       }
       LUTHIER_RETURN_ON_ERROR(Err);
-      return llvm::make_error<GenericLuthierError>(llvm::formatv(
+      return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
           "Failed to get the KD associated with address {0:x}", KDLoadOffset));
     }();
     LUTHIER_RETURN_ON_ERROR(KDSymbolOrErr.takeError());
@@ -582,6 +646,7 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
   /// lift it
   LUTHIER_RETURN_ON_ERROR(parseKDRsrc1(KDOnHost, TM, *F));
   LUTHIER_RETURN_ON_ERROR(parseKDRsrc2(KDOnHost, TM, *F));
+  LUTHIER_RETURN_ON_ERROR(parseKDRsrc3(KDOnHost, TM, *F));
 
   // Populate the MFI ==========================================================
 
