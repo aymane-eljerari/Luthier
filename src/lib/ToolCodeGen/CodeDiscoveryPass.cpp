@@ -43,8 +43,6 @@
 #include <llvm/MC/MCDisassembler/MCDisassembler.h>
 #include <llvm/MC/MCInstPrinter.h>
 #include <llvm/MC/TargetRegistry.h>
-// #include <luthier/ToolCodeGen/IPVectorRegLiveness.h>
-// #include <luthier/ToolCodeGen/IndirectBranchResolverAnalysis.h>
 #include "luthier/ToolCodeGen/InitialExecutionPointAnalysis.h"
 #include "luthier/ToolCodeGen/LuthierCallGraph.h"
 #include "luthier/ToolCodeGen/MIRToIRTranslator.h"
@@ -74,8 +72,24 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
   /// PRIORITY is set by the CP automatically
 
   /// FLOAT_ROUND_MODE_32, FLOAT_ROUND_MODE_16_64 fields are set to
-  /// FP_ROUND_ROUND_TO_NEAREST no matter what, so we will fix it once we
-  /// have printed the relocatable of the instrumented object
+  /// FP_ROUND_ROUND_TO_NEAREST no matter what by the AMDGPU AsmPrinter
+  /// (see \c getFPMode in \c AMDGPUAsmPrinter.cpp). Capture the original
+  /// 2-bit field values as \c amdgpu.kd.* attributes so that we
+  /// pass can patch the rsrc1 bits back after the assembly is printed
+  F.addFnAttr(
+      "amdgpu.kd.float_round_mode_32",
+      llvm::formatv(
+          "{0}",
+          AMDHSA_BITS_GET(KD.compute_pgm_rsrc1,
+                          llvm::amdhsa::COMPUTE_PGM_RSRC1_FLOAT_ROUND_MODE_32))
+          .str());
+  F.addFnAttr(
+      "amdgpu.kd.float_round_mode_16_64",
+      llvm::formatv("{0}",
+                    AMDHSA_BITS_GET(
+                        KD.compute_pgm_rsrc1,
+                        llvm::amdhsa::COMPUTE_PGM_RSRC1_FLOAT_ROUND_MODE_16_64))
+          .str());
 
   /// Lift FLOAT_DENORM_MODE_32 field
   auto Float32Denorm =
@@ -96,8 +110,8 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
     Denorm32Val = ",";
     break;
   default:
-    return llvm::make_error<GenericLuthierError>(
-        "Invalid FP 32 denorm field " + llvm::to_string(Float32Denorm) + ".");
+    return LUTHIER_MAKE_GENERIC_ERROR("Invalid FP 32 denorm field " +
+                                      llvm::to_string(Float32Denorm) + ".");
   }
   F.addFnAttr("denormal-fp-math-f32", Denorm32Val);
   /// Lift FLOAT_DENORM_MODE_16_64 field
@@ -119,16 +133,20 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
     Denorm1664Val = ",";
     break;
   default:
-    return llvm::make_error<GenericLuthierError>(
-        "Invalid FP 16/64 denorm field " + llvm::to_string(Float32Denorm) +
-        ".");
+    return LUTHIER_MAKE_GENERIC_ERROR("Invalid FP 16/64 denorm field " +
+                                      llvm::to_string(Float32Denorm) + ".");
   }
   F.addFnAttr("denormal-fp-math", Denorm1664Val);
   /// Lift ENABLE_DX10_CLAMP if gfx11-; Otherwise lift WG_RR_EN
   if (ST.hasRrWGMode()) {
-    /// WG_RR_EN is set to zero by the backend; must be fixed after the assembly
-    /// is printed
-
+    /// WG_RR_EN is set to zero by the backend; capture original bit as a
+    /// harmless \c amdgpu.kd.* attribute for the post-AsmPrinter patcher.
+    F.addFnAttr("amdgpu.kd.enable_wg_rr_en",
+                AMDHSA_BITS_GET(
+                    KD.compute_pgm_rsrc1,
+                    llvm::amdhsa::COMPUTE_PGM_RSRC1_GFX12_PLUS_ENABLE_WG_RR_EN)
+                    ? "1"
+                    : "0");
   } else {
     F.addFnAttr(
         "amdgpu-dx10-clamp",
@@ -141,8 +159,8 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
 
   /// DEBUG_MODE is set by the CP
 
-  /// Lift ENABLE_IEEE_MODE if gfx11-; DISABLE_PERF is reserved and must be set
-  /// to zero
+  /// Lift ENABLE_IEEE_MODE if gfx11-; DISABLE_PERF is reserved (gfx12+) and
+  /// is set to zero by the AsmPrinter
   if (ST.hasIEEEMode()) {
     F.addFnAttr("amdgpu-ieee",
                 AMDHSA_BITS_GET(
@@ -156,16 +174,38 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
 
   /// CDBG_USER is set by CP
 
-  /// FP16_OVFL can be queried on device code, but there's no place to set it
-  /// at the MIR level
+  /// FP16_OVFL (gfx9+) can be queried on device code, but there's no place to
+  /// set it at the MIR level
+  if (llvm::AMDGPU::isGFX9Plus(ST)) {
+    F.addFnAttr(
+        "amdgpu.kd.fp16_ovfl",
+        AMDHSA_BITS_GET(KD.compute_pgm_rsrc1,
+                        llvm::amdhsa::COMPUTE_PGM_RSRC1_GFX9_PLUS_FP16_OVFL)
+            ? "1"
+            : "0");
+  }
 
   /// WGP_MODE is set by the cumode feature in the subtarget
 
-  /// MEM_ORDERED is always set to 1 for GFX10+ in the backend, so we will fix
+  /// MEM_ORDERED (gfx10+) is always set to 1 by the AsmPrinter, so we will fix
   /// it once we have printed the relocatable of the instrumented object
+  if (llvm::AMDGPU::isGFX10Plus(ST)) {
+    F.addFnAttr(
+        "amdgpu.kd.mem_ordered",
+        AMDHSA_BITS_GET(KD.compute_pgm_rsrc1,
+                        llvm::amdhsa::COMPUTE_PGM_RSRC1_GFX10_PLUS_MEM_ORDERED)
+            ? "1"
+            : "0");
 
-  /// FWD_PROGRESS is always set to 1 for GFX10+, so we will fix it once we
-  /// have printed the relocatable of the instrumented object
+    /// FWD_PROGRESS (gfx10+) is always set to 1 by the AsmPrinter. Capture the
+    /// original bit so the post-AsmPrinter patcher can restore it
+    F.addFnAttr(
+        "amdgpu.kd.fwd_progress",
+        AMDHSA_BITS_GET(KD.compute_pgm_rsrc1,
+                        llvm::amdhsa::COMPUTE_PGM_RSRC1_GFX10_PLUS_FWD_PROGRESS)
+            ? "1"
+            : "0");
+  }
 
   return llvm::Error::success();
 }
