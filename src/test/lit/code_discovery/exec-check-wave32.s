@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:wave32_vec.kd \
 // RUN:   -initial-execution-point=0:wave32_vec.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // On wave32 targets (gfx10+), the EXEC register is 32 bits wide and only
 // mbcnt.lo is needed to compute the lane id; mbcnt.hi must NOT be emitted.

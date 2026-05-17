@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_permute_kern.kd \
 // RUN:   -initial-execution-point=0:ds_permute_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // DSSem fix #1: DS_PERMUTE_B32 / DS_BPERMUTE_B32 must lower to the
 // llvm.amdgcn.ds.{permute,bpermute} intrinsics using the $data0 operand

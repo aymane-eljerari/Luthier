@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:flat_load_kern.kd \
 // RUN:   -initial-execution-point=0:flat_load_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // FLAT loads (gfx9 — pre-SADDR). Exercises FLAT_LOAD_{UBYTE, SBYTE, USHORT,
 // SSHORT, DWORD, DWORDX2, DWORDX3, DWORDX4} and the D16/D16_HI forms.

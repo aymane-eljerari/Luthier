@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_wide_kern.kd \
 // RUN:   -initial-execution-point=0:ds_wide_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // DSSem fix #6: DS_READ_B96/B128 and DS_WRITE_B96/B128 should be modeled as
 // a single load/store on i96/i128 (LLVM lowers to sequential dword traffic).

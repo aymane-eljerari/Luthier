@@ -1,4 +1,4 @@
-; RUN: opt %luthier_tool_ir_compilation_plugin_path -passes=luthier-externalize-globals -S %s | FileCheck %s
+; RUN: opt %luthier_tool_ir_compilation_plugin_path -passes=luthier-externalize-globals -S %s | %tee_out FileCheck %s
 ; Verifies that externalize-globals:
 ;   - removes any *.managed global
 ;   - removes the reserved managed marker variable

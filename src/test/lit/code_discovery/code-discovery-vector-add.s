@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:vector_add.kd \
 // RUN:   -initial-execution-point=0:vector_add.kd \
-// RUN:   -o /dev/null 2>&1 | FileCheck %s
+// RUN:   -o /dev/null 2>&1 | %tee_out FileCheck %s
 
 // Smoke test that CodeDiscoveryPass + MIRToIRTranslator can lift a real
 // HIP-compiled SAXPY-style kernel (global loads, ALU, control flow with

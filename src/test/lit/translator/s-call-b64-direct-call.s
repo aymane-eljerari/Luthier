@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:_Z6kernelv.kd \
 // RUN:   -initial-execution-point=0:_Z6kernelv.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // --disable-verify: after CodeDiscoveryPass rewrites the $simm16 operand
 // from MO_Immediate to MO_GlobalAddress, SIInstrInfo::verifyInstruction's

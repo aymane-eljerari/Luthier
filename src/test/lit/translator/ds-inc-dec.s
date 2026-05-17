@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_incdec_kern.kd \
 // RUN:   -initial-execution-point=0:ds_incdec_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // Group E coverage: DS_INC_U32 and DS_DEC_U32 implement bounded
 // increment/decrement with wraparound:

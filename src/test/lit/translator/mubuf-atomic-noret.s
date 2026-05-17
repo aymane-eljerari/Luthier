@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:mubuf_atomic_noret.kd \
 // RUN:   -initial-execution-point=0:mubuf_atomic_noret.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // Non-RTN atomic (no `glc`): $vdata is input-only — the body must NOT
 // `SetNamedOperand $vdata` (would clobber the input register). The

@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_minmax_int_kern.kd \
 // RUN:   -initial-execution-point=0:ds_minmax_int_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // Group C coverage: DS_MIN_I32 / DS_MAX_I32 / DS_MIN_U32 / DS_MAX_U32 should
 // lower to select(icmp <pred>, tmp, data) with predicates SLT/SGT/ULT/UGT.

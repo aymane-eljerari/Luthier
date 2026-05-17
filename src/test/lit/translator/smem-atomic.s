@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:smem_atomic.kd \
 // RUN:   -initial-execution-point=0:smem_atomic.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // S_ATOMIC_ADD: scalar atomic add to global memory. Body uses LLVMAtomicRMW
 // with syncscope decoded from $cpol (was previously hardcoded "system").

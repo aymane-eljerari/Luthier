@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_src2_kern.kd \
 // RUN:   -initial-execution-point=0:ds_src2_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // DS_*_SRC2_* family — A-relative second-source addressing (pre-RDNA).
 //   B = A + 4 * (offset[15] ? sign_ext(A[31:17]) : sign_ext({offset[14:0]}))

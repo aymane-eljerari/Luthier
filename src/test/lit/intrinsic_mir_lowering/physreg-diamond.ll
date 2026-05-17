@@ -19,7 +19,7 @@
 ; RUN:    -imodule-output=%t.mir \
 ; RUN:    -imodule-ir-passes=luthier-process-intrinsics-at-ir-level \
 ; RUN:    -imodule-mir-passes=isel,mir-lowering,injected-payload-accessed-regs-print \
-; RUN:    -o /dev/null 2>&1 | FileCheck %s --check-prefix=ANALYSIS && \
+; RUN:    -o /dev/null 2>&1 | %tee_out FileCheck %s --check-prefix=ANALYSIS && \
 ; RUN: FileCheck %s --check-prefix=MIR < %t.mir
 
 ; ANALYSIS:      Payload luthier.payload.diamond:

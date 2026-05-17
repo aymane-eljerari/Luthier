@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:vop_cmp.kd \
 // RUN:   -initial-execution-point=0:vop_cmp.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // VOPCSem smoke test covering V_CMP / V_CMPX semantic fills:
 //

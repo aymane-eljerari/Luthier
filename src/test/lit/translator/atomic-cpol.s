@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:cpol_kern.kd \
 // RUN:   -initial-execution-point=0:cpol_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // CPOL-derived SyncScope mapping (gfx7-gfx11, pre-CDNA3, pre-gfx12):
 //   GLC=0 SLC=0  → syncscope("workgroup")

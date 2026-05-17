@@ -1,4 +1,4 @@
-; RUN: opt %luthier_tool_ir_compilation_plugin_path -passes=luthier-embed-imodule -S %s | FileCheck %s
+; RUN: opt %luthier_tool_ir_compilation_plugin_path -passes=luthier-embed-imodule -S %s | %tee_out FileCheck %s
 ; The orchestrator must be a no-op on non-amdgcn modules: no clone, no embed.
 
 target triple = "x86_64-unknown-linux-gnu"

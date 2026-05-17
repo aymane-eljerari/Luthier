@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_barrier_kern.kd \
 // RUN:   -initial-execution-point=0:ds_barrier_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // LDS atomic barrier-arrive helpers (gfx1250+ HasLdsBarrierArriveAtomic):
 //   DS_ATOMIC_ASYNC_BARRIER_ARRIVE_B64

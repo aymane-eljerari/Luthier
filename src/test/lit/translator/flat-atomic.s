@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:flat_atomic_kern.kd \
 // RUN:   -initial-execution-point=0:flat_atomic_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // FLAT atomics. Exercises NoRet and RTN forms of ADD, AND, SMIN, UMAX. Verifies
 // bugs B (NoRet writes back to $vdata) and C (CMPSWAP $vdata read as v2i32)

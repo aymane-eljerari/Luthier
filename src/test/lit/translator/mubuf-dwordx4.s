@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:mubuf_dwx4.kd \
 // RUN:   -initial-execution-point=0:mubuf_dwx4.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // MUBUF wide load/store: BUFFER_LOAD/STORE_DWORDX4_OFFEN. Exercises the
 // XYZW (4-dword) width path through the same struct.buffer.{load,store}

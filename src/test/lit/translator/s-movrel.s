@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:s_movrel.kd \
 // RUN:   -initial-execution-point=0:s_movrel.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // S_MOVREL{S,D}_B{32,64}: relative scalar moves indexed by M0.
 //

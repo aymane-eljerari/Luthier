@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:flat_store_kern.kd \
 // RUN:   -initial-execution-point=0:flat_store_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // FLAT stores (gfx9). Exercises FLAT_STORE_{BYTE, SHORT, DWORD, DWORDX2,
 // DWORDX4} and the SHORT_D16_HI form (upper-half extract before store).

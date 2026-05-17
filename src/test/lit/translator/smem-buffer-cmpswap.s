@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:smem_bcmpswap.kd \
 // RUN:   -initial-execution-point=0:smem_bcmpswap.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // S_BUFFER_ATOMIC_CMPSWAP — scalar buffer compare-and-swap. $sdata holds
 // (src, cmp) in an SReg_64 pair; intrinsic returns i32; $sdst is SReg_64

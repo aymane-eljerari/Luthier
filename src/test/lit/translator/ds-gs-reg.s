@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_gsreg_kern.kd \
 // RUN:   -initial-execution-point=0:ds_gsreg_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // DS_{ADD,SUB}_GS_REG_RTN — RDNA3-only atomic update of a GDS_STRMOUT_*
 // register bank entry. (i32 data, i32 imm_offset_idx) -> i64.

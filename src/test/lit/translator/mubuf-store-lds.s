@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:mubuf_store_lds.kd \
 // RUN:   -initial-execution-point=0:mubuf_store_lds.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // BUFFER_STORE_LDS_DWORD — per MI200 ISA p.184: "Store one DWORD from LDS
 // memory to system memory without utilizing VGPRs." LDS source address

@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_cmpst_kern.kd \
 // RUN:   -initial-execution-point=0:ds_cmpst_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // DSSem fix #3: DS_CMPST_B32 (pre-GFX11, gfx908) uses pre-GFX11 operand
 // ordering — cmp = data0, src = data1. The compare is against data0 and

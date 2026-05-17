@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:inline_asm_fallback.kd \
 // RUN:   -initial-execution-point=0:inline_asm_fallback.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // Verifies the MIInlineAsmEmitter's word-boundary-aware register-name
 // substitution. The instructions below use registers whose printed names

@@ -15,7 +15,7 @@
 ; RUN:    -imodule-output=%t.luthier \
 ; RUN:    -imodule-mir-passes= \
 ; RUN:    -imodule-ir-passes=luthier-process-intrinsics-at-ir-level,luthier-forward-isa-state-to-callees \
-; RUN:    -o /dev/null 2>&1 | FileCheck %s
+; RUN:    -o /dev/null 2>&1 | %tee_out FileCheck %s
 
 ; CHECK: opaque indirect call
 

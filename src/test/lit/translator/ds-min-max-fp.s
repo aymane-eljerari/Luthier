@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_minmax_kern.kd \
 // RUN:   -initial-execution-point=0:ds_minmax_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // DSSem fix #4: DS_MIN_F32 / DS_MAX_F32 must lower to llvm.minnum.f32 /
 // llvm.maxnum.f32 (IEEE minimumNumber / maximumNumber), not to a

@@ -19,7 +19,7 @@
 ; RUN:    -imodule-output=/dev/null \
 ; RUN:    -imodule-ir-passes=luthier-process-intrinsics-at-ir-level \
 ; RUN:    -imodule-mir-passes=isel,mir-lowering,injected-payload-accessed-regs-print \
-; RUN:    -o /dev/null 2>&1 | FileCheck %s
+; RUN:    -o /dev/null 2>&1 | %tee_out FileCheck %s
 
 ; Analysis output: SGPR4 appears in Reads only; Writes is empty.
 ; CHECK:      Payload luthier.payload.physreg_read:

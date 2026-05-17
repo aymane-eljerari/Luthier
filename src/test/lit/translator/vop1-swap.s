@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:vop1_swap.kd \
 // RUN:   -initial-execution-point=0:vop1_swap.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // V_SWAP_B32 — swap two VGPR contents. Out: (vdst, vdst1); in: (src0,
 // src1). Previously empty Semantic; now snapshots both inputs then

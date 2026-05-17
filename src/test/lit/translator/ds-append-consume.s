@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_appcon_kern.kd \
 // RUN:   -initial-execution-point=0:ds_appcon_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // DSSem fix #2: DS_APPEND / DS_CONSUME lower to llvm.amdgcn.ds.{append,consume}
 // with a ptr addrspace(3) constructed from the offset (NOT from a nonexistent

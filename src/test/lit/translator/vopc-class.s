@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:vopc_class.kd \
 // RUN:   -initial-execution-point=0:vopc_class.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // V_CMP_CLASS_F32 — FP class test. src1 is a bitmask of classes
 // (NaN/Inf/zero/...). Result is per-lane i1, broadcast via Ballot to VCC.

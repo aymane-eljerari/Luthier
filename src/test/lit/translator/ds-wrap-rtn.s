@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_wrap_kern.kd \
 // RUN:   -initial-execution-point=0:ds_wrap_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // DSSem fix #5: DS_WRAP_RTN_B32 should implement the ring-buffer wrap formula:
 //   MEM = (old >= data0) ? old - data0 : old + data1

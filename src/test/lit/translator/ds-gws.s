@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_gws_kern.kd \
 // RUN:   -initial-execution-point=0:ds_gws_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // GWS (Global Wave Sync) coverage: 1:1 pseudo-to-intrinsic mapping per
 // AMDGPUInstructionSelector::gwsIntrinToOpcode. 1D ops take (data0, offset)

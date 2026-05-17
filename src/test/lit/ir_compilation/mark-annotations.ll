@@ -1,4 +1,4 @@
-; RUN: opt %luthier_tool_ir_compilation_plugin_path -passes=luthier-mark-annotations -S %s | FileCheck %s
+; RUN: opt %luthier_tool_ir_compilation_plugin_path -passes=luthier-mark-annotations -S %s | %tee_out FileCheck %s
 ; Verifies that:
 ;   - functions annotated with luthier.function.hook get the matching fn-attr
 ;   - functions annotated with luthier.intrinsic get the matching fn-attr

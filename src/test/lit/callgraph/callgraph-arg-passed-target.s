@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:_Z6kernelv.kd \
 // RUN:   -initial-execution-point=0:_Z6kernelv.kd \
-// RUN:   -o - 2>&1 | FileCheck %s
+// RUN:   -o - 2>&1 | %tee_out FileCheck %s
 
 // CHECK: LuthierCallGraph (fully_recovered=yes)
 // CHECK: _Z6calleev{{x0x[0-9a-f]+}} -> [_Z3barvx0x0]

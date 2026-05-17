@@ -1,4 +1,4 @@
-; RUN: opt %luthier_tool_ir_compilation_plugin_path -passes=luthier-strip-kernels -S %s | FileCheck %s
+; RUN: opt %luthier_tool_ir_compilation_plugin_path -passes=luthier-strip-kernels -S %s | %tee_out FileCheck %s
 ; Verifies that strip-kernels removes every AMDGPU_KERNEL function and leaves
 ; non-kernel functions intact.
 

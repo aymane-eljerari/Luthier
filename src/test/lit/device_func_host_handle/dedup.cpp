@@ -1,7 +1,7 @@
 /// RUN: %clangxx -x hip --offload-arch=gfx908 \
 /// RUN:   -fplugin=%luthier_tool_cxx_compilation_plugin_path \
 /// RUN:   -I/opt/rocm/include \
-/// RUN:   --cuda-host-only -emit-llvm -S %s -o - 2>&1 | FileCheck %s
+/// RUN:   --cuda-host-only -emit-llvm -S %s -o - 2>&1 | %tee_out FileCheck %s
 /// Verifies that multiple references to the same hook produce a single
 /// kernel handle (deduplication).
 

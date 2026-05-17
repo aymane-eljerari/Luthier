@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_d16_kern.kd \
 // RUN:   -initial-execution-point=0:ds_d16_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // Group I coverage: D16 read variants pack a sub-i32 load into either the
 // low or high 16 bits of vdst, preserving the other half. We exercise

@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:mubuf_atomic.kd \
 // RUN:   -initial-execution-point=0:mubuf_atomic.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // MUBUF atomic: BUFFER_ATOMIC_ADD_OFFEN (i32 integer add),
 // BUFFER_ATOMIC_SWAP_OFFEN (i32 swap), and BUFFER_ATOMIC_ADD_F32_OFFEN

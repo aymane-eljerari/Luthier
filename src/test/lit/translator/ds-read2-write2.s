@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_dual_kern.kd \
 // RUN:   -initial-execution-point=0:ds_dual_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // Group G coverage: dual-offset DS family. DS_READ2_B32 produces two loads
 // at base+offset0*4 and base+offset1*4, packed into a v2i32. DS_WRITE2_B32

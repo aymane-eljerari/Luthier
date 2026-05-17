@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_mskor_kern.kd \
 // RUN:   -initial-execution-point=0:ds_mskor_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // Group J coverage: DS_MSKOR_B32 — masked OR.
 //   MEM = (tmp & ~data0) | data1   (data0 is the mask, data1 is the value)

@@ -1274,6 +1274,28 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
     EntryMBB->addSuccessor(EntryInst->getParent());
   }
 
+  /// LLVM IR/MIR convention requires the entry block to have no predecessors.
+  /// If the current first MBB does (e.g. the entry address sits at the head of
+  /// a loop and some later MBB branches back to it), splice a synthetic
+  /// preheader at the front whose only job is to unconditionally branch into
+  /// the original entry. The new S_BRANCH carries the same metadata shape as
+  /// the entry-in-middle synthesis above: \c canRelaxDirectBranch=true and no
+  /// trace-instruction address, so downstream passes recognize it as
+  /// non-trace.
+  if (!MF.empty() && MF.front().pred_size() != 0) {
+    llvm::MachineBasicBlock *OriginalEntry = &MF.front();
+    llvm::MachineBasicBlock *NewEntry = MF.CreateMachineBasicBlock();
+    MF.push_front(NewEntry);
+
+    llvm::MachineInstrBuilder Builder = llvm::BuildMI(
+        NewEntry, llvm::DebugLoc(), MCInstInfo.get(llvm::AMDGPU::S_BRANCH));
+    auto MDNodeOrErr = TargetMachineInstrMDNode::initializeMDNode(*Builder);
+    LUTHIER_RETURN_ON_ERROR(MDNodeOrErr.takeError());
+    MDNodeOrErr->setCanRelaxDirectBranch(Ctx, true);
+    Builder->addOperand(llvm::MachineOperand::CreateMBB(OriginalEntry));
+    NewEntry->addSuccessor(OriginalEntry);
+  }
+
   /// Freeze the set of reserved register because we will not do any register
   /// allocations here
   MF.getRegInfo().freezeReservedRegs();

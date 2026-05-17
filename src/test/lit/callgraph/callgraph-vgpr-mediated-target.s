@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:_Z6kernelv.kd \
 // RUN:   -initial-execution-point=0:_Z6kernelv.kd \
-// RUN:   -o - 2>&1 | FileCheck %s
+// RUN:   -o - 2>&1 | %tee_out FileCheck %s
 
 // CHECK: LuthierCallGraph (fully_recovered=no)
 // CHECK: Incomplete call sites (1):

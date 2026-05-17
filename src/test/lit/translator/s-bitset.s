@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:bitset_kern.kd \
 // RUN:   -initial-execution-point=0:bitset_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // S_BITSET{0,1}_B{32,64} have a `$sdst_in` operand tied to `$sdst`. Neither
 // the MCInst nor the assembly syntax mentions `$sdst_in` — the slot is

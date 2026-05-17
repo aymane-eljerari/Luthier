@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:tr_kern.kd \
 // RUN:   -initial-execution-point=0:tr_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // GLOBAL_LOAD_TR_B{64,128} (+ SADDR/w32/w64) — WMMA transpose loads.
 // Returns differ by wave size: w32 packs 2 values, w64 packs 1 (per the

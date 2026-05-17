@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:gpr_idx_kernel.kd \
 // RUN:   -initial-execution-point=0:gpr_idx_kernel.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // Phase B: GFX9 GPR_IDX_EN-driven indexed VGPR access.
 //

@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:vop_fma.kd \
 // RUN:   -initial-execution-point=0:vop_fma.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // VOPSem smoke test: v_add_u32_e32 and v_fmac_f32_e32 must lift through
 // MIRToIRTranslator without assertion and emit typed add / fma IR.

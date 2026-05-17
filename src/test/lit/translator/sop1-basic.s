@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:sop1_basic.kd \
 // RUN:   -initial-execution-point=0:sop1_basic.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // SOP1 basic semantics:
 //   S_NOT_B32         — XOR with -1; SCC updated

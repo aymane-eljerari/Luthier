@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:mubuf_offen.kd \
 // RUN:   -initial-execution-point=0:mubuf_offen.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // MUBUF semantics smoke test: BUFFER_LOAD_DWORD_OFFEN +
 // BUFFER_STORE_DWORD_OFFEN. Exercises the v4i32-bitcast on srsrc

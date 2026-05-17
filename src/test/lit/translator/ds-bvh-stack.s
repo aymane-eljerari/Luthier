@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_bvh_kern.kd \
 // RUN:   -initial-execution-point=0:ds_bvh_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // BVH-stack coverage: each DS_BVH_STACK_* pseudo lowers to its dedicated
 // LLVM intrinsic returning a {vdst, i32-addr} struct, split into the

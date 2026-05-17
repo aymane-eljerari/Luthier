@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:mtbuf_idxen.kd \
 // RUN:   -initial-execution-point=0:mtbuf_idxen.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // MTBUF: TBUFFER_LOAD_FORMAT_XYZW_IDXEN + TBUFFER_STORE_FORMAT_XYZW_IDXEN.
 // XYZW width → <4 x float>; IDXEN passes $vaddr as the struct vindex.

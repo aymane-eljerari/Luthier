@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:mtbuf_d16.kd \
 // RUN:   -initial-execution-point=0:mtbuf_d16.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // MTBUF D16: TBUFFER_LOAD_FORMAT_D16_XY_OFFEN. D16 widths produce
 // <N x half> result types (XY → <2 x half>).

@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:smem_load.kd \
 // RUN:   -initial-execution-point=0:smem_load.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // SMEM scalar load: S_LOAD_DWORD_IMM lifts to `load i32, ptr addrspace(4)`
 // (sbase as global_ptr_ty + offset). S_BUFFER_LOAD_DWORD_IMM lifts to

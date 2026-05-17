@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:mubuf_fence.kd \
 // RUN:   -initial-execution-point=0:mubuf_fence.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // BUFFER_INV / BUFFER_WBL2 — cache-control fences. Modeled as IR
 // `fence syncscope(...) <ordering>`:

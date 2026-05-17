@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:mtbuf_offset.kd \
 // RUN:   -initial-execution-point=0:mtbuf_offset.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // MTBUF semantics smoke test: TBUFFER_LOAD_FORMAT_X_OFFSET +
 // TBUFFER_STORE_FORMAT_X_OFFSET. OFFSET addressing has no $vaddr — the

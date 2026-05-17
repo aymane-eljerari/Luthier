@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:flat_load_d16_kern.kd \
 // RUN:   -initial-execution-point=0:flat_load_d16_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // FLAT D16 / D16_HI loads — merge with tied $vdst_in.
 //   Low form : vdst = (vdst_in & 0xFFFF0000) | zext_i32(ext_i16(load))

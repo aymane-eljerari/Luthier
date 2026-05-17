@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:gld_lds_kern.kd \
 // RUN:   -initial-execution-point=0:gld_lds_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // GLOBAL_LOAD_LDS_* — DRAM-to-LDS direct load. Modeled via
 // int_amdgcn_global_load_lds(global_ptr, local_ptr, byte_size, off, cpol).

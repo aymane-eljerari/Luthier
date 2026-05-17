@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:sopp_icache.kd \
 // RUN:   -initial-execution-point=0:sopp_icache.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // S_ICACHE_INV — instruction-cache invalidate. Was empty Semantic = [];
 // now models as s_waitcnt(0) barrier (HW-only effect; no IR analog for

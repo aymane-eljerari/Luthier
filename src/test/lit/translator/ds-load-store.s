@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_rmw.kd \
 // RUN:   -initial-execution-point=0:ds_rmw.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // DSSem smoke test: ds_read_b32 / ds_write_b32 must lift through
 // MIRToIRTranslator into typed load/store against ptr addrspace(3).

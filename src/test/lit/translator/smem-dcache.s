@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:smem_dcache.kd \
 // RUN:   -initial-execution-point=0:smem_dcache.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // S_DCACHE_INV / S_DCACHE_WB / S_MEMTIME — were previously empty bodies.
 // Now S_DCACHE_INV/WB use their dedicated intrinsics; S_MEMTIME returns i64.

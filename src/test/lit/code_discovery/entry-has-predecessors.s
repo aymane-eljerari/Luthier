@@ -4,34 +4,43 @@
 // RUN:   %luthier_tool_code_gen_plugin \
 // RUN:   '-passes=luthier-mock-load-amdgpu-code-objects,luthier-code-discovery,print' \
 // RUN:   -code-object-paths=%t \
-// RUN:   -initial-entrypoint=0:scalar_only.kd \
-// RUN:   -initial-execution-point=0:scalar_only.kd \
+// RUN:   -initial-entrypoint=0:entry_loop.kd \
+// RUN:   -initial-execution-point=0:entry_loop.kd \
 // RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
-// A kernel whose only MBB is purely scalar (SALU + s_endpgm) must NOT
-// receive an EXEC mask predicate check.
+// Tests CodeDiscoveryPass's synthetic-preheader insertion when the entry MBB
+// has predecessors (loop entry is the function entry).
+//
+// The kernel below jumps back to its own entry label, so the first decoded
+// MBB has a back-edge from itself. LLVM IR/MIR conventions require the
+// entry block to have no predecessors, so CodeDiscoveryPass must splice in
+// a new MBB at the front that unconditionally branches to the original
+// entry. After lifting, the IR should have a synthetic entry BB whose only
+// instruction is an unconditional `br` to the loop-header BB.
 
-// CHECK: define {{.*}} @scalar_only
-// CHECK-NOT: call i32 @llvm.amdgcn.mbcnt.lo
-// CHECK-NOT: call i32 @llvm.amdgcn.mbcnt.hi
-// CHECK-NOT: exec.is.active
+// The synthetic entry BB has just the unconditional branch.
+// CHECK: define {{.*}} @entry_loop
+// CHECK: br label %[[LOOP:[0-9]+]]
+// The original entry (loop header) is reachable via the synthetic preheader
+// and has a back-edge to itself.
+// CHECK: [[LOOP]]:
+// CHECK: br {{.*}}label %[[LOOP]]
 
   .text
   .amdgcn_target "amdgcn-amd-amdhsa--gfx908"
-  .globl  scalar_only
+  .globl  entry_loop
   .p2align  8
-  .type   scalar_only,@function
-scalar_only:
-  s_load_dwordx2 s[0:1], s[4:5], 0x0
-  s_waitcnt lgkmcnt(0)
+  .type   entry_loop,@function
+entry_loop:
   s_add_u32 s0, s0, 1
+  s_cmp_lt_u32 s0, 10
+  s_cbranch_scc1 entry_loop
   s_endpgm
-
-scalar_only_end:
+entry_loop_end:
 
   .section .rodata,"a",@progbits
   .p2align  6, 0x0
-  .amdhsa_kernel scalar_only
+  .amdhsa_kernel entry_loop
     .amdhsa_group_segment_fixed_size 0
     .amdhsa_private_segment_fixed_size 0
     .amdhsa_kernarg_size 0

@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_binary_kern.kd \
 // RUN:   -initial-execution-point=0:ds_binary_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // Group B coverage: DS_ADD_U32 / DS_SUB_U32 / DS_RSUB_U32 / DS_AND_B32 /
 // DS_OR_B32 / DS_XOR_B32 / DS_ADD_RTN_U32 must each lower to load+binop+store

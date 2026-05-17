@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:smem_cmpswap.kd \
 // RUN:   -initial-execution-point=0:smem_cmpswap.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // S_ATOMIC_CMPSWAP_IMM_RTN — compare-and-swap. $sdata holds (src, cmp) as
 // two i32 halves; cmpxchg returns {value, i1} struct, RTN takes element 0

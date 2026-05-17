@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:vop3p_packed.kd \
 // RUN:   -initial-execution-point=0:vop3p_packed.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // VOP3P packed-math coverage: ops that were empty Semantic = [] now lift
 // to typed packed IR ops. Doesn't model op_sel/neg_lo/hi/clamp modifiers —

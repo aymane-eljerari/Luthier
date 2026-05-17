@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:ds_addtid_kern.kd \
 // RUN:   -initial-execution-point=0:ds_addtid_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // DS_{READ,WRITE}_ADDTID_B32 — per-lane LDS address from
 //   byte_addr = (({OFFSET1,OFFSET0} + M0[15:0]) & 0xFFFF) + laneID * 4

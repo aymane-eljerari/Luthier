@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:addtid_kern.kd \
 // RUN:   -initial-execution-point=0:addtid_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // GLOBAL_LOAD/STORE_DWORD_ADDTID — per-thread-id global addressing:
 // addr = [saddr +] offset + lane_id * 4. lane_id from mbcnt_hi(mbcnt_lo).

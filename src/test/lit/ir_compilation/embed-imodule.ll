@@ -1,4 +1,4 @@
-; RUN: opt %luthier_tool_ir_compilation_plugin_path -passes=luthier-embed-imodule -S %s | FileCheck %s
+; RUN: opt %luthier_tool_ir_compilation_plugin_path -passes=luthier-embed-imodule -S %s | %tee_out FileCheck %s
 ; End-to-end smoke test of the orchestrator: one hook + one intrinsic + one
 ; kernel + one .managed global. The orchestrator must clone the module, run
 ; the worker chain on the clone, and embed the bitcode into the original

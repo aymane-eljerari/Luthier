@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:mubuf_cmpswap.kd \
 // RUN:   -initial-execution-point=0:mubuf_cmpswap.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // BUFFER_ATOMIC_CMPSWAP_OFFEN_RTN — vector buffer compare-and-swap.
 // $vdata is AVLdSt_64 (vector pair: src in elem 0, cmp in elem 1).

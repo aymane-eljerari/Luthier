@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:hwreg_kernel.kd \
 // RUN:   -initial-execution-point=0:hwreg_kernel.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // S_GETREG_B32 / S_SETREG_B32 — MODE-hwreg fold (Phase A).
 //

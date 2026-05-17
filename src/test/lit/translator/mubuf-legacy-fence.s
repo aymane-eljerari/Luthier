@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:mubuf_legacy_fence.kd \
 // RUN:   -initial-execution-point=0:mubuf_legacy_fence.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // BUFFER_WBINVL1* — legacy gfx9 L1 write-back+invalidate. No cpol operand;
 // modeled as `fence syncscope("agent") acq_rel` (L1 is an agent-local cache).

@@ -4,34 +4,47 @@
 // RUN:   %luthier_tool_code_gen_plugin \
 // RUN:   '-passes=luthier-mock-load-amdgpu-code-objects,luthier-code-discovery,print' \
 // RUN:   -code-object-paths=%t \
-// RUN:   -initial-entrypoint=0:scalar_only.kd \
-// RUN:   -initial-execution-point=0:scalar_only.kd \
+// RUN:   -initial-entrypoint=0:entry_mid.kd \
+// RUN:   -initial-execution-point=0:entry_mid.kd \
 // RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
-// A kernel whose only MBB is purely scalar (SALU + s_endpgm) must NOT
-// receive an EXEC mask predicate check.
+// Tests CodeDiscoveryPass's "entry in middle" synthesis: when the lowest
+// address in the MF's trace group is strictly less than the entry-point
+// address, the pass splices a synthetic preheader MBB at the front that
+// unconditionally branches to the MBB containing the entry instruction.
+//
+// Construction: the .text section starts with a small region (preamble_target)
+// of code laid out BEFORE the kernel symbol's first byte. The kernel itself
+// has a backward branch into that earlier region. The trace decoder seeds a
+// new trace at the backward-branch target, whose start address is below the
+// kernel entry. After merge, FirstTraceStartAddr < EntryPointAddress, which
+// fires the entry-in-middle synthesis.
 
-// CHECK: define {{.*}} @scalar_only
-// CHECK-NOT: call i32 @llvm.amdgcn.mbcnt.lo
-// CHECK-NOT: call i32 @llvm.amdgcn.mbcnt.hi
-// CHECK-NOT: exec.is.active
+// CHECK: define {{.*}} @entry_mid
+// Synthetic entry BB: a single unconditional branch to the actual entry
+// instruction's BB.
+// CHECK: br label %[[ENTRY_BODY:[0-9]+]]
+// CHECK: [[ENTRY_BODY]]:
 
   .text
   .amdgcn_target "amdgcn-amd-amdhsa--gfx908"
-  .globl  scalar_only
   .p2align  8
-  .type   scalar_only,@function
-scalar_only:
-  s_load_dwordx2 s[0:1], s[4:5], 0x0
-  s_waitcnt lgkmcnt(0)
+preamble_target:
   s_add_u32 s0, s0, 1
+  s_branch entry_mid
+  .globl  entry_mid
+  .type   entry_mid,@function
+entry_mid:
+  s_add_u32 s0, s0, 2
+  s_cmp_lt_u32 s0, 8
+  s_cbranch_scc1 preamble_target
   s_endpgm
-
-scalar_only_end:
+entry_mid_end:
+  .size   entry_mid, entry_mid_end-entry_mid
 
   .section .rodata,"a",@progbits
   .p2align  6, 0x0
-  .amdhsa_kernel scalar_only
+  .amdhsa_kernel entry_mid
     .amdhsa_group_segment_fixed_size 0
     .amdhsa_private_segment_fixed_size 0
     .amdhsa_kernarg_size 0

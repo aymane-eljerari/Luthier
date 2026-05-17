@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:mfma_tile.kd \
 // RUN:   -initial-execution-point=0:mfma_tile.kd \
-// RUN:   -o /dev/null 2>&1 | FileCheck %s
+// RUN:   -o /dev/null 2>&1 | %tee_out FileCheck %s
 
 // Verifies CodeDiscoveryPass can lift a kernel containing a 16x16x4 fp32
 // MFMA accumulate, which writes a 128-bit accumulator register file.

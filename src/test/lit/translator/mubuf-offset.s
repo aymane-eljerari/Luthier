@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:mubuf_offset.kd \
 // RUN:   -initial-execution-point=0:mubuf_offset.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // MUBUF semantics smoke test for the OFFSET form (no $vaddr operand in
 // InOperandList). Exercises the MUBUFSem.td fix that substitutes a constant

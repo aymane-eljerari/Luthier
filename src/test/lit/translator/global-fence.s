@@ -6,7 +6,7 @@
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:fence_kern.kd \
 // RUN:   -initial-execution-point=0:fence_kern.kd \
-// RUN:   -o - 2>/dev/null | FileCheck %s
+// RUN:   -o - 2>/dev/null | %tee_out FileCheck %s
 
 // GLOBAL_INV / GLOBAL_WB / GLOBAL_WBINV — gfx12 cache fences. Modeled as
 // IR `fence syncscope(...) <ordering>` where scope decodes from cpol bits 3-4.
