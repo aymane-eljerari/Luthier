@@ -22,8 +22,11 @@
 #include "luthier/ToolCodeGen/EntryPoint.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include "luthier/ToolCodeGen/InitialEntryPointAnalysis.h"
+#include "luthier/ToolCodeGen/InitialExecutionPointAnalysis.h"
 #include "luthier/ToolCodeGen/InstructionTracesAnalysis.h"
+#include "luthier/ToolCodeGen/LuthierCallGraph.h"
 #include "luthier/ToolCodeGen/MIRConvenience.h"
+#include "luthier/ToolCodeGen/MIRToIRTranslator.h"
 #include "luthier/ToolCodeGen/MemoryAllocationAccessor.h"
 #include "luthier/ToolCodeGen/PseudoOpcodeAndRegMapper.h"
 #include "luthier/ToolCodeGen/TargetMachineInstrMDNode.h"
@@ -35,6 +38,7 @@
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/ReachingDefAnalysis.h>
 #include <llvm/IR/InstIterator.h>
+#include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/IntrinsicsAMDGPU.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/MDBuilder.h>
@@ -43,10 +47,6 @@
 #include <llvm/MC/MCDisassembler/MCDisassembler.h>
 #include <llvm/MC/MCInstPrinter.h>
 #include <llvm/MC/TargetRegistry.h>
-#include "luthier/ToolCodeGen/InitialExecutionPointAnalysis.h"
-#include "luthier/ToolCodeGen/LuthierCallGraph.h"
-#include "luthier/ToolCodeGen/MIRToIRTranslator.h"
-#include <llvm/IR/IntrinsicInst.h>
 #include <unordered_set>
 
 #undef DEBUG_TYPE
@@ -68,8 +68,7 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
   uint32_t NextFreeVGPR =
       (GranulatedWorkitemVGPRCount + 1) * ST.getVGPREncodingGranule();
   F.addFnAttr("amdgpu-num-vgpr", llvm::formatv("{0}", NextFreeVGPR).str());
-
-  /// PRIORITY is set by the CP automatically
+  /// PRIORITY is set by the CP at dispatch time
 
   /// FLOAT_ROUND_MODE_32, FLOAT_ROUND_MODE_16_64 fields are set to
   /// FP_ROUND_ROUND_TO_NEAREST no matter what by the AMDGPU AsmPrinter
@@ -137,6 +136,9 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
                                       llvm::to_string(Float32Denorm) + ".");
   }
   F.addFnAttr("denormal-fp-math", Denorm1664Val);
+
+  /// PRIV is set by CP and is zero
+
   /// Lift ENABLE_DX10_CLAMP if gfx11-; Otherwise lift WG_RR_EN
   if (ST.hasRrWGMode()) {
     /// WG_RR_EN is set to zero by the backend; capture original bit as a
@@ -169,10 +171,18 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
                     ? "true"
                     : "false");
   }
+  if (llvm::AMDGPU::isGFX12Plus(ST)) {
+    F.addFnAttr(
+        "amdgpu.kd.disable_perf",
+        AMDHSA_BITS_GET(KD.compute_pgm_rsrc1,
+                        llvm::amdhsa::COMPUTE_PGM_RSRC1_GFX12_PLUS_DISABLE_PERF)
+            ? "1"
+            : "0");
+  }
 
-  /// BULKY is set by CP
+  /// BULKY is set by the CP at dispatch time
 
-  /// CDBG_USER is set by CP
+  /// CDBG_USER is set by the CP at dispatch time
 
   /// FP16_OVFL (gfx9+) can be queried on device code, but there's no place to
   /// set it at the MIR level
@@ -183,6 +193,17 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
                         llvm::amdhsa::COMPUTE_PGM_RSRC1_GFX9_PLUS_FP16_OVFL)
             ? "1"
             : "0");
+  }
+
+  /// FLAT_SCRATCH_IS_NV (gfx12.5, bit 27) — no IR handle, AsmPrinter doesn't
+  /// write it. Capture for the post-AsmPrinter patcher
+  if (llvm::AMDGPU::isGFX1250(ST)) {
+    F.addFnAttr("amdgpu.kd.flat_scratch_is_nv",
+                AMDHSA_BITS_GET(
+                    KD.compute_pgm_rsrc1,
+                    llvm::amdhsa::COMPUTE_PGM_RSRC1_GFX125_FLAT_SCRATCH_IS_NV)
+                    ? "1"
+                    : "0");
   }
 
   /// WGP_MODE is set by the cumode feature in the subtarget
@@ -214,11 +235,35 @@ static inline llvm::Error
 parseKDRsrc2(const llvm::amdhsa::kernel_descriptor_t &KD,
              const llvm::GCNTargetMachine &TM, llvm::Function &F) {
   auto &ST = TM.getSubtarget<llvm::GCNSubtarget>(F);
-  /// ENABLE_PRIVATE_SEGMENT is set if the stack size of the kernel is set to
-  /// non-zero value
+  /// ENABLE_PRIVATE_SEGMENT is set by the backend when the stack size is
+  /// non-zero; We capture it here anyway for more info
+  F.addFnAttr(
+      "amdgpu.kd.enable_private_segment",
+      AMDHSA_BITS_GET(KD.compute_pgm_rsrc2,
+                      llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_PRIVATE_SEGMENT)
+          ? "1"
+          : "0");
 
-  /// USER_SGPR_COUNT is automatically set based on the user sgprs requested
-  /// from the MFI
+  /// USER_SGPR_COUNT is automatically set by the backend from MFI's user-SGPR
+  /// usage (5 bits on gfx6-gfx12.0, 6 bits on gfx12.5). Capture for safety.
+  if (llvm::AMDGPU::isGFX1250(ST)) {
+    F.addFnAttr(
+        "amdgpu.kd.user_sgpr_count",
+        llvm::formatv(
+            "{0}", AMDHSA_BITS_GET(
+                       KD.compute_pgm_rsrc2,
+                       llvm::amdhsa::COMPUTE_PGM_RSRC2_GFX125_USER_SGPR_COUNT))
+            .str());
+  } else {
+    F.addFnAttr(
+        "amdgpu.kd.user_sgpr_count",
+        llvm::formatv(
+            "{0}",
+            AMDHSA_BITS_GET(
+                KD.compute_pgm_rsrc2,
+                llvm::amdhsa::COMPUTE_PGM_RSRC2_GFX6_GFX120_USER_SGPR_COUNT))
+            .str());
+  }
 
   /// ENABLE_TRAP_HANDLER (gfx6-gfx11) is not set in HSA; For other OSes, it
   /// should be set when creating the target. Capture the original bit as a
@@ -301,7 +346,7 @@ parseKDRsrc2(const llvm::amdhsa::kernel_descriptor_t &KD,
           ? "1"
           : "0");
 
-  /// GRANULATED_LDS_SIZE is automatically set via the dispatch packet
+  /// GRANULATED_LDS_SIZE is automatically via the dispatch packet
 
   /// The six IEEE_754_FP exception-enable bits and
   /// ENABLE_EXCEPTION_INT_DIVIDE_BY_ZERO are all written as zero by the
@@ -387,23 +432,22 @@ parseKDRsrc3(const llvm::amdhsa::kernel_descriptor_t &KD,
   }
 
   /// Rsrc3 for GFX11 only =====================================================
-  /// INST_PREF_SIZE is automatically calculated by the backend from the
-  /// kernel code size — no capture.
-  /// TRAP_ON_START / TRAP_ON_END are HW/CP-managed bits not written by the
-  /// AsmPrinter. Capture for round-trip fidelity.
+  /// INST_PREF_SIZE (gfx11: 6 bits) is automatically calculated by the
+  /// backend from the kernel code size. After instrumentation grows the
+  /// kernel the recomputed value will legitimately differ from the original,
+  /// so the post-AsmPrinter patcher generally should NOT clobber the
+  /// backend's value — the captured attribute is provided as the original
+  /// prefetch hint for any patcher policy that wants to preserve it.
+  /// TRAP_ON_START / TRAP_ON_END are filled in by the CP at dispatch time —
+  /// not a compiler concern, so no capture
   if (llvm::AMDGPU::isGFX11(ST)) {
     F.addFnAttr(
-        "amdgpu.kd.trap_on_start",
-        AMDHSA_BITS_GET(KD.compute_pgm_rsrc3,
-                        llvm::amdhsa::COMPUTE_PGM_RSRC3_GFX11_TRAP_ON_START)
-            ? "1"
-            : "0");
-    F.addFnAttr(
-        "amdgpu.kd.trap_on_end",
-        AMDHSA_BITS_GET(KD.compute_pgm_rsrc3,
-                        llvm::amdhsa::COMPUTE_PGM_RSRC3_GFX11_TRAP_ON_END)
-            ? "1"
-            : "0");
+        "amdgpu.kd.inst_pref_size",
+        llvm::formatv("{0}",
+                      AMDHSA_BITS_GET(
+                          KD.compute_pgm_rsrc3,
+                          llvm::amdhsa::COMPUTE_PGM_RSRC3_GFX11_INST_PREF_SIZE))
+            .str());
   }
 
   /// Rsrc3 for GFX11+ =========================================================
@@ -419,9 +463,21 @@ parseKDRsrc3(const llvm::amdhsa::kernel_descriptor_t &KD,
   }
 
   /// Rsrc3 for GFX12+ =========================================================
-  /// INST_PREF_SIZE is automatically calculated by the backend — no capture.
+  /// INST_PREF_SIZE (gfx12+: 8 bits) is automatically calculated by the
+  /// backend. Same caveat as the gfx11 capture: the post-patcher should
+  /// generally let the backend's recomputed value win once instrumentation
+  /// grows the kernel; the captured attribute is only useful for policies
+  /// that want to preserve the original prefetch hint.
   /// GLG_EN is not set by either the backend or MC. Capture
   if (llvm::AMDGPU::isGFX12Plus(ST)) {
+    F.addFnAttr(
+        "amdgpu.kd.inst_pref_size",
+        llvm::formatv(
+            "{0}",
+            AMDHSA_BITS_GET(
+                KD.compute_pgm_rsrc3,
+                llvm::amdhsa::COMPUTE_PGM_RSRC3_GFX12_PLUS_INST_PREF_SIZE))
+            .str());
     F.addFnAttr(
         "amdgpu.kd.glg_en",
         AMDHSA_BITS_GET(KD.compute_pgm_rsrc3,
@@ -431,15 +487,25 @@ parseKDRsrc3(const llvm::amdhsa::kernel_descriptor_t &KD,
   }
 
   /// Rsrc3 for GFX12.5 only ===================================================
-  /// NAMED_BAR_CNT is set by the backend from \c ProgInfo.NamedBarCnt after
-  /// counting the named barriers
-  ///
-  /// ENABLE_DYNAMIC_VGPR (gfx12.5 puts this in rsrc3; gfx12.0 puts the same
-  /// flag in rsrc2 — captured there). Not written by the AsmPrinter
-  /// TCP_SPLIT (3 bits) and ENABLE_DIDT_THROTTLE (1 bit) likewise only appear
-  /// in the disassembler's pseudo-directive output and are not written by the
-  /// AsmPrinter. Capture all three for the post-AsmPrinter patcher
   if (llvm::AMDGPU::isGFX1250(ST)) {
+    /// NAMED_BAR_CNT (3 bits) is set by the backend from \c ProgInfo.NamedBarCnt
+    /// which is derived from the LDS named-barrier GlobalVariables present in
+    /// the IR module (via \c isNamedBarrier checks during SelectionDAG
+    /// lowering). If the lifter doesn't reconstruct those LDS globals the
+    /// recomputed count will drop to zero, so capture the original 3-bit field
+    /// as a safety net for the post-AsmPrinter patcher.
+    F.addFnAttr(
+        "amdgpu.kd.named_bar_cnt",
+        llvm::formatv("{0}",
+                      AMDHSA_BITS_GET(
+                          KD.compute_pgm_rsrc3,
+                          llvm::amdhsa::COMPUTE_PGM_RSRC3_GFX125_NAMED_BAR_CNT))
+            .str());
+    /// ENABLE_DYNAMIC_VGPR (gfx12.5 puts this in rsrc3; gfx12.0 puts the same
+    /// flag in rsrc2 — captured there). Not written by the AsmPrinter
+    /// TCP_SPLIT (3 bits) and ENABLE_DIDT_THROTTLE (1 bit) likewise only appear
+    /// in the disassembler's pseudo-directive output and are not written by the
+    /// AsmPrinter. Capture all three for the post-AsmPrinter patcher
     F.addFnAttr("amdgpu.kd.enable_dynamic_vgpr",
                 AMDHSA_BITS_GET(
                     KD.compute_pgm_rsrc3,
