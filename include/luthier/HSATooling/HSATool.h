@@ -29,10 +29,10 @@
 #define LUTHIER_TOOLING_HSA_TOOL_H
 
 #include "luthier/Common/Singleton.h"
+#include "luthier/HSATooling/DeviceToolCodeFatBinaryLoader.h"
 #include "luthier/HSATooling/InjectedPayloadCreationPassTrait.h"
 #include "luthier/HSATooling/LLVMUserTrait.h"
 #include "luthier/HSATooling/LoadedCodeObjectCacheTrait.h"
-#include "luthier/HSATooling/LuthierHSATool.h"
 #include "luthier/HSATooling/PacketMonitorTrait.h"
 #include "luthier/HSATooling/ToolExecutableLoaderTrait.h"
 #include "luthier/PassPlugin/LuthierPassPlugin.h"
@@ -53,8 +53,9 @@ template <typename Derived> class IntrinsicProcessorRegistryTraitBase {};
 } // namespace detail
 
 /// \brief CRTP base for static HSA tools. Inherits the HIP fat-binary
-/// registration slots from \c LuthierHSATool and the per-process singleton
-/// identity from \c Singleton<Derived>; composes the per-subsystem traits.
+/// registration slots and per-agent HSA executable state from
+/// \c DeviceToolCodeFatBinaryLoader, and the per-process singleton identity
+/// from \c Singleton<Derived>; composes the per-subsystem traits.
 ///
 /// \c Singleton<Derived> is listed first so its constructor runs before any
 /// trait's constructor. The traits' destructors run in reverse-inheritance
@@ -71,11 +72,11 @@ template <typename Derived>
 class HSATool : public Singleton<Derived>,
                 public LLVMUserTrait<Derived>,
                 public LoadedCodeObjectCacheTrait<Derived>,
+                public DeviceToolCodeFatBinaryLoaderTrait<Derived>,
                 public ToolExecutableLoaderTrait<Derived>,
                 public InjectedPayloadCreationPassTrait<Derived>,
                 public detail::IntrinsicProcessorRegistryTraitBase<Derived>,
-                public PacketMonitorTrait<Derived>,
-                public LuthierHSATool<Derived> {
+                public PacketMonitorTrait<Derived> {
 public:
   HSATool(const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
           const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
@@ -84,6 +85,7 @@ public:
           llvm::Error &Err)
       : LLVMUserTrait<Derived>(CoreApi),
         LoadedCodeObjectCacheTrait<Derived>(CoreApi, VenLoader, Err),
+        DeviceToolCodeFatBinaryLoaderTrait<Derived>(CoreApi, AmdExt, VenLoader),
         ToolExecutableLoaderTrait<Derived>(CoreApi, AmdExt, VenLoader),
         PacketMonitorTrait<Derived>(CoreApi, AmdExt, VenLoader, Err) {}
 

@@ -15,12 +15,13 @@
 //===----------------------------------------------------------------------===//
 /// \file ForwardISAStateToCalleesPass.h
 /// Declares the \c ForwardISAStateToCalleesPass which extends every callee of
-/// an injected payload with extra parameters (one per SVA scalar-arg lane and
-/// per phys-reg channel it reads) and an optional struct return (one slot per
-/// phys-reg channel it writes), then rewrites all call sites to source/sink
-/// those values via fresh inline-asm placeholders in the caller. Net effect:
-/// callee bodies leave the pass with zero Luthier placeholders, and the MIR
-/// lowering stage only has to handle payload entries.
+/// an injected payload inside an instrumentation module with extra parameters
+/// (one per SVA scalar-arg lane and per phys-reg channel it reads) and an
+/// optional struct return (one slot per phys-reg channel it writes), then
+/// rewrites all call sites to source/sink those values via fresh inline-asm
+/// placeholders in the caller. Net effect: callee bodies leave the pass with
+/// zero Luthier placeholders, and the MIR lowering stage only has to handle
+/// payload entries.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOL_CODE_GEN_FORWARD_ISA_STATE_TO_CALLEES_PASS_H
 #define LUTHIER_TOOL_CODE_GEN_FORWARD_ISA_STATE_TO_CALLEES_PASS_H

@@ -22,6 +22,8 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolIRCompilation/LoadHIPFATBinaryInfoPass.h"
 #include "luthier/Common/ErrorCheck.h"
+#include "luthier/Common/GenericLuthierError.h"
+#include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Analysis/ValueTracking.h>
@@ -59,74 +61,77 @@ static llvm::Error getAnnotatedValues(
       llvm::StringRef Content;
       llvm::getConstantStringInfo(GV, Content);
       if (Content.starts_with("luthier.loader.hip")) {
-        NameToVar[Content].push_back(Var);
+        /// Inline-static class-template slots in
+        /// \c DeviceToolCodeFatBinaryLoader<Derived> get emitted with
+        /// linkonce_odr linkage; if multiple TUs ODR-use the class, the
+        /// linker collapses the GVs but \c llvm.global.annotations (which
+        /// has appending linkage) accumulates one entry per TU. De-dup so
+        /// the later RAUW + erase loop doesn't touch a freed value.
+        auto &Bucket = NameToVar[Content];
+        if (llvm::find(Bucket, Var) == Bucket.end())
+          Bucket.push_back(Var);
       }
     }
   }
   return llvm::Error::success();
 }
-/// \brief Replaces the null annotated variable with actual data, setInitializer
-/// doesn't work because constants can't change their type, as a workaround we
-/// reconstruct the variable with the correct type and delete the old one
-/// \note We keep annotations and do not delete them, they hold a pointer to the
-/// array, so a GEP is needed to access the struct
-/// \param name Name of the annotated variable we are replacing
-/// \param Type The type of the struct the variable array will hold
-/// \param Size The size of the array
-/// \param TempArr The array holding the structs
-/// \param M IR Module
-/// \param NameToVar StringMap containing all annotated variables
-static llvm::Error replacePlaceholderVariable(
-    llvm::StringRef Name, llvm::StructType *Type, uint64_t Size,
+/// \brief Set the initializer of an annotated \c llvm::ArrayRef<T> placeholder
+/// to a constant view of \p TempArr.
+///
+/// The corresponding slot on \c DeviceToolCodeFatBinaryLoader<Derived> is
+/// declared \c inline \c static \c llvm::ArrayRef<T>{}, so Clang has already
+/// emitted each placeholder as a global of struct type
+/// \c { ptr Data; i64 Length; } (matching ArrayRef's ABI). We side-load a
+/// private constant data array and \c setInitializer on the placeholder; no
+/// retype/RAUW dance is needed.
+///
+/// \param Name Annotation string identifying the placeholder slot(s).
+/// \param ElemTy IR type of each entry inside the data array.
+/// \param TempArr The constants making up the data array.
+/// \param M Containing module.
+/// \param NameToVar Map of annotation string to placeholder GVs.
+static llvm::Error populateArrayRefSlot(
+    llvm::StringRef Name, llvm::Type *ElemTy,
     llvm::ArrayRef<llvm::Constant *> TempArr, llvm::Module &M,
     llvm::StringMap<llvm::SmallVector<llvm::GlobalVariable *, 4>> &NameToVar) {
   if (NameToVar[Name].empty()) {
-    return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                   "There is no annotated variable for " +
-                                       Name);
+    return LUTHIER_MAKE_GENERIC_ERROR(
+        ("There is no annotated variable for " + Name).str());
   }
-  llvm::ArrayType *ArrayTy = llvm::ArrayType::get(Type, Size);
-  llvm::Constant *Array = llvm::ConstantArray::get(ArrayTy, TempArr);
-  /// Replace old variable with the array
-  for (auto *OldVar : NameToVar[Name]) {
-    auto *NewTable =
-        new llvm::GlobalVariable(M, Array->getType(), true,
-                                 llvm::GlobalValue::ExternalLinkage, Array, "");
-    NewTable->takeName(OldVar);
-    /// RAUW the new variable. We do a bitcast in case the type is different
-    OldVar->replaceAllUsesWith(
-        llvm::ConstantExpr::getBitCast(NewTable, OldVar->getType()));
-
-    OldVar->eraseFromParent();
-  }
-  return llvm::Error::success();
-}
-
-/// \brief Same function as the other one, but this is specifically for the fat
-/// bin wrapper, since it is not stored in a struct we store an array of opaque
-/// pointers to the hip fat binaries
-static llvm::Error replacePlaceholderVariable(
-    llvm::StringRef Name, llvm::PointerType *Type, uint64_t Size,
-    llvm::ArrayRef<llvm::Constant *> TempArr, llvm::Module &M,
-    llvm::StringMap<llvm::SmallVector<llvm::GlobalVariable *, 4>> &NameToVar) {
-  if (NameToVar[Name].empty()) {
-    return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                   "There is no annotated variable for " +
-                                       Name);
-  }
-  llvm::Constant *Array =
-      llvm::ConstantArray::get(llvm::ArrayType::get(Type, Size), TempArr);
-  /// Replace old variable with the array
+  llvm::LLVMContext &C = M.getContext();
+  llvm::ArrayType *ArrayTy = llvm::ArrayType::get(ElemTy, TempArr.size());
+  llvm::Constant *DataInit = llvm::ConstantArray::get(ArrayTy, TempArr);
 
   for (auto *OldVar : NameToVar[Name]) {
-    auto *NewTable =
-        new llvm::GlobalVariable(M, Array->getType(), true,
-                                 llvm::GlobalValue::ExternalLinkage, Array, "");
-    NewTable->takeName(OldVar);
-    OldVar->replaceAllUsesWith(
-        llvm::ConstantExpr::getBitCast(NewTable, OldVar->getType()));
-
-    OldVar->eraseFromParent();
+    /// Sanity-check the placeholder's IR type: it must be a two-element
+    /// struct compatible with ArrayRef<T>::{Data, Length}.
+    auto *SlotTy = llvm::dyn_cast<llvm::StructType>(OldVar->getValueType());
+    if (!SlotTy || SlotTy->getNumElements() != 2 ||
+        !SlotTy->getElementType(0)->isPointerTy() ||
+        !SlotTy->getElementType(1)->isIntegerTy(64)) {
+      return LUTHIER_MAKE_GENERIC_ERROR(
+          ("Annotated ArrayRef slot '" + Name +
+           "' is not the expected { ptr, i64 } shape; LLVM ABI for "
+           "llvm::ArrayRef may have changed.")
+              .str());
+    }
+    /// Each placeholder gets its own private data array — they share the
+    /// same payload but having one GV per slot keeps mangling simple and
+    /// lets each ArrayRef view its own storage cleanly.
+    auto *Data = new llvm::GlobalVariable(
+        M, ArrayTy, /*isConstant=*/true,
+        llvm::GlobalValue::PrivateLinkage, DataInit,
+        ".luthier.loader." + Name + ".data");
+    llvm::Constant *DataPtr = Data;
+    if (DataPtr->getType() != SlotTy->getElementType(0))
+      DataPtr = llvm::ConstantExpr::getBitCast(
+          DataPtr, SlotTy->getElementType(0));
+    llvm::Constant *Init = llvm::ConstantStruct::get(
+        SlotTy,
+        {DataPtr, llvm::ConstantInt::get(llvm::Type::getInt64Ty(C),
+                                         TempArr.size())});
+    OldVar->setInitializer(Init);
+    OldVar->setConstant(true);
   }
   return llvm::Error::success();
 }
@@ -138,21 +143,18 @@ static llvm::Error deleteModuleCtor(llvm::Module &M) {
   llvm::GlobalVariable *OldCtors = M.getGlobalVariable("llvm.global_ctors");
   /// If there are no global constructors there is nothing we should do
   if (!OldCtors)
-    return llvm::createStringError(
-        llvm::inconvertibleErrorCode(),
+    return LUTHIER_MAKE_GENERIC_ERROR(
         "llvm.global_ctors is not present in this file");
 
   if (!OldCtors->hasInitializer())
-    return llvm::createStringError(
-        llvm::inconvertibleErrorCode(),
+    return LUTHIER_MAKE_GENERIC_ERROR(
         "llvm.global_ctors is missing the initializer");
 
   auto *CtorArray =
       llvm::dyn_cast<llvm::ConstantArray>(OldCtors->getInitializer());
 
   if (!CtorArray)
-    return llvm::createStringError(
-        llvm::inconvertibleErrorCode(),
+    return LUTHIER_MAKE_GENERIC_ERROR(
         "llvm.global_ctors initializer is not a ConstantArray!");
   llvm::SmallVector<llvm::Constant *, 4> RemainingCtors;
   bool Found = false;
@@ -262,200 +264,154 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
     return llvm::PreservedAnalyses::all();
   }
   /// There should only be one hip binary, but we generalize to assume there
-  /// could be more than one
-  llvm::SmallVector<llvm::Constant *, 4> FatBinWrappers{};
-  unsigned long long HipFatBinariesSize{};
+  /// Helper to look up / create the named element struct type for a Hip*Info
+  /// data array. The Luthier-side C++ struct definitions in
+  /// \c DeviceToolCodeFatBinaryLoader.h are the source of truth for the
+  /// field shapes encoded here.
+  auto getOrCreateStruct =
+      [&C](llvm::StringRef Name,
+           llvm::ArrayRef<llvm::Type *> Fields) -> llvm::StructType * {
+    if (auto *Existing = llvm::StructType::getTypeByName(C, Name))
+      return Existing;
+    return llvm::StructType::create(C, Fields, Name);
+  };
+  llvm::Type *PtrTy = llvm::PointerType::getUnqual(C);
+  llvm::Type *I64Ty = llvm::Type::getInt64Ty(C);
+  llvm::Type *I32Ty = llvm::Type::getInt32Ty(C);
+
+  /// Each \c __hipRegisterFatBinary call site hands us the host-side
+  /// \c __CudaFatBinaryWrapper GV \c { i32 magic, i32 version, ptr binary,
+  /// ptr dummy }. We chase \c binary through any constant-expr bitcasts to
+  /// the bundle storage GV, and emit \c { ptr Bundle, i64 GV-array-size }
+  /// — letting the runtime hand a correctly-sized \c MemoryBufferRef to
+  /// LLVM's \c OffloadBundleFatBin parser without re-deriving the size.
+  llvm::StructType *FatBinInfoTy = getOrCreateStruct(
+      "struct.luthier::DeviceToolCodeFatBinaryLoader::HipFatBinaryInfo",
+      {PtrTy, I64Ty});
+  llvm::SmallVector<llvm::Constant *, 4> FatBinInfos{};
   for (llvm::User *U : RFB->users()) {
-    if (auto *CB = llvm::dyn_cast<llvm::CallBase>(U)) {
-      llvm::Value *FatBinWrapper = CB->getArgOperand(0);
-      // We store the hip fat binaries in a small vector.
-      if (llvm::GlobalVariable::classof(FatBinWrapper)) {
-        HipFatBinariesSize++;
-        auto *GV = llvm::dyn_cast<llvm::GlobalVariable>(FatBinWrapper);
-        FatBinWrappers.push_back(GV);
-      }
-    }
+    auto *CB = llvm::dyn_cast<llvm::CallBase>(U);
+    if (!CB)
+      continue;
+    auto *WrapperGV =
+        llvm::dyn_cast<llvm::GlobalVariable>(CB->getArgOperand(0));
+    if (!WrapperGV || !WrapperGV->hasInitializer())
+      continue;
+    auto *WrapperInit =
+        llvm::dyn_cast<llvm::ConstantStruct>(WrapperGV->getInitializer());
+    if (!WrapperInit || WrapperInit->getNumOperands() < 3)
+      continue;
+    auto *BundleGV = llvm::dyn_cast<llvm::GlobalVariable>(
+        WrapperInit->getOperand(2)->stripPointerCasts());
+    if (!BundleGV)
+      continue;
+    auto *ArrTy = llvm::dyn_cast<llvm::ArrayType>(BundleGV->getValueType());
+    if (!ArrTy)
+      continue;
+    uint64_t Size = ArrTy->getNumElements() *
+                    ArrTy->getElementType()->getScalarSizeInBits() / 8;
+    FatBinInfos.push_back(llvm::ConstantStruct::get(
+        FatBinInfoTy,
+        {BundleGV, llvm::ConstantInt::get(I64Ty, Size)}));
   }
-  // Replace nullptr variable with actual value
-  LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
-      "luthier.loader.hip_fat_binaries_ptr", llvm::PointerType::getUnqual(C),
-      HipFatBinariesSize, FatBinWrappers, M, NameToVar));
-  for (auto *SizeVariable : NameToVar["luthier.loader.hip_fat_binaries_size"]) {
-    SizeVariable->setInitializer(
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), HipFatBinariesSize));
-  }
+  LUTHIER_REPORT_FATAL_ON_ERROR(populateArrayRefSlot(
+      HipFatBinariesAttr, FatBinInfoTy, FatBinInfos, M, NameToVar));
 
   if (RFUN) {
-    /// Small vector holding the ConstantStructs we will use to construct the
-    /// ConstantArray holding them.
+    llvm::StructType *FunInfoTy = getOrCreateStruct(
+        "struct.luthier::DeviceToolCodeFatBinaryLoader::HipFunctionInfo", {PtrTy, PtrTy});
     llvm::SmallVector<llvm::Constant *, 10> FunctionHandles{};
-    /// We get the type of the info, if it doesn't exist (which it should) we
-    /// construct it.
-    llvm::StructType *FunInfoTy =
-        llvm::StructType::getTypeByName(C, "struct.luthier::HipFunctionInfo");
-    if (!FunInfoTy)
-      FunInfoTy = llvm::StructType::create("struct.luthier::HipFunctionInfo",
-                                           llvm::PointerType::getUnqual(C),
-                                           llvm::PointerType::getUnqual(C));
-    unsigned long long FunctionHandlesSize{};
-    /// Loop through all uses and get the necessary operands
     for (llvm::User *U : RFUN->users()) {
       if (auto *CB = llvm::dyn_cast<llvm::CallBase>(U)) {
-        llvm::Value *FunctionPtr = CB->getArgOperand(1);
-        llvm::Value *DeviceName = CB->getArgOperand(3);
-        if (llvm::GlobalVariable::classof(FunctionPtr) &&
-            llvm::GlobalVariable::classof(DeviceName)) {
-          FunctionHandlesSize++;
-          auto *Ptr = llvm::dyn_cast<llvm::Constant>(FunctionPtr);
-          auto *Name = llvm::dyn_cast<llvm::Constant>(DeviceName);
-          llvm::Constant *FunInfoStruct =
-              llvm::ConstantStruct::get(FunInfoTy, {Ptr, Name});
-          FunctionHandles.push_back(FunInfoStruct);
-        }
+        auto *Ptr = llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(1));
+        auto *Name = llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(3));
+        if (Ptr && Name)
+          FunctionHandles.push_back(
+              llvm::ConstantStruct::get(FunInfoTy, {Ptr, Name}));
       }
     }
-    LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
-        "luthier.loader.hip_functions_ptr", FunInfoTy, FunctionHandlesSize,
-        FunctionHandles, M, NameToVar));
-    for (auto *FunctionsSize : NameToVar["luthier.loader.hip_functions_size"]) {
-      FunctionsSize->setInitializer(llvm::ConstantInt::get(
-          llvm::Type::getInt64Ty(C), FunctionHandlesSize));
-    }
+    LUTHIER_REPORT_FATAL_ON_ERROR(populateArrayRefSlot(
+        HipFunctionsAttr, FunInfoTy, FunctionHandles, M,
+        NameToVar));
   }
 
   if (RMV) {
-    llvm::StructType *ManagedVarTy =
-        llvm::StructType::getTypeByName(C, "struct.luthier::HipManagedVarInfo");
-    if (!ManagedVarTy)
-      ManagedVarTy = llvm::StructType::create(
-          "struct.luthier::HipManagedVarInfo", llvm::PointerType::getUnqual(C),
-          llvm::PointerType::getUnqual(C), llvm::PointerType::getUnqual(C),
-          llvm::IntegerType::getInt64Ty(C), llvm::IntegerType::getInt32Ty(C));
+    llvm::StructType *ManagedVarTy = getOrCreateStruct(
+        "struct.luthier::DeviceToolCodeFatBinaryLoader::HipManagedVarInfo",
+        {PtrTy, PtrTy, PtrTy, I64Ty, I32Ty});
     llvm::SmallVector<llvm::Constant *, 10> ManagedVars{};
-    unsigned long long ManagedVarSize{};
     for (llvm::User *U : RMV->users()) {
       if (auto *CB = llvm::dyn_cast<llvm::CallBase>(U)) {
-        llvm::Value *Ptr = CB->getArgOperand(1);
-        llvm::Value *InitValue = CB->getArgOperand(2);
-        llvm::Value *Name = CB->getArgOperand(3);
-        llvm::Value *Size = CB->getArgOperand(4);
-        llvm::Value *Align = CB->getArgOperand(5);
-        ManagedVarSize++;
-        auto *ConstPtr = llvm::dyn_cast<llvm::Constant>(Ptr);
-        auto *ConstInitValue = llvm::dyn_cast<llvm::Constant>(InitValue);
-        auto *ConstName = llvm::dyn_cast<llvm::Constant>(Name);
-        auto *ConstSize = llvm::dyn_cast<llvm::Constant>(Size);
-        auto *ConstAlign = llvm::dyn_cast<llvm::Constant>(Align);
-        llvm::Constant *ManagedVarStruct = llvm::ConstantStruct::get(
-            ManagedVarTy,
-            {ConstPtr, ConstInitValue, ConstName, ConstSize, ConstAlign});
-        ManagedVars.push_back(ManagedVarStruct);
+        auto *ConstPtr = llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(1));
+        auto *ConstInitValue =
+            llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(2));
+        auto *ConstName = llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(3));
+        auto *ConstSize = llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(4));
+        auto *ConstAlign =
+            llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(5));
+        if (ConstPtr && ConstInitValue && ConstName && ConstSize && ConstAlign)
+          ManagedVars.push_back(llvm::ConstantStruct::get(
+              ManagedVarTy,
+              {ConstPtr, ConstInitValue, ConstName, ConstSize, ConstAlign}));
       }
     }
-    LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
-        "luthier.loader.hip_managed_vars_ptr", ManagedVarTy, ManagedVarSize,
-        ManagedVars, M, NameToVar));
-    for (auto *ManagedSize :
-         NameToVar["luthier.loader.hip_managed_vars_size"]) {
-      ManagedSize->setInitializer(
-          llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), ManagedVarSize));
-    }
+    LUTHIER_REPORT_FATAL_ON_ERROR(populateArrayRefSlot(
+        HipManagedVarsAttr, ManagedVarTy, ManagedVars, M,
+        NameToVar));
   }
 
   if (RDV) {
-    /// FIXME: Should this be a normal vector?
+    llvm::StructType *VarInfoTy = getOrCreateStruct(
+        "struct.luthier::DeviceToolCodeFatBinaryLoader::HipDeviceVarInfo", {PtrTy, PtrTy});
     llvm::SmallVector<llvm::Constant *, 10> DeviceVars{};
-    llvm::StructType *VarInfoTy =
-        llvm::StructType::getTypeByName(C, "struct.luthier::HipDeviceVarInfo");
-    if (!VarInfoTy)
-      VarInfoTy = llvm::StructType::create("struct.luthier::HipDeviceVarInfo",
-                                           llvm::PointerType::getUnqual(C),
-                                           llvm::PointerType::getUnqual(C));
-    unsigned long long DeviceVarsSize{};
     for (llvm::User *U : RDV->users()) {
       if (auto *CB = llvm::dyn_cast<llvm::CallBase>(U)) {
-        llvm::Value *HostHandle = CB->getArgOperand(1);
-        llvm::Value *Name = CB->getArgOperand(2);
-        DeviceVarsSize++;
-        auto *Ptr = llvm::dyn_cast<llvm::Constant>(HostHandle);
-        auto *ConstName = llvm::dyn_cast<llvm::Constant>(Name);
-        llvm::Constant *FunInfoStruct =
-            llvm::ConstantStruct::get(VarInfoTy, {Ptr, ConstName});
-        DeviceVars.push_back(FunInfoStruct);
+        auto *Ptr = llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(1));
+        auto *ConstName = llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(2));
+        if (Ptr && ConstName)
+          DeviceVars.push_back(
+              llvm::ConstantStruct::get(VarInfoTy, {Ptr, ConstName}));
       }
     }
-    LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
-        "luthier.loader.hip_device_vars_ptr", VarInfoTy, DeviceVarsSize,
-        DeviceVars, M, NameToVar));
-    for (auto *DeviceVarSize :
-         NameToVar["luthier.loader.hip_device_vars_size"]) {
-      DeviceVarSize->setInitializer(
-          llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), DeviceVarsSize));
-    }
+    LUTHIER_REPORT_FATAL_ON_ERROR(populateArrayRefSlot(
+        HipDeviceVarsAttr, VarInfoTy, DeviceVars, M,
+        NameToVar));
   }
 
   if (RTX) {
-    /// FIXME: Should this be a normal vector?
+    llvm::StructType *TextureInfoTy = getOrCreateStruct(
+        "struct.luthier::DeviceToolCodeFatBinaryLoader::HipTextureInfo", {PtrTy, PtrTy});
     llvm::SmallVector<llvm::Constant *, 10> Textures{};
-    llvm::StructType *TextureInfoTy =
-        llvm::StructType::getTypeByName(C, "struct.luthier::HipTextureInfo");
-    if (!TextureInfoTy)
-      TextureInfoTy = llvm::StructType::create("struct.luthier::HipTextureInfo",
-                                               llvm::PointerType::getUnqual(C),
-                                               llvm::PointerType::getUnqual(C));
-    unsigned long long TexturesSize{};
     for (llvm::User *U : RTX->users()) {
       if (auto *CB = llvm::dyn_cast<llvm::CallBase>(U)) {
-        llvm::Value *HostHandle = CB->getArgOperand(1);
-        llvm::Value *Name = CB->getArgOperand(2);
-        TexturesSize++;
-        auto *Ptr = llvm::dyn_cast<llvm::Constant>(HostHandle);
-        auto *ConstName = llvm::dyn_cast<llvm::Constant>(Name);
-        llvm::Constant *FunInfoStruct =
-            llvm::ConstantStruct::get(TextureInfoTy, {Ptr, ConstName});
-        Textures.push_back(FunInfoStruct);
+        auto *Ptr = llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(1));
+        auto *ConstName = llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(2));
+        if (Ptr && ConstName)
+          Textures.push_back(
+              llvm::ConstantStruct::get(TextureInfoTy, {Ptr, ConstName}));
       }
     }
-    LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
-        "luthier.loader.hip_texture_vars_ptr", TextureInfoTy, TexturesSize,
-        Textures, M, NameToVar));
-    for (auto *TextureVarsSize :
-         NameToVar["luthier.loader.hip_texture_vars_size"]) {
-      TextureVarsSize->setInitializer(
-          llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), TexturesSize));
-    }
+    LUTHIER_REPORT_FATAL_ON_ERROR(populateArrayRefSlot(
+        HipTextureVarsAttr, TextureInfoTy, Textures, M,
+        NameToVar));
   }
 
   if (RSF) {
-    /// FIXME: Should this be a normal vector?
+    llvm::StructType *SurfaceInfoTy = getOrCreateStruct(
+        "struct.luthier::DeviceToolCodeFatBinaryLoader::HipSurfaceInfo", {PtrTy, PtrTy});
     llvm::SmallVector<llvm::Constant *, 10> Surfaces{};
-    llvm::StructType *SurfaceInfoTy =
-        llvm::StructType::getTypeByName(C, "struct.luthier::HipSurfaceInfo");
-    if (!SurfaceInfoTy)
-      SurfaceInfoTy = llvm::StructType::create("struct.luthier::HipSurfaceInfo",
-                                               llvm::PointerType::getUnqual(C),
-                                               llvm::PointerType::getUnqual(C));
-    unsigned long long SurfacesSize{};
     for (llvm::User *U : RSF->users()) {
       if (auto *CB = llvm::dyn_cast<llvm::CallBase>(U)) {
-        llvm::Value *HostHandle = CB->getArgOperand(1);
-        llvm::Value *Name = CB->getArgOperand(2);
-        SurfacesSize++;
-        auto *Ptr = llvm::dyn_cast<llvm::Constant>(HostHandle);
-        auto *ConstName = llvm::dyn_cast<llvm::Constant>(Name);
-        llvm::Constant *FunInfoStruct =
-            llvm::ConstantStruct::get(SurfaceInfoTy, {Ptr, ConstName});
-        Surfaces.push_back(FunInfoStruct);
+        auto *Ptr = llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(1));
+        auto *ConstName = llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(2));
+        if (Ptr && ConstName)
+          Surfaces.push_back(
+              llvm::ConstantStruct::get(SurfaceInfoTy, {Ptr, ConstName}));
       }
     }
-    LUTHIER_REPORT_FATAL_ON_ERROR(replacePlaceholderVariable(
-        "luthier.loader.hip_surface_vars_ptr", SurfaceInfoTy, SurfacesSize,
-        Surfaces, M, NameToVar));
-    for (auto *SurfaceVarsSize :
-         NameToVar["luthier.loader.hip_surface_vars_size"]) {
-      SurfaceVarsSize->setInitializer(
-          llvm::ConstantInt::get(llvm::Type::getInt64Ty(C), SurfacesSize));
-    }
+    LUTHIER_REPORT_FATAL_ON_ERROR(populateArrayRefSlot(
+        HipSurfaceVarsAttr, SurfaceInfoTy, Surfaces, M,
+        NameToVar));
   }
   /// Make sure we remove the hip module Ctor from  llvm.global_ctors, not doing
   /// so the function cannot be deleted since it still would have a use

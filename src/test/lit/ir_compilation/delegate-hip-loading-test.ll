@@ -18,6 +18,7 @@ target triple = "x86_64-unknown-linux-gnu"
 @__hip_gpubin_handle_60997337ce9624a2 = internal global ptr null, align 8
 @DummyVar = dso_local global i64 0
 @DummyManagedVariable = dso_local global i64 0
+
 ; --- Verify that hip functions of interest are gone ---
 ; CHECK-NOT: define internal void @__hip_module_ctor
 ; CHECK-NOT: define internal void @__hip_register_globals
@@ -31,70 +32,80 @@ target triple = "x86_64-unknown-linux-gnu"
 ; CHECK-NOT: declare dso_local void @__hipUnregisterFatBinary
 
 declare dso_local i32 @__hipRegisterFunction(ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr)
-
 declare dso_local void @__hipRegisterVar(ptr, ptr, ptr, ptr, i32, i64, i32, i32)
-
 declare dso_local void @__hipRegisterManagedVar(ptr, ptr, ptr, ptr, i64, i32)
-
 declare dso_local void @__hipRegisterSurface(ptr, ptr, ptr, ptr, i32, i32)
-
 declare dso_local void @__hipRegisterTexture(ptr, ptr, ptr, ptr, i32, i32, i32)
-
 declare dso_local ptr @__hipRegisterFatBinary(ptr)
-
 declare dso_local void @__hipUnregisterFatBinary(ptr)
-
 declare dso_local i32 @atexit(ptr)
-; CHECK-DAG: %"struct.luthier::HipFunctionInfo" = type { ptr, ptr }
-; CHECK-DAG: %"struct.luthier::HipManagedVarInfo" = type { ptr, ptr, ptr, i64, i32 }
-; CHECK-DAG: %"struct.luthier::HipDeviceVarInfo" = type { ptr, ptr }
-; CHECK-DAG: %"struct.luthier::HipTextureInfo" = type { ptr, ptr }
-; CHECK-DAG: %"struct.luthier::HipSurfaceInfo" = type { ptr, ptr }
-; CHECK: @llvm.global.annotations = appending global [12 x { ptr, ptr, ptr, i32, ptr }] [{ ptr, ptr, ptr, i32, ptr } { ptr @HipFatBinaries, ptr @.str, ptr @.str.1, i32 63, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipFatBinariesSize, ptr @.str.2, ptr @.str.1, i32 65, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipFunctions, ptr @.str.3, ptr @.str.1, i32 67, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipFunctionsSize, ptr @.str.functions_size, ptr @.str.1, i32 69, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipDeviceVars, ptr @.str.4, ptr @.str.1, i32 71, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipDeviceVarsSize, ptr @.str.5, ptr @.str.1, i32 73, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipManagedVars, ptr @.str.6, ptr @.str.1, i32 75, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipManagedVarsSize, ptr @.str.7, ptr @.str.1, i32 77, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipTextureVars, ptr @.str.8, ptr @.str.1, i32 79, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipTextureVarsSize, ptr @.str.9, ptr @.str.1, i32 81, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipSurfaceVars, ptr @.str.10, ptr @.str.1, i32 83, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipSurfaceVarsSize, ptr @.str.11, ptr @.str.1, i32 85, ptr null }], section "llvm.metadata"
-; CHECK: @llvm.compiler.used = appending global [13 x ptr] [ptr @HipFunctionsSize, ptr @HipFunctions, ptr @HipDeviceVars, ptr @HipFatBinaries, ptr @HipManagedVars, ptr @HipSurfaceVars, ptr @HipTextureVars, ptr @HipDeviceVarsSize, ptr @HipFatBinariesSize, ptr @HipManagedVarsSize, ptr @HipSurfaceVarsSize, ptr @HipTextureVarsSize, ptr @__hip_cuid_60997337ce9624a2]
-@llvm.global.annotations = appending global [12 x { ptr, ptr, ptr, i32, ptr }] [{ ptr, ptr, ptr, i32, ptr } { ptr @HipFatBinaries, ptr @.str, ptr @.str.1, i32 63, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipFatBinariesSize, ptr @.str.2, ptr @.str.1, i32 65, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipFunctions, ptr @.str.3, ptr @.str.1, i32 67, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipFunctionsSize, ptr @.str.functions_size, ptr @.str.1, i32 69, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipDeviceVars, ptr @.str.4, ptr @.str.1, i32 71, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipDeviceVarsSize, ptr @.str.5, ptr @.str.1, i32 73, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipManagedVars, ptr @.str.6, ptr @.str.1, i32 75, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipManagedVarsSize, ptr @.str.7, ptr @.str.1, i32 77, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipTextureVars, ptr @.str.8, ptr @.str.1, i32 79, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipTextureVarsSize, ptr @.str.9, ptr @.str.1, i32 81, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipSurfaceVars, ptr @.str.10, ptr @.str.1, i32 83, ptr null }, { ptr, ptr, ptr, i32, ptr } { ptr @HipSurfaceVarsSize, ptr @.str.11, ptr @.str.1, i32 85, ptr null }], section "llvm.metadata"
-@llvm.compiler.used = appending global [13 x ptr] [ptr @HipFunctionsSize, ptr @HipFunctions, ptr @HipDeviceVars, ptr @HipFatBinaries, ptr @HipManagedVars, ptr @HipSurfaceVars, ptr @HipTextureVars, ptr @HipDeviceVarsSize, ptr @HipFatBinariesSize, ptr @HipManagedVarsSize, ptr @HipSurfaceVarsSize, ptr @HipTextureVarsSize, ptr @__hip_cuid_60997337ce9624a2], section "llvm.metadata"
-@HipFatBinaries = dso_local global ptr null, align 8
-@.str = private unnamed_addr constant [36 x i8] c"luthier.loader.hip_fat_binaries_ptr\00", section "llvm.metadata"
-@.str.1 = private unnamed_addr constant [17 x i8] c"/app/example.cpp\00", section "llvm.metadata"
-@HipFatBinariesSize = dso_local global i64 0, align 8
-@.str.2 = private unnamed_addr constant [37 x i8] c"luthier.loader.hip_fat_binaries_size\00", section "llvm.metadata"
-@HipFunctions = dso_local global ptr null, align 8
-@.str.3 = private unnamed_addr constant [33 x i8] c"luthier.loader.hip_functions_ptr\00", section "llvm.metadata"
-@HipFunctionsSize = dso_local global i64 0, align 8
-@.str.functions_size = private unnamed_addr constant [34 x i8] c"luthier.loader.hip_functions_size\00", section "llvm.metadata"
-@HipDeviceVars = dso_local global ptr null, align 8
-@.str.4 = private unnamed_addr constant [35 x i8] c"luthier.loader.hip_device_vars_ptr\00", section "llvm.metadata"
-@HipDeviceVarsSize = dso_local global i64 0, align 8
-@.str.5 = private unnamed_addr constant [36 x i8] c"luthier.loader.hip_device_vars_size\00", section "llvm.metadata"
-@HipManagedVars = dso_local global ptr null, align 8
-@.str.6 = private unnamed_addr constant [36 x i8] c"luthier.loader.hip_managed_vars_ptr\00", section "llvm.metadata"
-@HipManagedVarsSize = dso_local global i64 0, align 8
-@.str.7 = private unnamed_addr constant [37 x i8] c"luthier.loader.hip_managed_vars_size\00", section "llvm.metadata"
-@HipTextureVars = dso_local global ptr null, align 8
-@.str.8 = private unnamed_addr constant [36 x i8] c"luthier.loader.hip_texture_vars_ptr\00", section "llvm.metadata"
-@HipTextureVarsSize = dso_local global i64 0, align 8
-@.str.9 = private unnamed_addr constant [37 x i8] c"luthier.loader.hip_texture_vars_size\00", section "llvm.metadata"
-@HipSurfaceVars = dso_local global ptr null, align 8
-@.str.10 = private unnamed_addr constant [36 x i8] c"luthier.loader.hip_surface_vars_ptr\00", section "llvm.metadata"
-@HipSurfaceVarsSize = dso_local global i64 0, align 8
-@.str.11 = private unnamed_addr constant [37 x i8] c"luthier.loader.hip_surface_vars_size\00", section "llvm.metadata"
-; --- VERIFY PROMOTED GLOBALS ---
-; CHECK-DAG: @HipFatBinaries = constant [1 x ptr] [ptr @__hip_fatbin_wrapper]
-; CHECK-DAG: @HipFunctions = constant [2 x %"struct.luthier::HipFunctionInfo"] [%"struct.luthier::HipFunctionInfo" { ptr @add_numbers_ptr, ptr @1 }, %"struct.luthier::HipFunctionInfo" { ptr @_Z16binomial_optionsiPK15HIP_vector_typeIfLj4EEPS0_, ptr @0 }]
-; CHECK-DAG: @HipManagedVars = constant [1 x %"struct.luthier::HipManagedVarInfo"] [%"struct.luthier::HipManagedVarInfo" { ptr @VarManaged, ptr @DummyManagedVariable, ptr @VarName, i64 0, i32 0 }]
-; CHECK-DAG: @HipDeviceVars = constant [1 x %"struct.luthier::HipDeviceVarInfo"] [%"struct.luthier::HipDeviceVarInfo" { ptr @DummyVar, ptr @VarName }]
-; CHECK-DAG: @HipTextureVars = constant [2 x %"struct.luthier::HipTextureInfo"] [%"struct.luthier::HipTextureInfo" { ptr @TextureAddr2, ptr @TexName2 }, %"struct.luthier::HipTextureInfo" { ptr @TextureAddr, ptr @TexName }]
-; CHECK-DAG: @HipSurfaceVars = constant [1 x %"struct.luthier::HipSurfaceInfo"] [%"struct.luthier::HipSurfaceInfo" { ptr @SurfaceAddr, ptr @SurName }]
-; CHECK-DAG: @HipFatBinariesSize = dso_local global i64 1, align 8
-; CHECK-DAG: @HipFunctionsSize = dso_local global i64 2, align 8
-; CHECK-DAG: @HipDeviceVarsSize = dso_local global i64 1, align 8
-; CHECK-DAG: @HipManagedVarsSize = dso_local global i64 1, align 8
-; CHECK-DAG: @HipTextureVarsSize = dso_local global i64 2, align 8
-; CHECK-DAG: @HipSurfaceVarsSize = dso_local global i64 1, align 8
+
+; --- After the pass: element structs exist, ArrayRef slots are init'd ---
+; CHECK-DAG: %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipFunctionInfo" = type { ptr, ptr }
+; CHECK-DAG: %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipManagedVarInfo" = type { ptr, ptr, ptr, i64, i32 }
+; CHECK-DAG: %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipDeviceVarInfo" = type { ptr, ptr }
+; CHECK-DAG: %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipTextureInfo" = type { ptr, ptr }
+; CHECK-DAG: %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipSurfaceInfo" = type { ptr, ptr }
+
+;
+; The placeholders below mirror what Clang emits for the six
+; `inline static llvm::ArrayRef<T>` slots on
+; DeviceToolCodeFatBinaryLoader<Derived>. Each is a global of two-element
+; struct type `{ ptr Data; i64 Length; }` matching ArrayRef's ABI.
+;
+%"class.llvm::ArrayRef" = type { ptr, i64 }
+
+@HipFatBinaries = dso_local global %"class.llvm::ArrayRef" zeroinitializer, align 8
+@HipFunctions   = dso_local global %"class.llvm::ArrayRef" zeroinitializer, align 8
+@HipDeviceVars  = dso_local global %"class.llvm::ArrayRef" zeroinitializer, align 8
+@HipManagedVars = dso_local global %"class.llvm::ArrayRef" zeroinitializer, align 8
+@HipTextureVars = dso_local global %"class.llvm::ArrayRef" zeroinitializer, align 8
+@HipSurfaceVars = dso_local global %"class.llvm::ArrayRef" zeroinitializer, align 8
+
+@.str.fb  = private unnamed_addr constant [32 x i8] c"luthier.loader.hip_fat_binaries\00", section "llvm.metadata"
+@.str.fn  = private unnamed_addr constant [29 x i8] c"luthier.loader.hip_functions\00", section "llvm.metadata"
+@.str.dv  = private unnamed_addr constant [31 x i8] c"luthier.loader.hip_device_vars\00", section "llvm.metadata"
+@.str.mv  = private unnamed_addr constant [32 x i8] c"luthier.loader.hip_managed_vars\00", section "llvm.metadata"
+@.str.tx  = private unnamed_addr constant [32 x i8] c"luthier.loader.hip_texture_vars\00", section "llvm.metadata"
+@.str.sf  = private unnamed_addr constant [32 x i8] c"luthier.loader.hip_surface_vars\00", section "llvm.metadata"
+@.str.src = private unnamed_addr constant [17 x i8] c"/app/example.cpp\00", section "llvm.metadata"
+
+@llvm.global.annotations = appending global [6 x { ptr, ptr, ptr, i32, ptr }] [
+  { ptr, ptr, ptr, i32, ptr } { ptr @HipFatBinaries, ptr @.str.fb, ptr @.str.src, i32 63, ptr null },
+  { ptr, ptr, ptr, i32, ptr } { ptr @HipFunctions,   ptr @.str.fn, ptr @.str.src, i32 67, ptr null },
+  { ptr, ptr, ptr, i32, ptr } { ptr @HipDeviceVars,  ptr @.str.dv, ptr @.str.src, i32 71, ptr null },
+  { ptr, ptr, ptr, i32, ptr } { ptr @HipManagedVars, ptr @.str.mv, ptr @.str.src, i32 75, ptr null },
+  { ptr, ptr, ptr, i32, ptr } { ptr @HipTextureVars, ptr @.str.tx, ptr @.str.src, i32 79, ptr null },
+  { ptr, ptr, ptr, i32, ptr } { ptr @HipSurfaceVars, ptr @.str.sf, ptr @.str.src, i32 83, ptr null }
+], section "llvm.metadata"
+
+@llvm.compiler.used = appending global [7 x ptr] [ptr @HipFunctions, ptr @HipDeviceVars, ptr @HipFatBinaries, ptr @HipManagedVars, ptr @HipSurfaceVars, ptr @HipTextureVars, ptr @__hip_cuid_60997337ce9624a2], section "llvm.metadata"
+
+; --- VERIFY PROMOTED SLOTS ---
+;
+; Each ArrayRef slot is set in-place to a `{ ptr to data, i64 N }` initializer
+; that views a private constant data array.
+;
+; CHECK-DAG: %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipFatBinaryInfo" = type { ptr, i64 }
+; CHECK-DAG: @[[FB_DATA:[._a-zA-Z0-9]+]] = private constant [1 x %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipFatBinaryInfo"] [%"struct.luthier::DeviceToolCodeFatBinaryLoader::HipFatBinaryInfo" { ptr @__hip_fatbin, i64 32 }]
+; CHECK-DAG: @HipFatBinaries = dso_local constant %"class.llvm::ArrayRef" { ptr @[[FB_DATA]], i64 1 }
+;
+; CHECK-DAG: @[[FN_DATA:[._a-zA-Z0-9]+]] = private constant [2 x %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipFunctionInfo"]
+; CHECK-DAG: @HipFunctions = dso_local constant %"class.llvm::ArrayRef" { ptr @[[FN_DATA]], i64 2 }
+;
+; CHECK-DAG: @[[MV_DATA:[._a-zA-Z0-9]+]] = private constant [1 x %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipManagedVarInfo"] [%"struct.luthier::DeviceToolCodeFatBinaryLoader::HipManagedVarInfo" { ptr @VarManaged, ptr @DummyManagedVariable, ptr @VarName, i64 0, i32 0 }]
+; CHECK-DAG: @HipManagedVars = dso_local constant %"class.llvm::ArrayRef" { ptr @[[MV_DATA]], i64 1 }
+;
+; CHECK-DAG: @[[DV_DATA:[._a-zA-Z0-9]+]] = private constant [1 x %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipDeviceVarInfo"] [%"struct.luthier::DeviceToolCodeFatBinaryLoader::HipDeviceVarInfo" { ptr @DummyVar, ptr @VarName }]
+; CHECK-DAG: @HipDeviceVars = dso_local constant %"class.llvm::ArrayRef" { ptr @[[DV_DATA]], i64 1 }
+;
+; CHECK-DAG: @[[TX_DATA:[._a-zA-Z0-9]+]] = private constant [2 x %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipTextureInfo"]
+; CHECK-DAG: @HipTextureVars = dso_local constant %"class.llvm::ArrayRef" { ptr @[[TX_DATA]], i64 2 }
+;
+; CHECK-DAG: @[[SF_DATA:[._a-zA-Z0-9]+]] = private constant [1 x %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipSurfaceInfo"] [%"struct.luthier::DeviceToolCodeFatBinaryLoader::HipSurfaceInfo" { ptr @SurfaceAddr, ptr @SurName }]
+; CHECK-DAG: @HipSurfaceVars = dso_local constant %"class.llvm::ArrayRef" { ptr @[[SF_DATA]], i64 1 }
 
 ; --- VERIFY CONSTRUCTOR MODIFICATION ---
-
 ; CHECK: @llvm.global_ctors = appending global [1 x { i32, ptr, ptr }] [{ i32, ptr, ptr } { i32 65535, ptr @_GLOBAL__sub_I_BinomialOption.cpp, ptr null }]
 @llvm.global_ctors = appending global [2 x { i32, ptr, ptr }] [{ i32, ptr, ptr } { i32 65535, ptr @_GLOBAL__sub_I_BinomialOption.cpp, ptr null }, { i32, ptr, ptr } { i32 65535, ptr @__hip_module_ctor, ptr null }]
 
@@ -116,12 +127,12 @@ entry:
   %1 = icmp ne ptr %0, null
   br i1 %1, label %if, label %exit
 
-if:                                               ; preds = %entry
+if:
   call void @__hipUnregisterFatBinary(ptr %0)
   store ptr null, ptr @__hip_gpubin_handle_60997337ce9624a2, align 8
   br label %exit
 
-exit:                                             ; preds = %if, %entry
+exit:
   ret void
 }
 
@@ -131,12 +142,12 @@ entry:
   %1 = icmp eq ptr %0, null
   br i1 %1, label %if, label %exit
 
-if:                                               ; preds = %entry
+if:
   %2 = call ptr @__hipRegisterFatBinary(ptr @__hip_fatbin_wrapper)
   store ptr %2, ptr @__hip_gpubin_handle_60997337ce9624a2, align 8
   br label %exit
 
-exit:                                             ; preds = %if, %entry
+exit:
   %3 = load ptr, ptr @__hip_gpubin_handle_60997337ce9624a2, align 8
   call void @__hip_register_globals(ptr %3)
   %4 = call i32 @atexit(ptr @__hip_module_dtor)
@@ -146,7 +157,11 @@ exit:                                             ; preds = %if, %entry
 ; --- UNTOUCHED CODE ---
 @_Z16binomial_optionsiPK15HIP_vector_typeIfLj4EEPS0_ = dso_local constant ptr @_Z31__device_stub__binomial_optionsiPK15HIP_vector_typeIfLj4EEPS0_, align 8
 @add_numbers_ptr = dso_local constant ptr @add_numbers, align 8
-@__hip_fatbin_wrapper = internal constant { i32, i32, ptr, ptr } { i32 1212764230, i32 1, ptr null, ptr null }
+; Minimum-shape uncompressed Clang offload bundle: 24-byte magic + 8-byte
+; NumEntries(=0). Sized as [32 x i8]; the pass reads the GV's array size
+; to compute the runtime MemoryBufferRef extent.
+@__hip_fatbin = internal constant [32 x i8] c"__CLANG_OFFLOAD_BUNDLE__\00\00\00\00\00\00\00\00"
+@__hip_fatbin_wrapper = internal constant { i32, i32, ptr, ptr } { i32 1212764230, i32 1, ptr @__hip_fatbin, ptr null }
 @0 = private unnamed_addr constant [52 x i8] c"_Z16binomial_optionsiPK15HIP_vector_typeIfLj4EEPS0_\00"
 @1 = private unnamed_addr constant [12 x i8] c"add_numbers\00"
 

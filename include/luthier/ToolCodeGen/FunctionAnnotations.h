@@ -76,68 +76,40 @@ static constexpr llvm::StringLiteral InjectedPayloadAttribute{
 
 #define InitialEntryPointAttr   "luthier.function.initial_entrypoint"
 
-#define HipFatBinariesPtrAttr   "luthier.loader.hip_fat_binaries_ptr"
+/// Annotation strings attached to the inline-static \c llvm::ArrayRef slots
+/// on \c DeviceToolCodeFatBinaryLoader. \c LoadHIPFATBinaryInfoPass matches
+/// by string and rewrites each slot's initializer to the appropriate
+/// constant-array view.
+///
+/// Each annotation has two forms: a bare-token macro consumed by
+/// \c LUTHIER_ANNOTATE_VARIABLE for the \c __attribute__((annotate(...)))
+/// site, and a \c static \c constexpr \c StringLiteral for runtime
+/// comparisons in the IR pass.
+#define LUTHIER_HIP_FAT_BINARIES_ATTR luthier.loader.hip_fat_binaries
+#define LUTHIER_HIP_FUNCTIONS_ATTR    luthier.loader.hip_functions
+#define LUTHIER_HIP_DEVICE_VARS_ATTR  luthier.loader.hip_device_vars
+#define LUTHIER_HIP_MANAGED_VARS_ATTR luthier.loader.hip_managed_vars
+#define LUTHIER_HIP_TEXTURE_VARS_ATTR luthier.loader.hip_texture_vars
+#define LUTHIER_HIP_SURFACE_VARS_ATTR luthier.loader.hip_surface_vars
 
-#define HipFatBinariesSizeAttr  "luthier.loader.hip_fat_binaries_size"
-
-#define HipFunctionsPtrAttr     "luthier.loader.hip_functions_ptr"
-
-#define HipFunctionsSizeAttr    "luthier.loader.hip_functions_size"
-
-#define HipDeviceVarsPtrAttr    "luthier.loader.hip_device_vars_ptr"
-
-#define HipDeviceVarsSizeAttr   "luthier.loader.hip_device_vars_size"
-
-#define HipManagedVarsPtrAttr   "luthier.loader.hip_managed_vars_ptr"
-
-#define HipManagedVarsSizeAttr  "luthier.loader.hip_managed_vars_size"
-
-#define HipTextureVarsPtrAttr   "luthier.loader.hip_texture_vars_ptr"
-
-#define HipTextureVarsSizeAttr  "luthier.loader.hip_texture_vars_size"
-
-#define HipSurfaceVarsPtrAttr   "luthier.loader.hip_surface_vars_ptr"
-
-#define HipSurfaceVarsSizeAttr  "luthier.loader.hip_surface_vars_size"
+static constexpr llvm::StringLiteral HipFatBinariesAttr{
+    LUTHIER_STRINGIFY(LUTHIER_HIP_FAT_BINARIES_ATTR)};
+static constexpr llvm::StringLiteral HipFunctionsAttr{
+    LUTHIER_STRINGIFY(LUTHIER_HIP_FUNCTIONS_ATTR)};
+static constexpr llvm::StringLiteral HipDeviceVarsAttr{
+    LUTHIER_STRINGIFY(LUTHIER_HIP_DEVICE_VARS_ATTR)};
+static constexpr llvm::StringLiteral HipManagedVarsAttr{
+    LUTHIER_STRINGIFY(LUTHIER_HIP_MANAGED_VARS_ATTR)};
+static constexpr llvm::StringLiteral HipTextureVarsAttr{
+    LUTHIER_STRINGIFY(LUTHIER_HIP_TEXTURE_VARS_ATTR)};
+static constexpr llvm::StringLiteral HipSurfaceVarsAttr{
+    LUTHIER_STRINGIFY(LUTHIER_HIP_SURFACE_VARS_ATTR)};
 
 static constexpr const char *InitialExecutionPointAttr =
     "luthier.function.initial_execution_point";
 
 static constexpr const char *TargetInstrPointAttr =
     "luthier.target_instr_point";
-
-/// \brief If a tool contains an instrumentation hook it \b must
-/// use this macro once. Luthier hooks are annotated via the
-/// \p LUTHIER_HOOK_CREATE macro. \n
-///
-/// \p MARK_LUTHIER_DEVICE_MODULE macro defines a managed variable of
-/// type \p char named \p __luthier_reserved in the tool device code.
-/// This managed variable ensures that: \n
-/// 1. <b>The HIP runtime is forced to load the tool code object before the
-/// first HIP kernel is launched on the device, without requiring eager binary
-/// loading to be enabled</b>: The Clang compiler embeds the device code of a
-/// Luthier tool and its bitcode into a static HIP FAT binary bundled within the
-/// tool's shared object. During runtime, the tool's FAT binary gets
-/// registered with the HIP runtime; However, by default, the HIP runtime loads
-/// FAT binaries in a lazy fashion, only loading it onto a device if:
-/// a. a kernel is launched from it on the said device, or
-/// b. it contains a managed variable. \n
-/// Including a managed variable is the only way to ensure the tool's FAT binary
-/// is loaded in time without interfering with the loading mechanism of HIP
-/// runtime.
-/// \n
-/// 2. <b>Luthier can easily identify a tool's code object by a constant time
-/// symbol hash lookup</b>.
-/// \n
-/// If the target application is not using the HIP runtime, then no kernel is
-/// launched by the HIP runtime, meaning that the tool FAT binary does not ever
-/// get loaded. In that scenario, as the HIP runtime is present solely for
-/// Luthier's function, the `HIP_ENABLE_DEFERRED_LOADING` environment
-/// variable must be set to zero to ensure Luthier tool code objects get loaded
-/// right away on all devices.
-/// \sa LUTHIER_HOOK_ANNOTATE
-#define MARK_LUTHIER_DEVICE_MODULE                                             \
-  __attribute__((managed, used)) char LUTHIER_RESERVED_MANAGED_VAR = 0;
 
 /// \brief Tags a \c __device__ function to be accessed by the tool's
 /// host code
@@ -155,8 +127,12 @@ static constexpr const char *TargetInstrPointAttr =
 #define LUTHIER_HOST_VISIBLE_DEVICE_FN                                         \
   __attribute__((device)) LUTHIER_EXPORT_FUNCTION_HANDLE_ATTR
 
-#define LUTHIER_ANNOTATE_VARIABLE(AnnotationString) \
-__attribute__((annotate(AnnotationString)))
+/// Tag a variable declaration with a Clang \c annotate attribute. \p Sym
+/// is a bare-token macro (e.g. \c LUTHIER_HIP_FAT_BINARIES_ATTR) that
+/// expands to a dotted symbol; the preprocessor stringifies it for the
+/// attribute.
+#define LUTHIER_ANNOTATE_VARIABLE(Sym) \
+__attribute__((annotate(LUTHIER_STRINGIFY(Sym))))
 
 void setFunctionEntryPoint(llvm::Function &F, EntryPoint EP);
 
