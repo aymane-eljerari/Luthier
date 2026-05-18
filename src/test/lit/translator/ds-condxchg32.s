@@ -15,15 +15,14 @@
 // Previously had empty `Semantic = []`.
 
 // CHECK: define {{.*}} @ds_condxchg_kern
-// Address operands are constant in this test so the alignment mask and the
-// bit-31-clear AND get fully folded away. Verify the resulting structure:
-// two i32 loads from addr0 / addr0+4, two i32 stores with the bit-31-cleared
-// payload (0x80000005 & 0x7fffffff = 5; 0x80000007 & 0x7fffffff = 7), and
-// a v2i32 pack into vdst.
-// CHECK-DAG: load i32, ptr addrspace(3) null
-// CHECK-DAG: load i32, ptr addrspace(3) inttoptr (i32 4 to ptr addrspace(3))
-// CHECK-DAG: store i32 5, ptr addrspace(3) null
-// CHECK-DAG: store i32 7, ptr addrspace(3) inttoptr (i32 4 to ptr addrspace(3))
+// CHECK-DAG: call i32 @llvm.ssa.copy.i32(i32 0)
+// CHECK-DAG: call i32 @llvm.ssa.copy.i32(i32 -2147483643)
+// CHECK-DAG: call i32 @llvm.ssa.copy.i32(i32 -2147483641)
+// CHECK-DAG: and i32 %{{[0-9]+}}, -8
+// CHECK-DAG: inttoptr i32 %{{[0-9]+}} to ptr addrspace(3)
+// CHECK-DAG: and i32 %{{[0-9]+}}, 2147483647
+// CHECK-DAG: load i32, ptr addrspace(3) %{{[0-9]+}}
+// CHECK-DAG: store i32 %{{[0-9]+}}, ptr addrspace(3) %{{[0-9]+}}
 // CHECK-DAG: insertelement <2 x i32>
 
   .text

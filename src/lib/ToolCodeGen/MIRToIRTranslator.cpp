@@ -1335,15 +1335,12 @@ void MIRToIRTranslator::initDeviceFunctionEntryRegs(
 }
 
 void MIRToIRTranslator::emitDirectTailCall(const llvm::MachineInstr &MI,
+                                           llvm::IRBuilderBase &Builder,
                                            llvm::Value *InstAddr,
                                            llvm::Value *Target) {
   llvm::Value *FinalTarget{nullptr};
   if (auto *TargetConst = dyn_cast<llvm::ConstantInt>(Target);
       TargetConst && MI.getOpcode() == llvm::AMDGPU::S_CALL_B64) {
-    const llvm::MachineBasicBlock *MBB = MI.getParent();
-    assert(MBB && "MI has no parent MBB");
-    auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
-    llvm::IRBuilder<> Builder(BB);
     FinalTarget = Builder.CreateAdd(
         InstAddr, Builder.getInt64(4 * TargetConst->getSExtValue()));
   } else if (llvm::isa<llvm::Function>(Target)) {
@@ -1353,10 +1350,11 @@ void MIRToIRTranslator::emitDirectTailCall(const llvm::MachineInstr &MI,
   }
   assert(FinalTarget && "Target does not have a called target");
 
-  emitIndirectTailCall(MI, FinalTarget);
+  emitIndirectTailCall(MI, Builder, FinalTarget);
 }
 
 void MIRToIRTranslator::emitIndirectTailCall(const llvm::MachineInstr &MI,
+                                             llvm::IRBuilderBase &Builder,
                                              llvm::Value *Target) {
   if (!Target) {
     // CodeDiscoveryPass couldn't resolve the call target (e.g. S_CALL_B64
@@ -1373,9 +1371,7 @@ void MIRToIRTranslator::emitIndirectTailCall(const llvm::MachineInstr &MI,
                           << " target=" << *Target << "\n");
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI has no parent MBB");
-  auto *BB = const_cast<llvm::BasicBlock *>(MBB->getBasicBlock());
 
-  llvm::IRBuilder Builder{BB};
   llvm::Value *FuncPtr =
       Builder.CreateBitOrPointerCast(Target, Builder.getPtrTy());
 
@@ -1383,28 +1379,13 @@ void MIRToIRTranslator::emitIndirectTailCall(const llvm::MachineInstr &MI,
   std::vector<llvm::Value *> CallArgs;
   CallArgs.reserve(FTy->getNumParams());
 
-  unsigned CurrentParamIdx = 0;
   for (llvm::MCRegister RegFileBase : FunctionCallArgOrder) {
     unsigned NumLanes32 = RegFileSize[RegFileBase] / 2;
-    std::string ValueName = getRegValueName(RegFileBase);
     for (unsigned PI = 0; PI < NumLanes32; ++PI) {
-      llvm::IRBuilder<llvm::InstSimplifyFolder, llvm::IRBuilderCallbackInserter>
-          RegBuilder(BB->getContext(),
-                     llvm::InstSimplifyFolder{MF.getDataLayout()},
-                     llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
-                       LLVM_DEBUG(llvm::dbgs()
-                                  << "[MIRToIRTranslator] Inserting reg read "
-                                     "instruction "
-                                  << *I << "\n");
-                     }});
-      // Must set an insert point so any materialized instructions are
-      // anchored in BB rather than being orphaned (no-parent) instructions.
-      RegBuilder.SetInsertPoint(BB);
       // Each 32-bit GPR spans 2 halves, so SGPR_N lives at offset 2*N.
       CallArgs.push_back(&getOperandAsValue(
-          *MBB, std::make_tuple(RegFileBase, PI * 2, 2), RegBuilder));
+          *MBB, std::make_tuple(RegFileBase, PI * 2, 2), Builder));
     }
-    CurrentParamIdx += NumLanes32;
   }
 
   llvm::CallInst *Call = Builder.CreateCall(FTy, FuncPtr, CallArgs);

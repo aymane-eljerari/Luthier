@@ -14,9 +14,10 @@
 // constants in v1 (= data0 = cmp = 11) and v2 (= data1 = src = 22).
 
 // CHECK: define {{.*}} @ds_cmpst_kern
-// Compare against data0 = 11 (cmp). On match, store data1 = 22 (src).
-// CHECK-DAG: icmp eq i32 %{{[0-9]+}}, 11
-// CHECK-DAG: select i1 %{{[0-9]+}}, i32 22
+// CHECK-DAG: call i32 @llvm.ssa.copy.i32(i32 11)
+// CHECK-DAG: call i32 @llvm.ssa.copy.i32(i32 22)
+// CHECK-DAG: icmp eq i32 %{{[0-9]+}}, %{{[0-9]+}}
+// CHECK-DAG: select i1 %{{[0-9]+}}, i32 %{{[0-9]+}}
 
   .text
   .amdgcn_target "amdgcn-amd-amdhsa--gfx908"

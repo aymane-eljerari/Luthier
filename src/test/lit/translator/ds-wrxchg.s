@@ -12,8 +12,9 @@
 //   old = MEM[addr]; MEM[addr] = data; vdst = old
 
 // CHECK: define {{.*}} @ds_wrxchg_kern
+// CHECK-DAG: call i32 @llvm.ssa.copy.i32(i32 42)
 // CHECK-DAG: load i32, ptr addrspace(3)
-// CHECK-DAG: store i32 42, ptr addrspace(3)
+// CHECK-DAG: store i32 %{{[0-9]+}}, ptr addrspace(3)
 
   .text
   .amdgcn_target "amdgcn-amd-amdhsa--gfx908"

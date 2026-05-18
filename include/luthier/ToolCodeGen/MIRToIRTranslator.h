@@ -627,13 +627,15 @@ class MIRToIRTranslator {
   /// (used to compute the absolute call target when \p Target is still a raw
   /// displacement). \p Target is either an \c llvm::Function* (post-callgraph
   /// fixup) or a \c ConstantInt displacement (pre-fixup); the implementation
-  /// dispatches on the runtime type.
-  void emitDirectTailCall(const llvm::MachineInstr &MI, llvm::Value *InstAddr,
+  /// dispatches on the runtime type. \p Builder is the per-MI IRBuilder
+  void emitDirectTailCall(const llvm::MachineInstr &MI,
+                          llvm::IRBuilderBase &Builder, llvm::Value *InstAddr,
                           llvm::Value *Target);
 
   /// Like \c emitIndirectCall but the call is a tail call followed by
-  /// \c ret of the call's return value.
-  void emitIndirectTailCall(const llvm::MachineInstr &MI, llvm::Value *Target);
+  /// \c ret of the call's return value. \p Builder is the per-MI IRBuilder
+  void emitIndirectTailCall(const llvm::MachineInstr &MI,
+                            llvm::IRBuilderBase &Builder, llvm::Value *Target);
 
 public:
   MIRToIRTranslator(llvm::MachineFunction &MF, llvm::Error &Err);

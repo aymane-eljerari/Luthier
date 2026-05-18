@@ -2059,7 +2059,9 @@ def V_PK_FMAC_F16_e32_sem : InstSISemantic<V_PK_FMAC_F16_e32> {
 //   rdna4-instruction-set-architecture.pdf, page 315.
 def V_MOV_B32_e32_sem : InstSISemantic<V_MOV_B32_e32> {
   let Semantic = [
-    (SetNamedOperand $vdst, (GetNamedOperand $src0))
+    // See S_MOV_B32_sem in SOP1Sem.td for why ssa.copy is used
+    (SetNamedOperand $vdst,
+      (LLVMUnaryIntrinsic int_ssa_copy, (GetNamedOperand $src0)))
   ];
 }
 
@@ -2069,7 +2071,9 @@ def V_MOV_B32_e32_sem : InstSISemantic<V_MOV_B32_e32> {
 //   amd-instinct-cdna4-instruction-set-architecture.pdf, page 216.
 def V_MOV_B64_e32_sem : InstSISemantic<V_MOV_B64_e32> {
   let Semantic = [
-    (SetNamedOperand $vdst, (GetNamedOperand $src0))
+    // See also V_MOV_B32_e32_sem
+    (SetNamedOperand $vdst,
+      (LLVMUnaryIntrinsic int_ssa_copy, (GetNamedOperand $src0)))
   ];
 }
 
@@ -2079,7 +2083,9 @@ def V_MOV_B64_e32_sem : InstSISemantic<V_MOV_B64_e32> {
 //   rdna4-instruction-set-architecture.pdf, page 344.
 def V_MOV_B16_t16_e32_sem : InstSISemantic<V_MOV_B16_t16_e32> {
   let Semantic = [
-    (SetNamedOperand $vdst, (GetNamedOperand $src0))
+    // See V_MOV_B32_e32_sem
+    (SetNamedOperand $vdst,
+      (LLVMUnaryIntrinsic int_ssa_copy, (GetNamedOperand $src0)))
   ];
 }
 
@@ -3713,7 +3719,9 @@ def V_SWAPREL_B32_sem : InstSISemantic<V_SWAPREL_B32> {
 //   amd-instinct-cdna4-instruction-set-architecture.pdf, page 224.
 def V_ACCVGPR_MOV_B32_sem : InstSISemantic<V_ACCVGPR_MOV_B32> {
   let Semantic = [
-    (SetNamedOperand $vdst, (GetNamedOperand $src0))
+    // See V_MOV_B32_e32_sem
+    (SetNamedOperand $vdst,
+      (LLVMUnaryIntrinsic int_ssa_copy, (GetNamedOperand $src0)))
   ];
 }
 

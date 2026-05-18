@@ -186,7 +186,7 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
             "Expected `DirectCall` to have 2 arguments (instruction PC, "
             "callee Function* or displacement), got " +
                 llvm::Twine(NumArgs) + " instead");
-      OS << "Translator.emitDirectTailCall(MI, ";
+      OS << "Translator.emitDirectTailCall(MI, Builder, ";
       emitSemanticStatement(OS, Dag->getArg(0), Loc);
       OS << ", ";
       emitSemanticStatement(OS, Dag->getArg(1), Loc);
@@ -229,7 +229,7 @@ void SIInstrSemanticsEmitter::emitSemanticStatement(
 
     // --- emitIndirectTailCall <target> ---
     else if (OpName == "IndirectTailCall") {
-      OS << "Translator.emitIndirectTailCall(MI, ";
+      OS << "Translator.emitIndirectTailCall(MI, Builder, ";
       emitSemanticStatement(OS, Dag->getArg(0), Loc);
       OS << ")";
     }

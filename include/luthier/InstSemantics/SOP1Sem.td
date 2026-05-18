@@ -33,7 +33,11 @@
 //   rdna4-instruction-set-architecture.pdf, page 230.
 def S_MOV_B32_sem : InstSISemantic<S_MOV_B32> {
   let Semantic = [
-    (SetNamedOperand $sdst, (GetNamedOperand $src0, si_llvm_i32_ty))
+    // Route through `llvm.ssa.copy` so that there is a one-to-one
+    // mapping between the MIR instruction and the IR-level translation
+    (SetNamedOperand $sdst,
+      (LLVMUnaryIntrinsic int_ssa_copy,
+        (GetNamedOperand $src0, si_llvm_i32_ty)))
   ];
 }
 
@@ -52,7 +56,11 @@ def S_MOV_B32_sem : InstSISemantic<S_MOV_B32> {
 //   rdna4-instruction-set-architecture.pdf, page 230.
 def S_MOV_B64_sem : InstSISemantic<S_MOV_B64> {
   let Semantic = [
-    (SetNamedOperand $sdst, (GetNamedOperand $src0, si_llvm_i64_ty))
+        // Route through `llvm.ssa.copy` so that there is a one-to-one
+        // mapping between the MIR instruction and the IR-level translation
+    (SetNamedOperand $sdst,
+      (LLVMUnaryIntrinsic int_ssa_copy,
+        (GetNamedOperand $src0, si_llvm_i64_ty)))
   ];
 }
 
@@ -61,7 +69,10 @@ def S_MOV_B64_sem : InstSISemantic<S_MOV_B64> {
 // Defined in llvm-project: llvm/lib/Target/AMDGPU/SOPInstructions.td
 def S_MOV_B32_sideeffects_sem : InstSISemantic<S_MOV_B32_sideeffects> {
   let Semantic = [
-    (SetNamedOperand $sdst, (GetNamedOperand $src0))
+        // Route through `llvm.ssa.copy` so that there is a one-to-one
+        // mapping between the MIR instruction and the IR-level translation
+    (SetNamedOperand $sdst,
+      (LLVMUnaryIntrinsic int_ssa_copy, (GetNamedOperand $src0)))
   ];
 }
 

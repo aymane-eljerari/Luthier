@@ -13,10 +13,11 @@
 // Lowered via (tmp & (data0 ^ -1)) | data1.
 
 // CHECK: define {{.*}} @ds_mskor_kern
-// Note: with constant inputs the `xor data0, -1` folds into a literal
-// (~0xff00 = -65281). Check the AND/OR structure that survives.
-// CHECK-DAG: and i32 {{.*}}, -65281
-// CHECK-DAG: or i32 {{.*}}, 21760
+// CHECK-DAG: call i32 @llvm.ssa.copy.i32(i32 65280)
+// CHECK-DAG: call i32 @llvm.ssa.copy.i32(i32 21760)
+// CHECK-DAG: xor i32 %{{[0-9]+}}, -1
+// CHECK-DAG: and i32 %{{[0-9]+}}, %{{[0-9]+}}
+// CHECK-DAG: or i32 %{{[0-9]+}}, %{{[0-9]+}}
 
   .text
   .amdgcn_target "amdgcn-amd-amdhsa--gfx908"

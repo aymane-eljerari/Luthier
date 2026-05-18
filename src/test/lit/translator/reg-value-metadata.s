@@ -19,10 +19,16 @@
 // CHECK-DAG: !{i64 -1, !"exec{{[^"]*}}", i32 {{[0-9]+}}, i32 {{[0-9]+}}, i32 4}
 // CHECK-DAG: !{i32 0, !"src_scc{{[^"]*}}", i32 {{[0-9]+}}, i32 {{[0-9]+}}, i32 2}
 // CHECK-DAG: !{i32 0, !"mode{{[^"]*}}", i32 {{[0-9]+}}, i32 {{[0-9]+}}, i32 2}
-// A v_mov_b32 v0, 0 / v1, 1 result is constant-folded; its reg tag must
-// survive onto the surviving Constant via the entry_reg_map.
-// CHECK-DAG: !{i32 0, !"vgpr0", i32 {{[0-9]+}}, i32 {{[0-9]+}}, i32 2}
-// CHECK-DAG: !{i32 1, !"vgpr1", i32 {{[0-9]+}}, i32 {{[0-9]+}}, i32 2}
+// V_MOV_B32 semantics wrap their result in `llvm.ssa.copy` so the
+// move materializes an explicit IR CallInst that the per-MI builder's
+// callback can tag with `!pcsections`. That CallInst — not the source
+// Constant — is what lands in the register-value map, so the reg-tag
+// emitter routes vgpr0/1 through the per-instruction `!luthier.reg`
+// path (4-element tuple) rather than the entry-reg-map's 5-element
+// "constant-survival" tuple. The ssa.copy CallInst persists in IR with
+// no IR uses, kept alive by optimizeNonTraceInsts' trace check.
+// CHECK-DAG: !{!"vgpr0", i32 {{[0-9]+}}, i32 {{[0-9]+}}, i32 2}
+// CHECK-DAG: !{!"vgpr1", i32 {{[0-9]+}}, i32 {{[0-9]+}}, i32 2}
 
   .text
   .amdgcn_target "amdgcn-amd-amdhsa--gfx908"

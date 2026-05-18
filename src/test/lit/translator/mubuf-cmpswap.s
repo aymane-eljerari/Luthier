@@ -17,7 +17,9 @@
 // failed the size assertion in setRegOperandValue.
 
 // CHECK: define {{.*}} @mubuf_cmpswap
-// CHECK-DAG: call i32 @llvm.amdgcn.struct.buffer.atomic.cmpswap.i32(i32 7, i32 11,
+// CHECK-DAG: call i32 @llvm.ssa.copy.i32(i32 7)
+// CHECK-DAG: call i32 @llvm.ssa.copy.i32(i32 11)
+// CHECK-DAG: call i32 @llvm.amdgcn.struct.buffer.atomic.cmpswap.i32(i32 %{{[0-9]+}}, i32 %{{[0-9]+}},
 // CHECK-DAG: zext i32 {{.*}} to i64
 
   .text
