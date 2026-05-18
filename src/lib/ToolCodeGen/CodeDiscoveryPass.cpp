@@ -39,7 +39,6 @@
 #include <llvm/CodeGen/ReachingDefAnalysis.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/IntrinsicInst.h>
-#include <llvm/IR/IntrinsicsAMDGPU.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/IR/Module.h>
