@@ -138,21 +138,16 @@ concretizeFeatures(const llvm::SubtargetFeatures &Source, bool ConcreteXnackOn,
   return Out;
 }
 
-/// Parses the Clang offload \p Bundle
+/// Parses the Clang offload \p Bundle entries into \p Slices
 ///
 /// Handles both compressed and uncompressed FAT binaries
 ///
-/// The bundle entry id is *not* trusted as ISA evidence — each per-entry
-/// ELF is opened with \c AMDGCNObjectFile and its \c e_flags-derived
-/// canonical target id is the ground truth (matching ROCr's own
-/// view). Non-AMD entries (host slots etc.) fail the AMDGCN
-/// magic check and are skipped silently. The LLVM-form triple/CPU/features
-/// are parsed from the canonical id and cached on the slice for later
-/// JIT-time \c TargetMachine construction.
+/// In case of \p Bundle being a compressed FAT binary, \p DecompressedHolder
+/// will hold the owning memory buffer of the decompressed version of \p Bundle
+/// on return
 ///
-/// \p DecompressedHolder receives ownership of the decompressed buffer
-/// when the source is compressed; the slice StringRefs view into it and
-/// remain valid only as long as that buffer outlives them.
+/// \note The ISA of each Slice entry will be populated by checking the
+/// ISA of the code object slice directly; The entry ID is ignored
 llvm::Error
 parseOffloadBundle(const hsa::ApiTableContainer<::CoreApiTable> &Core,
                    llvm::MemoryBufferRef Bundle,
