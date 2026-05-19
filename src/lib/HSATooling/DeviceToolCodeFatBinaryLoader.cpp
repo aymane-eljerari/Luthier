@@ -298,19 +298,14 @@ poolAllocGranule(const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
 //===----------------------------------------------------------------------===//
 
 llvm::Error DeviceToolCodeFatBinaryLoader::loadAll() {
-  // The hsa:: helpers consume `ApiTableContainer`s rather than rocprofiler
-  // snapshots, so adapt once.
   auto Core = CoreApiSnapshot.getTable();
 
-  // Enumerate GPU agents once. Empty agent list is not an error; the tool
-  // simply ends up with nothing loaded.
   llvm::SmallVector<hsa_agent_t, 4> Agents;
-  if (auto E = hsa::getAllAgentsWithDeviceType<HSA_DEVICE_TYPE_GPU>(Core,
-                                                                   Agents))
-    return E;
+  LUTHIER_RETURN_ON_ERROR(
+      hsa::getAllAgentsWithDeviceType<HSA_DEVICE_TYPE_GPU>(Core, Agents));
 
-  // Populate host-handle → device-name. Each input table is independent.
-  auto recordHandle = [&](void *Handle, const char *Name) {
+  // Populate host-handle → device-name
+  auto recordHandle = [&](const void *Handle, const char *Name) {
     if (Handle != nullptr && Name != nullptr)
       HandleToName[Handle] = std::string(Name);
   };
@@ -324,9 +319,9 @@ llvm::Error DeviceToolCodeFatBinaryLoader::loadAll() {
     recordHandle(E.HostHandle, E.DeviceName);
 
   FatBins.reserve(InputFatBinaries.size());
-  for (const HipFatBinaryInfo &Info : InputFatBinaries) {
+  for (const auto &[Bundle, Size] : InputFatBinaries) {
     FatBinRecord &Rec = FatBins.emplace_back();
-    Rec.Wrapper = Info.Bundle;
+    Rec.Wrapper = Bundle;
 
     llvm::SmallVector<BundleSlice, 4> Slices;
     // The decompressed buffer (if the bundle is compressed) must outlive
@@ -335,9 +330,8 @@ llvm::Error DeviceToolCodeFatBinaryLoader::loadAll() {
     // bitcode extractor takes its own owned copy, so the holder can drop
     // at end of this iteration.
     std::unique_ptr<llvm::MemoryBuffer> DecompressedHolder;
-    if (auto E =
-            parseBundle(Core, Info.Bundle, Info.Size, Slices, DecompressedHolder))
-      return E;
+    LUTHIER_RETURN_ON_ERROR(
+        parseBundle(Core, Bundle, Size, Slices, DecompressedHolder));
 
     // Handle-keyed map for the agent-matching predicate. \c Slices is
     // SmallVector and the loop below doesn't touch it once we start
@@ -424,82 +418,86 @@ llvm::Error DeviceToolCodeFatBinaryLoader::loadAll() {
     }
   }
 
-  // Managed-var allocation. Modelled on HIP's __hipRegisterManagedVar
-  // (clr/hipamd/src/hip_platform.cpp:147) and Var::allocateManagedVarPtr
-  // (clr/hipamd/src/hip_global.cpp:277): allocate a single host
-  // fine-grain buffer per variable, copy the init value in, grant each
-  // GPU agent access, and write the allocation back through the host
-  // shadow pointer.
-  if (!InputManagedVars.empty()) {
-    auto AmdExt = AmdExtSnapshot.getTable();
+  LUTHIER_RETURN_ON_ERROR(loadManagedVars(Agents));
 
-    // We need a CPU agent to host the fine-grain pool we allocate from.
-    llvm::SmallVector<hsa_agent_t, 1> CpuAgents;
-    if (auto E =
-            hsa::getAllAgentsWithDeviceType<HSA_DEVICE_TYPE_CPU>(Core,
-                                                                CpuAgents))
+  return llvm::Error::success();
+}
+
+//===----------------------------------------------------------------------===//
+// DeviceToolCodeFatBinaryLoader::loadManagedVars
+//===----------------------------------------------------------------------===//
+
+llvm::Error DeviceToolCodeFatBinaryLoader::loadManagedVars(
+    llvm::ArrayRef<hsa_agent_t> Agents) {
+  if (InputManagedVars.empty())
+    return llvm::Error::success();
+
+  const auto Core = CoreApiSnapshot.getTable();
+  const auto AmdExt = AmdExtSnapshot.getTable();
+
+  // We need a CPU agent to host the fine-grain pool we allocate from.
+  llvm::SmallVector<hsa_agent_t, 1> CpuAgents;
+  LUTHIER_RETURN_ON_ERROR(
+      hsa::getAllAgentsWithDeviceType<HSA_DEVICE_TYPE_CPU>(Core, CpuAgents));
+  if (CpuAgents.empty())
+    return LUTHIER_MAKE_HSA_ERROR(
+        "No CPU agent available for managed-var allocation.");
+
+  auto PoolOrErr = selectManagedVarPool(AmdExt, CpuAgents.front());
+  if (!PoolOrErr)
+    return PoolOrErr.takeError();
+  llvm::Expected<size_t> GranuleOrErr = poolAllocGranule(AmdExt, *PoolOrErr);
+  if (!GranuleOrErr)
+    return GranuleOrErr.takeError();
+
+  for (const auto &MV : InputManagedVars) {
+    if (MV.Pointer == nullptr)
+      continue;
+    if (MV.Align > *GranuleOrErr)
+      return LUTHIER_MAKE_HSA_ERROR(llvm::formatv(
+          "Managed variable {0} alignment ({1}) exceeds pool granule "
+          "({2}); over-aligned managed vars are not modelled.",
+          MV.Name ? MV.Name : "<unnamed>", MV.Align, *GranuleOrErr));
+
+    void *Alloc = nullptr;
+    if (auto E = LUTHIER_HSA_CALL_ERROR_CHECK(
+            AmdExt.callFunction<hsa_amd_memory_pool_allocate>(
+                *PoolOrErr, MV.Size, /*flags=*/0, &Alloc),
+            llvm::formatv("Failed to allocate managed-var storage for {0}.",
+                          MV.Name ? MV.Name : "<unnamed>")))
       return E;
-    if (CpuAgents.empty())
-      return LUTHIER_MAKE_HSA_ERROR(
-          "No CPU agent available for managed-var allocation.");
 
-    auto PoolOrErr = selectManagedVarPool(AmdExt, CpuAgents.front());
-    if (!PoolOrErr)
-      return PoolOrErr.takeError();
-    auto GranuleOrErr = poolAllocGranule(AmdExt, *PoolOrErr);
-    if (!GranuleOrErr)
-      return GranuleOrErr.takeError();
+    // Copy initial value (fine-grain host memory => plain CPU store).
+    if (MV.InitValue != nullptr && MV.Size > 0)
+      std::memcpy(Alloc, MV.InitValue, MV.Size);
 
-    for (const auto &MV : InputManagedVars) {
-      if (MV.Pointer == nullptr)
-        continue;
-      if (MV.Align > *GranuleOrErr)
-        return LUTHIER_MAKE_HSA_ERROR(llvm::formatv(
-            "Managed variable {0} alignment ({1}) exceeds pool granule "
-            "({2}); over-aligned managed vars are not modelled.",
-            MV.Name ? MV.Name : "<unnamed>", MV.Align, *GranuleOrErr));
-
-      void *Alloc = nullptr;
+    // Grant every GPU agent access to the allocation so kernel-side
+    // dereferences of the symbol resolve to this storage.
+    if (!Agents.empty()) {
       if (auto E = LUTHIER_HSA_CALL_ERROR_CHECK(
-              AmdExt.callFunction<hsa_amd_memory_pool_allocate>(
-                  *PoolOrErr, MV.Size, /*flags=*/0, &Alloc),
-              llvm::formatv("Failed to allocate managed-var storage for {0}.",
-                            MV.Name ? MV.Name : "<unnamed>")))
+              AmdExt.callFunction<hsa_amd_agents_allow_access>(
+                  Agents.size(), Agents.data(), /*flags=*/nullptr, Alloc),
+              llvm::formatv(
+                  "Failed to grant GPU agents access to managed var {0}.",
+                  MV.Name ? MV.Name : "<unnamed>"))) {
+        (void)AmdExt.callFunction<hsa_amd_memory_pool_free>(Alloc);
         return E;
-
-      // Copy initial value (fine-grain host memory => plain CPU store).
-      if (MV.InitValue != nullptr && MV.Size > 0)
-        std::memcpy(Alloc, MV.InitValue, MV.Size);
-
-      // Grant every GPU agent access to the allocation so kernel-side
-      // dereferences of the symbol resolve to this storage.
-      if (!Agents.empty()) {
-        if (auto E = LUTHIER_HSA_CALL_ERROR_CHECK(
-                AmdExt.callFunction<hsa_amd_agents_allow_access>(
-                    Agents.size(), Agents.data(), /*flags=*/nullptr, Alloc),
-                llvm::formatv(
-                    "Failed to grant GPU agents access to managed var {0}.",
-                    MV.Name ? MV.Name : "<unnamed>"))) {
-          (void)AmdExt.callFunction<hsa_amd_memory_pool_free>(Alloc);
-          return E;
-        }
       }
-
-      // Publish the device-accessible pointer through the host shadow.
-      *MV.Pointer = Alloc;
-
-      ManagedVarRec Rec;
-      Rec.HostShadowPtr = MV.Pointer;
-      Rec.InitValue = MV.InitValue;
-      Rec.Size = MV.Size;
-      Rec.Align = MV.Align;
-      Rec.Allocation = Alloc;
-      ManagedVarRecords[MV.Pointer] = Rec;
-      if (MV.Name != nullptr)
-        HandleToName[MV.Pointer] = std::string(MV.Name);
     }
-  }
 
+    // Publish the device-accessible pointer through the host shadow.
+    *MV.Pointer = Alloc;
+
+    ManagedVarRec Rec;
+    Rec.HostShadowPtr = MV.Pointer;
+    Rec.InitValue = MV.InitValue;
+    Rec.Size = MV.Size;
+    Rec.Align = MV.Align;
+    Rec.Allocation = Alloc;
+    ManagedVarRecords[MV.Pointer] = Rec;
+    if (MV.Name != nullptr)
+      HandleToName[MV.Pointer] = std::string(MV.Name);
+  }
   return llvm::Error::success();
 }
 

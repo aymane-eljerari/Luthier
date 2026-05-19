@@ -157,6 +157,14 @@ protected:
   /// teardown-safe partially-loaded state.
   llvm::Error loadAll();
 
+  /// Allocate the backing memory for every \c InputManagedVars entry,
+  /// initialise it from \c InitValue, grant the listed GPU agents access,
+  /// and publish each allocation through the host shadow pointer. Modelled
+  /// on HIP's \c __hipRegisterManagedVar + \c Var::allocateManagedVarPtr
+  /// (\c clr/hipamd/src/hip_platform.cpp:147 + \c hip_global.cpp:277).
+  /// No-op if \c InputManagedVars is empty.
+  llvm::Error loadManagedVars(llvm::ArrayRef<hsa_agent_t> Agents);
+
   /// Symmetric teardown: destroys executables and code-object readers, frees
   /// managed allocations, clears the bookkeeping maps. Swallows + logs HSA
   /// errors so it is safe to call from a destructor.
