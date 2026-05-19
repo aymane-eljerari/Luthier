@@ -31,6 +31,13 @@ configure_file(
 install(FILES ${CMAKE_BINARY_DIR}/lib/cmake/luthier/LuthierAddClangPlugin.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/luthier)
 
+configure_file(
+        ${CMAKE_SOURCE_DIR}/cmake/modules/LuthierAddTool.cmake
+        ${CMAKE_BINARY_DIR}/lib/cmake/luthier/LuthierAddTool.cmake COPYONLY)
+
+install(FILES ${CMAKE_BINARY_DIR}/lib/cmake/luthier/LuthierAddTool.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/luthier)
+
 # Install Include directories
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/include
         DESTINATION ${CMAKE_INSTALL_PREFIX})

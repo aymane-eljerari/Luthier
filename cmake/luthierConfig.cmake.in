@@ -13,3 +13,4 @@ include("${_dir}/luthierTargets.cmake")
 # Import the plugin macros
 include("${_dir}/LuthierAddCompilerPlugin.cmake")
 include("${_dir}/LuthierAddClangPlugin.cmake")
+include("${_dir}/LuthierAddTool.cmake")

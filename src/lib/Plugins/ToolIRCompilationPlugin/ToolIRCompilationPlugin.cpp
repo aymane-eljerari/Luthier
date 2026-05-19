@@ -21,7 +21,9 @@
 #include "luthier/ToolIRCompilation/ExternalizeGlobalsPass.h"
 #include "luthier/ToolIRCompilation/FinalizeIntrinsicsPass.h"
 #include "luthier/ToolIRCompilation/LoadHIPFATBinaryInfoPass.h"
+#include "luthier/ToolIRCompilation/LuthierFunctionIndirectionPass.h"
 #include "luthier/ToolIRCompilation/MarkAnnotationsPass.h"
+#include "luthier/ToolIRCompilation/StripDeviceFunctionBodiesPass.h"
 #include "luthier/ToolIRCompilation/StripKernelsPass.h"
 #include "luthier/ToolIRCompilation/SubstituteAMDGCNIntrinsicsPass.h"
 #include <llvm/Passes/PassBuilder.h>
@@ -51,11 +53,17 @@ void registerEmbedIModulePasses(llvm::PassBuilder &PB) {
                tryParsePass<luthier::ExternalizeGlobalsPass>(Name, MPM) ||
                tryParsePass<luthier::SubstituteAMDGCNIntrinsicsPass>(Name, MPM) ||
                tryParsePass<luthier::LoadHIPFATBinaryInfoPass>(Name, MPM) ||
+               tryParsePass<luthier::LuthierFunctionIndirectionPass>(Name, MPM) ||
+               tryParsePass<luthier::StripDeviceFunctionBodiesPass>(Name, MPM) ||
                tryParsePass<luthier::CreateAndEmbedIModulePass>(Name, MPM);
       });
 
-  // CreateAndEmbedIModulePass clones the AMD GCN device module, runs the
-  // worker passes on the clone, and embeds bitcode. It internally bails on
+  // LuthierFunctionIndirectionPass rewrites address-takes of device
+  // functions to load through a per-module function table. Must run on
+  // M *before* CreateAndEmbedIModulePass clones it, so the rewrite is
+  // captured in both the embedded bitcode and the final binary.
+  // CreateAndEmbedIModulePass then clones M, runs the inner worker
+  // passes on the clone, and embeds bitcode. Both internally bail on
   // non-AMD GCN modules, so registering at the optimizer-last EP is safe.
   PB.registerOptimizerLastEPCallback(
       [](llvm::ModulePassManager &MPM, llvm::OptimizationLevel
@@ -63,7 +71,13 @@ void registerEmbedIModulePasses(llvm::PassBuilder &PB) {
          ,
          llvm::ThinOrFullLTOPhase
 #endif
-      ) { MPM.addPass(luthier::CreateAndEmbedIModulePass()); });
+      ) {
+        MPM.addPass(luthier::LuthierFunctionIndirectionPass());
+        MPM.addPass(luthier::CreateAndEmbedIModulePass());
+        // Final-binary trim: keep symbols, drop bodies. Runs on M after
+        // the clone is taken so the .llvmbc bitcode keeps full bodies.
+        MPM.addPass(luthier::StripDeviceFunctionBodiesPass());
+      });
 
   // LoadHIPFATBinaryInfoPass rewrites the host-side __hip_register* calls.
   // It internally bails on AMD GCN device modules, so we register at the

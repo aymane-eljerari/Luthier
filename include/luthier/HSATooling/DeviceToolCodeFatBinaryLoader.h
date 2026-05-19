@@ -37,6 +37,8 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Support/Error.h>
 #include <llvm/Support/MemoryBuffer.h>
+#include <llvm/TargetParser/SubtargetFeature.h>
+#include <llvm/TargetParser/Triple.h>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -70,7 +72,7 @@ protected:
     const char *DeviceName{nullptr};
   };
 
-  /// Per-managed-variable entry produced from a \c __hipRegisterManagedVar
+  /// Per-managed-variable entry produced from a \c __hipRegisterManagedVar call
   struct HipManagedVarInfo {
     /// The host shadow-pointer slot the runtime updates with the
     /// device-accessible allocation
@@ -136,9 +138,8 @@ protected:
   llvm::ArrayRef<HipTextureInfo> InputTextures;
   llvm::ArrayRef<HipSurfaceInfo> InputSurfaces;
 
-  enum class LoadState { Pending, Loaded, Failed };
+  enum class LoadState { Pending, Loaded };
   LoadState State{LoadState::Pending};
-  std::string LoadErrorMsg;
 
   llvm::SmallVector<FatBinRecord, 1> FatBins;
   llvm::DenseMap<const void *, std::string> HandleToName;
@@ -147,6 +148,15 @@ protected:
   /// into the caller's context on demand by \c getEmbeddedModule, so we
   /// never spin up a long-lived dummy \c LLVMContext.
   llvm::DenseMap<hsa_agent_t, std::unique_ptr<llvm::MemoryBuffer>> AgentBitcode;
+  /// LLVM-form ISA for the slice loaded on each agent. Populated alongside
+  /// \c AgentBitcode; consumed by \c getEmbeddedTarget so JIT consumers can
+  /// build a \c TargetMachine without re-deriving from \c hsa_isa_t.
+  struct AgentTargetISA {
+    llvm::Triple Triple;
+    std::string CPU;
+    llvm::SubtargetFeatures Features;
+  };
+  llvm::DenseMap<hsa_agent_t, AgentTargetISA> AgentISA;
   llvm::DenseMap<const void *, ManagedVarRec> ManagedVarRecords;
 
   /// Full HSA-side load: parse the Clang offload bundles inside each
@@ -158,7 +168,7 @@ protected:
   llvm::Error loadAll();
 
   /// Allocate the backing memory for every \c InputManagedVars entry,
-  /// initialise it from \c InitValue, grant the listed GPU agents access,
+  /// initialize it from \c InitValue, grant the listed GPU agents access,
   /// and publish each allocation through the host shadow pointer. Modelled
   /// on HIP's \c __hipRegisterManagedVar + \c Var::allocateManagedVarPtr
   /// (\c clr/hipamd/src/hip_platform.cpp:147 + \c hip_global.cpp:277).
@@ -170,10 +180,13 @@ protected:
   /// errors so it is safe to call from a destructor.
   void unloadAll() noexcept;
 
-  /// Run \c loadAll on first call. Subsequent calls return success (or, if
-  /// the first attempt failed, replay the cached error message). Caller
-  /// MUST hold \c Mutex (the recursive mutex is re-acquired inside via the
-  /// public methods' locks; calls from within those methods are safe).
+  /// Run \c loadAll on first call. If the load succeeded, subsequent calls
+  /// short-circuit to success. If it failed, the caller receives the
+  /// original \c llvm::Error and is responsible for handling it; each
+  /// subsequent call retries the load, so transient failures can recover.
+  /// Caller MUST hold \c Mutex (the recursive mutex is re-acquired inside
+  /// via the public methods' locks; calls from within those methods are
+  /// safe).
   llvm::Error ensureLoaded();
 
 public:
@@ -181,8 +194,10 @@ public:
   /// The HSA-side load is NOT performed here — the rocprofiler API-table
   /// snapshots may not yet be initialized at construction time. Instead,
   /// the first call to any public query method triggers a one-shot load
-  /// (see \c ensureLoaded). If that load fails, the cached error is
-  /// re-reported on every subsequent query.
+  /// (see \c ensureLoaded). If that load fails the caller receives the
+  /// \c llvm::Error directly; subsequent calls retry, so transient
+  /// failures can recover. Callers are responsible for surfacing the
+  /// error appropriately.
   DeviceToolCodeFatBinaryLoader(
       const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
       const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
@@ -239,6 +254,22 @@ public:
   /// the one-shot HSA load on first call.
   llvm::Expected<std::unique_ptr<llvm::Module>>
   getEmbeddedModule(hsa_agent_t Agent, llvm::LLVMContext &Ctx);
+
+  /// Bundle of inputs for constructing an \c llvm::TargetMachine alongside
+  /// the embedded module, returned by \c getEmbeddedTarget.
+  struct EmbeddedTarget {
+    std::unique_ptr<llvm::Module> Module;
+    llvm::Triple Triple;
+    std::string CPU;
+    llvm::SubtargetFeatures Features;
+  };
+
+  /// Identical to \c getEmbeddedModule but also returns the LLVM-form ISA
+  /// of the slice that was loaded on \p Agent. JIT consumers use the ISA
+  /// pieces to instantiate a \c TargetMachine directly, no re-derivation
+  /// from \c hsa_isa_t needed.
+  llvm::Expected<EmbeddedTarget> getEmbeddedTarget(hsa_agent_t Agent,
+                                                   llvm::LLVMContext &Ctx);
 };
 
 /// \brief CRTP trait that supplies the per-\c Derived inline-static
