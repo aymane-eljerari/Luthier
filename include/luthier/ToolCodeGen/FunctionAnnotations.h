@@ -131,8 +131,12 @@ static constexpr const char *TargetInstrPointAttr =
 /// is a bare-token macro (e.g. \c LUTHIER_HIP_FAT_BINARIES_ATTR) that
 /// expands to a dotted symbol; the preprocessor stringifies it for the
 /// attribute.
+#if defined(__clang__)
 #define LUTHIER_ANNOTATE_VARIABLE(Sym) \
 __attribute__((annotate(LUTHIER_STRINGIFY(Sym))))
+#else
+#define LUTHIER_ANNOTATE_VARIABLE(Sym)
+#endif
 
 void setFunctionEntryPoint(llvm::Function &F, EntryPoint EP);
 

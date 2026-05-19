@@ -370,86 +370,31 @@ llvm::Error DeviceToolCodeFatBinaryLoader::loadAll() {
     Rec.Wrapper = Bundle;
 
     llvm::SmallVector<BundleSlice, 4> Slices;
-    // The decompressed buffer (if the bundle is compressed) must outlive
-    // the HSA load + bitcode-extraction calls below since the slice
-    // StringRefs view into it. HSA copies the ELF internally and the
-    // bitcode extractor takes its own owned copy, so the holder can drop
-    // at end of this iteration.
     std::unique_ptr<llvm::MemoryBuffer> DecompressedHolder;
     llvm::MemoryBufferRef BundleRef(
         llvm::StringRef(static_cast<const char *>(Bundle), Size), "fatbin");
     LUTHIER_RETURN_ON_ERROR(
         parseOffloadBundle(Core, BundleRef, Slices, DecompressedHolder));
 
-    // Handle-keyed map for the agent-matching predicate. Build it with
-    // specificity-aware precedence:
-    //   1. Sort slices by ascending \c anyCount — slices with no \c Any
-    //      features sort first (most specific).
-    //   2. For each slice, register all concrete handles it covers (1, 2,
-    //      or 4 depending on how many features are \c Any).
-    //   3. Use \c try_emplace so the first-inserted (most-specific) slice
-    //      wins on every handle.
-    // The result: when \c agentFindFirstISA later walks the agent's ISAs in
-    // ROCr's native-first order, the predicate sees a hit for the most
-    // specific slice that matches the agent's exact ISA. Perfect match →
-    // any-feature match → generic falls out automatically (generics arrive
-    // last in the iteration order from ROCr).
-    llvm::SmallVector<const BundleSlice *> SortedSlices;
-    SortedSlices.reserve(Slices.size());
-    for (const auto &S : Slices)
-      SortedSlices.push_back(&S);
-    llvm::stable_sort(SortedSlices,
-                      [](const BundleSlice *A, const BundleSlice *B) {
-                        return anyCount(*A) < anyCount(*B);
-                      });
-
-    llvm::DenseMap<uint64_t, const BundleSlice *> SliceByIsaHandle;
-    for (const BundleSlice *S : SortedSlices) {
-      // Always register the canonical handle (the bare form, no
-      // Any-expansion). agentFindFirstISA may hit this when the agent's
-      // own ISA exactly matches.
-      SliceByIsaHandle.try_emplace(S->IsaHandle.handle, S);
-
-      // For each Any-feature dimension (absent from the slice's
-      // SubtargetFeatures), fan out to the concrete on/off ISAs. We
-      // resolve each via hsa::isaFromLLVM so ROCr returns the same
-      // handle the agent's iterator would yield.
-      bool XnackAny = !featureState(S->Features, "xnack");
-      bool SrameccAny = !featureState(S->Features, "sramecc");
-      if (!XnackAny && !SrameccAny)
-        continue;
-      for (int Xc = 0; Xc < (XnackAny ? 2 : 1); ++Xc) {
-        for (int Sc = 0; Sc < (SrameccAny ? 2 : 1); ++Sc) {
-          auto ConcreteFeatures =
-              concretizeFeatures(S->Features,
-                                 /*ConcreteXnackOn=*/Xc != 0,
-                                 /*ConcreteSrameccOn=*/Sc != 0);
-          auto IsaOrErr =
-              hsa::isaFromLLVM(Core, S->Triple, S->CPU, ConcreteFeatures);
-          if (!IsaOrErr) {
-            consumeError(IsaOrErr.takeError());
-            continue;
-          }
-          SliceByIsaHandle.try_emplace(IsaOrErr->handle, S);
-        }
-      }
+    llvm::DenseMap<hsa_isa_t, const BundleSlice *> SliceByIsaHandle;
+    for (const BundleSlice &S : Slices) {
+      SliceByIsaHandle.try_emplace(S.IsaHandle, &S);
     }
 
     for (hsa_agent_t Agent : Agents) {
       // \c agentFindFirstISA walks the agent's supported ISAs in ROCr's
       // registry order — native first, then generic (see
-      // amd_gpu_agent.cpp:186). The first ISA the predicate accepts wins,
+      // amd_gpu_agent.cpp). The first ISA the predicate accepts wins,
       // so HIP's "native > generic" preference falls out automatically.
       auto MatchedOrErr = hsa::agentFindFirstISA(
           Core, Agent, [&](hsa_isa_t AgentIsa) -> llvm::Expected<bool> {
-            return SliceByIsaHandle.contains(AgentIsa.handle);
+            return SliceByIsaHandle.contains(AgentIsa);
           });
       if (!MatchedOrErr)
         return MatchedOrErr.takeError();
       if (!*MatchedOrErr)
         continue; // No slice in this bundle is compatible with this agent.
-      const BundleSlice *Match =
-          SliceByIsaHandle.lookup((*MatchedOrErr)->handle);
+      const BundleSlice *Match = SliceByIsaHandle.lookup(**MatchedOrErr);
 
       auto ReaderOrErr =
           hsa::codeObjectReaderCreateFromMemory(Core, Match->Elf);
