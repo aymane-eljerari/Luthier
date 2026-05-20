@@ -33,6 +33,7 @@
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringRef.h>
+#include <llvm/ADT/StringSet.h>
 #include <llvm/BinaryFormat/Magic.h>
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Object/ELFObjectFile.h>
@@ -304,77 +305,6 @@ DeviceToolCodeLoader::addSlice(llvm::MemoryBufferRef CodeObject) {
   Entry.Features = std::move(Features);
   Slices.insert({std::move(Key), std::move(Entry)});
 
-  // Discover dynamic managed variables: pairs of (Name, Name.managed)
-  // global-object symbols. The .managed companion carries the size +
-  // initial bytes; the base symbol is the pointer-sized device storage
-  // kernel code dereferences. Failures here log + skip rather than fail
-  // the whole construction.
-  static constexpr llvm::StringLiteral ManagedSuffix = ".managed";
-  llvm::Error VarIterErr = llvm::Error::success();
-  for (const auto &Var : (*ObjOrErr)->variables(VarIterErr)) {
-    auto NameOrErr = Var.getName();
-    if (!NameOrErr) {
-      llvm::consumeError(NameOrErr.takeError());
-      continue;
-    }
-    if (!NameOrErr->ends_with(ManagedSuffix))
-      continue;
-    llvm::StringRef BaseName = NameOrErr->drop_back(ManagedSuffix.size());
-    uint64_t Size = Var.getSize();
-    if (Size == 0)
-      continue;
-
-    auto SectionOrErr = Var.getSection();
-    if (!SectionOrErr) {
-      llvm::consumeError(SectionOrErr.takeError());
-      continue;
-    }
-    auto ContentsOrErr = (*SectionOrErr)->getContents();
-    if (!ContentsOrErr) {
-      llvm::consumeError(ContentsOrErr.takeError());
-      continue;
-    }
-    auto SymValOrErr = Var.getValue();
-    if (!SymValOrErr) {
-      llvm::consumeError(SymValOrErr.takeError());
-      continue;
-    }
-    uint64_t SymVal = *SymValOrErr;
-    uint64_t SectAddr = (*SectionOrErr)->getAddress();
-    if (SymVal < SectAddr ||
-        (SymVal - SectAddr) + Size > ContentsOrErr->size()) {
-      LLVM_DEBUG(llvm::dbgs()
-                 << "[luthier] managed-var symbol " << *NameOrErr
-                 << " out of section bounds, skipping\n");
-      continue;
-    }
-    llvm::ArrayRef<uint8_t> InitBytes(
-        reinterpret_cast<const uint8_t *>(ContentsOrErr->data()) +
-            (SymVal - SectAddr),
-        Size);
-
-    unsigned Align = (*SectionOrErr)->getAlignment().value();
-
-    // Dedup across slices on BaseSymbolName.
-    bool AlreadyKnown = false;
-    for (const auto &Existing : DynamicManagedVars) {
-      if (Existing.BaseSymbolName == BaseName) {
-        AlreadyKnown = true;
-        break;
-      }
-    }
-    if (AlreadyKnown)
-      continue;
-
-    ManagedVarInfo MV;
-    MV.BaseSymbolName = BaseName;
-    MV.Size = Size;
-    MV.Align = Align;
-    MV.InitValue = InitBytes;
-    DynamicManagedVars.push_back(std::move(MV));
-  }
-  if (VarIterErr)
-    return VarIterErr;
   return llvm::Error::success();
 }
 
@@ -548,9 +478,6 @@ llvm::Error DeviceToolCodeLoader::clearLoadedState() {
 
 llvm::Error DeviceToolCodeLoader::loadDynamicManagedVars(
     llvm::ArrayRef<hsa_agent_t> Agents) {
-  if (DynamicManagedVars.empty())
-    return llvm::Error::success();
-
   const auto Core = CoreApiSnapshot.getTable();
   const auto AmdExt = AmdExtSnapshot.getTable();
 
@@ -559,11 +486,16 @@ llvm::Error DeviceToolCodeLoader::loadDynamicManagedVars(
     return HmmOrErr.takeError();
   const bool HmmSupported = *HmmOrErr;
 
-  // Resolve the CPU fine-grain pool only on the non-HMM path; the HMM path
-  // doesn't go through a pool.
+  // Lazy CPU fine-grain pool resolution: only triggers the first time a
+  // non-HMM allocation is about to happen. Stays uninitialized on the HMM
+  // path (where the pool is unused) and on the no-managed-vars case (where
+  // discovery finds nothing).
   hsa_amd_memory_pool_t Pool{};
   size_t Granule = 0;
-  if (!HmmSupported) {
+  bool PoolResolved = false;
+  auto EnsurePool = [&]() -> llvm::Error {
+    if (PoolResolved)
+      return llvm::Error::success();
     llvm::SmallVector<hsa_agent_t, 1> CpuAgents;
     LUTHIER_RETURN_ON_ERROR(
         hsa::getAllAgentsWithDeviceType<HSA_DEVICE_TYPE_CPU>(Core, CpuAgents));
@@ -578,71 +510,139 @@ llvm::Error DeviceToolCodeLoader::loadDynamicManagedVars(
     if (!GranuleOrErr)
       return GranuleOrErr.takeError();
     Granule = *GranuleOrErr;
-  }
+    PoolResolved = true;
+    return llvm::Error::success();
+  };
 
-  for (const auto &MV : DynamicManagedVars) {
-    if (MV.Size == 0)
-      continue;
-    if (!HmmSupported && MV.Align > Granule)
-      return LUTHIER_MAKE_HSA_ERROR(llvm::formatv(
-          "Managed variable {0} alignment ({1}) exceeds pool granule "
-          "({2}); over-aligned managed vars are not modelled.",
-          MV.BaseSymbolName, MV.Align, Granule));
+  // Walk every slice's ELF symbol table to find managed-variable companions
+  // (symbols named "<base>.managed"). The same managed var typically appears
+  // in every slice (different ISAs of the same TU), so dedup by base name —
+  // first occurrence wins.
+  static constexpr llvm::StringLiteral ManagedSuffix = ".managed";
+  llvm::StringSet<> Seen;
 
-    auto AllocOrErr = allocateManagedStorage(AmdExt, Agents, Pool, MV.Size,
-                                             MV.Align, HmmSupported);
-    if (!AllocOrErr)
-      return AllocOrErr.takeError();
-    ManagedAlloc Alloc = *AllocOrErr;
+  for (const auto &KV : Slices) {
+    const SliceCacheEntry &Entry = KV.second;
+    auto ObjOrErr = luthier::object::AMDGCNObjectFile::createAMDGCNObjectFile(
+        Entry.CodeObject.getBuffer());
+    if (!ObjOrErr)
+      return ObjOrErr.takeError();
 
-    auto FreeOnError = [&](llvm::Error E) {
-      return llvm::joinErrors(std::move(E),
-                              freeManagedStorage(AmdExt, Alloc));
-    };
-
-    // Copy initial value from the cached .managed-symbol bytes.
-    if (!MV.InitValue.empty())
-      std::memcpy(Alloc.Ptr, MV.InitValue.data(),
-                  std::min<size_t>(MV.InitValue.size(), MV.Size));
-
-    // Per-agent publish: write the managed-memory pointer into each
-    // agent's loaded image of the base symbol so kernels reading the
-    // base symbol go to the managed allocation.
-    auto NameIt = NameToAgentGlobal.find(MV.BaseSymbolName);
-    if (NameIt == NameToAgentGlobal.end()) {
-      LLVM_DEBUG(llvm::dbgs()
-                 << "[luthier] base symbol not found for managed var "
-                 << MV.BaseSymbolName << "\n");
-    } else {
-      for (hsa_agent_t Agent : Agents) {
-        auto AgentIt = NameIt->second.find(Agent);
-        if (AgentIt == NameIt->second.end())
-          continue;
-        auto AddrOrErr =
-            hsa::executableSymbolGetAddress(Core, AgentIt->second);
-        if (!AddrOrErr)
-          return FreeOnError(AddrOrErr.takeError());
-        if (auto E = LUTHIER_HSA_CALL_ERROR_CHECK(
-                Core.callFunction<hsa_memory_copy>(
-                    reinterpret_cast<void *>(*AddrOrErr), &Alloc.Ptr,
-                    sizeof(void *)),
-                llvm::formatv(
-                    "hsa_memory_copy failed publishing managed-var "
-                    "pointer for {0}",
-                    MV.BaseSymbolName)))
-          return FreeOnError(std::move(E));
+    llvm::Error VarIterErr = llvm::Error::success();
+    for (const auto &Var : (*ObjOrErr)->variables(VarIterErr)) {
+      auto NameOrErr = Var.getName();
+      if (!NameOrErr) {
+        llvm::consumeError(NameOrErr.takeError());
+        continue;
       }
-    }
+      if (!NameOrErr->ends_with(ManagedSuffix))
+        continue;
+      llvm::StringRef BaseName = NameOrErr->drop_back(ManagedSuffix.size());
+      uint64_t Size = Var.getSize();
+      if (Size == 0)
+        continue;
+      if (!Seen.insert(BaseName).second)
+        continue;
 
-    ManagedVarRec Rec;
-    Rec.Name = MV.BaseSymbolName;
-    Rec.Allocation = Alloc.Ptr;
-    Rec.AllocSize = Alloc.AllocSize;
-    Rec.Size = MV.Size;
-    Rec.Align = MV.Align;
-    Rec.ViaSvm = Alloc.ViaSvm;
-    ManagedVarRecords[Alloc.Ptr] = Rec;
-    NameToManagedAlloc[MV.BaseSymbolName] = Alloc.Ptr;
+      auto SectionOrErr = Var.getSection();
+      if (!SectionOrErr) {
+        llvm::consumeError(SectionOrErr.takeError());
+        continue;
+      }
+      auto ContentsOrErr = (*SectionOrErr)->getContents();
+      if (!ContentsOrErr) {
+        llvm::consumeError(ContentsOrErr.takeError());
+        continue;
+      }
+      auto SymValOrErr = Var.getValue();
+      if (!SymValOrErr) {
+        llvm::consumeError(SymValOrErr.takeError());
+        continue;
+      }
+      const uint64_t SymVal = *SymValOrErr;
+      const uint64_t SectAddr = (*SectionOrErr)->getAddress();
+      if (SymVal < SectAddr ||
+          (SymVal - SectAddr) + Size > ContentsOrErr->size()) {
+        LLVM_DEBUG(llvm::dbgs()
+                   << "[luthier] managed-var symbol " << *NameOrErr
+                   << " out of section bounds, skipping\n");
+        continue;
+      }
+      llvm::ArrayRef<uint8_t> InitBytes(
+          reinterpret_cast<const uint8_t *>(ContentsOrErr->data()) +
+              (SymVal - SectAddr),
+          Size);
+      const unsigned Align = (*SectionOrErr)->getAlignment().value();
+
+      // Resolve the CPU pool the first time we need it on the non-HMM
+      // path. Skipped entirely when HmmSupported, or when there are no
+      // managed vars to allocate.
+      if (!HmmSupported) {
+        LUTHIER_RETURN_ON_ERROR(EnsurePool());
+        if (Align > Granule)
+          return LUTHIER_MAKE_HSA_ERROR(llvm::formatv(
+              "Managed variable {0} alignment ({1}) exceeds pool granule "
+              "({2}); over-aligned managed vars are not modelled.",
+              BaseName, Align, Granule));
+      }
+
+      auto AllocOrErr = allocateManagedStorage(AmdExt, Agents, Pool, Size,
+                                               Align, HmmSupported);
+      if (!AllocOrErr)
+        return AllocOrErr.takeError();
+      ManagedAlloc Alloc = *AllocOrErr;
+
+      auto FreeOnError = [&](llvm::Error E) {
+        return llvm::joinErrors(std::move(E),
+                                freeManagedStorage(AmdExt, Alloc));
+      };
+
+      // Copy initial value from the .managed-symbol section bytes.
+      if (!InitBytes.empty())
+        std::memcpy(Alloc.Ptr, InitBytes.data(),
+                    std::min<size_t>(InitBytes.size(), Size));
+
+      // Per-agent publish: write the managed-memory pointer into each
+      // agent's loaded image of the base symbol so kernels reading the
+      // base symbol go to the managed allocation.
+      auto NameIt = NameToAgentGlobal.find(BaseName);
+      if (NameIt == NameToAgentGlobal.end()) {
+        LLVM_DEBUG(llvm::dbgs()
+                   << "[luthier] base symbol not found for managed var "
+                   << BaseName << "\n");
+      } else {
+        for (hsa_agent_t Agent : Agents) {
+          auto AgentIt = NameIt->second.find(Agent);
+          if (AgentIt == NameIt->second.end())
+            continue;
+          auto AddrOrErr =
+              hsa::executableSymbolGetAddress(Core, AgentIt->second);
+          if (!AddrOrErr)
+            return FreeOnError(AddrOrErr.takeError());
+          if (auto E = LUTHIER_HSA_CALL_ERROR_CHECK(
+                  Core.callFunction<hsa_memory_copy>(
+                      reinterpret_cast<void *>(*AddrOrErr), &Alloc.Ptr,
+                      sizeof(void *)),
+                  llvm::formatv(
+                      "hsa_memory_copy failed publishing managed-var "
+                      "pointer for {0}",
+                      BaseName)))
+            return FreeOnError(std::move(E));
+        }
+      }
+
+      ManagedVarRec Rec;
+      Rec.Name = BaseName;
+      Rec.Allocation = Alloc.Ptr;
+      Rec.AllocSize = Alloc.AllocSize;
+      Rec.Size = Size;
+      Rec.Align = Align;
+      Rec.ViaSvm = Alloc.ViaSvm;
+      ManagedVarRecords[Alloc.Ptr] = Rec;
+      NameToManagedAlloc[BaseName] = Alloc.Ptr;
+    }
+    if (VarIterErr)
+      return VarIterErr;
   }
   return llvm::Error::success();
 }

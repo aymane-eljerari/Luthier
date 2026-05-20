@@ -87,24 +87,6 @@ protected:
     llvm::SubtargetFeatures Features;
   };
 
-  /// Description of one dynamic managed variable, discovered from the
-  /// code-object symbol table. Dynamic managed vars are detected by the
-  /// loader itself (no host-side shadow exists) by finding pairs of
-  /// symbols where one has a \c ".managed" suffix; the base symbol is
-  /// pointer-sized device storage that kernel code dereferences, and the
-  /// \c .managed companion carries the size + initial bytes.
-  struct ManagedVarInfo {
-    /// Non-owning view into the ELF symbol string table for the base
-    /// symbol's name. Alive for the loader's lifetime (slice ELFs are
-    /// retained).
-    llvm::StringRef BaseSymbolName;
-    size_t Size{0};
-    unsigned Align{0};
-    /// View into the slice ELF's \c .managed-companion section bytes.
-    /// Alive for the loader's lifetime (slice ELFs are retained).
-    llvm::ArrayRef<uint8_t> InitValue;
-  };
-
   /// Bookkeeping for an allocated dynamic managed variable. One per
   /// allocation performed by \c loadDynamicManagedVars.
   struct ManagedVarRec {
@@ -157,11 +139,6 @@ protected:
 
   /// Load record for every agent the loader successfully loaded a slice on
   llvm::DenseMap<hsa_agent_t, SliceLoadRecord> PerAgentLoadRecords;
-
-  /// Dynamic managed variables discovered while parsing the loader's
-  /// input. Populated at construction (HSA-free) by \c addSlice scanning
-  /// each slice's symbol table for \c .managed-suffixed companions.
-  llvm::SmallVector<ManagedVarInfo, 0> DynamicManagedVars;
 
   /// One \c ManagedVarRec per allocation produced by
   /// \c loadDynamicManagedVars. Freed by \c freeManagedVars during
@@ -240,12 +217,22 @@ protected:
   /// roll back via \c clearLoadedState on local failure.
   llvm::Error ensureLoaded();
 
-  /// For every \c ManagedVarInfo discovered in \c DynamicManagedVars,
-  /// allocate managed memory from a host fine-grain pool, copy the
-  /// initial bytes in (from the cached \c .managed-symbol view), grant
-  /// every agent access, and publish the device-accessible pointer into
-  /// each agent's loaded image of the base symbol via \c hsa_memory_copy.
-  /// No-op if \c DynamicManagedVars is empty.
+  /// Discover and allocate every dynamic managed variable advertised by
+  /// the loaded slices. Each slice's ELF symbol table is scanned for
+  /// pairs <tt>(&lt;base&gt;, &lt;base&gt;.managed)</tt>: the base symbol
+  /// is pointer-sized device storage the kernel reads, and the
+  /// \c .managed companion carries the size, alignment, and initial
+  /// bytes. The same managed var typically appears in every slice
+  /// (different ISAs of the same TU), so discoveries dedup by base name.
+  ///
+  /// For each unique managed var found, allocates host-coherent storage
+  /// via \c allocateManagedStorage (HMM or pool path, picked
+  /// automatically), copies the initial bytes in, and publishes the
+  /// device-accessible pointer into every agent's loaded image of the
+  /// base symbol via \c hsa_memory_copy. The pool/granule query needed
+  /// by the non-HMM path is performed lazily on the first allocation
+  /// taking that path, so this method is zero-cost when no managed vars
+  /// exist.
   llvm::Error loadDynamicManagedVars(llvm::ArrayRef<hsa_agent_t> Agents);
 
   /// Free every allocation in \c ManagedVarRecords (using
@@ -323,7 +310,8 @@ protected:
   /// Internal helper used by both constructors. Parses one ELF as an AMDGCN
   /// object file, extracts its LLVM ISA tuple + \c .llvmbc bytes, and
   /// inserts a new entry into \c Slices. Returns an error on parse failure
-  /// or duplicate ISA.
+  /// or duplicate ISA. Dynamic managed-var discovery is deferred to load
+  /// time (see \c loadDynamicManagedVars).
   llvm::Error addSlice(llvm::MemoryBufferRef CodeObject);
 
 public:
