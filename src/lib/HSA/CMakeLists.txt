@@ -9,6 +9,8 @@ add_library(LuthierHSA OBJECT
         Region.cpp
         Memory.cpp
         MemoryPool.cpp
+        SVM.cpp
+        VMEM.cpp
 )
 
 target_compile_definitions(LuthierHSA PRIVATE AMD_INTERNAL_BUILD ${LLVM_DEFINITIONS})

@@ -1,4 +1,4 @@
-//===-- DeviceToolCodeLoaderBase.h -------------------------------*- C++-*-===//
+//===-- DeviceToolCodeLoader.h -----------------------------------*- C++-*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file DeviceToolCodeLoaderBase.h
+/// \file DeviceToolCodeLoader.h
 /// Shared base class for the static fat-binary loader
 /// (\c DeviceToolCodeFatBinaryLoader) and the dynamic module loader.
 ///
@@ -32,8 +32,8 @@
 /// by a subclass — by which time the caller guarantees the rocprofiler API
 /// snapshots are populated.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOLING_DEVICE_TOOL_CODE_LOADER_BASE_H
-#define LUTHIER_TOOLING_DEVICE_TOOL_CODE_LOADER_BASE_H
+#ifndef LUTHIER_TOOLING_DEVICE_TOOL_CODE_LOADER_H
+#define LUTHIER_TOOLING_DEVICE_TOOL_CODE_LOADER_H
 
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
@@ -41,6 +41,7 @@
 #include "luthier/Rocprofiler/ApiTableSnapshot.h"
 #include <cstdint>
 #include <hsa/hsa.h>
+#include <hsa/hsa_ext_amd.h>
 #include <hsa/hsa_ven_amd_loader.h>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/DenseMap.h>
@@ -50,12 +51,14 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/Error.h>
+#include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/MemoryBufferRef.h>
 #include <llvm/TargetParser/SubtargetFeature.h>
 #include <llvm/TargetParser/Triple.h>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 
 namespace luthier {
@@ -64,10 +67,10 @@ namespace luthier {
 /// loader. Provides the HSA-free parse + per-agent code-object-load machinery
 /// and the lookup caches; subclasses drive when the deferred HSA-side load
 /// runs and what host-side bookkeeping wraps it.
-class DeviceToolCodeLoaderBase {
+class DeviceToolCodeLoader {
 protected:
-  /// Per-agent HSA handles produced by loading one code object (slice) into one
-  /// agent
+  /// Per-agent HSA handles produced by loading one code object (slice) into an
+  /// agent attached to the system
   struct SliceLoadRecord {
     hsa_code_object_reader_t Reader{};
     hsa_loaded_code_object_t LCO{};
@@ -118,9 +121,22 @@ protected:
   /// Bookkeeping for an allocated dynamic managed variable. One per
   /// allocation performed by \c loadDynamicManagedVars.
   struct ManagedVarRec {
+    /// View into the slice ELF's symbol name (loader-lifetime, alive as
+    /// long as \c RetainedBuffers is). Also serves as the lookup key for
+    /// \c NameToManagedAlloc, so the lifetimes match.
+    llvm::StringRef Name;
     void *Allocation{nullptr};
+    /// Bytes actually reserved at the allocation API level — equal to the
+    /// requested size on the pool path, and to the page-rounded size on
+    /// the SVM/HMM path. \c freeManagedStorage needs this.
+    size_t AllocSize{0};
+    /// Requested size from the \c .managed companion section. May be less
+    /// than \c AllocSize on the SVM path.
     size_t Size{0};
     unsigned Align{0};
+    /// True iff this allocation took the SVM/HMM path. Selects the
+    /// matching free API.
+    bool ViaSvm{false};
   };
 
   std::recursive_mutex Mutex;
@@ -165,11 +181,19 @@ protected:
   /// \c clearLoadedState.
   llvm::DenseMap<void *, ManagedVarRec> ManagedVarRecords;
 
+  /// Reverse index: managed-variable base symbol name → allocation
+  /// pointer. Populated alongside \c ManagedVarRecords in
+  /// \c loadDynamicManagedVars; consulted by \c lookupManagedVarAllocation
+  /// (used by the fat-binary loader to write each
+  /// \c __hipRegisterManagedVar host shadow). Keys are \c StringRefs into
+  /// the loader-retained ELF symbol tables.
+  llvm::StringMap<void *> NameToManagedAlloc;
+
   /// Bundle-path constructor: takes ownership of the input \c MemoryBuffer
   /// and parses it as a Clang offload bundle. Sets \p Err on parse failure
   /// or if two slices in the bundle share the same canonical LLVM ISA.
   /// HSA-free.
-  DeviceToolCodeLoaderBase(
+  DeviceToolCodeLoader(
       const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
       const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
       const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
@@ -181,7 +205,7 @@ protected:
   /// holds non-owning views into the caller's buffers — the caller must
   /// keep them alive for the loader's lifetime. Sets \p Err if two entries
   /// share the same canonical LLVM ISA. HSA-free.
-  DeviceToolCodeLoaderBase(
+  DeviceToolCodeLoader(
       const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
       const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
       const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
@@ -189,7 +213,7 @@ protected:
       llvm::ArrayRef<std::unique_ptr<llvm::MemoryBuffer>> CodeObjects,
       llvm::Error &Err);
 
-  ~DeviceToolCodeLoaderBase();
+  ~DeviceToolCodeLoader();
 
   /// Walk \c Slices, resolving each entry's \c IsaHandle on the first
   /// invocation (HSA must be ready by this point — caller's contract).
@@ -246,11 +270,68 @@ protected:
   /// Pick a host fine-grain memory pool suitable for backing managed
   /// variables (HIP's \c hipMallocManaged path uses the CPU agent's
   /// fine-grain pool because it's host-coherent and cross-agent-accessible
-  /// via \c hsa_amd_agents_allow_access). Shared by both the base's
-  /// dynamic-managed-var path and the fat-binary loader's static path.
+  /// via \c hsa_amd_agents_allow_access).
   static llvm::Expected<hsa_amd_memory_pool_t>
   selectManagedVarPool(const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
                        hsa_agent_t CpuAgent);
+
+  /// Result of one managed-variable storage allocation. The full state
+  /// needed to free it correctly is captured here so the free path doesn't
+  /// have to re-decide which API path was used.
+  struct ManagedAlloc {
+    /// Allocation pointer. CPU-side memcpy targets, agent base-symbol
+    /// publish target, and free input.
+    void *Ptr{nullptr};
+    /// Bytes actually reserved. On the HMM path this is rounded up to the
+    /// system page size; on the pool path this matches the requested size.
+    /// \c freeManagedStorage hands this back to the underlying free API.
+    size_t AllocSize{0};
+    /// True if the allocation came from \c hsa_amd_vmem_address_reserve_align
+    /// (HMM path); false if it came from \c hsa_amd_memory_pool_allocate
+    /// (legacy non-HMM path). Selects which free API to call.
+    bool ViaSvm{false};
+  };
+
+  /// HMM-aware managed-storage allocation.
+  ///
+  /// On HMM-supported systems (\p HmmSupported = true) takes the
+  /// \c hipMallocManaged HMM path: reserves a page-aligned VA range via
+  /// \c hsa_amd_vmem_address_reserve_align with
+  /// \c HSA_AMD_VMEM_ADDRESS_NO_REGISTER, then declares it accessible from
+  /// every entry in \p GpuAgents via
+  /// \c hsa_amd_svm_attributes_set(\c HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE).
+  /// CPU access is implicit; no \c agents_allow_access call. \p Pool is
+  /// ignored on this path.
+  ///
+  /// On non-HMM systems (\p HmmSupported = false) takes the legacy
+  /// memory-pool path: \c hsa_amd_memory_pool_allocate(\p Pool) +
+  /// \c hsa_amd_agents_allow_access(\p GpuAgents).
+  ///
+  /// Returns a populated \c ManagedAlloc on success; the caller frees via
+  /// \c freeManagedStorage.
+  static llvm::Expected<ManagedAlloc>
+  allocateManagedStorage(const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
+                         llvm::ArrayRef<hsa_agent_t> GpuAgents,
+                         hsa_amd_memory_pool_t Pool, size_t Size,
+                         unsigned Align, bool HmmSupported);
+
+  /// Free a \c ManagedAlloc previously produced by
+  /// \c allocateManagedStorage, dispatching to the matching free API based
+  /// on \c ViaSvm.
+  static llvm::Error
+  freeManagedStorage(const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
+                     const ManagedAlloc &Alloc);
+
+  /// Lazily probe \c HSA_AMD_SYSTEM_INFO_SVM_SUPPORTED and cache the
+  /// result for the loader's lifetime (HMM support is a system property,
+  /// so one query is enough). On query failure returns \c false (matches
+  /// HIP's rocclr fallback). Caller must hold \c Mutex (the cache field
+  /// is \c std::optional and unsynchronized).
+  llvm::Expected<bool> getHmmSupported();
+
+  /// Cached \c HSA_AMD_SYSTEM_INFO_SVM_SUPPORTED query result. Populated
+  /// on first \c getHmmSupported() call after HSA is up.
+  std::optional<bool> HmmSupportedCache;
 
   /// Internal helper used by both constructors. Parses one ELF as an AMDGCN
   /// object file, extracts its LLVM ISA tuple + \c .llvmbc bytes, and
@@ -259,9 +340,9 @@ protected:
   llvm::Error addSlice(llvm::MemoryBufferRef CodeObject);
 
 public:
-  DeviceToolCodeLoaderBase(const DeviceToolCodeLoaderBase &) = delete;
-  DeviceToolCodeLoaderBase &
-  operator=(const DeviceToolCodeLoaderBase &) = delete;
+  DeviceToolCodeLoader(const DeviceToolCodeLoader &) = delete;
+  DeviceToolCodeLoader &
+  operator=(const DeviceToolCodeLoader &) = delete;
 
   /// Resolve a device-side global-variable name to its
   /// \c hsa_executable_symbol_t on \p Agent. Callers needing the loaded
@@ -285,6 +366,29 @@ public:
     return AgentIt->second;
   }
 
+  /// Resolve a managed-variable base symbol name to the host-allocated
+  /// storage pointer the loader publishes into every agent's image of
+  /// that symbol. Subclasses (e.g. the fat-binary loader) use this to
+  /// write the \c void** host shadow that
+  /// \c __hipRegisterManagedVar registered, so host-side reads of the
+  /// managed variable point at the same storage the device kernels see.
+  ///
+  /// Triggers \c ensureLoaded on first call. The lookup is by
+  /// loader-internal base symbol name (ELF symbol minus the \c .managed
+  /// suffix), which matches the device name passed to
+  /// \c __hipRegisterManagedVar.
+  llvm::Expected<void *> lookupManagedVarAllocation(llvm::StringRef Name) {
+    std::lock_guard Lock(Mutex);
+    if (auto E = ensureLoaded())
+      return std::move(E);
+    auto It = NameToManagedAlloc.find(Name);
+    LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+        It != NameToManagedAlloc.end(),
+        llvm::formatv("No managed-variable allocation for symbol '{0}'", Name)
+            .str()));
+    return It->second;
+  }
+
   /// Parse the embedded \c .llvmbc bytes cached for the requested LLVM ISA
   /// tuple into \p Ctx. The bitcode cache is populated at construction
   /// (HSA-free), so this method works even before \c loadOntoAgents has run.
@@ -306,4 +410,4 @@ public:
 
 } // namespace luthier
 
-#endif // LUTHIER_TOOLING_DEVICE_TOOL_CODE_LOADER_BASE_H
+#endif // LUTHIER_TOOLING_DEVICE_TOOL_CODE_LOADER_H

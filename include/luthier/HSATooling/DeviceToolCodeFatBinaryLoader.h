@@ -15,26 +15,19 @@
 //===----------------------------------------------------------------------===//
 /// \file DeviceToolCodeFatBinaryLoader.h
 /// Single templated class that drives the shared
-/// \c DeviceToolCodeLoaderBase with the annotated-slot inputs the IR
+/// \c DeviceToolCodeLoader with the annotated-slot inputs the IR
 /// plugin populates per-\c Derived, plus the HIP-static-specific
 /// host-shadow-pointer managed-variable path.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_DEVICE_TOOL_CODE_FAT_BINARY_LOADER_H
 #define LUTHIER_TOOLING_DEVICE_TOOL_CODE_FAT_BINARY_LOADER_H
 
-#include "luthier/HSA/Agent.h"
-#include "luthier/HSA/HsaError.h"
-#include "luthier/HSA/MemoryPool.h"
-#include "luthier/HSATooling/DeviceToolCodeLoaderBase.h"
+#include "luthier/HSATooling/DeviceToolCodeLoader.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
-#include <hsa/hsa_ext_amd.h>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/DenseMap.h>
-#include <llvm/ADT/SmallVector.h>
-#include <llvm/Support/Debug.h>
 #include <llvm/Support/Error.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -63,8 +56,19 @@ static_assert(sizeof(decltype(std::declval<llvm::ArrayRef<void *>>().size())) ==
 /// gives each tool its own set of \c inline static annotated slots that
 /// \c LoadHIPFATBinaryInfoPass populates at IR-compile time. The class
 /// inherits the bulk of the loading machinery from
-/// \c DeviceToolCodeLoaderBase and adds the HIP-static path
-/// (\c __hipRegisterManagedVar host-shadow publish + handle name table).
+/// \c DeviceToolCodeLoader; on top of it, it adds the
+/// \c __hipRegisterManagedVar handle-name table (HSA-free, populated at
+/// construction) and the host-shadow publish step (run after the base
+/// finishes its dynamic-managed-var allocation).
+///
+/// Managed-variable storage itself is owned end-to-end by the base class:
+/// each \c .managed-suffixed ELF symbol becomes a single managed
+/// allocation (HMM path on HMM-supported systems, CPU fine-grain pool
+/// otherwise). The fat-binary loader's only managed-var responsibility is
+/// to walk the IR-pass-populated \c HipManagedVars table and write the
+/// allocation pointer into each entry's \c void** host shadow, so host-side
+/// reads of the managed variable resolve to the same storage the device
+/// kernels see.
 ///
 /// A tool MUST be instantiated from exactly one host translation unit (the
 /// same requirement \c Singleton<Derived> implicitly places on it). Each TU
@@ -79,7 +83,7 @@ static_assert(sizeof(decltype(std::declval<llvm::ArrayRef<void *>>().size())) ==
 /// data array initializer and the runtime's struct reads remain
 /// byte-compatible regardless of which named type any IR site references.
 template <typename Derived>
-class DeviceToolCodeFatBinaryLoader : public DeviceToolCodeLoaderBase {
+class DeviceToolCodeFatBinaryLoader : public DeviceToolCodeLoader {
 public:
   /// \brief Per-fat-binary entry produced from a \c __hipRegisterFatBinary
   /// call. \c Bundle points at the raw Clang offload bundle; \c Size is the
@@ -155,7 +159,7 @@ public:
       const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
           &Loader,
       llvm::Error &Err)
-      : DeviceToolCodeLoaderBase(CoreApi, AmdExt, Loader,
+      : DeviceToolCodeLoader(CoreApi, AmdExt, Loader,
                                  buildBundleBuffer(HipFatBinaries, Err), Err),
         InputManagedVars(HipManagedVars) {
     llvm::ErrorAsOutParameter EAO(&Err);
@@ -181,14 +185,15 @@ public:
   }
 
   ~DeviceToolCodeFatBinaryLoader() {
-    // Free subclass-owned static-path managed-var allocations before the
-    // base destructor tears down its own state. The base only cleans
-    // base-owned resources (its dynamic-path allocations get freed via
-    // the base's clearLoadedState).
+    // Null out the host shadows so callers that hold on to the
+    // \c HipManagedVarInfo entries past the loader's lifetime see a clean
+    // \c nullptr rather than a stale pointer into freed storage. The
+    // storage itself is owned by the base and gets freed by the base's
+    // destructor.
     std::lock_guard Lock(Mutex);
     if (State == LoadState::Loaded)
-      freeStaticManagedVars();
-    DeviceToolCodeLoaderBase::~DeviceToolCodeLoaderBase();
+      nullManagedVarHostShadows();
+    DeviceToolCodeLoader::~DeviceToolCodeLoader();
   }
 
   /// Resolve a HIP host shadow handle (the \c __hipRegister* host-side
@@ -204,43 +209,23 @@ public:
   }
 
   /// Override: run the base's deferred load first (slices + dynamic
-  /// managed vars), then do the static-path managed-var allocation.
-  /// On local failure, free the static-path partial state and roll back
-  /// the base's state too via \c clearLoadedState.
+  /// managed-var allocation), then mirror each managed-var allocation
+  /// pointer into the corresponding \c __hipRegisterManagedVar host
+  /// shadow. On local failure, null the partially-written shadows and
+  /// roll the base's state back via \c clearLoadedState.
   llvm::Error ensureLoaded() {
     std::lock_guard Lock(Mutex);
-    LUTHIER_RETURN_ON_ERROR(DeviceToolCodeLoaderBase::ensureLoaded());
-
-    llvm::SmallVector<hsa_agent_t, 4> Agents;
-    auto Core = CoreApiSnapshot.getTable();
-    LUTHIER_RETURN_ON_ERROR(
-        hsa::getAllAgentsWithDeviceType<HSA_DEVICE_TYPE_GPU>(Core, Agents));
-
-    if (auto E = loadStaticManagedVars(Agents)) {
-      freeStaticManagedVars();
-      E = llvm::joinErrors(
-          std::move(E),
-          clearLoadedState()); // resets base state + State back to Pending.
-      return E;
+    LUTHIER_RETURN_ON_ERROR(DeviceToolCodeLoader::ensureLoaded());
+    if (auto E = publishManagedVarHostShadows()) {
+      nullManagedVarHostShadows();
+      return llvm::joinErrors(std::move(E), clearLoadedState());
     }
     return llvm::Error::success();
   }
 
 protected:
-  /// Per-allocation bookkeeping for the static path. Distinct from the
-  /// base's \c ManagedVarRecords (which tracks the dynamic-path
-  /// allocations).
-  struct StaticManagedVarRec {
-    void **HostShadowPtr{nullptr};
-    const void *InitValue{nullptr};
-    size_t Size{0};
-    unsigned Align{0};
-    void *Allocation{nullptr};
-  };
-
   llvm::ArrayRef<HipManagedVarInfo> InputManagedVars;
   llvm::DenseMap<const void *, std::string> HandleToName;
-  llvm::DenseMap<const void *, StaticManagedVarRec> StaticManagedVarRecords;
 
   /// Build a non-owning \c MemoryBuffer wrapper around the single fat-bin
   /// recorded in \p Slots. Sets \p Err if \p Slots has more than one entry
@@ -267,89 +252,33 @@ protected:
         /*RequiresNullTerminator=*/false);
   }
 
-  /// Static-path managed-var load: for each \c InputManagedVars entry,
-  /// allocate managed memory from a host fine-grain pool, copy in the
-  /// initial bytes from \c InitValue, grant agents access, and publish
-  /// the allocation pointer through the entry's host shadow slot
-  /// (\c *MV.Pointer).
-  llvm::Error loadStaticManagedVars(llvm::ArrayRef<hsa_agent_t> Agents) {
-    if (InputManagedVars.empty())
-      return llvm::Error::success();
-
-    const auto Core = CoreApiSnapshot.getTable();
-    const auto AmdExt = AmdExtSnapshot.getTable();
-
-    llvm::SmallVector<hsa_agent_t, 1> CpuAgents;
-    LUTHIER_RETURN_ON_ERROR(
-        hsa::getAllAgentsWithDeviceType<HSA_DEVICE_TYPE_CPU>(Core, CpuAgents));
-    if (CpuAgents.empty())
-      return LUTHIER_MAKE_HSA_ERROR(
-          "No CPU agent available for managed-var allocation.");
-
-    auto PoolOrErr = selectManagedVarPool(AmdExt, CpuAgents.front());
-    if (!PoolOrErr)
-      return PoolOrErr.takeError();
-    llvm::Expected<size_t> GranuleOrErr =
-        hsa::memoryPoolGetRuntimeAllocGranule(AmdExt, *PoolOrErr);
-    if (!GranuleOrErr)
-      return GranuleOrErr.takeError();
-
+  /// For each \c HipManagedVars entry, look up the base class's
+  /// managed-var allocation by name (the \c __hipRegisterManagedVar
+  /// device name matches the ELF base symbol — both are emitted by the
+  /// same compiler) and write the allocation pointer into the entry's
+  /// \c void** host shadow. After this returns, host-side reads of the
+  /// managed variable resolve to the same storage the device kernels see.
+  llvm::Error publishManagedVarHostShadows() {
     for (const auto &MV : InputManagedVars) {
-      if (MV.Pointer == nullptr)
+      if (MV.Pointer == nullptr || MV.Name == nullptr)
         continue;
-      if (MV.Align > *GranuleOrErr)
-        return LUTHIER_MAKE_HSA_ERROR(llvm::formatv(
-            "Managed variable {0} alignment ({1}) exceeds pool granule "
-            "({2}); over-aligned managed vars are not modelled.",
-            MV.Name ? MV.Name : "<unnamed>", MV.Align, *GranuleOrErr));
-
-      llvm::Expected<void *> AllocOrErr =
-          hsa::memoryPoolAllocate(AmdExt, *PoolOrErr, MV.Size, /*Flags=*/0);
+      auto AllocOrErr =
+          DeviceToolCodeLoader::lookupManagedVarAllocation(MV.Name);
       if (!AllocOrErr)
         return AllocOrErr.takeError();
-      void *Alloc = *AllocOrErr;
-
-      if (MV.InitValue != nullptr && MV.Size > 0)
-        std::memcpy(Alloc, MV.InitValue, MV.Size);
-
-      if (!Agents.empty()) {
-        if (auto E = hsa::agentsAllowAccess(AmdExt, Agents, Alloc))
-          return llvm::joinErrors(std::move(E),
-                                  hsa::memoryPoolFree(AmdExt, Alloc));
-      }
-
-      *MV.Pointer = Alloc;
-
-      StaticManagedVarRec Rec;
-      Rec.HostShadowPtr = MV.Pointer;
-      Rec.InitValue = MV.InitValue;
-      Rec.Size = MV.Size;
-      Rec.Align = MV.Align;
-      Rec.Allocation = Alloc;
-      StaticManagedVarRecords[MV.Pointer] = Rec;
+      *MV.Pointer = *AllocOrErr;
     }
     return llvm::Error::success();
   }
 
-  /// Free every static-path allocation, null out the host shadow slots,
-  /// and clear \c StaticManagedVarRecords. Idempotent.
-  void freeStaticManagedVars() noexcept {
-    auto AmdExt = AmdExtSnapshot.getTable();
-    for (auto &KV : StaticManagedVarRecords) {
-      if (KV.second.Allocation == nullptr)
-        continue;
-      if (KV.second.HostShadowPtr != nullptr)
-        *KV.second.HostShadowPtr = nullptr;
-      if (auto E = hsa::memoryPoolFree(AmdExt, KV.second.Allocation)) {
-        DEBUG_WITH_TYPE("luthier-device-tool-code-fat-binary-loader",
-                        llvm::dbgs() << "[luthier] managed-var free failed for "
-                                     << KV.second.Allocation << ": "
-                                     << llvm::toString(std::move(E)) << "\n");
-      } else {
-        consumeError(std::move(E));
-      }
-    }
-    StaticManagedVarRecords.clear();
+  /// Null every host shadow that \c publishManagedVarHostShadows would
+  /// touch. Used on rollback and during destruction so callers that hold
+  /// the \c HipManagedVarInfo entries past the loader's lifetime see a
+  /// clean \c nullptr instead of a dangling pointer into freed storage.
+  void nullManagedVarHostShadows() noexcept {
+    for (const auto &MV : InputManagedVars)
+      if (MV.Pointer != nullptr)
+        *MV.Pointer = nullptr;
   }
 };
 
