@@ -91,6 +91,7 @@ protected:
     llvm::MemoryBufferRef CodeObject;
     /// Non-owning view of the slice's \c .llvmbc section bytes.
     llvm::MemoryBufferRef Bitcode;
+    /// ISA of the slice
     llvm::Triple T;
     std::string CPU;
     llvm::SubtargetFeatures Features;
