@@ -300,7 +300,7 @@ DeviceToolCodeLoader::addSlice(llvm::MemoryBufferRef CodeObject) {
   SliceCacheEntry Entry;
   Entry.CodeObject = CodeObject;
   Entry.Bitcode = *BitcodeOrErr;
-  Entry.T = std::move(T);
+  Entry.TT = std::move(T);
   Entry.CPU = CPU.str();
   Entry.Features = std::move(Features);
   Slices.insert({std::move(Key), std::move(Entry)});
@@ -389,7 +389,7 @@ DeviceToolCodeLoader::loadOntoAgents(llvm::ArrayRef<hsa_agent_t> Agents) {
   for (auto &KV : Slices) {
     SliceCacheEntry &Entry = KV.second;
     llvm::Expected<hsa_isa_t> IsaOrErr =
-        hsa::isaFromLLVM(Core, Entry.T, Entry.CPU, Entry.Features);
+        hsa::isaFromLLVM(Core, Entry.TT, Entry.CPU, Entry.Features);
     if (!IsaOrErr)
       return IsaOrErr.takeError();
     // try_emplace: first slice wins on hsa_isa_t collision (e.g. wave32
@@ -711,16 +711,6 @@ DeviceToolCodeLoader::getEmbeddedModule(
       It != Slices.end(),
       "No embedded bitcode cached for the requested LLVM ISA tuple."));
   return llvm::parseBitcodeFile(It->second.Bitcode, Ctx);
-}
-
-llvm::SmallVector<DeviceToolCodeLoader::CachedISA, 4>
-DeviceToolCodeLoader::getCachedISAs() {
-  std::lock_guard Lock(Mutex);
-  llvm::SmallVector<CachedISA, 4> Out;
-  Out.reserve(Slices.size());
-  for (const auto &KV : Slices)
-    Out.push_back(CachedISA{KV.second.T, KV.second.CPU, KV.second.Features});
-  return Out;
 }
 
 } // namespace luthier
