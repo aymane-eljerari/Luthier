@@ -18,13 +18,16 @@
 /// fat-binary loader and the dynamic module loader.
 //===----------------------------------------------------------------------===//
 #include "luthier/HSATooling/DeviceToolCodeLoaderBase.h"
+#include "luthier/HSA/Agent.h"
 #include "luthier/HSA/CodeObjectReader.h"
 #include "luthier/HSA/Executable.h"
 #include "luthier/HSA/ExecutableSymbol.h"
 #include "luthier/HSA/HsaError.h"
 #include "luthier/HSA/ISA.h"
+#include "luthier/HSA/MemoryPool.h"
 #include "luthier/Object/AMDGCNObjectFile.h"
 #include "luthier/Object/ObjectFileUtils.h"
+#include <hsa/hsa_ext_amd.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/BinaryFormat/Magic.h>
@@ -33,9 +36,11 @@
 #include <llvm/Object/OffloadBundle.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Support/Error.h>
+#include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/raw_ostream.h>
 
 #include <algorithm>
+#include <cstring>
 
 #define DEBUG_TYPE "luthier-device-tool-code-loader-base"
 
@@ -125,6 +130,44 @@ extractEmbeddedBitcode(llvm::StringRef Elf) {
       "ELF slice does not contain a .llvmbc section.");
 }
 
+//===----------------------------------------------------------------------===//
+// Managed-variable backing pool selection
+//===----------------------------------------------------------------------===//
+
+/// Find a host fine-grain global memory pool suitable for backing managed
+/// variables. Mirrors HIP's \c hipMallocManaged path: the CPU agent's
+/// fine-grain pool is host-coherent and cross-agent-accessible once we
+/// grant access via \c hsa_amd_agents_allow_access.
+llvm::Expected<hsa_amd_memory_pool_t>
+selectManagedVarPool(const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
+                     hsa_agent_t CpuAgent) {
+  hsa_amd_memory_pool_t Found{};
+  bool DidFind = false;
+  LUTHIER_RETURN_ON_ERROR(hsa::agentIterateMemoryPools(
+      AmdExt, CpuAgent,
+      [&](hsa_amd_memory_pool_t Pool) -> llvm::Error {
+        if (DidFind)
+          return llvm::Error::success();
+        llvm::Expected<bool> FGOrErr =
+            hsa::memoryPoolIsFineGrained(AmdExt, Pool);
+        LUTHIER_RETURN_ON_ERROR(FGOrErr.takeError());
+        if (!*FGOrErr)
+          return llvm::Error::success();
+        llvm::Expected<bool> AllocOrErr =
+            hsa::memoryPoolGetRuntimeAllocAllowed(AmdExt, Pool);
+        LUTHIER_RETURN_ON_ERROR(AllocOrErr.takeError());
+        if (!*AllocOrErr)
+          return llvm::Error::success();
+        Found = Pool;
+        DidFind = true;
+        return llvm::Error::success();
+      }));
+  if (!DidFind)
+    return LUTHIER_MAKE_HSA_ERROR(
+        "No host fine-grain memory pool available for managed-var allocation.");
+  return Found;
+}
+
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -175,6 +218,78 @@ DeviceToolCodeLoaderBase::addSlice(llvm::MemoryBufferRef CodeObject) {
   Entry.CPU = CPU.str();
   Entry.Features = std::move(Features);
   Slices.insert({std::move(Key), std::move(Entry)});
+
+  // Discover dynamic managed variables: pairs of (Name, Name.managed)
+  // global-object symbols. The .managed companion carries the size +
+  // initial bytes; the base symbol is the pointer-sized device storage
+  // kernel code dereferences. Failures here log + skip rather than fail
+  // the whole construction.
+  static constexpr llvm::StringLiteral ManagedSuffix = ".managed";
+  llvm::Error VarIterErr = llvm::Error::success();
+  for (const auto &Var : (*ObjOrErr)->variables(VarIterErr)) {
+    auto NameOrErr = Var.getName();
+    if (!NameOrErr) {
+      llvm::consumeError(NameOrErr.takeError());
+      continue;
+    }
+    if (!NameOrErr->ends_with(ManagedSuffix))
+      continue;
+    llvm::StringRef BaseName = NameOrErr->drop_back(ManagedSuffix.size());
+    uint64_t Size = Var.getSize();
+    if (Size == 0)
+      continue;
+
+    auto SectionOrErr = Var.getSection();
+    if (!SectionOrErr) {
+      llvm::consumeError(SectionOrErr.takeError());
+      continue;
+    }
+    auto ContentsOrErr = (*SectionOrErr)->getContents();
+    if (!ContentsOrErr) {
+      llvm::consumeError(ContentsOrErr.takeError());
+      continue;
+    }
+    auto SymValOrErr = Var.getValue();
+    if (!SymValOrErr) {
+      llvm::consumeError(SymValOrErr.takeError());
+      continue;
+    }
+    uint64_t SymVal = *SymValOrErr;
+    uint64_t SectAddr = (*SectionOrErr)->getAddress();
+    if (SymVal < SectAddr ||
+        (SymVal - SectAddr) + Size > ContentsOrErr->size()) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "[luthier] managed-var symbol " << *NameOrErr
+                 << " out of section bounds, skipping\n");
+      continue;
+    }
+    llvm::ArrayRef<uint8_t> InitBytes(
+        reinterpret_cast<const uint8_t *>(ContentsOrErr->data()) +
+            (SymVal - SectAddr),
+        Size);
+
+    unsigned Align = (*SectionOrErr)->getAlignment().value();
+
+    // Dedup across slices on BaseSymbolName.
+    bool AlreadyKnown = false;
+    for (const auto &Existing : DynamicManagedVars) {
+      if (Existing.BaseSymbolName == BaseName) {
+        AlreadyKnown = true;
+        break;
+      }
+    }
+    if (AlreadyKnown)
+      continue;
+
+    ManagedVarInfo MV;
+    MV.BaseSymbolName = BaseName.str();
+    MV.Size = Size;
+    MV.Align = Align;
+    MV.InitValue = InitBytes;
+    DynamicManagedVars.push_back(std::move(MV));
+  }
+  if (VarIterErr)
+    return VarIterErr;
   return llvm::Error::success();
 }
 
@@ -299,7 +414,8 @@ DeviceToolCodeLoaderBase::loadOntoAgents(llvm::ArrayRef<hsa_agent_t> Agents) {
           llvm::joinErrors(std::move(E),
                            hsa::executableDestroy(Core, *ExeOrErr)),
           hsa::codeObjectReaderDestroy(*ReaderOrErr, Core));
-    PerAgentLoadRecords[Agent] = LoadRecord{*ReaderOrErr, *LCOOrErr, *ExeOrErr};
+    PerAgentLoadRecords[Agent] =
+        SliceLoadRecord{*ReaderOrErr, *LCOOrErr, *ExeOrErr};
 
     auto Callback = [&](hsa_executable_symbol_t Sym) -> llvm::Error {
       auto KindOrErr = hsa::executableSymbolGetType(Core, Sym);
@@ -335,12 +451,162 @@ void DeviceToolCodeLoaderBase::clearLoadedState() noexcept {
       consumeError(std::move(E));
     }
   };
+  freeManagedVars();
   for (auto &KV : PerAgentLoadRecords) {
     Swallow(hsa::executableDestroy(Core, KV.second.Executable));
     Swallow(hsa::codeObjectReaderDestroy(KV.second.Reader, Core));
   }
   PerAgentLoadRecords.clear();
   NameToAgentGlobal.clear();
+  State = LoadState::Pending;
+}
+
+//===----------------------------------------------------------------------===//
+// loadDynamicManagedVars / freeManagedVars
+//===----------------------------------------------------------------------===//
+
+llvm::Error DeviceToolCodeLoaderBase::loadDynamicManagedVars(
+    llvm::ArrayRef<hsa_agent_t> Agents) {
+  if (DynamicManagedVars.empty())
+    return llvm::Error::success();
+
+  const auto Core = CoreApiSnapshot.getTable();
+  const auto AmdExt = AmdExtSnapshot.getTable();
+
+  // We need a CPU agent to host the fine-grain pool we allocate from.
+  llvm::SmallVector<hsa_agent_t, 1> CpuAgents;
+  LUTHIER_RETURN_ON_ERROR(
+      hsa::getAllAgentsWithDeviceType<HSA_DEVICE_TYPE_CPU>(Core, CpuAgents));
+  if (CpuAgents.empty())
+    return LUTHIER_MAKE_HSA_ERROR(
+        "No CPU agent available for managed-var allocation.");
+
+  auto PoolOrErr = selectManagedVarPool(AmdExt, CpuAgents.front());
+  if (!PoolOrErr)
+    return PoolOrErr.takeError();
+  llvm::Expected<size_t> GranuleOrErr =
+      hsa::memoryPoolGetRuntimeAllocGranule(AmdExt, *PoolOrErr);
+  if (!GranuleOrErr)
+    return GranuleOrErr.takeError();
+
+  for (const auto &MV : DynamicManagedVars) {
+    if (MV.Size == 0)
+      continue;
+    if (MV.Align > *GranuleOrErr)
+      return LUTHIER_MAKE_HSA_ERROR(llvm::formatv(
+          "Managed variable {0} alignment ({1}) exceeds pool granule "
+          "({2}); over-aligned managed vars are not modelled.",
+          MV.BaseSymbolName, MV.Align, *GranuleOrErr));
+
+    llvm::Expected<void *> AllocOrErr =
+        hsa::memoryPoolAllocate(AmdExt, *PoolOrErr, MV.Size, /*Flags=*/0);
+    if (!AllocOrErr)
+      return AllocOrErr.takeError();
+    void *Alloc = *AllocOrErr;
+
+    // Copy initial value from the cached .managed-symbol bytes.
+    if (!MV.InitValue.empty())
+      std::memcpy(Alloc, MV.InitValue.data(),
+                  std::min<size_t>(MV.InitValue.size(), MV.Size));
+
+    // Grant every GPU agent access to the allocation so kernel-side
+    // dereferences of the symbol resolve to this storage.
+    if (!Agents.empty()) {
+      if (auto E = hsa::agentsAllowAccess(AmdExt, Agents, Alloc))
+        return llvm::joinErrors(std::move(E),
+                                hsa::memoryPoolFree(AmdExt, Alloc));
+    }
+
+    // Per-agent publish: write the managed-memory pointer into each
+    // agent's loaded image of the base symbol so kernels reading the
+    // base symbol go to the managed allocation.
+    auto NameIt = NameToAgentGlobal.find(MV.BaseSymbolName);
+    if (NameIt == NameToAgentGlobal.end()) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "[luthier] base symbol not found for managed var "
+                 << MV.BaseSymbolName << "\n");
+    } else {
+      for (hsa_agent_t Agent : Agents) {
+        auto AgentIt = NameIt->second.find(Agent);
+        if (AgentIt == NameIt->second.end())
+          continue;
+        auto AddrOrErr =
+            hsa::executableSymbolGetAddress(Core, AgentIt->second);
+        if (!AddrOrErr)
+          return llvm::joinErrors(AddrOrErr.takeError(),
+                                  hsa::memoryPoolFree(AmdExt, Alloc));
+        if (auto E = LUTHIER_HSA_CALL_ERROR_CHECK(
+                Core.callFunction<hsa_memory_copy>(
+                    reinterpret_cast<void *>(*AddrOrErr), &Alloc,
+                    sizeof(void *)),
+                llvm::formatv(
+                    "hsa_memory_copy failed publishing managed-var "
+                    "pointer for {0}",
+                    MV.BaseSymbolName)))
+          return llvm::joinErrors(std::move(E),
+                                  hsa::memoryPoolFree(AmdExt, Alloc));
+      }
+    }
+
+    ManagedVarRec Rec;
+    Rec.Allocation = Alloc;
+    Rec.Size = MV.Size;
+    Rec.Align = MV.Align;
+    ManagedVarRecords[Alloc] = Rec;
+  }
+  return llvm::Error::success();
+}
+
+void DeviceToolCodeLoaderBase::freeManagedVars() noexcept {
+  auto AmdExt = AmdExtSnapshot.getTable();
+  // Match HIP's path: a single pool_free per variable, no per-agent unmap
+  // (the access grant is released implicitly by the free). Per-agent
+  // base-symbol storage gets implicitly invalidated when the agent
+  // executable is destroyed in clearLoadedState.
+  for (auto &KV : ManagedVarRecords) {
+    if (KV.second.Allocation == nullptr)
+      continue;
+    if (auto E = hsa::memoryPoolFree(AmdExt, KV.second.Allocation)) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "[luthier] managed-var free failed for "
+                 << KV.second.Allocation << ": "
+                 << llvm::toString(std::move(E)) << "\n");
+    } else {
+      consumeError(std::move(E));
+    }
+  }
+  ManagedVarRecords.clear();
+}
+
+//===----------------------------------------------------------------------===//
+// ensureLoaded
+//===----------------------------------------------------------------------===//
+
+llvm::Error DeviceToolCodeLoaderBase::ensureLoaded() {
+  std::lock_guard Lock(Mutex);
+  if (State == LoadState::Loaded)
+    return llvm::Error::success();
+
+  auto Core = CoreApiSnapshot.getTable();
+  llvm::SmallVector<hsa_agent_t, 4> Agents;
+  LUTHIER_RETURN_ON_ERROR(
+      hsa::getAllAgentsWithDeviceType<HSA_DEVICE_TYPE_GPU>(Core, Agents));
+
+  if (auto E = loadOntoAgents(Agents)) {
+    clearLoadedState();
+    return E;
+  }
+  if (auto E = loadDynamicManagedVars(Agents)) {
+    clearLoadedState();
+    return E;
+  }
+  if (auto E = postLoadHook(Agents)) {
+    preUnloadHook();
+    clearLoadedState();
+    return E;
+  }
+  State = LoadState::Loaded;
+  return llvm::Error::success();
 }
 
 //===----------------------------------------------------------------------===//

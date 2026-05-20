@@ -66,8 +66,9 @@ namespace luthier {
 /// runs and what host-side bookkeeping wraps it.
 class DeviceToolCodeLoaderBase {
 protected:
-  /// Per-agent HSA handles produced by loading one ELF slice into one agent.
-  struct LoadRecord {
+  /// Per-agent HSA handles produced by loading one code object (slice) into one
+  /// agent
+  struct SliceLoadRecord {
     hsa_code_object_reader_t Reader{};
     hsa_loaded_code_object_t LCO{};
     hsa_executable_t Executable{};
@@ -93,6 +94,29 @@ protected:
     llvm::Triple T;
     std::string CPU;
     llvm::SubtargetFeatures Features;
+  };
+
+  /// Description of one dynamic managed variable, discovered from the
+  /// code-object symbol table. Dynamic managed vars are detected by the
+  /// loader itself (no host-side shadow exists) by finding pairs of
+  /// symbols where one has a \c ".managed" suffix; the base symbol is
+  /// pointer-sized device storage that kernel code dereferences, and the
+  /// \c .managed companion carries the size + initial bytes.
+  struct ManagedVarInfo {
+    std::string BaseSymbolName;
+    size_t Size{0};
+    unsigned Align{0};
+    /// View into the slice ELF's \c .managed-companion section bytes.
+    /// Alive for the loader's lifetime (slice ELFs are retained).
+    llvm::ArrayRef<uint8_t> InitValue;
+  };
+
+  /// Bookkeeping for an allocated dynamic managed variable. One per
+  /// allocation performed by \c loadDynamicManagedVars.
+  struct ManagedVarRec {
+    void *Allocation{nullptr};
+    size_t Size{0};
+    unsigned Align{0};
   };
 
   std::recursive_mutex Mutex;
@@ -125,12 +149,22 @@ protected:
   llvm::SmallVector<std::unique_ptr<llvm::MemoryBuffer>, 2> RetainedBuffers;
 
   /// Load record for every agent the loader successfully loaded a slice on
-  llvm::DenseMap<hsa_agent_t, LoadRecord> PerAgentLoadRecords;
+  llvm::DenseMap<hsa_agent_t, SliceLoadRecord> PerAgentLoadRecords;
+
+  /// Dynamic managed variables discovered while parsing the loader's
+  /// input. Populated at construction (HSA-free) by \c addSlice scanning
+  /// each slice's symbol table for \c .managed-suffixed companions.
+  llvm::SmallVector<ManagedVarInfo, 0> DynamicManagedVars;
+
+  /// One \c ManagedVarRec per allocation produced by
+  /// \c loadDynamicManagedVars. Freed by \c freeManagedVars during
+  /// \c clearLoadedState.
+  llvm::DenseMap<void *, ManagedVarRec> ManagedVarRecords;
 
   /// Bundle-path constructor: takes ownership of the input \c MemoryBuffer
   /// and parses it as a Clang offload bundle. Sets \p Err on parse failure
   /// or if two slices in the bundle share the same canonical LLVM ISA.
-  /// HSA-free: no HSA runtime calls are issued during construction.
+  /// HSA-free.
   DeviceToolCodeLoaderBase(
       const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
       const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
@@ -168,18 +202,51 @@ protected:
                                          llvm::StringRef CPU,
                                          const llvm::SubtargetFeatures &F);
 
-  /// Symmetric teardown: destroys every HSA executable + code-object reader
-  /// owned by the loader, then clears \c LoadedAgents and
-  /// \c NameToAgentGlobal. Does NOT discard the slice cache or retained
-  /// buffers — those are bound to the loader for its lifetime.
-  /// Swallows + logs HSA errors so it is safe to call from destructors.
-  /// Idempotent.
+  /// Symmetric teardown: frees managed-variable allocations, destroys
+  /// every HSA executable + code-object reader, clears \c PerAgentLoadRecords
+  /// and \c NameToAgentGlobal, and resets \c State to \c Pending. Does NOT
+  /// discard the slice cache or retained buffers — those are bound to the
+  /// loader for its lifetime. Swallows + logs HSA errors so it is safe to
+  /// call from destructors. Idempotent.
   void clearLoadedState() noexcept;
 
-  /// Subclass hook invoked at the top of every public lookup. The default
-  /// implementation is a no-op (returns success); the fat-binary loader
-  /// overrides this to perform the deferred HSA-side load on first call.
-  virtual llvm::Error ensureLoaded() { return llvm::Error::success(); }
+  enum class LoadState { Pending, Loaded };
+  LoadState State{LoadState::Pending};
+
+  /// Deferred HSA-side load. First call collects every GPU agent, runs
+  /// \c loadOntoAgents, then \c loadDynamicManagedVars, then the
+  /// \c postLoadHook subclass extension. On success transitions \c State
+  /// to \c Loaded; on failure invokes \c preUnloadHook +
+  /// \c clearLoadedState and stays \c Pending so the next call retries.
+  llvm::Error ensureLoaded();
+
+  /// For every \c ManagedVarInfo discovered in \c DynamicManagedVars,
+  /// allocate managed memory from a host fine-grain pool, copy the
+  /// initial bytes in (from the cached \c .managed-symbol view), grant
+  /// every agent access, and publish the device-accessible pointer into
+  /// each agent's loaded image of the base symbol via \c hsa_memory_copy.
+  /// No-op if \c DynamicManagedVars is empty.
+  llvm::Error loadDynamicManagedVars(llvm::ArrayRef<hsa_agent_t> Agents);
+
+  /// Free every allocation in \c ManagedVarRecords (using
+  /// \c hsa_amd_memory_pool_free) and clear the bookkeeping map.
+  /// Swallows and logs errors so it is safe to call from destructors.
+  /// Idempotent.
+  void freeManagedVars() noexcept;
+
+  /// Subclass extension point for additional load-time work, called by
+  /// \c ensureLoaded after the base's own load steps. Default no-op.
+  /// The static fat-binary loader overrides this for the
+  /// \c __hipRegisterManagedVar path (host-shadow-pointer publish).
+  virtual llvm::Error postLoadHook(llvm::ArrayRef<hsa_agent_t> Agents) {
+    return llvm::Error::success();
+  }
+
+  /// Cleanup hook paired with \c postLoadHook. Default no-op. Called by
+  /// \c ensureLoaded on rollback, and must be called from the subclass
+  /// destructor if \c State is \c Loaded (base destructor only tears
+  /// down base state).
+  virtual void preUnloadHook() noexcept {}
 
   /// Internal helper used by both constructors. Parses one ELF as an AMDGCN
   /// object file, extracts its LLVM ISA tuple + \c .llvmbc bytes, and

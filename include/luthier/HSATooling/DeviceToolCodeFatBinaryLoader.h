@@ -93,42 +93,39 @@ protected:
     void *Allocation{nullptr};
   };
 
-  /// Managed-variable input table — kept because the per-allocation HSA
-  /// work happens at load time. The other IR-pass-populated handle tables
-  /// (functions, device vars, textures, surfaces) are consumed during
-  /// construction to populate \c HandleToName and not stored.
+  /// Managed-variable input table populated by \c __hipRegisterManagedVar
+  /// IR-pass scraping. The static path is distinct from the dynamic
+  /// path on the base (which discovers vars from the code-object symbol
+  /// table); the two coexist without overlap.
   llvm::ArrayRef<HipManagedVarInfo> InputManagedVars;
-
-  enum class LoadState { Pending, Loaded };
-  LoadState State{LoadState::Pending};
 
   /// Host shadow handle → device-side symbol name, populated at
   /// construction from the IR-pass \c __hipRegister* tables. HSA-free,
   /// so \c lookupNameByHandle works immediately. Only meaningful for
   /// static HIP registration.
   llvm::DenseMap<const void *, std::string> HandleToName;
-  llvm::DenseMap<const void *, ManagedVarRec> ManagedVarRecords;
 
-  /// Drive \c base::loadOntoAgents over all GPU agents, then
-  /// \c loadManagedVars. Caller's contract: HSA is ready.
-  llvm::Error loadAll();
+  /// Per-allocation bookkeeping for the static path. Distinct from the
+  /// base's \c ManagedVarRecords (which tracks the dynamic-path
+  /// allocations).
+  llvm::DenseMap<const void *, ManagedVarRec> StaticManagedVarRecords;
 
-  /// Allocate backing memory for every \c InputManagedVars entry, initialize
-  /// it from \c InitValue, grant the listed GPU agents access, and publish
-  /// each allocation through the host shadow pointer. Modelled on HIP's
-  /// \c __hipRegisterManagedVar + \c Var::allocateManagedVarPtr.
-  llvm::Error loadManagedVars(llvm::ArrayRef<hsa_agent_t> Agents);
+  /// Static-path managed-var load: for each \c InputManagedVars entry,
+  /// allocate managed memory from a host fine-grain pool, copy in the
+  /// initial bytes from \c InitValue, grant agents access, and publish
+  /// the allocation pointer through the entry's host shadow slot
+  /// (\c *MV.Pointer). Modelled on HIP's \c __hipRegisterManagedVar +
+  /// \c Var::allocateManagedVarPtr.
+  llvm::Error loadStaticManagedVars(llvm::ArrayRef<hsa_agent_t> Agents);
 
-  /// Symmetric teardown: \c base::clearLoadedState + free managed-var
-  /// allocations + clear HIP-static bookkeeping maps. Safe to call from
-  /// a destructor.
-  void unloadAll() noexcept;
+  /// Free every static-path allocation, null out the host shadow slots,
+  /// and clear \c StaticManagedVarRecords. Idempotent.
+  void freeStaticManagedVars() noexcept;
 
-  /// First call runs \c loadAll. On success, subsequent calls short-circuit.
-  /// On failure, the caller receives the \c llvm::Error and subsequent calls
-  /// retry, so transient failures can recover. Override of the base hook so
-  /// the inherited lookups trigger the deferred load.
-  llvm::Error ensureLoaded() override;
+  llvm::Error postLoadHook(llvm::ArrayRef<hsa_agent_t> Agents) override {
+    return loadStaticManagedVars(Agents);
+  }
+  void preUnloadHook() noexcept override { freeStaticManagedVars(); }
 
   /// Build a non-owning \c MemoryBuffer wrapper around the single fat-bin
   /// recorded in \p Slots. Sets \p Err if \p Slots has more than one entry

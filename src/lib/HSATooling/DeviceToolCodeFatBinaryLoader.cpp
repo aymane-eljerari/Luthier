@@ -91,27 +91,10 @@ selectManagedVarPool(const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
 } // namespace
 
 //===----------------------------------------------------------------------===//
-// DeviceToolCodeFatBinaryLoader::loadAll
+// DeviceToolCodeFatBinaryLoader::loadStaticManagedVars
 //===----------------------------------------------------------------------===//
 
-llvm::Error DeviceToolCodeFatBinaryLoader::loadAll() {
-  auto Core = CoreApiSnapshot.getTable();
-
-  llvm::SmallVector<hsa_agent_t, 4> Agents;
-  LUTHIER_RETURN_ON_ERROR(
-      hsa::getAllAgentsWithDeviceType<HSA_DEVICE_TYPE_GPU>(Core, Agents));
-
-  LUTHIER_RETURN_ON_ERROR(loadOntoAgents(Agents));
-  LUTHIER_RETURN_ON_ERROR(loadManagedVars(Agents));
-
-  return llvm::Error::success();
-}
-
-//===----------------------------------------------------------------------===//
-// DeviceToolCodeFatBinaryLoader::loadManagedVars
-//===----------------------------------------------------------------------===//
-
-llvm::Error DeviceToolCodeFatBinaryLoader::loadManagedVars(
+llvm::Error DeviceToolCodeFatBinaryLoader::loadStaticManagedVars(
     llvm::ArrayRef<hsa_agent_t> Agents) {
   if (InputManagedVars.empty())
     return llvm::Error::success();
@@ -154,15 +137,15 @@ llvm::Error DeviceToolCodeFatBinaryLoader::loadManagedVars(
     if (MV.InitValue != nullptr && MV.Size > 0)
       std::memcpy(Alloc, MV.InitValue, MV.Size);
 
-    // Grant every GPU agent access to the allocation so kernel-side
-    // dereferences of the symbol resolve to this storage.
+    // Grant every GPU agent access to the allocation.
     if (!Agents.empty()) {
       if (auto E = hsa::agentsAllowAccess(AmdExt, Agents, Alloc))
         return llvm::joinErrors(std::move(E),
                                 hsa::memoryPoolFree(AmdExt, Alloc));
     }
 
-    // Publish the device-accessible pointer through the host shadow.
+    // Publish the device-accessible pointer through the host shadow slot
+    // — the simple part of the static path.
     *MV.Pointer = Alloc;
 
     ManagedVarRec Rec;
@@ -171,22 +154,21 @@ llvm::Error DeviceToolCodeFatBinaryLoader::loadManagedVars(
     Rec.Size = MV.Size;
     Rec.Align = MV.Align;
     Rec.Allocation = Alloc;
-    ManagedVarRecords[MV.Pointer] = Rec;
+    StaticManagedVarRecords[MV.Pointer] = Rec;
   }
   return llvm::Error::success();
 }
 
 //===----------------------------------------------------------------------===//
-// DeviceToolCodeFatBinaryLoader::unloadAll
+// DeviceToolCodeFatBinaryLoader::freeStaticManagedVars
 //===----------------------------------------------------------------------===//
 
-void DeviceToolCodeFatBinaryLoader::unloadAll() noexcept {
+void DeviceToolCodeFatBinaryLoader::freeStaticManagedVars() noexcept {
   auto AmdExt = AmdExtSnapshot.getTable();
 
-  // Free managed-var backing allocations. Match HIP's path: a single
-  // pool_free per variable, no per-agent unmap (the access grant is
-  // released implicitly by the free).
-  for (auto &KV : ManagedVarRecords) {
+  // Match HIP's path: a single pool_free per variable, no per-agent unmap
+  // (the access grant is released implicitly by the free).
+  for (auto &KV : StaticManagedVarRecords) {
     if (KV.second.Allocation == nullptr)
       continue;
     if (KV.second.HostShadowPtr != nullptr)
@@ -200,31 +182,7 @@ void DeviceToolCodeFatBinaryLoader::unloadAll() noexcept {
       consumeError(std::move(E));
     }
   }
-  ManagedVarRecords.clear();
-
-  // HandleToName is populated at construction and survives unload/rollback —
-  // re-running ensureLoaded() shouldn't re-resolve handle names.
-
-  // Base handles its own state: LoadedAgents, NameToAgentGlobal.
-  clearLoadedState();
-}
-
-//===----------------------------------------------------------------------===//
-// DeviceToolCodeFatBinaryLoader::ensureLoaded
-//===----------------------------------------------------------------------===//
-
-llvm::Error DeviceToolCodeFatBinaryLoader::ensureLoaded() {
-  std::lock_guard Lock(Mutex);
-  if (State == LoadState::Loaded)
-    return llvm::Error::success();
-  if (auto E = loadAll()) {
-    // Roll back partial state and stay in Pending so the next call
-    // retries; the caller propagates this error and decides how to act.
-    unloadAll();
-    return E;
-  }
-  State = LoadState::Loaded;
-  return llvm::Error::success();
+  StaticManagedVarRecords.clear();
 }
 
 //===----------------------------------------------------------------------===//
@@ -287,9 +245,13 @@ DeviceToolCodeFatBinaryLoader::DeviceToolCodeFatBinaryLoader(
 }
 
 DeviceToolCodeFatBinaryLoader::~DeviceToolCodeFatBinaryLoader() {
-  // Skip teardown if loadAll never ran (or already rolled back on failure).
+  // Free subclass-owned static-path managed-var allocations before the
+  // base destructor tears down its own state. The base only cleans
+  // base-owned resources (its dynamic-path allocations get freed via
+  // the base's clearLoadedState).
+  std::lock_guard Lock(Mutex);
   if (State == LoadState::Loaded)
-    unloadAll();
+    freeStaticManagedVars();
 }
 
 } // namespace luthier
