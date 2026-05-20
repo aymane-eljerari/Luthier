@@ -66,9 +66,7 @@ protected:
   };
 
   /// One entry per distinct LLVM-tuple (Triple/CPU/Features) the loader was
-  /// given. Populated at construction (HSA-free); \c loadOntoAgents derives
-  /// the \c hsa_isa_t for each entry at load time as needed.
-  ///
+  /// given. Populated at construction (HSA-free)
   /// HSA-level ISA matching is coarser than LLVM's codegen target (wave mode,
   /// cu mode, and other kernel-descriptor-driven feature bits are invisible
   /// to HSA), so a bundle may legitimately ship multiple LLVM-tuple variants
@@ -88,13 +86,12 @@ protected:
     llvm::SubtargetFeatures Features;
   };
 
-  /// Bookkeeping for an allocated dynamic managed variable. One per
-  /// allocation performed by \c loadDynamicManagedVars.
+  /// Bookkeeping for an allocated managed variable. One per
+  /// allocation performed by \c loadManagedVars. Stored in
+  /// \c ManagedVarRecords keyed by the managed var's base symbol name
+  /// (the ELF symbol with the \c .managed suffix stripped), so the name
+  /// itself doesn't appear as a field.
   struct ManagedVarRec {
-    /// View into the slice ELF's symbol name (loader-lifetime, alive as
-    /// long as \c RetainedBuffers is). Also serves as the lookup key for
-    /// \c NameToManagedAlloc, so the lifetimes match.
-    llvm::StringRef Name;
     void *Allocation{nullptr};
     /// Bytes actually reserved at the allocation API level — equal to the
     /// requested size on the pool path, and to the page-rounded size on
@@ -142,17 +139,11 @@ protected:
   llvm::DenseMap<hsa_agent_t, SliceLoadRecord> PerAgentLoadRecords;
 
   /// One \c ManagedVarRec per allocation produced by
-  /// \c loadDynamicManagedVars. Freed by \c freeManagedVars during
-  /// \c clearLoadedState.
-  llvm::DenseMap<void *, ManagedVarRec> ManagedVarRecords;
-
-  /// Reverse index: managed-variable base symbol name → allocation
-  /// pointer. Populated alongside \c ManagedVarRecords in
-  /// \c loadDynamicManagedVars; consulted by \c lookupManagedVarAllocation
-  /// (used by the fat-binary loader to write each
-  /// \c __hipRegisterManagedVar host shadow). Keys are \c StringRefs into
-  /// the loader-retained ELF symbol tables.
-  llvm::StringMap<void *> NameToManagedAlloc;
+  /// \c loadManagedVars, keyed by the managed var's base symbol
+  /// name (the ELF symbol with the \c .managed suffix stripped)
+  /// Freed by \c freeManagedVars during \c clearLoadedState; also
+  /// backs \c lookupManagedVarAllocation.
+  llvm::StringMap<ManagedVarRec> ManagedVarRecords;
 
   /// Bundle-path constructor: takes ownership of the input \c MemoryBuffer
   /// and parses it as a Clang offload bundle. Sets \p Err on parse failure
@@ -229,7 +220,7 @@ protected:
   /// by the non-HMM path is performed lazily on the first allocation
   /// taking that path, so this method is zero-cost when no managed vars
   /// exist.
-  llvm::Error loadDynamicManagedVars(llvm::ArrayRef<hsa_agent_t> Agents);
+  llvm::Error loadManagedVars(llvm::ArrayRef<hsa_agent_t> Agents);
 
   /// Free every allocation in \c ManagedVarRecords (using
   /// \c hsa_amd_memory_pool_free) and clear the bookkeeping map.
@@ -351,12 +342,12 @@ public:
     std::lock_guard Lock(Mutex);
     if (auto E = ensureLoaded())
       return std::move(E);
-    auto It = NameToManagedAlloc.find(Name);
+    auto It = ManagedVarRecords.find(Name);
     LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-        It != NameToManagedAlloc.end(),
+        It != ManagedVarRecords.end(),
         llvm::formatv("No managed-variable allocation for symbol '{0}'", Name)
             .str()));
-    return It->second;
+    return It->second.Allocation;
   }
 
   /// Parse the embedded tool bitcode for the requested LLVM ISA

@@ -476,7 +476,7 @@ llvm::Error DeviceToolCodeLoader::clearLoadedState() {
 // loadDynamicManagedVars / freeManagedVars
 //===----------------------------------------------------------------------===//
 
-llvm::Error DeviceToolCodeLoader::loadDynamicManagedVars(
+llvm::Error DeviceToolCodeLoader::loadManagedVars(
     llvm::ArrayRef<hsa_agent_t> Agents) {
   const auto Core = CoreApiSnapshot.getTable();
   const auto AmdExt = AmdExtSnapshot.getTable();
@@ -632,14 +632,12 @@ llvm::Error DeviceToolCodeLoader::loadDynamicManagedVars(
       }
 
       ManagedVarRec Rec;
-      Rec.Name = BaseName;
       Rec.Allocation = Alloc.Ptr;
       Rec.AllocSize = Alloc.AllocSize;
       Rec.Size = Size;
       Rec.Align = Align;
       Rec.ViaSvm = Alloc.ViaSvm;
-      ManagedVarRecords[Alloc.Ptr] = Rec;
-      NameToManagedAlloc[BaseName] = Alloc.Ptr;
+      ManagedVarRecords[BaseName] = Rec;
     }
     if (VarIterErr)
       return VarIterErr;
@@ -664,7 +662,6 @@ llvm::Error DeviceToolCodeLoader::freeManagedVars() {
     E = llvm::joinErrors(std::move(E), freeManagedStorage(AmdExt, A));
   }
   ManagedVarRecords.clear();
-  NameToManagedAlloc.clear();
   return E;
 }
 
@@ -686,7 +683,7 @@ llvm::Error DeviceToolCodeLoader::ensureLoaded() {
     E = llvm::joinErrors(std::move(E), clearLoadedState());
     return E;
   }
-  if (auto E = loadDynamicManagedVars(Agents)) {
+  if (auto E = loadManagedVars(Agents)) {
     E = llvm::joinErrors(std::move(E), clearLoadedState());
     return E;
   }
