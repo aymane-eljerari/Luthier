@@ -14,23 +14,8 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 /// \file DeviceToolCodeLoader.h
-/// Shared base class for the static fat-binary loader
-/// (\c DeviceToolCodeFatBinaryLoader) and the dynamic module loader.
-///
-/// Following the one-loader-one-module rule, the loader's input bytes are
-/// supplied at construction. Two input shapes are accepted:
-///   - a single Clang offload bundle (compressed or uncompressed)
-///   - an array of pre-unbundled code-object buffers, one per LLVM ISA
-///
-/// Construction is HSA-free: the constructor parses the input, extracts the
-/// LLVM-form ISA tuple and the embedded \c .llvmbc bytes of each slice, and
-/// caches them in \c Slices keyed by canonical LLVM ISA. Duplicate ISA
-/// entries surface as an error.
-///
-/// HSA-side resolution (mapping each slice to an \c hsa_isa_t and creating
-/// per-agent executables) is deferred until \c loadOntoAgents is invoked
-/// by a subclass — by which time the caller guarantees the rocprofiler API
-/// snapshots are populated.
+/// Defines the \c DeviceToolCodeLoader in charge of loading the device code of
+/// a single tool onto GPU agents on the system
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_DEVICE_TOOL_CODE_LOADER_H
 #define LUTHIER_TOOLING_DEVICE_TOOL_CODE_LOADER_H
@@ -63,10 +48,12 @@
 
 namespace luthier {
 
-/// \brief Non-templated, non-public-API base shared by every device-code
-/// loader. Provides the HSA-free parse + per-agent code-object-load machinery
-/// and the lookup caches; subclasses drive when the deferred HSA-side load
-/// runs and what host-side bookkeeping wraps it.
+/// \brief In charge of loading the device code of a single Luthier tool
+/// translation unit (TU) onto GPU HSA Agents attached to the system./// Also extracts and provides access to the LLVM bitcode of the instrumentation
+/// module appropriate for the kernel being instrumented
+/// \note This class only handles loading the same source (TU) compiled for
+/// multiple GPU targets running on the system. For loading multiple TUs, use
+/// multiple instances of this class
 class DeviceToolCodeLoader {
 protected:
   /// Per-agent HSA handles produced by loading one code object (slice) into an
@@ -341,8 +328,7 @@ protected:
 
 public:
   DeviceToolCodeLoader(const DeviceToolCodeLoader &) = delete;
-  DeviceToolCodeLoader &
-  operator=(const DeviceToolCodeLoader &) = delete;
+  DeviceToolCodeLoader &operator=(const DeviceToolCodeLoader &) = delete;
 
   /// Resolve a device-side global-variable name to its
   /// \c hsa_executable_symbol_t on \p Agent. Callers needing the loaded
