@@ -353,7 +353,9 @@ DeviceToolCodeLoaderBase::DeviceToolCodeLoaderBase(
   }
 }
 
-DeviceToolCodeLoaderBase::~DeviceToolCodeLoaderBase() { clearLoadedState(); }
+DeviceToolCodeLoaderBase::~DeviceToolCodeLoaderBase() {
+  llvm::consumeError(clearLoadedState());
+}
 
 //===----------------------------------------------------------------------===//
 // loadOntoAgents
@@ -437,21 +439,14 @@ DeviceToolCodeLoaderBase::loadOntoAgents(llvm::ArrayRef<hsa_agent_t> Agents) {
 // clearLoadedState
 //===----------------------------------------------------------------------===//
 
-void DeviceToolCodeLoaderBase::clearLoadedState() noexcept {
+llvm::Error DeviceToolCodeLoaderBase::clearLoadedState() {
   auto Core = CoreApiSnapshot.getTable();
-  auto Swallow = [](llvm::Error E) {
-    if (E) {
-      LLVM_DEBUG(llvm::dbgs() << "[luthier] unload: "
-                              << llvm::toString(std::move(E)) << "\n");
-      consumeError(std::move(E));
-    } else {
-      consumeError(std::move(E));
-    }
-  };
-  freeManagedVars();
+  llvm::Error E = freeManagedVars();
   for (auto &KV : PerAgentLoadRecords) {
-    Swallow(hsa::executableDestroy(Core, KV.second.Executable));
-    Swallow(hsa::codeObjectReaderDestroy(KV.second.Reader, Core));
+    E = llvm::joinErrors(std::move(E),
+                         hsa::executableDestroy(Core, KV.second.Executable));
+    E = llvm::joinErrors(std::move(E),
+                         hsa::codeObjectReaderDestroy(KV.second.Reader, Core));
   }
   PerAgentLoadRecords.clear();
   NameToAgentGlobal.clear();
@@ -554,7 +549,7 @@ llvm::Error DeviceToolCodeLoaderBase::loadDynamicManagedVars(
   return llvm::Error::success();
 }
 
-void DeviceToolCodeLoaderBase::freeManagedVars() noexcept {
+llvm::Error DeviceToolCodeLoaderBase::freeManagedVars() {
   auto AmdExt = AmdExtSnapshot.getTable();
   // Match HIP's path: a single pool_free per variable, no per-agent unmap
   // (the access grant is released implicitly by the free). Per-agent
@@ -564,15 +559,10 @@ void DeviceToolCodeLoaderBase::freeManagedVars() noexcept {
     if (KV.second.Allocation == nullptr)
       continue;
     if (auto E = hsa::memoryPoolFree(AmdExt, KV.second.Allocation)) {
-      LLVM_DEBUG(llvm::dbgs()
-                 << "[luthier] managed-var free failed for "
-                 << KV.second.Allocation << ": "
-                 << llvm::toString(std::move(E)) << "\n");
-    } else {
-      consumeError(std::move(E));
+      return E;
     }
+    ManagedVarRecords.clear();
   }
-  ManagedVarRecords.clear();
 }
 
 //===----------------------------------------------------------------------===//
@@ -590,11 +580,11 @@ llvm::Error DeviceToolCodeLoaderBase::ensureLoaded() {
       hsa::getAllAgentsWithDeviceType<HSA_DEVICE_TYPE_GPU>(Core, Agents));
 
   if (auto E = loadOntoAgents(Agents)) {
-    clearLoadedState();
+    E = llvm::joinErrors(std::move(E), clearLoadedState());
     return E;
   }
   if (auto E = loadDynamicManagedVars(Agents)) {
-    clearLoadedState();
+    E = llvm::joinErrors(std::move(E), clearLoadedState());
     return E;
   }
   State = LoadState::Loaded;

@@ -212,7 +212,7 @@ protected:
   /// discard the slice cache or retained buffers — those are bound to the
   /// loader for its lifetime. Swallows + logs HSA errors so it is safe to
   /// call from destructors. Idempotent.
-  void clearLoadedState() noexcept;
+  llvm::Error clearLoadedState();
 
   enum class LoadState { Pending, Loaded };
   LoadState State{LoadState::Pending};
@@ -227,7 +227,7 @@ protected:
   /// \c base::ensureLoaded() first, then do their own additional work
   /// (e.g. the fat-binary loader's static-managed-var allocation), and
   /// roll back via \c clearLoadedState on local failure.
-  virtual llvm::Error ensureLoaded();
+  llvm::Error ensureLoaded();
 
   /// For every \c ManagedVarInfo discovered in \c DynamicManagedVars,
   /// allocate managed memory from a host fine-grain pool, copy the
@@ -241,7 +241,7 @@ protected:
   /// \c hsa_amd_memory_pool_free) and clear the bookkeeping map.
   /// Swallows and logs errors so it is safe to call from destructors.
   /// Idempotent.
-  void freeManagedVars() noexcept;
+  llvm::Error freeManagedVars();
 
   /// Pick a host fine-grain memory pool suitable for backing managed
   /// variables (HIP's \c hipMallocManaged path uses the CPU agent's

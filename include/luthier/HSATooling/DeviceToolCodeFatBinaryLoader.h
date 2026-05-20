@@ -186,9 +186,9 @@ public:
     // base-owned resources (its dynamic-path allocations get freed via
     // the base's clearLoadedState).
     std::lock_guard Lock(Mutex);
-    DeviceToolCodeLoaderBase::~DeviceToolCodeLoaderBase();
     if (State == LoadState::Loaded)
       freeStaticManagedVars();
+    DeviceToolCodeLoaderBase::~DeviceToolCodeLoaderBase();
   }
 
   /// Resolve a HIP host shadow handle (the \c __hipRegister* host-side
@@ -207,7 +207,7 @@ public:
   /// managed vars), then do the static-path managed-var allocation.
   /// On local failure, free the static-path partial state and roll back
   /// the base's state too via \c clearLoadedState.
-  llvm::Error ensureLoaded() override {
+  llvm::Error ensureLoaded() {
     std::lock_guard Lock(Mutex);
     LUTHIER_RETURN_ON_ERROR(DeviceToolCodeLoaderBase::ensureLoaded());
 
@@ -218,7 +218,9 @@ public:
 
     if (auto E = loadStaticManagedVars(Agents)) {
       freeStaticManagedVars();
-      clearLoadedState(); // resets base state + State back to Pending.
+      E = llvm::joinErrors(
+          std::move(E),
+          clearLoadedState()); // resets base state + State back to Pending.
       return E;
     }
     return llvm::Error::success();
