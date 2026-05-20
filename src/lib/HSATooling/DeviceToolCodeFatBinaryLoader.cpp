@@ -98,46 +98,6 @@ struct BundleSlice {
   llvm::StringRef Elf;
 };
 
-/// Inspect \p F for a \c +Name/-Name entry. \c std::nullopt means the
-/// feature isn't pinned in the ELF (\c Any — portable across both
-/// states); \c true means \c +Name (\c On); \c false means \c -Name
-/// (\c Off). Matches the semantics LLVM's \c SubtargetFeatures itself
-/// uses internally.
-std::optional<bool> featureState(const llvm::SubtargetFeatures &F,
-                                 llvm::StringRef Name) {
-  for (const std::string &S : F.getFeatures()) {
-    llvm::StringRef Ref(S);
-    if (!Ref.empty() && (Ref.front() == '+' || Ref.front() == '-')) {
-      if (Ref.drop_front() == Name)
-        return Ref.front() == '+';
-    }
-  }
-  return std::nullopt;
-}
-
-/// Number of feature dimensions left as \c Any (i.e. absent from the
-/// slice's \c SubtargetFeatures). Lower is more specific — used to sort
-/// slices so exact-match entries beat any-match entries when both could
-/// satisfy an agent's ISA.
-unsigned anyCount(const BundleSlice &S) {
-  return (featureState(S.Features, "xnack") ? 0 : 1) +
-         (featureState(S.Features, "sramecc") ? 0 : 1);
-}
-
-/// Copy \p Source and pin any \c xnack/sramecc dimension that was left
-/// as \c Any to a concrete value. Used to expand \c Any features into
-/// the concrete ISA names the agent's iterator would yield.
-llvm::SubtargetFeatures
-concretizeFeatures(const llvm::SubtargetFeatures &Source, bool ConcreteXnackOn,
-                   bool ConcreteSrameccOn) {
-  llvm::SubtargetFeatures Out = Source;
-  if (!featureState(Source, "xnack"))
-    Out.AddFeature("xnack", ConcreteXnackOn);
-  if (!featureState(Source, "sramecc"))
-    Out.AddFeature("sramecc", ConcreteSrameccOn);
-  return Out;
-}
-
 /// Parses the Clang offload \p Bundle entries into \p Slices
 ///
 /// Handles both compressed and uncompressed FAT binaries
