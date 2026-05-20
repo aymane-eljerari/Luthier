@@ -41,6 +41,7 @@
 #include "luthier/HSA/ExecutableSymbol.h"
 #include "luthier/HSA/HsaError.h"
 #include "luthier/HSA/ISA.h"
+#include "luthier/HSA/MemoryPool.h"
 #include "luthier/Object/AMDGCNObjectFile.h"
 #include "luthier/Object/ObjectFileUtils.h"
 #include <hsa/hsa_ext_amd.h>
@@ -237,64 +238,30 @@ llvm::StringRef stripKDSuffix(llvm::StringRef Name) {
 llvm::Expected<hsa_amd_memory_pool_t>
 selectManagedVarPool(const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
                      hsa_agent_t CpuAgent) {
-  struct CBData {
-    const hsa::ApiTableContainer<::AmdExtTable> &AmdExt;
-    hsa_amd_memory_pool_t Pool{};
-    bool Found{false};
-    llvm::Error Err{llvm::Error::success()};
-  } Data{AmdExt, {}, false, llvm::Error::success()};
-
-  auto Iter = [](hsa_amd_memory_pool_t Pool, void *D) -> hsa_status_t {
-    auto *Cb = static_cast<CBData *>(D);
-    if (Cb->Found)
-      return HSA_STATUS_SUCCESS;
-    hsa_amd_segment_t Segment{};
-    hsa_status_t S = Cb->AmdExt.callFunction<hsa_amd_memory_pool_get_info>(
-        Pool, HSA_AMD_MEMORY_POOL_INFO_SEGMENT, &Segment);
-    if (S != HSA_STATUS_SUCCESS)
-      return S;
-    if (Segment != HSA_AMD_SEGMENT_GLOBAL)
-      return HSA_STATUS_SUCCESS;
-    uint32_t Flags = 0;
-    S = Cb->AmdExt.callFunction<hsa_amd_memory_pool_get_info>(
-        Pool, HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS, &Flags);
-    if (S != HSA_STATUS_SUCCESS)
-      return S;
-    if (!(Flags & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_FINE_GRAINED))
-      return HSA_STATUS_SUCCESS;
-    bool AllocAllowed = false;
-    S = Cb->AmdExt.callFunction<hsa_amd_memory_pool_get_info>(
-        Pool, HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED, &AllocAllowed);
-    if (S != HSA_STATUS_SUCCESS)
-      return S;
-    if (!AllocAllowed)
-      return HSA_STATUS_SUCCESS;
-    Cb->Pool = Pool;
-    Cb->Found = true;
-    return HSA_STATUS_SUCCESS;
-  };
-  if (auto E = LUTHIER_HSA_CALL_ERROR_CHECK(
-          AmdExt.callFunction<hsa_amd_agent_iterate_memory_pools>(CpuAgent,
-                                                                  Iter, &Data),
-          "Failed to iterate CPU memory pools for managed-var allocation."))
-    return std::move(E);
-  if (!Data.Found)
+  hsa_amd_memory_pool_t Found{};
+  bool DidFind = false;
+  LUTHIER_RETURN_ON_ERROR(hsa::agentIterateMemoryPools(
+      AmdExt, CpuAgent,
+      [&](hsa_amd_memory_pool_t Pool) -> llvm::Error {
+        if (DidFind)
+          return llvm::Error::success();
+        llvm::Expected<bool> FGOrErr = hsa::memoryPoolIsFineGrained(AmdExt, Pool);
+        LUTHIER_RETURN_ON_ERROR(FGOrErr.takeError());
+        if (!*FGOrErr)
+          return llvm::Error::success();
+        llvm::Expected<bool> AllocOrErr =
+            hsa::memoryPoolGetRuntimeAllocAllowed(AmdExt, Pool);
+        LUTHIER_RETURN_ON_ERROR(AllocOrErr.takeError());
+        if (!*AllocOrErr)
+          return llvm::Error::success();
+        Found = Pool;
+        DidFind = true;
+        return llvm::Error::success();
+      }));
+  if (!DidFind)
     return LUTHIER_MAKE_HSA_ERROR(
         "No host fine-grain memory pool available for managed-var allocation.");
-  return Data.Pool;
-}
-
-/// Query the pool's recommended allocation granule (alignment).
-llvm::Expected<size_t>
-poolAllocGranule(const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
-                 hsa_amd_memory_pool_t Pool) {
-  size_t Granule = 0;
-  if (auto E = LUTHIER_HSA_CALL_ERROR_CHECK(
-          AmdExt.callFunction<hsa_amd_memory_pool_get_info>(
-              Pool, HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE, &Granule),
-          "Failed to query memory pool allocation granule."))
-    return std::move(E);
-  return Granule;
+  return Found;
 }
 
 } // namespace
@@ -446,7 +413,8 @@ llvm::Error DeviceToolCodeFatBinaryLoader::loadManagedVars(
   auto PoolOrErr = selectManagedVarPool(AmdExt, CpuAgents.front());
   if (!PoolOrErr)
     return PoolOrErr.takeError();
-  llvm::Expected<size_t> GranuleOrErr = poolAllocGranule(AmdExt, *PoolOrErr);
+  llvm::Expected<size_t> GranuleOrErr =
+      hsa::memoryPoolGetRuntimeAllocGranule(AmdExt, *PoolOrErr);
   if (!GranuleOrErr)
     return GranuleOrErr.takeError();
 
@@ -459,13 +427,11 @@ llvm::Error DeviceToolCodeFatBinaryLoader::loadManagedVars(
           "({2}); over-aligned managed vars are not modelled.",
           MV.Name ? MV.Name : "<unnamed>", MV.Align, *GranuleOrErr));
 
-    void *Alloc = nullptr;
-    if (auto E = LUTHIER_HSA_CALL_ERROR_CHECK(
-            AmdExt.callFunction<hsa_amd_memory_pool_allocate>(
-                *PoolOrErr, MV.Size, /*flags=*/0, &Alloc),
-            llvm::formatv("Failed to allocate managed-var storage for {0}.",
-                          MV.Name ? MV.Name : "<unnamed>")))
-      return E;
+    llvm::Expected<void *> AllocOrErr =
+        hsa::memoryPoolAllocate(AmdExt, *PoolOrErr, MV.Size, /*Flags=*/0);
+    if (!AllocOrErr)
+      return AllocOrErr.takeError();
+    void *Alloc = *AllocOrErr;
 
     // Copy initial value (fine-grain host memory => plain CPU store).
     if (MV.InitValue != nullptr && MV.Size > 0)
@@ -474,13 +440,8 @@ llvm::Error DeviceToolCodeFatBinaryLoader::loadManagedVars(
     // Grant every GPU agent access to the allocation so kernel-side
     // dereferences of the symbol resolve to this storage.
     if (!Agents.empty()) {
-      if (auto E = LUTHIER_HSA_CALL_ERROR_CHECK(
-              AmdExt.callFunction<hsa_amd_agents_allow_access>(
-                  Agents.size(), Agents.data(), /*flags=*/nullptr, Alloc),
-              llvm::formatv(
-                  "Failed to grant GPU agents access to managed var {0}.",
-                  MV.Name ? MV.Name : "<unnamed>"))) {
-        (void)AmdExt.callFunction<hsa_amd_memory_pool_free>(Alloc);
+      if (auto E = hsa::agentsAllowAccess(AmdExt, Agents, Alloc)) {
+        consumeError(hsa::memoryPoolFree(AmdExt, Alloc));
         return E;
       }
     }
@@ -533,12 +494,13 @@ void DeviceToolCodeFatBinaryLoader::unloadAll() noexcept {
       continue;
     if (KV.second.HostShadowPtr != nullptr)
       *KV.second.HostShadowPtr = nullptr;
-    hsa_status_t S =
-        AmdExt.callFunction<hsa_amd_memory_pool_free>(KV.second.Allocation);
-    if (S != HSA_STATUS_SUCCESS) {
+    if (auto E = hsa::memoryPoolFree(AmdExt, KV.second.Allocation)) {
       LLVM_DEBUG(llvm::dbgs()
                  << "[luthier] managed-var free failed for "
-                 << KV.second.Allocation << " (status " << S << ")\n");
+                 << KV.second.Allocation << ": "
+                 << llvm::toString(std::move(E)) << "\n");
+    } else {
+      consumeError(std::move(E));
     }
   }
 
