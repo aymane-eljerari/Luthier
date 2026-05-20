@@ -218,11 +218,16 @@ protected:
   LoadState State{LoadState::Pending};
 
   /// Deferred HSA-side load. First call collects every GPU agent, runs
-  /// \c loadOntoAgents, then \c loadDynamicManagedVars, then the
-  /// \c postLoadHook subclass extension. On success transitions \c State
-  /// to \c Loaded; on failure invokes \c preUnloadHook +
-  /// \c clearLoadedState and stays \c Pending so the next call retries.
-  llvm::Error ensureLoaded();
+  /// \c loadOntoAgents, then \c loadDynamicManagedVars. On success
+  /// transitions \c State to \c Loaded; on failure invokes
+  /// \c clearLoadedState (which frees any partial dynamic-managed-var
+  /// state) and stays \c Pending so the next call retries.
+  ///
+  /// \c virtual so subclasses can extend the load sequence — call
+  /// \c base::ensureLoaded() first, then do their own additional work
+  /// (e.g. the fat-binary loader's static-managed-var allocation), and
+  /// roll back via \c clearLoadedState on local failure.
+  virtual llvm::Error ensureLoaded();
 
   /// For every \c ManagedVarInfo discovered in \c DynamicManagedVars,
   /// allocate managed memory from a host fine-grain pool, copy the
@@ -238,19 +243,14 @@ protected:
   /// Idempotent.
   void freeManagedVars() noexcept;
 
-  /// Subclass extension point for additional load-time work, called by
-  /// \c ensureLoaded after the base's own load steps. Default no-op.
-  /// The static fat-binary loader overrides this for the
-  /// \c __hipRegisterManagedVar path (host-shadow-pointer publish).
-  virtual llvm::Error postLoadHook(llvm::ArrayRef<hsa_agent_t> Agents) {
-    return llvm::Error::success();
-  }
-
-  /// Cleanup hook paired with \c postLoadHook. Default no-op. Called by
-  /// \c ensureLoaded on rollback, and must be called from the subclass
-  /// destructor if \c State is \c Loaded (base destructor only tears
-  /// down base state).
-  virtual void preUnloadHook() noexcept {}
+  /// Pick a host fine-grain memory pool suitable for backing managed
+  /// variables (HIP's \c hipMallocManaged path uses the CPU agent's
+  /// fine-grain pool because it's host-coherent and cross-agent-accessible
+  /// via \c hsa_amd_agents_allow_access). Shared by both the base's
+  /// dynamic-managed-var path and the fat-binary loader's static path.
+  static llvm::Expected<hsa_amd_memory_pool_t>
+  selectManagedVarPool(const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
+                       hsa_agent_t CpuAgent);
 
   /// Internal helper used by both constructors. Parses one ELF as an AMDGCN
   /// object file, extracts its LLVM ISA tuple + \c .llvmbc bytes, and

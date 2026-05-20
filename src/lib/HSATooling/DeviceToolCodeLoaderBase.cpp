@@ -130,17 +130,16 @@ extractEmbeddedBitcode(llvm::StringRef Elf) {
       "ELF slice does not contain a .llvmbc section.");
 }
 
+} // namespace
+
 //===----------------------------------------------------------------------===//
-// Managed-variable backing pool selection
+// selectManagedVarPool
 //===----------------------------------------------------------------------===//
 
-/// Find a host fine-grain global memory pool suitable for backing managed
-/// variables. Mirrors HIP's \c hipMallocManaged path: the CPU agent's
-/// fine-grain pool is host-coherent and cross-agent-accessible once we
-/// grant access via \c hsa_amd_agents_allow_access.
 llvm::Expected<hsa_amd_memory_pool_t>
-selectManagedVarPool(const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
-                     hsa_agent_t CpuAgent) {
+DeviceToolCodeLoaderBase::selectManagedVarPool(
+    const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
+    hsa_agent_t CpuAgent) {
   hsa_amd_memory_pool_t Found{};
   bool DidFind = false;
   LUTHIER_RETURN_ON_ERROR(hsa::agentIterateMemoryPools(
@@ -167,8 +166,6 @@ selectManagedVarPool(const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
         "No host fine-grain memory pool available for managed-var allocation.");
   return Found;
 }
-
-} // namespace
 
 //===----------------------------------------------------------------------===//
 // Canonical LLVM ISA key
@@ -597,11 +594,6 @@ llvm::Error DeviceToolCodeLoaderBase::ensureLoaded() {
     return E;
   }
   if (auto E = loadDynamicManagedVars(Agents)) {
-    clearLoadedState();
-    return E;
-  }
-  if (auto E = postLoadHook(Agents)) {
-    preUnloadHook();
     clearLoadedState();
     return E;
   }

@@ -72,7 +72,7 @@ template <typename Derived>
 class HSATool : public Singleton<Derived>,
                 public LLVMUserTrait<Derived>,
                 public LoadedCodeObjectCacheTrait<Derived>,
-                public DeviceToolCodeFatBinaryLoaderTrait<Derived>,
+                public DeviceToolCodeFatBinaryLoader<Derived>,
                 public ToolExecutableLoaderTrait<Derived>,
                 public InjectedPayloadCreationPassTrait<Derived>,
                 public detail::IntrinsicProcessorRegistryTraitBase<Derived>,
@@ -85,8 +85,8 @@ public:
           llvm::Error &Err)
       : LLVMUserTrait<Derived>(CoreApi),
         LoadedCodeObjectCacheTrait<Derived>(CoreApi, VenLoader, Err),
-        DeviceToolCodeFatBinaryLoaderTrait<Derived>(CoreApi, AmdExt, VenLoader,
-                                                    Err),
+        DeviceToolCodeFatBinaryLoader<Derived>(CoreApi, AmdExt, VenLoader,
+                                                Err),
         ToolExecutableLoaderTrait<Derived>(CoreApi, AmdExt, VenLoader),
         PacketMonitorTrait<Derived>(CoreApi, AmdExt, VenLoader, Err) {}
 
