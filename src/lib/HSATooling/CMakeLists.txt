@@ -1,5 +1,6 @@
 add_library(LuthierHSATooling OBJECT
         DeviceToolCodeFatBinaryLoader.cpp
+        DeviceToolCodeLoaderBase.cpp
         HSAToolCompileCheck.cpp
         HsaMemoryAllocationAccessor.cpp
         LoadedCodeObjectCache.cpp

@@ -85,7 +85,8 @@ public:
           llvm::Error &Err)
       : LLVMUserTrait<Derived>(CoreApi),
         LoadedCodeObjectCacheTrait<Derived>(CoreApi, VenLoader, Err),
-        DeviceToolCodeFatBinaryLoaderTrait<Derived>(CoreApi, AmdExt, VenLoader),
+        DeviceToolCodeFatBinaryLoaderTrait<Derived>(CoreApi, AmdExt, VenLoader,
+                                                    Err),
         ToolExecutableLoaderTrait<Derived>(CoreApi, AmdExt, VenLoader),
         PacketMonitorTrait<Derived>(CoreApi, AmdExt, VenLoader, Err) {}
 

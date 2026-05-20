@@ -15,45 +15,21 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// Implementation of the non-template helpers consumed by
-/// \c DeviceToolCodeFatBinaryLoader<Derived>.
+/// Drives \c DeviceToolCodeLoaderBase with the annotated-slot inputs the IR
+/// plugin populates, plus the managed-variable path that is HIP-static
+/// specific.
 ///
-/// Fat-binary wrapper layout follows HIP's \c __CudaFatBinaryWrapper
-/// (compatible w/ \c clr/hipamd/src/hip_platform.cpp): a 16-byte header
-/// followed by an inline pointer to a Clang offload bundle. The bundle
-/// uncompressed layout is taken from \c clr/hipamd/src/hip_code_object.hpp:
-/// magic \c "__CLANG_OFFLOAD_BUNDLE__" (24 bytes), a 64-bit number of
-/// bundles, then each entry \c {u64 offset, u64 size, u64 idSize, char id[]}.
-///
-/// Bundle entries with id prefixes \c "hip-amdgcn-amd-amdhsa-" or
-/// \c "hipv4-amdgcn-amd-amdhsa-" are AMD GPU code objects; everything else
-/// (host slots) is ignored. The gfx-id suffix is matched against
-/// \c HSA_AGENT_INFO_NAME for each GPU agent.
-///
-/// Embedded bitcode follows \c CreateAndEmbedIModulePass: the device-side
-/// module is bitcode-written and inserted into the ELF as section
-/// \c ".llvmbc" via \c llvm::embedBufferInModule.
 //===----------------------------------------------------------------------===//
 #include "luthier/HSATooling/DeviceToolCodeFatBinaryLoader.h"
 #include "luthier/HSA/Agent.h"
-#include "luthier/HSA/CodeObjectReader.h"
-#include "luthier/HSA/Executable.h"
-#include "luthier/HSA/ExecutableSymbol.h"
 #include "luthier/HSA/HsaError.h"
-#include "luthier/HSA/ISA.h"
 #include "luthier/HSA/MemoryPool.h"
-#include "luthier/Object/AMDGCNObjectFile.h"
-#include "luthier/Object/ObjectFileUtils.h"
 #include <hsa/hsa_ext_amd.h>
-#include <llvm/ADT/SmallString.h>
-#include <llvm/ADT/StringRef.h>
-#include <llvm/BinaryFormat/Magic.h>
-#include <llvm/Bitcode/BitcodeReader.h>
-#include <llvm/Object/ELFObjectFile.h>
-#include <llvm/Object/OffloadBundle.h>
+#include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Support/Error.h>
-#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/MemoryBufferRef.h>
 
 #include <cstring>
@@ -65,7 +41,7 @@ namespace luthier {
 /// The IR pass writes a \c { ptr, i64 } struct constant into each placeholder
 /// slot, matching \c llvm::ArrayRef<T>'s ABI. If LLVM ever rearranges
 /// \c ArrayRef's members, these asserts trip at compile time and the pass
-/// needs to be updated in lockstep
+/// needs to be updated in lockstep.
 static_assert(sizeof(llvm::ArrayRef<void *>) ==
                   sizeof(void *) + sizeof(uint64_t),
               "llvm::ArrayRef ABI changed: expected { ptr, i64 } layout "
@@ -77,159 +53,6 @@ static_assert(sizeof(decltype(std::declval<llvm::ArrayRef<void *>>().size())) ==
               "llvm::ArrayRef length is no longer 64-bit.");
 
 namespace {
-
-//===----------------------------------------------------------------------===//
-// Clang offload bundle parsing
-//===----------------------------------------------------------------------===//
-
-/// One AMD code-object slice extracted from a Clang offload bundle. The
-/// LLVM-form ISA comes from \c luthier::object::getObjectFileTargetTuple,
-/// which decodes \c e_flags including XNACK/SRAMECC into the
-/// \c SubtargetFeatures list. The bundle entry id is not consulted. The
-/// xnack/sramecc state is read directly off \c Features whenever the
-/// matching logic needs it — no separate cached tri-state.
-struct BundleSlice {
-  hsa_isa_t IsaHandle{};
-  llvm::Triple Triple;
-  std::string CPU;
-  llvm::SubtargetFeatures Features;
-  /// Raw ELF bytes (view into either the supplied bundle buffer for
-  /// uncompressed bundles or the decompressed buffer the caller owns
-  /// alongside the slice list).
-  llvm::StringRef Elf;
-};
-
-/// Parses the Clang offload \p Bundle entries into \p Slices
-///
-/// Handles both compressed and uncompressed FAT binaries
-///
-/// In case of \p Bundle being a compressed FAT binary, \p DecompressedHolder
-/// will hold the owning memory buffer of the decompressed version of \p Bundle
-/// on return
-///
-/// \note The ISA of each Slice entry will be populated by checking the
-/// ISA of the code object slice directly; The entry ID is ignored
-llvm::Error
-parseOffloadBundle(const hsa::ApiTableContainer<::CoreApiTable> &Core,
-                   llvm::MemoryBufferRef Bundle,
-                   llvm::SmallVectorImpl<BundleSlice> &Slices,
-                   std::unique_ptr<llvm::MemoryBuffer> &DecompressedHolder) {
-  if (Bundle.getBufferSize() == 0)
-    return LUTHIER_MAKE_GENERIC_ERROR("Empty fat-binary bundle.");
-
-  auto Magic = llvm::identify_magic(Bundle.getBuffer());
-
-  llvm::MemoryBufferRef ParseBuf = Bundle;
-  bool Decompressed = false;
-  if (Magic == llvm::file_magic::offload_bundle_compressed) {
-    auto Input = llvm::MemoryBuffer::getMemBuffer(
-        Bundle, /*RequiresNullTerminator=*/false);
-    auto DecompOrErr =
-        llvm::object::CompressedOffloadBundle::decompress(*Input, nullptr);
-    if (!DecompOrErr)
-      return DecompOrErr.takeError();
-    DecompressedHolder = std::move(*DecompOrErr);
-    ParseBuf = DecompressedHolder->getMemBufferRef();
-    Decompressed = true;
-  } else if (Magic != llvm::file_magic::offload_bundle) {
-    return LUTHIER_MAKE_GENERIC_ERROR(
-        "Bundle does not start with __CLANG_OFFLOAD_BUNDLE__ or CCOB magic.");
-  }
-
-  auto BundleOrErr = llvm::object::OffloadBundleFatBin::create(
-      ParseBuf, /*SectionOffset=*/0, "fatbin", Decompressed);
-  if (!BundleOrErr)
-    return BundleOrErr.takeError();
-
-  for (auto &Entry : (*BundleOrErr)->getEntries()) {
-    llvm::MemoryBufferRef CodeObjectBuf{
-        llvm::StringRef(ParseBuf.getBufferStart() + Entry.Offset, Entry.Size),
-        "code object buffer"};
-    auto CodeObjectObjFileOrErr =
-        llvm::object::ObjectFile::createObjectFile(CodeObjectBuf);
-    if (!CodeObjectObjFileOrErr)
-      return CodeObjectObjFileOrErr.takeError();
-
-    /// Skip non-AMDGCN object files in the bundle
-    if (llvm::isa<object::AMDGCNObjectFile>(*CodeObjectObjFileOrErr))
-      continue;
-
-    auto &AMDGCNObjFile =
-        llvm::cast<object::AMDGCNObjectFile>(**CodeObjectObjFileOrErr);
-
-    /// Parse the Object File's ISA so that we know where to load it
-    auto TupleOrErr = luthier::object::getObjectFileTargetTuple(AMDGCNObjFile);
-    if (!TupleOrErr) {
-      return TupleOrErr.takeError();
-    }
-    auto &[Triple, CPU, Features] = *TupleOrErr;
-
-    /// Get the HSA ISA handle associated with the binary
-    llvm::Expected<hsa_isa_t> IsaOrErr =
-        hsa::isaFromLLVM(Core, Triple, CPU, Features);
-    if (!IsaOrErr) {
-      return IsaOrErr.takeError();
-    }
-
-    BundleSlice Slice;
-    Slice.IsaHandle = *IsaOrErr;
-    Slice.Triple = std::move(Triple);
-    Slice.CPU = CPU.str();
-    Slice.Features = std::move(Features);
-    Slice.Elf = CodeObjectBuf.getBuffer();
-    Slices.push_back(std::move(Slice));
-  }
-  return llvm::Error::success();
-}
-
-//===----------------------------------------------------------------------===//
-// Embedded bitcode extraction (.llvmbc section)
-//===----------------------------------------------------------------------===//
-
-/// Extract the raw \c .llvmbc section bytes from an agent ELF slice into a
-/// caller-owned \c MemoryBuffer. We deliberately do NOT parse the bytes
-/// here — parsing into an \c LLVMContext is deferred to
-/// \c getEmbeddedModule so the cache stays context-free.
-llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>>
-extractEmbeddedBitcode(llvm::StringRef Elf) {
-  auto ObjOrErr =
-      luthier::object::AMDGCNObjectFile::createAMDGCNObjectFile(Elf);
-  if (!ObjOrErr)
-    return ObjOrErr.takeError();
-  auto &Obj = **ObjOrErr;
-  for (const auto &Section : Obj.sections()) {
-    auto NameOrErr = Section.getName();
-    if (!NameOrErr)
-      return NameOrErr.takeError();
-    if (*NameOrErr != ".llvmbc")
-      continue;
-    auto ContentsOrErr = Section.getContents();
-    if (!ContentsOrErr)
-      return ContentsOrErr.takeError();
-    /// \c Section.getContents() returns a view into the ELF buffer owned
-    /// by \c Obj; once \c Obj goes out of scope the view dangles. Copy the
-    /// bytes so the cache survives independently.
-    return llvm::MemoryBuffer::getMemBufferCopy(*ContentsOrErr, "agent-bc");
-  }
-  return LUTHIER_MAKE_GENERIC_ERROR(
-      "ELF slice does not contain a .llvmbc section.");
-}
-
-//===----------------------------------------------------------------------===//
-// Symbol-name suffix normalisation
-//===----------------------------------------------------------------------===//
-
-/// Drop HSA's ".kd" kernel-descriptor suffix when present. The HIP register
-/// tables store the device-side symbol name without the suffix, but
-/// \c HSA_EXECUTABLE_SYMBOL_INFO_NAME returns the suffixed form for kernels.
-llvm::StringRef stripKDSuffix(llvm::StringRef Name) {
-  Name.consume_back(".kd");
-  return Name;
-}
-
-//===----------------------------------------------------------------------===//
-// Managed-variable backing pool selection
-//===----------------------------------------------------------------------===//
 
 /// Find a host fine-grain global memory pool suitable for backing managed
 /// variables. HIP's \c hipMallocManaged path uses the CPU agent's
@@ -245,7 +68,8 @@ selectManagedVarPool(const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
       [&](hsa_amd_memory_pool_t Pool) -> llvm::Error {
         if (DidFind)
           return llvm::Error::success();
-        llvm::Expected<bool> FGOrErr = hsa::memoryPoolIsFineGrained(AmdExt, Pool);
+        llvm::Expected<bool> FGOrErr =
+            hsa::memoryPoolIsFineGrained(AmdExt, Pool);
         LUTHIER_RETURN_ON_ERROR(FGOrErr.takeError());
         if (!*FGOrErr)
           return llvm::Error::success();
@@ -277,114 +101,7 @@ llvm::Error DeviceToolCodeFatBinaryLoader::loadAll() {
   LUTHIER_RETURN_ON_ERROR(
       hsa::getAllAgentsWithDeviceType<HSA_DEVICE_TYPE_GPU>(Core, Agents));
 
-  // Populate host-handle → device-name
-  auto RecordHandle = [&](const void *Handle, const char *Name) {
-    if (Handle != nullptr && Name != nullptr)
-      HandleToName[Handle] = std::string(Name);
-  };
-  for (const auto &E : InputFunctions)
-    RecordHandle(E.HostHandle, E.DeviceName);
-  for (const auto &E : InputDeviceVars)
-    RecordHandle(E.HostHandle, E.DeviceName);
-  for (const auto &E : InputTextures)
-    RecordHandle(E.HostHandle, E.DeviceName);
-  for (const auto &E : InputSurfaces)
-    RecordHandle(E.HostHandle, E.DeviceName);
-
-  FatBins.reserve(InputFatBinaries.size());
-  for (const auto &[Bundle, Size] : InputFatBinaries) {
-    FatBinRecord &Rec = FatBins.emplace_back();
-    Rec.Wrapper = Bundle;
-
-    llvm::SmallVector<BundleSlice, 4> Slices;
-    std::unique_ptr<llvm::MemoryBuffer> DecompressedHolder;
-    llvm::MemoryBufferRef BundleRef(
-        llvm::StringRef(static_cast<const char *>(Bundle), Size), "fatbin");
-    LUTHIER_RETURN_ON_ERROR(
-        parseOffloadBundle(Core, BundleRef, Slices, DecompressedHolder));
-
-    llvm::DenseMap<hsa_isa_t, const BundleSlice *> SliceByIsaHandle;
-    for (const BundleSlice &S : Slices) {
-      SliceByIsaHandle.try_emplace(S.IsaHandle, &S);
-    }
-
-    for (hsa_agent_t Agent : Agents) {
-      // \c agentFindFirstISA walks the agent's supported ISAs in ROCr's
-      // registry order — native first, then generic (see
-      // amd_gpu_agent.cpp). The first ISA the predicate accepts wins,
-      // so HIP's "native > generic" preference falls out automatically.
-      auto MatchedOrErr = hsa::agentFindFirstISA(
-          Core, Agent, [&](hsa_isa_t AgentIsa) -> llvm::Expected<bool> {
-            return SliceByIsaHandle.contains(AgentIsa);
-          });
-      if (!MatchedOrErr)
-        return MatchedOrErr.takeError();
-      if (!*MatchedOrErr)
-        continue; // No slice in this bundle is compatible with this agent.
-      const BundleSlice *Match = SliceByIsaHandle.lookup(**MatchedOrErr);
-
-      auto ReaderOrErr =
-          hsa::codeObjectReaderCreateFromMemory(Core, Match->Elf);
-      if (!ReaderOrErr)
-        return ReaderOrErr.takeError();
-      auto ExeOrErr = hsa::executableCreate(Core);
-      if (!ExeOrErr) {
-        (void)hsa::codeObjectReaderDestroy(*ReaderOrErr, Core);
-        return ExeOrErr.takeError();
-      }
-      auto LCOOrErr = hsa::executableLoadAgentCodeObject(Core, *ExeOrErr,
-                                                         *ReaderOrErr, Agent);
-      if (!LCOOrErr) {
-        (void)hsa::executableDestroy(Core, *ExeOrErr);
-        (void)hsa::codeObjectReaderDestroy(*ReaderOrErr, Core);
-        return LCOOrErr.takeError();
-      }
-      if (auto E = hsa::executableFreeze(Core, *ExeOrErr)) {
-        (void)hsa::executableDestroy(Core, *ExeOrErr);
-        (void)hsa::codeObjectReaderDestroy(*ReaderOrErr, Core);
-        return E;
-      }
-      Rec.Loaded[Agent] = AgentExecutable{*ReaderOrErr, *LCOOrErr, *ExeOrErr};
-
-      // Populate per-agent loaded-address map for every registered name we
-      // can resolve in this executable.
-      auto Callback = [&](hsa_executable_symbol_t Sym) -> llvm::Error {
-        auto NameOrErr = hsa::executableSymbolGetName(Core, Sym);
-        if (!NameOrErr)
-          return NameOrErr.takeError();
-        llvm::StringRef Name = stripKDSuffix(*NameOrErr);
-        auto AddrOrErr = hsa::executableSymbolGetAddress(Core, Sym);
-        if (!AddrOrErr)
-          return AddrOrErr.takeError();
-        NameToAgentAddr[Name][Agent] = *AddrOrErr;
-        return llvm::Error::success();
-      };
-      if (auto E = hsa::executableIterateAgentSymbols(Core, *ExeOrErr, Agent,
-                                                      Callback))
-        return E;
-
-      // Cache the raw `.llvmbc` bytes once per agent + the slice's
-      // LLVM-form ISA pieces for later TargetMachine construction.
-      // Parsing into an LLVMContext is deferred to getEmbeddedModule /
-      // getEmbeddedTarget.
-      if (AgentBitcode.find(Agent) == AgentBitcode.end()) {
-        auto BufOrErr = extractEmbeddedBitcode(Match->Elf);
-        if (!BufOrErr) {
-          LLVM_DEBUG(llvm::dbgs()
-                     << "[luthier] no embedded bitcode for "
-                        "agent isa handle 0x"
-                     << llvm::utohexstr(Match->IsaHandle.handle) << ": "
-                     << llvm::toString(BufOrErr.takeError()) << "\n");
-          consumeError(BufOrErr.takeError());
-        } else {
-          AgentBitcode.insert({Agent, std::move(*BufOrErr)});
-          AgentISA[Agent] =
-              AgentTargetISA{Match->Triple, Match->CPU, Match->Features};
-        }
-      }
-    }
-  }
-
+  LUTHIER_RETURN_ON_ERROR(loadOntoAgents(Agents));
   LUTHIER_RETURN_ON_ERROR(loadManagedVars(Agents));
 
   return llvm::Error::success();
@@ -440,10 +157,9 @@ llvm::Error DeviceToolCodeFatBinaryLoader::loadManagedVars(
     // Grant every GPU agent access to the allocation so kernel-side
     // dereferences of the symbol resolve to this storage.
     if (!Agents.empty()) {
-      if (auto E = hsa::agentsAllowAccess(AmdExt, Agents, Alloc)) {
-        consumeError(hsa::memoryPoolFree(AmdExt, Alloc));
-        return E;
-      }
+      if (auto E = hsa::agentsAllowAccess(AmdExt, Agents, Alloc))
+        return llvm::joinErrors(std::move(E),
+                                hsa::memoryPoolFree(AmdExt, Alloc));
     }
 
     // Publish the device-accessible pointer through the host shadow.
@@ -456,8 +172,6 @@ llvm::Error DeviceToolCodeFatBinaryLoader::loadManagedVars(
     Rec.Align = MV.Align;
     Rec.Allocation = Alloc;
     ManagedVarRecords[MV.Pointer] = Rec;
-    if (MV.Name != nullptr)
-      HandleToName[MV.Pointer] = std::string(MV.Name);
   }
   return llvm::Error::success();
 }
@@ -467,24 +181,7 @@ llvm::Error DeviceToolCodeFatBinaryLoader::loadManagedVars(
 //===----------------------------------------------------------------------===//
 
 void DeviceToolCodeFatBinaryLoader::unloadAll() noexcept {
-  auto Core = CoreApiSnapshot.getTable();
   auto AmdExt = AmdExtSnapshot.getTable();
-  auto Swallow = [](llvm::Error E) {
-    if (E) {
-      LLVM_DEBUG(llvm::dbgs() << "[luthier] unload: "
-                              << llvm::toString(std::move(E)) << "\n");
-      consumeError(std::move(E));
-    } else {
-      consumeError(std::move(E));
-    }
-  };
-
-  for (auto &Rec : FatBins) {
-    for (auto &KV : Rec.Loaded) {
-      Swallow(hsa::executableDestroy(Core, KV.second.Executable));
-      Swallow(hsa::codeObjectReaderDestroy(KV.second.Reader, Core));
-    }
-  }
 
   // Free managed-var backing allocations. Match HIP's path: a single
   // pool_free per variable, no per-agent unmap (the access grant is
@@ -503,59 +200,13 @@ void DeviceToolCodeFatBinaryLoader::unloadAll() noexcept {
       consumeError(std::move(E));
     }
   }
-
-  FatBins.clear();
-  HandleToName.clear();
-  NameToAgentAddr.clear();
-  AgentBitcode.clear();
-  AgentISA.clear();
   ManagedVarRecords.clear();
-}
 
-//===----------------------------------------------------------------------===//
-// DeviceToolCodeFatBinaryLoader::getEmbeddedModule
-//===----------------------------------------------------------------------===//
+  // HandleToName is populated at construction and survives unload/rollback —
+  // re-running ensureLoaded() shouldn't re-resolve handle names.
 
-llvm::Expected<std::unique_ptr<llvm::Module>>
-DeviceToolCodeFatBinaryLoader::getEmbeddedModule(hsa_agent_t Agent,
-                                                 llvm::LLVMContext &Ctx) {
-  std::lock_guard Lock(Mutex);
-  if (auto E = ensureLoaded())
-    return std::move(E);
-  auto It = AgentBitcode.find(Agent);
-  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-      It != AgentBitcode.end(),
-      "No embedded bitcode cached for the requested agent."));
-  return llvm::parseBitcodeFile(It->second->getMemBufferRef(), Ctx);
-}
-
-//===----------------------------------------------------------------------===//
-// DeviceToolCodeFatBinaryLoader::getEmbeddedTarget
-//===----------------------------------------------------------------------===//
-
-llvm::Expected<DeviceToolCodeFatBinaryLoader::EmbeddedTarget>
-DeviceToolCodeFatBinaryLoader::getEmbeddedTarget(hsa_agent_t Agent,
-                                                 llvm::LLVMContext &Ctx) {
-  std::lock_guard Lock(Mutex);
-  if (auto E = ensureLoaded())
-    return std::move(E);
-  auto BCIt = AgentBitcode.find(Agent);
-  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-      BCIt != AgentBitcode.end(),
-      "No embedded bitcode cached for the requested agent."));
-  auto ISAIt = AgentISA.find(Agent);
-  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-      ISAIt != AgentISA.end(),
-      "No LLVM-form ISA cached for the requested agent."));
-  auto ModOrErr = llvm::parseBitcodeFile(BCIt->second->getMemBufferRef(), Ctx);
-  if (!ModOrErr)
-    return ModOrErr.takeError();
-  EmbeddedTarget Out;
-  Out.Module = std::move(*ModOrErr);
-  Out.Triple = ISAIt->second.Triple;
-  Out.CPU = ISAIt->second.CPU;
-  Out.Features = ISAIt->second.Features;
-  return Out;
+  // Base handles its own state: LoadedAgents, NameToAgentGlobal.
+  clearLoadedState();
 }
 
 //===----------------------------------------------------------------------===//
@@ -580,27 +231,63 @@ llvm::Error DeviceToolCodeFatBinaryLoader::ensureLoaded() {
 // DeviceToolCodeFatBinaryLoader — ctor/dtor
 //===----------------------------------------------------------------------===//
 
+std::unique_ptr<llvm::MemoryBuffer>
+DeviceToolCodeFatBinaryLoader::buildBundleBuffer(
+    llvm::ArrayRef<HipFatBinaryInfo> Slots, llvm::Error &Err) {
+  llvm::ErrorAsOutParameter EAO(&Err);
+  if (Err)
+    return nullptr;
+  if (Slots.size() > 1) {
+    Err = LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+        "Luthier requires at most one fat binary per loader; received {0}. "
+        "Use multiple Derived instances for multi-fat-binary tools.",
+        Slots.size()));
+    return nullptr;
+  }
+  if (Slots.empty() || Slots.front().Bundle == nullptr)
+    return nullptr;
+  const auto &S = Slots.front();
+  return llvm::MemoryBuffer::getMemBuffer(
+      llvm::StringRef(static_cast<const char *>(S.Bundle), S.Size), "fatbin",
+      /*RequiresNullTerminator=*/false);
+}
+
 DeviceToolCodeFatBinaryLoader::DeviceToolCodeFatBinaryLoader(
     const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
     const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
     const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
         &Loader,
-    llvm::ArrayRef<HipFatBinaryInfo> FatBinaries,
+    std::unique_ptr<llvm::MemoryBuffer> Bundle,
     llvm::ArrayRef<HipFunctionInfo> Functions,
     llvm::ArrayRef<HipDeviceVarInfo> DeviceVars,
     llvm::ArrayRef<HipManagedVarInfo> ManagedVars,
     llvm::ArrayRef<HipTextureInfo> Textures,
-    llvm::ArrayRef<HipSurfaceInfo> Surfaces)
-    : CoreApiSnapshot(CoreApi), AmdExtSnapshot(AmdExt),
-      LoaderApiSnapshot(Loader), InputFatBinaries(FatBinaries),
-      InputFunctions(Functions), InputDeviceVars(DeviceVars),
-      InputManagedVars(ManagedVars), InputTextures(Textures),
-      InputSurfaces(Surfaces) {}
+    llvm::ArrayRef<HipSurfaceInfo> Surfaces, llvm::Error &Err)
+    : DeviceToolCodeLoaderBase(CoreApi, AmdExt, Loader, std::move(Bundle), Err),
+      InputManagedVars(ManagedVars) {
+  llvm::ErrorAsOutParameter EAO(&Err);
+  if (Err)
+    return;
+  // Populate host-handle → device-name from every IR-pass-populated table.
+  // HSA-free; lets lookupNameByHandle work before any deferred load runs.
+  auto RecordHandle = [&](const void *Handle, const char *Name) {
+    if (Handle != nullptr && Name != nullptr)
+      HandleToName[Handle] = std::string(Name);
+  };
+  for (const auto &E : Functions)
+    RecordHandle(E.HostHandle, E.DeviceName);
+  for (const auto &E : DeviceVars)
+    RecordHandle(E.HostHandle, E.DeviceName);
+  for (const auto &E : Textures)
+    RecordHandle(E.HostHandle, E.DeviceName);
+  for (const auto &E : Surfaces)
+    RecordHandle(E.HostHandle, E.DeviceName);
+  for (const auto &MV : ManagedVars)
+    RecordHandle(MV.Pointer, MV.Name);
+}
 
 DeviceToolCodeFatBinaryLoader::~DeviceToolCodeFatBinaryLoader() {
-  // Skip teardown if loadAll never ran (or already rolled back on
-  // failure). Saves a needless HSA dispatch on snapshots that may have
-  // never been initialized.
+  // Skip teardown if loadAll never ran (or already rolled back on failure).
   if (State == LoadState::Loaded)
     unloadAll();
 }

@@ -15,46 +15,33 @@
 //===----------------------------------------------------------------------===//
 /// \file DeviceToolCodeFatBinaryLoader.h
 /// Defines the \c DeviceToolCodeFatBinaryLoader and its associated trait.
+/// Drives the shared \c DeviceToolCodeLoaderBase with the annotated-slot
+/// inputs the IR plugin populates at compile time, plus the managed-variable
+/// path that's specific to HIP static registration.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_DEVICE_TOOL_CODE_FAT_BINARY_LOADER_H
 #define LUTHIER_TOOLING_DEVICE_TOOL_CODE_FAT_BINARY_LOADER_H
 
-#include "luthier/Common/ErrorCheck.h"
-#include "luthier/Common/GenericLuthierError.h"
-#include "luthier/HSA/Agent.h"
-#include "luthier/Rocprofiler/ApiTableSnapshot.h"
+#include "luthier/HSATooling/DeviceToolCodeLoaderBase.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include <cstddef>
 #include <cstdint>
-#include <hsa/hsa.h>
-#include <hsa/hsa_ven_amd_loader.h>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/DenseMap.h>
-#include <llvm/ADT/SmallVector.h>
-#include <llvm/ADT/StringMap.h>
-#include <llvm/ADT/StringRef.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
 #include <llvm/Support/Error.h>
 #include <llvm/Support/MemoryBuffer.h>
-#include <llvm/TargetParser/SubtargetFeature.h>
-#include <llvm/TargetParser/Triple.h>
 #include <memory>
-#include <mutex>
-#include <string>
 
 namespace luthier {
 
-/// \brief Non-templated base of \c DeviceToolCodeFatBinaryLoaderTrait
-/// containing the logic for load/unload and state management of the FAT
-/// binaries as well as static symbol query methods originally provided by
-/// the HIP runtime
-class DeviceToolCodeFatBinaryLoader {
+/// \brief Non-templated base of \c DeviceToolCodeFatBinaryLoaderTrait. Owns
+/// the HIP-static-specific bookkeeping (managed-vars, host-handle table)
+/// and the deferred HSA-side load over all GPU agents.
+class DeviceToolCodeFatBinaryLoader : public DeviceToolCodeLoaderBase {
 protected:
-  /// \brief Per-fat-binary entry produced from a \c __hipRegisterFatBinary call
-  /// \details \c Bundle points at the raw Clang offload bundle (the \c binary
-  /// field of HIP's \c __CudaFatBinaryWrapper) instead of the FAT binary
-  /// wrapper struct itself. \c Size is the byte extent of the bundle itself
+  /// \brief Per-fat-binary entry produced from a \c __hipRegisterFatBinary
+  /// call. \c Bundle points at the raw Clang offload bundle; \c Size is the
+  /// bundle's byte extent.
   struct HipFatBinaryInfo {
     const void *Bundle{nullptr};
     size_t Size{0};
@@ -74,11 +61,7 @@ protected:
 
   /// Per-managed-variable entry produced from a \c __hipRegisterManagedVar call
   struct HipManagedVarInfo {
-    /// The host shadow-pointer slot the runtime updates with the
-    /// device-accessible allocation
     void **Pointer{nullptr};
-    /// Initial value of the bytes to be copied into that allocation at load
-    /// time
     void *InitValue{nullptr};
     const char *Name{nullptr};
     unsigned long long Size{0};
@@ -97,19 +80,6 @@ protected:
     const char *DeviceName{nullptr};
   };
 
-  /// Per-agent HSA handles created during the load of a single fat binary.
-  struct AgentExecutable {
-    hsa_code_object_reader_t Reader{};
-    hsa_loaded_code_object_t LCO{};
-    hsa_executable_t Executable{};
-  };
-
-  /// One loaded fat-binary record.
-  struct FatBinRecord {
-    const void *Wrapper{nullptr};
-    llvm::DenseMap<hsa_agent_t, AgentExecutable> Loaded;
-  };
-
   /// Managed-variable bookkeeping. Mirrors HIP's \c Var with \c DVK_Managed
   /// in the immediate-alloc path: a single device-accessible allocation
   /// owned by the loader, with the host shadow pointer pointing at it.
@@ -123,174 +93,94 @@ protected:
     void *Allocation{nullptr};
   };
 
-  std::recursive_mutex Mutex;
-
-  const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApiSnapshot;
-  const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExtSnapshot;
-  const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
-      &LoaderApiSnapshot;
-
-  /// FAT binary and variable handles
-  llvm::ArrayRef<HipFatBinaryInfo> InputFatBinaries;
-  llvm::ArrayRef<HipFunctionInfo> InputFunctions;
-  llvm::ArrayRef<HipDeviceVarInfo> InputDeviceVars;
+  /// Managed-variable input table — kept because the per-allocation HSA
+  /// work happens at load time. The other IR-pass-populated handle tables
+  /// (functions, device vars, textures, surfaces) are consumed during
+  /// construction to populate \c HandleToName and not stored.
   llvm::ArrayRef<HipManagedVarInfo> InputManagedVars;
-  llvm::ArrayRef<HipTextureInfo> InputTextures;
-  llvm::ArrayRef<HipSurfaceInfo> InputSurfaces;
 
   enum class LoadState { Pending, Loaded };
   LoadState State{LoadState::Pending};
 
-  llvm::SmallVector<FatBinRecord, 1> FatBins;
+  /// Host shadow handle → device-side symbol name, populated at
+  /// construction from the IR-pass \c __hipRegister* tables. HSA-free,
+  /// so \c lookupNameByHandle works immediately. Only meaningful for
+  /// static HIP registration.
   llvm::DenseMap<const void *, std::string> HandleToName;
-  llvm::StringMap<llvm::DenseMap<hsa_agent_t, uint64_t>> NameToAgentAddr;
-  /// Raw per-agent \c .llvmbc bytes copied out of the loaded ELFs. Parsed
-  /// into the caller's context on demand by \c getEmbeddedModule, so we
-  /// never spin up a long-lived dummy \c LLVMContext.
-  llvm::DenseMap<hsa_agent_t, std::unique_ptr<llvm::MemoryBuffer>> AgentBitcode;
-  /// LLVM-form ISA for the slice loaded on each agent. Populated alongside
-  /// \c AgentBitcode; consumed by \c getEmbeddedTarget so JIT consumers can
-  /// build a \c TargetMachine without re-deriving from \c hsa_isa_t.
-  struct AgentTargetISA {
-    llvm::Triple Triple;
-    std::string CPU;
-    llvm::SubtargetFeatures Features;
-  };
-  llvm::DenseMap<hsa_agent_t, AgentTargetISA> AgentISA;
   llvm::DenseMap<const void *, ManagedVarRec> ManagedVarRecords;
 
-  /// Full HSA-side load: parse the Clang offload bundles inside each
-  /// fat-binary wrapper, load and freeze a per-agent executable for every
-  /// compatible GPU, populate symbol lookup tables, extract embedded
-  /// \c .llvmbc modules into the per-agent bitcode cache, and allocate
-  /// managed-variable storage. On failure, the loader is left in a
-  /// teardown-safe partially-loaded state.
+  /// Drive \c base::loadOntoAgents over all GPU agents, then
+  /// \c loadManagedVars. Caller's contract: HSA is ready.
   llvm::Error loadAll();
 
-  /// Allocate the backing memory for every \c InputManagedVars entry,
-  /// initialize it from \c InitValue, grant the listed GPU agents access,
-  /// and publish each allocation through the host shadow pointer. Modelled
-  /// on HIP's \c __hipRegisterManagedVar + \c Var::allocateManagedVarPtr
-  /// (\c clr/hipamd/src/hip_platform.cpp:147 + \c hip_global.cpp:277).
-  /// No-op if \c InputManagedVars is empty.
+  /// Allocate backing memory for every \c InputManagedVars entry, initialize
+  /// it from \c InitValue, grant the listed GPU agents access, and publish
+  /// each allocation through the host shadow pointer. Modelled on HIP's
+  /// \c __hipRegisterManagedVar + \c Var::allocateManagedVarPtr.
   llvm::Error loadManagedVars(llvm::ArrayRef<hsa_agent_t> Agents);
 
-  /// Symmetric teardown: destroys executables and code-object readers, frees
-  /// managed allocations, clears the bookkeeping maps. Swallows + logs HSA
-  /// errors so it is safe to call from a destructor.
+  /// Symmetric teardown: \c base::clearLoadedState + free managed-var
+  /// allocations + clear HIP-static bookkeeping maps. Safe to call from
+  /// a destructor.
   void unloadAll() noexcept;
 
-  /// Run \c loadAll on first call. If the load succeeded, subsequent calls
-  /// short-circuit to success. If it failed, the caller receives the
-  /// original \c llvm::Error and is responsible for handling it; each
-  /// subsequent call retries the load, so transient failures can recover.
-  /// Caller MUST hold \c Mutex (the recursive mutex is re-acquired inside
-  /// via the public methods' locks; calls from within those methods are
-  /// safe).
-  llvm::Error ensureLoaded();
+  /// First call runs \c loadAll. On success, subsequent calls short-circuit.
+  /// On failure, the caller receives the \c llvm::Error and subsequent calls
+  /// retry, so transient failures can recover. Override of the base hook so
+  /// the inherited lookups trigger the deferred load.
+  llvm::Error ensureLoaded() override;
+
+  /// Build a non-owning \c MemoryBuffer wrapper around the single fat-bin
+  /// recorded in \p Slots. Sets \p Err if \p Slots has more than one entry
+  /// (Luthier requires one fat binary per loader; multi-fat-bin tools must
+  /// use multiple \c Derived instances). Returns \c nullptr if \p Slots is
+  /// empty or its sole entry has no bundle.
+  static std::unique_ptr<llvm::MemoryBuffer>
+  buildBundleBuffer(llvm::ArrayRef<HipFatBinaryInfo> Slots, llvm::Error &Err);
 
 public:
-  /// Construct a loader bound to the six tables the IR plugin populated.
-  /// The HSA-side load is NOT performed here — the rocprofiler API-table
-  /// snapshots may not yet be initialized at construction time. Instead,
-  /// the first call to any public query method triggers a one-shot load
-  /// (see \c ensureLoaded). If that load fails the caller receives the
-  /// \c llvm::Error directly; subsequent calls retry, so transient
-  /// failures can recover. Callers are responsible for surfacing the
-  /// error appropriately.
   DeviceToolCodeFatBinaryLoader(
       const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
       const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
       const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
           &Loader,
-      llvm::ArrayRef<HipFatBinaryInfo> FatBinaries,
+      std::unique_ptr<llvm::MemoryBuffer> Bundle,
       llvm::ArrayRef<HipFunctionInfo> Functions,
       llvm::ArrayRef<HipDeviceVarInfo> DeviceVars,
       llvm::ArrayRef<HipManagedVarInfo> ManagedVars,
       llvm::ArrayRef<HipTextureInfo> Textures,
-      llvm::ArrayRef<HipSurfaceInfo> Surfaces);
+      llvm::ArrayRef<HipSurfaceInfo> Surfaces, llvm::Error &Err);
 
   ~DeviceToolCodeFatBinaryLoader();
 
-  DeviceToolCodeFatBinaryLoader(const DeviceToolCodeFatBinaryLoader &) = delete;
-  DeviceToolCodeFatBinaryLoader &
-  operator=(const DeviceToolCodeFatBinaryLoader &) = delete;
-
-  /// Resolve a host shadow handle to its device-side symbol name. Triggers
-  /// the one-shot HSA load on first call.
+  /// Resolve a HIP host shadow handle (the \c __hipRegister* host-side
+  /// pointer) to its device-side symbol name. Populated at construction,
+  /// so this does not trigger \c ensureLoaded — works before HSA is up.
   llvm::Expected<llvm::StringRef> lookupNameByHandle(const void *Handle) {
     std::lock_guard Lock(Mutex);
-    if (auto E = ensureLoaded())
-      return std::move(E);
     auto It = HandleToName.find(Handle);
     LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         It != HandleToName.end(),
         "No device-side symbol registered for the given host handle."));
     return llvm::StringRef{It->second};
   }
-
-  /// Resolve a device-side symbol name to its loaded address on \p Agent.
-  /// Triggers the one-shot HSA load on first call.
-  llvm::Expected<uint64_t> lookupLoadedAddress(llvm::StringRef Name,
-                                               hsa_agent_t Agent) {
-    std::lock_guard Lock(Mutex);
-    if (auto E = ensureLoaded())
-      return std::move(E);
-    auto It = NameToAgentAddr.find(Name);
-    LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-        It != NameToAgentAddr.end(),
-        "Symbol has no per-agent loaded-address record."));
-    auto AgentIt = It->second.find(Agent);
-    LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-        AgentIt != It->second.end(),
-        "Symbol is not loaded on the requested agent."));
-    return AgentIt->second;
-  }
-
-  /// Parse the per-agent embedded \c .llvmbc bytes into \p Ctx. The loader
-  /// holds the raw bitcode buffer for the lifetime of the loader; this
-  /// method is the only step that touches \c LLVMContext, so the buffer
-  /// can be parsed into different contexts at different times. Triggers
-  /// the one-shot HSA load on first call.
-  llvm::Expected<std::unique_ptr<llvm::Module>>
-  getEmbeddedModule(hsa_agent_t Agent, llvm::LLVMContext &Ctx);
-
-  /// Bundle of inputs for constructing an \c llvm::TargetMachine alongside
-  /// the embedded module, returned by \c getEmbeddedTarget.
-  struct EmbeddedTarget {
-    std::unique_ptr<llvm::Module> Module;
-    llvm::Triple Triple;
-    std::string CPU;
-    llvm::SubtargetFeatures Features;
-  };
-
-  /// Identical to \c getEmbeddedModule but also returns the LLVM-form ISA
-  /// of the slice that was loaded on \p Agent. JIT consumers use the ISA
-  /// pieces to instantiate a \c TargetMachine directly, no re-derivation
-  /// from \c hsa_isa_t needed.
-  llvm::Expected<EmbeddedTarget> getEmbeddedTarget(hsa_agent_t Agent,
-                                                   llvm::LLVMContext &Ctx);
 };
 
-/// \brief CRTP trait that supplies the per-\c Derived inline-static
-/// annotated slots and forwards them into \c DeviceToolCodeFatBinaryLoader.
+/// \brief CRTP trait that supplies the per-\c Derived inline-static annotated
+/// slots and forwards them into \c DeviceToolCodeFatBinaryLoader.
 ///
 /// A tool MUST be instantiated from exactly one host translation unit (the
 /// same requirement \c Singleton<Derived> implicitly places on it). Each TU
 /// that ODR-uses the class emits a \c linkonce_odr definition of every
-/// annotated slot (forced live by \c [[gnu::used]]), so multi-TU duplication
-/// would feed the same \c GlobalVariable* into \c llvm.global.annotations
-/// more than once. \c LoadHIPFATBinaryInfoPass de-dups defensively, but
-/// multi-TU usage still violates the singleton contract.
+/// annotated slot (forced live by \c [[gnu::used]]). Per the one-loader-one-
+/// module rule, the \c HipFatBinaries slot must contain at most one entry;
+/// the base constructor enforces this via \p Err.
 template <typename Derived>
 class DeviceToolCodeFatBinaryLoaderTrait
     : public DeviceToolCodeFatBinaryLoader {
 public:
   //===-------------------------------------------------------------------===//
   // Annotated slots populated by LoadHIPFATBinaryInfoPass at IR-compile time.
-  // The IR pass matches by annotation string, not by class name; each slot is
-  // an inline-static class-template member so no per-tool definitions are
-  // needed (replaces the old REGISTER_STRUCTS macro).
   //===-------------------------------------------------------------------===//
   inline static __attribute__((used))
   LUTHIER_ANNOTATE_VARIABLE(LUTHIER_HIP_FAT_BINARIES_ATTR)
@@ -320,10 +210,12 @@ public:
       const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
       const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
       const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
-          &Loader)
+          &Loader,
+      llvm::Error &Err)
       : DeviceToolCodeFatBinaryLoader(
-            CoreApi, AmdExt, Loader, HipFatBinaries, HipFunctions,
-            HipDeviceVars, HipManagedVars, HipTextureVars, HipSurfaceVars) {}
+            CoreApi, AmdExt, Loader, buildBundleBuffer(HipFatBinaries, Err),
+            HipFunctions, HipDeviceVars, HipManagedVars, HipTextureVars,
+            HipSurfaceVars, Err) {}
 };
 
 } // namespace luthier
