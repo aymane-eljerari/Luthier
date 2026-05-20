@@ -49,7 +49,8 @@
 namespace luthier {
 
 /// \brief In charge of loading the device code of a single Luthier tool
-/// translation unit (TU) onto GPU HSA Agents attached to the system./// Also extracts and provides access to the LLVM bitcode of the instrumentation
+/// translation unit (TU) onto GPU HSA Agents attached to the system. Also
+/// extracts and provides access to the LLVM bitcode of the instrumentation
 /// module appropriate for the kernel being instrumented
 /// \note This class only handles loading the same source (TU) compiled for
 /// multiple GPU targets running on the system. For loading multiple TUs, use
@@ -209,12 +210,7 @@ protected:
   /// \c loadOntoAgents, then \c loadDynamicManagedVars. On success
   /// transitions \c State to \c Loaded; on failure invokes
   /// \c clearLoadedState (which frees any partial dynamic-managed-var
-  /// state) and stays \c Pending so the next call retries.
-  ///
-  /// \c virtual so subclasses can extend the load sequence — call
-  /// \c base::ensureLoaded() first, then do their own additional work
-  /// (e.g. the fat-binary loader's static-managed-var allocation), and
-  /// roll back via \c clearLoadedState on local failure.
+  /// state) and stays \c Pending so the next call retries
   llvm::Error ensureLoaded();
 
   /// Discover and allocate every dynamic managed variable advertised by
@@ -370,16 +366,6 @@ public:
   getEmbeddedModule(const llvm::Triple &T, llvm::StringRef CPU,
                     const llvm::SubtargetFeatures &Features,
                     llvm::LLVMContext &Ctx);
-
-  /// One entry per LLVM ISA tuple currently cached. Lets tools enumerate
-  /// the variants the bundle shipped (e.g. wave32 + wave64 of the same
-  /// gfx target) before deciding which one to JIT against.
-  struct CachedISA {
-    llvm::Triple T;
-    std::string CPU;
-    llvm::SubtargetFeatures Features;
-  };
-  llvm::SmallVector<CachedISA, 4> getCachedISAs();
 };
 
 } // namespace luthier
