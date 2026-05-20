@@ -359,9 +359,9 @@ public:
     return It->second;
   }
 
-  /// Parse the embedded \c .llvmbc bytes cached for the requested LLVM ISA
-  /// tuple into \p Ctx. The bitcode cache is populated at construction
-  /// (HSA-free), so this method works even before \c loadOntoAgents has run.
+  /// Parse the embedded tool bitcode for the requested LLVM ISA
+  /// tuple into \p Ctx
+  /// \note This method is safe to use before \c ensureLoad has been invoked
   llvm::Expected<std::unique_ptr<llvm::Module>>
   getEmbeddedModule(const llvm::Triple &T, llvm::StringRef CPU,
                     const llvm::SubtargetFeatures &Features,
