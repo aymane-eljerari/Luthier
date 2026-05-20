@@ -282,7 +282,7 @@ DeviceToolCodeLoaderBase::addSlice(llvm::MemoryBufferRef CodeObject) {
       continue;
 
     ManagedVarInfo MV;
-    MV.BaseSymbolName = BaseName.str();
+    MV.BaseSymbolName = BaseName;
     MV.Size = Size;
     MV.Align = Align;
     MV.InitValue = InitBytes;

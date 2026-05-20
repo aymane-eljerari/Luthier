@@ -103,7 +103,10 @@ protected:
   /// pointer-sized device storage that kernel code dereferences, and the
   /// \c .managed companion carries the size + initial bytes.
   struct ManagedVarInfo {
-    std::string BaseSymbolName;
+    /// Non-owning view into the ELF symbol string table for the base
+    /// symbol's name. Alive for the loader's lifetime (slice ELFs are
+    /// retained).
+    llvm::StringRef BaseSymbolName;
     size_t Size{0};
     unsigned Align{0};
     /// View into the slice ELF's \c .managed-companion section bytes.
