@@ -1,4 +1,4 @@
-//===-- HSATool.h - Luthier HSA Tool Base -----------------------*- C++ -*-===//
+//===-- HSATool.h - Luthier HSA Tool Trait ----------------------*- C++ -*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,29 +14,22 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 ///
-/// \file
-/// CRTP base class for static Luthier tools that intercept HSA. Composes the
-/// per-tool traits (target manager, LCO cache, executable loader, packet
-/// monitor, intrinsic registry, injected-payload creation) and exposes
-/// \c buildPipeline / \c runInstrumentationPipeline as the user-facing entry
-/// to the instrumentation codegen.
-///
-/// Step 1 status: the trait bases are empty stubs. The inheritance order is
-/// fixed now so subsequent steps fill traits in place without churning the
-/// public API.
+/// \file HSATool.h
+/// CRTP base class for static Luthier HSA tools. Composes the per-tool traits
+/// and exposes frequently used methods in tools written in HIP.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_HSA_TOOL_H
 #define LUTHIER_TOOLING_HSA_TOOL_H
 
 #include "luthier/Common/Singleton.h"
 #include "luthier/HSATooling/DeviceToolCodeFatBinaryLoader.h"
-#include "luthier/HSATooling/InjectedPayloadCreationPassTrait.h"
 #include "luthier/HSATooling/LLVMUserTrait.h"
 #include "luthier/HSATooling/LoadedCodeObjectCacheTrait.h"
 #include "luthier/HSATooling/PacketMonitorTrait.h"
 #include "luthier/HSATooling/ToolExecutableLoaderTrait.h"
 #include "luthier/PassPlugin/LuthierPassPlugin.h"
 #include "luthier/Rocprofiler/ApiTableSnapshot.h"
+#include "luthier/ToolCodeGen/InjectedPayloadCreationPass.h"
 #include "luthier/ToolCodeGen/InstrumentationPMDriver.h"
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/IR/PassManager.h>
@@ -68,13 +61,13 @@ template <typename Derived> class IntrinsicProcessorRegistryTraitBase {};
 /// Trait wrappers are expected to consult \c Singleton<Derived>::isInitialized
 /// before doing any tool-specific work; uninstalling a wrapper while the
 /// HSA runtime may still call it would be racy and unsafe.
-template <typename Derived>
+template <typename Derived, typename TargetUnitT = llvm::MachineFunction>
 class HSATool : public Singleton<Derived>,
                 public LLVMUserTrait<Derived>,
                 public LoadedCodeObjectCacheTrait<Derived>,
                 public DeviceToolCodeFatBinaryLoader<Derived>,
                 public ToolExecutableLoaderTrait<Derived>,
-                public InjectedPayloadCreationPassTrait<Derived>,
+                public InjectedPayloadCreationPass<Derived, TargetUnitT>,
                 public detail::IntrinsicProcessorRegistryTraitBase<Derived>,
                 public PacketMonitorTrait<Derived> {
 public:
@@ -85,8 +78,7 @@ public:
           llvm::Error &Err)
       : LLVMUserTrait<Derived>(CoreApi),
         LoadedCodeObjectCacheTrait<Derived>(CoreApi, VenLoader, Err),
-        DeviceToolCodeFatBinaryLoader<Derived>(CoreApi, AmdExt, VenLoader,
-                                                Err),
+        DeviceToolCodeFatBinaryLoader<Derived>(CoreApi, AmdExt, VenLoader, Err),
         ToolExecutableLoaderTrait<Derived>(CoreApi, AmdExt, VenLoader),
         PacketMonitorTrait<Derived>(CoreApi, AmdExt, VenLoader, Err) {}
 
@@ -113,6 +105,22 @@ public:
                              const InstrumentationPMDriverOptions &Opts,
                              llvm::ArrayRef<PassPlugin> Plugins = {}) {
     return buildPipeline(Opts, Plugins).run(TargetAppM, TargetMAM);
+  }
+
+  /// Resolve a payload function's host shadow handle to the corresponding
+  /// \c llvm::Function inside the given instrumentation module. Convenience
+  /// over a two-step \c Derived::lookupNameByHandle / \c Module::getFunction.
+  llvm::Expected<llvm::Function *>
+  resolvePayloadHandle(const void *HostHandle,
+                       llvm::Module &InstrumentationModule) {
+    auto &Self = static_cast<Derived &>(*this);
+    auto NameOrErr = Self.lookupNameByHandle(HostHandle);
+    LUTHIER_RETURN_ON_ERROR(NameOrErr.takeError());
+    llvm::Function *F = InstrumentationModule.getFunction(*NameOrErr);
+    LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+        F != nullptr,
+        "Payload function not present in the instrumentation module."));
+    return F;
   }
 };
 
