@@ -217,6 +217,7 @@ llvm::Error parseCodeGenPipeline(llvm::StringRef PipelineStr,
 
 InstrumentationPMDriver::InstrumentationPMDriver(
     const InstrumentationPMDriverOptions &Options,
+    IntrinsicProcessorRegistry &Registry,
     llvm::ArrayRef<PassPlugin> PassPlugins,
     IModuleCreationFnType ModuleCreatorFn,
     std::function<void(llvm::PassBuilder &)> PassBuilderAugmentationCallback,
@@ -228,7 +229,7 @@ InstrumentationPMDriver::InstrumentationPMDriver(
     std::function<void(llvm::PassRegistry &, llvm::TargetPassConfig &,
                        llvm::TargetMachine &)>
         AugmentTargetPassConfigCallback)
-    : Options(Options), PassPlugins(PassPlugins),
+    : Options(Options), Registry(Registry), PassPlugins(PassPlugins),
       IModuleCreatorFn(std::move(ModuleCreatorFn)),
       PassBuilderAugmentationCallback(
           std::move(PassBuilderAugmentationCallback)),
@@ -238,20 +239,21 @@ InstrumentationPMDriver::InstrumentationPMDriver(
           std::move(PostIRIntrinsicLoweringCallback)),
       AugmentTargetPassConfigCallback(
           std::move(AugmentTargetPassConfigCallback)) {
-  llvm::PassRegistry *Registry = llvm::PassRegistry::getPassRegistry();
-  initializeIModuleMAMWrapperPass(*Registry);
-  initializeIntrinsicMIRLoweringPass(*Registry);
-  initializeInjectedPayloadAccessedRegsAnalysis(*Registry);
-  initializeInjectedPayloadAccessedRegsPrinterPass(*Registry);
-  initializeIModuleIPPredicatedLivenessAnalysis(*Registry);
-  initializeInjectedPayloadPreserveLiveRegsPass(*Registry);
-  initializeLRStateValueStorageAndLoadLocationsAnalysis(*Registry);
-  initializeSVAPhysVGPRPinPass(*Registry);
-  initializeInjectedPayloadPEIPass(*Registry);
-  initializeTargetModulePatcherPass(*Registry);
+  llvm::PassRegistry *LegacyPassRegistry =
+      llvm::PassRegistry::getPassRegistry();
+  initializeIModuleMAMWrapperPass(*LegacyPassRegistry);
+  initializeIntrinsicMIRLoweringPass(*LegacyPassRegistry);
+  initializeInjectedPayloadAccessedRegsAnalysis(*LegacyPassRegistry);
+  initializeInjectedPayloadAccessedRegsPrinterPass(*LegacyPassRegistry);
+  initializeIModuleIPPredicatedLivenessAnalysis(*LegacyPassRegistry);
+  initializeInjectedPayloadPreserveLiveRegsPass(*LegacyPassRegistry);
+  initializeLRStateValueStorageAndLoadLocationsAnalysis(*LegacyPassRegistry);
+  initializeSVAPhysVGPRPinPass(*LegacyPassRegistry);
+  initializeInjectedPayloadPEIPass(*LegacyPassRegistry);
+  initializeTargetModulePatcherPass(*LegacyPassRegistry);
 
   for (const auto &Plugin : PassPlugins) {
-    Plugin.registerLegacyCodegenPassesCallback(*Registry);
+    Plugin.registerLegacyCodegenPassesCallback(*LegacyPassRegistry);
   }
 }
 
@@ -387,7 +389,7 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
   // TODO: re-enable when production-pipeline deps are compiled in:
   // IMAM.registerPass([&]() { return IntrinsicIRLoweringInfoMapAnalysis(); });
   IMAM.registerPass([&]() { return InjectedPayloadAndInstPointAnalysis(); });
-  IMAM.registerPass([&]() { return IntrinsicsProcessorsAnalysis(); });
+  IMAM.registerPass([&]() { return IntrinsicsProcessorsAnalysis(Registry); });
 
   IMAM.registerPass(
       [&]() { return TargetAppModuleAndMAMAnalysis(TargetMAM, TargetAppM); });

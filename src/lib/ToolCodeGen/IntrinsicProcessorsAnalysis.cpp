@@ -26,25 +26,21 @@ llvm::AnalysisKey IntrinsicsProcessorsAnalysis::Key;
 std::optional<IntrinsicProcessor>
 IntrinsicsProcessorsAnalysis::Result::getProcessorIfRegistered(
     llvm::StringRef Name) const {
-  return IntrinsicProcessorRegistry::instance()
-      .getIntrinsicProcessorIfRegistered(Name);
+  return Registry->getIntrinsicProcessorIfRegistered(Name);
 }
 
 bool IntrinsicsProcessorsAnalysis::Result::isProcessorRegistered(
     llvm::StringRef Name) const {
-  return IntrinsicProcessorRegistry::instance().isIntrinsicProcessorRegistered(
-      Name);
+  return Registry->isIntrinsicProcessorRegistered(Name);
 }
 
 void IntrinsicsProcessorsAnalysis::Result::registerIntrinsicProcessor(
     llvm::StringRef Name, IntrinsicProcessor Processor) {
-  return IntrinsicProcessorRegistry::instance().registerIntrinsicProcessor(
-      Name, std::move(Processor));
+  return Registry->registerIntrinsicProcessor(Name, std::move(Processor));
 }
 
 void IntrinsicsProcessorsAnalysis::Result::unregisterIntrinsicProcessor(
     llvm::StringRef Name) {
-  return IntrinsicProcessorRegistry::instance().unregisterIntrinsicProcessor(
-      Name);
+  return Registry->unregisterIntrinsicProcessor(Name);
 }
 } // namespace luthier

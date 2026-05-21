@@ -26,6 +26,8 @@
 
 namespace luthier {
 
+class IntrinsicProcessorRegistry;
+
 /// \brief Produces the map which holds the processors for all intrinsics
 class IntrinsicsProcessorsAnalysis
     : public llvm::AnalysisInfoMixin<IntrinsicsProcessorsAnalysis> {
@@ -34,11 +36,15 @@ private:
 
   static llvm::AnalysisKey Key;
 
+  IntrinsicProcessorRegistry *Registry;
+
 public:
   class Result {
     friend class IntrinsicsProcessorsAnalysis;
 
-    Result() = default;
+    IntrinsicProcessorRegistry *Registry;
+
+    explicit Result(IntrinsicProcessorRegistry &R) : Registry(&R) {}
 
   public:
     [[nodiscard]] std::optional<IntrinsicProcessor>
@@ -59,9 +65,12 @@ public:
     }
   };
 
-  IntrinsicsProcessorsAnalysis() = default;
+  explicit IntrinsicsProcessorsAnalysis(IntrinsicProcessorRegistry &Registry)
+      : Registry(&Registry) {}
 
-  Result run(llvm::Module &, llvm::ModuleAnalysisManager &) { return Result{}; }
+  Result run(llvm::Module &, llvm::ModuleAnalysisManager &) {
+    return Result{*Registry};
+  }
 };
 
 } // namespace luthier

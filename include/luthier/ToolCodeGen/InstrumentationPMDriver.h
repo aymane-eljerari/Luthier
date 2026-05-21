@@ -32,6 +32,9 @@ class PassRegistry;
 
 namespace luthier {
 
+class IntrinsicProcessorRegistry;
+
+
 struct InstrumentationPMDriverOptions {
   llvm::cl::OptionCategory InstrumentationPMDriverOptionsCat{
       "Instrumentation PM Driver Options",
@@ -117,6 +120,11 @@ class InstrumentationPMDriver
 
   const InstrumentationPMDriverOptions &Options;
 
+  /// Registry holding the IR/MIR processors for Luthier intrinsics. Owned by
+  /// the enclosing tool (e.g. \c HSATool) or by the opt plugin's static
+  /// storage; the driver only borrows it.
+  IntrinsicProcessorRegistry &Registry;
+
   /// Luthier pass plugins registered with the outer driver
   llvm::ArrayRef<PassPlugin> PassPlugins{};
 
@@ -150,6 +158,7 @@ class InstrumentationPMDriver
 public:
   explicit InstrumentationPMDriver(
       const InstrumentationPMDriverOptions &Options,
+      IntrinsicProcessorRegistry &Registry,
       llvm::ArrayRef<PassPlugin> PassPlugins = {},
       IModuleCreationFnType ModuleCreatorFn =
           [](llvm::LLVMContext &Ctx) {

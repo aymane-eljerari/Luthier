@@ -14,12 +14,11 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 ///
-/// \file
-/// Describes Luthier's Intrinsic Processor registry singleton.
+/// \file IntrinsicProcessorRegistry.h
+/// Describes Luthier's Intrinsic Processor registry.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOL_CODE_GEN_INTRINSIC_PROCESSOR_REGISTRY_H
 #define LUTHIER_TOOL_CODE_GEN_INTRINSIC_PROCESSOR_REGISTRY_H
-#include "luthier/Common/Singleton.h"
 #include "luthier/Intrinsic/IntrinsicProcessor.h"
 
 #include <llvm/ADT/StringMap.h>
@@ -28,8 +27,7 @@
 
 namespace luthier {
 
-class IntrinsicProcessorRegistry final
-    : public Singleton<IntrinsicProcessorRegistry> {
+class IntrinsicProcessorRegistry final {
 private:
   mutable std::shared_mutex Mutex;
 

@@ -15,7 +15,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// Implements Luthier's Intrinsic Processor registry singleton.
+/// Implements Luthier's Intrinsic Processor registry.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/IntrinsicProcessorRegistry.h"
 #include "luthier/Intrinsic/ImplicitArgPtr.h"
@@ -27,12 +27,7 @@
 
 namespace luthier {
 
-template <>
-IntrinsicProcessorRegistry *Singleton<IntrinsicProcessorRegistry>::Instance{
-    nullptr};
-
-IntrinsicProcessorRegistry::IntrinsicProcessorRegistry()
-    : Singleton<luthier::IntrinsicProcessorRegistry>() {
+IntrinsicProcessorRegistry::IntrinsicProcessorRegistry() {
   /// Register built-in Luthier intrinsics
 #define REGISTER_INTRINSIC(NAME, IR_PROCESSOR, MIR_PROCESSOR)                  \
   Processors.try_emplace(NAME, IntrinsicProcessor{IR_PROCESSOR, MIR_PROCESSOR});

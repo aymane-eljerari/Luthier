@@ -31,19 +31,30 @@
 #include "luthier/Rocprofiler/ApiTableSnapshot.h"
 #include "luthier/ToolCodeGen/InjectedPayloadCreationPass.h"
 #include "luthier/ToolCodeGen/InstrumentationPMDriver.h"
+#include "luthier/ToolCodeGen/IntrinsicProcessorRegistry.h"
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/Support/Error.h>
 
 namespace luthier {
 
-namespace detail {
+/// Per-tool trait that owns the \c IntrinsicProcessorRegistry the tool's
+/// instrumentation pipeline consults during IR/MIR intrinsic lowering. The
+/// registry default-constructs (its ctor auto-registers the built-in Luthier
+/// intrinsics from \c IntrinsicRegistry.def), so the trait needs no
+/// constructor arguments and never fails.
+template <typename Derived> class IntrinsicProcessorRegistryTraitBase {
+  IntrinsicProcessorRegistry Registry;
 
-/// Stub trait base for the intrinsic-processor registry. To be filled in a
-/// later step.
-template <typename Derived> class IntrinsicProcessorRegistryTraitBase {};
+public:
+  IntrinsicProcessorRegistry &getIntrinsicProcessorRegistry() {
+    return Registry;
+  }
 
-} // namespace detail
+  const IntrinsicProcessorRegistry &getIntrinsicProcessorRegistry() const {
+    return Registry;
+  }
+};
 
 /// \brief CRTP base for static HSA tools. Inherits the HIP fat-binary
 /// registration slots and per-agent HSA executable state from
@@ -68,7 +79,7 @@ class HSATool : public Singleton<Derived>,
                 public DeviceToolCodeFatBinaryLoader<Derived>,
                 public InstrumentedKernelLoaderAndLauncherTrait<Derived>,
                 public InjectedPayloadCreationPass<Derived, TargetUnitT>,
-                public detail::IntrinsicProcessorRegistryTraitBase<Derived>,
+                public IntrinsicProcessorRegistryTraitBase<Derived>,
                 public PacketMonitorTrait<Derived> {
 public:
   HSATool(const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
@@ -94,7 +105,8 @@ public:
   InstrumentationPMDriver
   buildPipeline(const InstrumentationPMDriverOptions &Opts,
                 llvm::ArrayRef<PassPlugin> Plugins = {}) {
-    return InstrumentationPMDriver(Opts, Plugins);
+    return InstrumentationPMDriver(Opts, this->getIntrinsicProcessorRegistry(),
+                                   Plugins);
   }
 
   /// Convenience: build the pipeline and immediately run it against \p

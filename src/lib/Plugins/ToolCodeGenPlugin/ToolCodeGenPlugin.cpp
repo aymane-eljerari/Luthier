@@ -61,8 +61,10 @@ static MockAMDGPULoaderAnalysisOptions MockLoaderOptions;
 
 static CodeDiscoveryPassOptions CodeDiscoveryOptions;
 
-/// Initialize the intrinsic processor registry here
-static IntrinsicProcessorRegistry IntrinsicProcessorRegistrySingleton;
+/// Per-process intrinsic processor registry used by the opt plugin's
+/// instrumentation driver. The plugin has no \c HSATool to own one, so it
+/// keeps a static; it is no longer a \c Singleton<> type.
+static IntrinsicProcessorRegistry IntrinsicProcessorRegistryStorage;
 
 struct MockAMDGPULoaderInitialEntryPointParser
     : public llvm::cl::parser<
@@ -379,7 +381,8 @@ llvmGetPassPluginInfo() {
             llvm::ArrayRef<luthier::PassPlugin> Plugins =
                 luthier::loadLuthierPluginsFromCLI();
             MPM.addPass(luthier::InstrumentationPMDriver(
-                luthier::InstrumentationPMOptions, Plugins));
+                luthier::InstrumentationPMOptions,
+                luthier::IntrinsicProcessorRegistryStorage, Plugins));
             return true;
           }
           return false;
