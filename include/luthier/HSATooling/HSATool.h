@@ -24,7 +24,7 @@
 #include "luthier/Common/Singleton.h"
 #include "luthier/HSATooling/DeviceToolCodeFatBinaryLoader.h"
 #include "luthier/HSATooling/LLVMUserTrait.h"
-#include "luthier/HSATooling/LoadedCodeObjectCacheTrait.h"
+#include "luthier/HSATooling/LoadedCodeObjectCache.h"
 #include "luthier/HSATooling/PacketMonitorTrait.h"
 #include "luthier/HSATooling/ToolExecutableLoaderTrait.h"
 #include "luthier/PassPlugin/LuthierPassPlugin.h"
@@ -76,7 +76,7 @@ public:
           const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
               &VenLoader,
           llvm::Error &Err)
-      : LLVMUserTrait<Derived>(CoreApi),
+      : Singleton<Derived>(), LLVMUserTrait<Derived>(),
         LoadedCodeObjectCacheTrait<Derived>(CoreApi, VenLoader, Err),
         DeviceToolCodeFatBinaryLoader<Derived>(CoreApi, AmdExt, VenLoader, Err),
         ToolExecutableLoaderTrait<Derived>(CoreApi, AmdExt, VenLoader),

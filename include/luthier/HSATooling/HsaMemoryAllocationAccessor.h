@@ -28,7 +28,7 @@ namespace luthier {
 /// runtime
 class HsaMemoryAllocationAccessor : public MemoryAllocationAccessor {
 
-  const hsa::LoadedCodeObjectCache &COC;
+  const LoadedCodeObjectCache &COC;
 
   const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreTable;
 
@@ -47,7 +47,7 @@ public:
   getAllocationDescriptor(uint64_t DeviceAddr) const override;
 
   HsaMemoryAllocationAccessor(
-      const hsa::LoadedCodeObjectCache &COC,
+      const LoadedCodeObjectCache &COC,
       const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreTable,
       const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExtTable,
       const hsa::ExtensionApiTableInfo<HSA_EXTENSION_AMD_LOADER>::TableType
