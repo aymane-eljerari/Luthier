@@ -23,10 +23,10 @@
 
 #include "luthier/Common/Singleton.h"
 #include "luthier/HSATooling/DeviceToolCodeFatBinaryLoader.h"
+#include "luthier/HSATooling/InstrumentedKernelLoaderAndLauncher.h"
 #include "luthier/HSATooling/LLVMUserTrait.h"
 #include "luthier/HSATooling/LoadedCodeObjectCache.h"
 #include "luthier/HSATooling/PacketMonitorTrait.h"
-#include "luthier/HSATooling/ToolExecutableLoaderTrait.h"
 #include "luthier/PassPlugin/LuthierPassPlugin.h"
 #include "luthier/Rocprofiler/ApiTableSnapshot.h"
 #include "luthier/ToolCodeGen/InjectedPayloadCreationPass.h"
@@ -66,7 +66,7 @@ class HSATool : public Singleton<Derived>,
                 public LLVMUserTrait<Derived>,
                 public LoadedCodeObjectCacheTrait<Derived>,
                 public DeviceToolCodeFatBinaryLoader<Derived>,
-                public ToolExecutableLoaderTrait<Derived>,
+                public InstrumentedKernelLoaderAndLauncherTrait<Derived>,
                 public InjectedPayloadCreationPass<Derived, TargetUnitT>,
                 public detail::IntrinsicProcessorRegistryTraitBase<Derived>,
                 public PacketMonitorTrait<Derived> {
@@ -79,7 +79,9 @@ public:
       : Singleton<Derived>(), LLVMUserTrait<Derived>(),
         LoadedCodeObjectCacheTrait<Derived>(CoreApi, VenLoader, Err),
         DeviceToolCodeFatBinaryLoader<Derived>(CoreApi, AmdExt, VenLoader, Err),
-        ToolExecutableLoaderTrait<Derived>(CoreApi, AmdExt, VenLoader),
+        InstrumentedKernelLoaderAndLauncherTrait<Derived>(
+            CoreApi, VenLoader, static_cast<DeviceToolCodeLoader &>(*this),
+            Err),
         PacketMonitorTrait<Derived>(CoreApi, AmdExt, VenLoader, Err) {}
 
   /// Build the instrumentation pass pipeline driver for a target application

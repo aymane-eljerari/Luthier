@@ -2,6 +2,7 @@ add_library(LuthierHSATooling OBJECT
         DeviceToolCodeLoader.cpp
         HSAToolCompileCheck.cpp
         HsaMemoryAllocationAccessor.cpp
+        InstrumentedKernelLoaderAndLauncher.cpp
         LoadedCodeObjectCache.cpp
 )
 

@@ -82,6 +82,19 @@ executableSymbolGetAddress(const ApiTableContainer<::CoreApiTable> &CoreApi,
 executableSymbolGetAgent(const ApiTableContainer<::CoreApiTable> &CoreApi,
                          hsa_executable_symbol_t Symbol);
 
+/// Queries the private (scratch) segment size in bytes that the kernel
+/// pointed to by \p Symbol requires per work-item.
+/// \param CoreApi the \c ::CoreApiTable used to dispatch HSA functions
+/// \param Symbol the \c hsa_executable_symbol_t being queried; must be of
+/// kind \c HSA_SYMBOL_KIND_KERNEL
+/// \return Expects the per-work-item private segment size on success
+/// \sa HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE
+/// \sa hsa_executable_symbol_get_info
+[[nodiscard]] llvm::Expected<uint32_t>
+executableSymbolGetKernelPrivateSegmentSize(
+    const ApiTableContainer<::CoreApiTable> &CoreApi,
+    hsa_executable_symbol_t Symbol);
+
 } // namespace luthier::hsa
 
 //===----------------------------------------------------------------------===//
