@@ -1,5 +1,4 @@
 add_library(LuthierToolCXXCompilation OBJECT
-        Mangling.cpp
         Attributes.cpp
         Consumers.cpp)
 

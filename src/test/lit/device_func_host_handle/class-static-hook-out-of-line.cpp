@@ -34,18 +34,15 @@ void hostFunction(const void **out) {
   out[0] = reinterpret_cast<const void *>(&Tool::hook);
 }
 
+// clang-format off
 /// One handle, irrespective of in-class vs. out-of-line definition.
-/// CHECK-COUNT-1:
-/// @_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
-/// = dso_local CHECK-NOT:
-/// @_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
-/// = dso_local
+/// CHECK-COUNT-1: @_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv = dso_local
+/// CHECK-NOT: @_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv = dso_local
 
 /// Host rewrite + registration still happen.
-/// CHECK: store ptr
-/// @_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
-/// CHECK:
-/// __hipRegisterFunction({{.*}}@_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
+/// CHECK: store ptr @_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
+/// CHECK: __hipRegisterFunction({{.*}}@_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
 
 /// And the body still doesn't leak.
 /// CHECK-NOT: llvm.amdgcn.
+// clang-format on

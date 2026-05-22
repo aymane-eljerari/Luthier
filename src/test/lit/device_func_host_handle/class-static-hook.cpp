@@ -29,28 +29,25 @@ void hostFunction(const void **out) {
   out[0] = reinterpret_cast<const void *>(&Tool::hook);
 }
 
+// clang-format off
 /// The synthesized kernel handle host shadow is generated regardless of
 /// scope: the embedded original Itanium-mangled name carries the
 /// anonymous-namespace + class scope.
-/// CHECK:
-/// @_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
-/// = dso_local
+/// CHECK: @_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv = dso_local
 
 /// The host stub for the kernel handle is also emitted (HIP launch stub).
-/// CHECK:
-/// @_Z{{[0-9]+}}__device_stub____luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
+/// CHECK: @_Z{{[0-9]+}}__device_stub____luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
 
 /// The host-side address-take is rewritten to point at the kernel handle,
 /// not at the host stub of the (now bodyless) device function.
 /// CHECK: define dso_local void @_Z12hostFunctionPPKv
-/// CHECK: store ptr
-/// @_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
+/// CHECK: store ptr @_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
 
 /// HIP runtime registers the kernel handle.
-/// CHECK:
-/// __hipRegisterFunction({{.*}}@_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
+/// CHECK: __hipRegisterFunction({{.*}}@_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
 
 /// Critically: the original device function's body must NOT have leaked
 /// into host IR. The plugin clears it; any `amdgcn` intrinsic surviving
 /// to the host module would mean the leak is back.
 /// CHECK-NOT: llvm.amdgcn.
+// clang-format on

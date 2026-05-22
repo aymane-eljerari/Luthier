@@ -14,15 +14,18 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCXXCompilation/Consumers.h"
-#include "luthier/ToolCXXCompilation/Annotations.h"
-#include "luthier/ToolCXXCompilation/Mangling.h"
+#include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include <clang/AST/AST.h>
 #include <clang/AST/ASTConsumer.h>
 #include <clang/AST/Attr.h>
 #include <clang/AST/DeclCXX.h>
+#include <clang/AST/Mangle.h>
 #include <clang/AST/RecursiveASTVisitor.h>
 #include <clang/Sema/Sema.h>
+#include <llvm/ADT/Twine.h>
 #include <llvm/Support/Casting.h>
+#include <llvm/Support/raw_ostream.h>
+#include <memory>
 
 namespace luthier {
 
@@ -41,6 +44,18 @@ bool hasAnnotation(const clang::FunctionDecl *FD, llvm::StringRef Tag) {
 
 bool hasExportHandleAttr(const clang::FunctionDecl *FD) {
   return hasAnnotation(FD, ExportFunctionHandleMarker);
+}
+
+std::string buildHandleBaseIdentifier(clang::FunctionDecl *FD,
+                                      clang::ASTContext &Ctx) {
+  std::string OriginalSymbol;
+  llvm::raw_string_ostream OS(OriginalSymbol);
+  std::unique_ptr<clang::MangleContext> MC(Ctx.createMangleContext());
+  if (MC->shouldMangleDeclName(FD))
+    MC->mangleName(FD, OS);
+  else
+    OS << FD->getName();
+  return (llvm::Twine(HookHandleSymbolPrefix) + OriginalSymbol).str();
 }
 
 /// Synthesizes <tt>__global__ __used__ void
