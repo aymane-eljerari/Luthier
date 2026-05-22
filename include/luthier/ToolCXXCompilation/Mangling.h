@@ -14,7 +14,7 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 /// \file Mangling.h
-/// Defines helpers for custom mangling in the CXX compilation pipeline.
+/// Helper for building the kernel-handle stub's base identifier.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOL_CXX_COMPILATION_MANGLING_H
 #define LUTHIER_TOOL_CXX_COMPILATION_MANGLING_H
@@ -27,10 +27,22 @@ class FunctionDecl;
 
 namespace luthier {
 
-/// Returns \c __luthier_builtin_hook_handle_<sanitized> where \c sanitized
-/// is the Itanium-mangled name of \p FD with each non-identifier byte
-/// replaced by \c _xx (lowercase hex). Reversible and stable across TUs.
-std::string mangleAndSanitize(clang::FunctionDecl *FD, clang::ASTContext &Ctx);
+/// Returns the base identifier for the synthesized kernel-handle stub:
+/// \c __luthier_builtin_hook_handle_<original-mangled-name>. When the
+/// original needs Itanium mangling, the suffix is the full Itanium-mangled
+/// name verbatim (Itanium names are identifier-safe in the cases relevant
+/// to hooks — no Clang clone suffixes, etc.). When the original has C
+/// linkage, the suffix is the original's source identifier.
+///
+/// The resulting identifier is used as the *base* identifier of a plain
+/// C++ \c FunctionDecl synthesized at translation-unit scope. Letting
+/// Clang Itanium-mangle that decl normally yields a host-side symbol
+/// whose \c llvm::ItaniumPartialDemangler::getFunctionBaseName begins
+/// with \c __luthier_builtin_hook_handle_ ; dropping that prefix gives
+/// the original device function's mangled name directly, suitable for
+/// \c Module::getFunction.
+std::string buildHandleBaseIdentifier(clang::FunctionDecl *FD,
+                                      clang::ASTContext &Ctx);
 
 } // namespace luthier
 

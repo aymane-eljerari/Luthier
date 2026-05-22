@@ -15,38 +15,25 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCXXCompilation/Mangling.h"
 #include "luthier/ToolCXXCompilation/Annotations.h"
-#include <cctype>
 #include <clang/AST/ASTContext.h>
 #include <clang/AST/Decl.h>
 #include <clang/AST/Mangle.h>
-#include <cstdio>
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/raw_ostream.h>
 #include <memory>
 
 namespace luthier {
 
-std::string mangleAndSanitize(clang::FunctionDecl *FD, clang::ASTContext &Ctx) {
-  std::string Mangled;
-  llvm::raw_string_ostream OS(Mangled);
+std::string buildHandleBaseIdentifier(clang::FunctionDecl *FD,
+                                      clang::ASTContext &Ctx) {
+  std::string OriginalSymbol;
+  llvm::raw_string_ostream OS(OriginalSymbol);
   std::unique_ptr<clang::MangleContext> MC(Ctx.createMangleContext());
   if (MC->shouldMangleDeclName(FD))
     MC->mangleName(FD, OS);
   else
     OS << FD->getName();
-
-  std::string Sanitized;
-  Sanitized.reserve(Mangled.size());
-  for (unsigned char C : Mangled) {
-    if (std::isalnum(C) || C == '_') {
-      Sanitized.push_back(static_cast<char>(C));
-    } else {
-      char Buf[8];
-      std::snprintf(Buf, sizeof(Buf), "_%02x", C);
-      Sanitized.append(Buf);
-    }
-  }
-  return (llvm::Twine(HookHandleSymbolPrefix) + Sanitized).str();
+  return (llvm::Twine(HookHandleSymbolPrefix) + OriginalSymbol).str();
 }
 
 } // namespace luthier

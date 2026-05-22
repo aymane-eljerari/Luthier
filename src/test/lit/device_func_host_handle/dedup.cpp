@@ -17,5 +17,5 @@ void useThrice(const void **out) {
 }
 
 /// Exactly one host shadow constant for the kernel handle.
-/// CHECK-COUNT-1: @__luthier_builtin_hook_handle__Z6myHookv = dso_local constant
-/// CHECK-NOT: @__luthier_builtin_hook_handle__Z6myHookv = dso_local constant
+/// CHECK-COUNT-1: @_Z{{[0-9]+}}__luthier_builtin_hook_handle__Z6myHookvv = dso_local constant
+/// CHECK-NOT: @_Z{{[0-9]+}}__luthier_builtin_hook_handle__Z6myHookvv = dso_local constant

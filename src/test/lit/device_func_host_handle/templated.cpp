@@ -3,7 +3,8 @@
 /// RUN:   -I/opt/rocm/include \
 /// RUN:   --cuda-host-only -emit-llvm -S %s -o - 2>&1 | %tee_out FileCheck %s
 /// Verifies that templated hooks produce one kernel handle per concrete
-/// instantiation, keyed off the instantiation's mangled name.
+/// instantiation, distinguished by the instantiation's mangled name
+/// embedded in the synth stub's base identifier.
 
 #include <hip/hip_runtime.h>
 
@@ -16,12 +17,14 @@ void hostFunction(const void **out) {
   out[1] = reinterpret_cast<const void *>(&myHook<float>);
 }
 
-/// Two distinct handles, one per instantiation.
-/// CHECK-DAG: @__luthier_builtin_hook_handle__Z6myHookIiEvT_ = dso_local
-/// constant CHECK-DAG: @__luthier_builtin_hook_handle__Z6myHookIfEvT_ =
-/// dso_local constant
+/// Two distinct handles, one per instantiation. The base identifiers are
+/// `__luthier_builtin_hook_handle__Z6myHookIiEvT_` and
+/// `__luthier_builtin_hook_handle__Z6myHookIfEvT_` (Itanium mangling of
+/// the template parameter shows up as `T_`).
+/// CHECK-DAG: @_Z{{[0-9]+}}__luthier_builtin_hook_handle__Z6myHookIiEvT_v = dso_local
+/// CHECK-DAG: @_Z{{[0-9]+}}__luthier_builtin_hook_handle__Z6myHookIfEvT_v = dso_local
 
 /// Use sites point at the instantiation-specific kernel handle.
 /// CHECK: define dso_local void @_Z12hostFunctionPPKv
-/// CHECK-DAG: store ptr @__luthier_builtin_hook_handle__Z6myHookIiEvT_
-/// CHECK-DAG: store ptr @__luthier_builtin_hook_handle__Z6myHookIfEvT_
+/// CHECK-DAG: store ptr @_Z{{[0-9]+}}__luthier_builtin_hook_handle__Z6myHookIiEvT_v
+/// CHECK-DAG: store ptr @_Z{{[0-9]+}}__luthier_builtin_hook_handle__Z6myHookIfEvT_v

@@ -43,29 +43,31 @@ bool hasExportHandleAttr(const clang::FunctionDecl *FD) {
   return hasAnnotation(FD, ExportFunctionHandleMarker);
 }
 
-/// Synthesizes <tt>extern "C" __global__ __used__ void
-/// __luthier_builtin_hook_handle_<key>() {}</tt> at file scope. HIP's dual
-/// emission produces both the device kernel symbol (registered with the
-/// runtime) and the host stub whose address is what host code will obtain
-/// after the use-site rewrite.
+/// Synthesizes <tt>__global__ __used__ void
+/// __luthier_builtin_hook_handle_<original-mangled-name>() {}</tt> at
+/// translation-unit scope as a plain C++ function (no \c extern "C"
+/// wrapper). Clang Itanium-mangles it normally, so the host-side symbol
+/// is itself Itanium-mangled and demangleable. The base identifier
+/// embeds the original device function's Itanium-mangled name verbatim,
+/// which makes the reverse direction (host shadow pointer → IModule
+/// hook function) a single \c partialDemangle + \c drop_front + direct
+/// \c Module::getFunction lookup. HIP's dual emission produces both the
+/// device kernel symbol (registered with the runtime) and the host stub
+/// whose address is what host code will obtain after the use-site
+/// rewrite.
 clang::FunctionDecl *makeKernelHandle(clang::Sema &S,
                                       clang::FunctionDecl *Original) {
   clang::ASTContext &Ctx = S.Context;
   clang::TranslationUnitDecl *TU = Ctx.getTranslationUnitDecl();
 
-  std::string Name = mangleAndSanitize(Original, Ctx);
+  std::string Name = buildHandleBaseIdentifier(Original, Ctx);
   clang::IdentifierInfo &II = Ctx.Idents.get(Name);
 
   clang::FunctionProtoType::ExtProtoInfo EPI;
   clang::QualType FnTy = Ctx.getFunctionType(Ctx.VoidTy, {}, EPI);
 
-  auto *LS = clang::LinkageSpecDecl::Create(Ctx, TU, clang::SourceLocation(),
-                                            clang::SourceLocation(),
-                                            clang::LinkageSpecLanguageIDs::C,
-                                            /*HasBraces=*/false);
-
   auto *FD = clang::FunctionDecl::Create(
-      Ctx, LS, clang::SourceLocation(), clang::SourceLocation(),
+      Ctx, TU, clang::SourceLocation(), clang::SourceLocation(),
       clang::DeclarationName(&II), FnTy,
       /*TInfo=*/nullptr, clang::SC_Extern, /*UsesFPIntrin=*/false,
       /*isInlineSpecified=*/false, /*hasWrittenPrototype=*/true,
@@ -78,12 +80,11 @@ clang::FunctionDecl *makeKernelHandle(clang::Sema &S,
                                           clang::SourceLocation(),
                                           clang::SourceLocation()));
 
-  LS->addDecl(FD);
-  TU->addDecl(LS);
+  TU->addDecl(FD);
 
   S.PushOnScopeChains(FD, S.TUScope, /*AddToContext=*/false);
   S.MarkFunctionReferenced(clang::SourceLocation(), FD, /*MightBeOdrUse=*/true);
-  S.Consumer.HandleTopLevelDecl(clang::DeclGroupRef(LS));
+  S.Consumer.HandleTopLevelDecl(clang::DeclGroupRef(FD));
   return FD;
 }
 

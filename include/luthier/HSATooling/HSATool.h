@@ -33,6 +33,7 @@
 #include "luthier/ToolCodeGen/InstrumentationPMDriver.h"
 #include "luthier/ToolCodeGen/IntrinsicProcessorRegistry.h"
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/Demangle/Demangle.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/Support/Error.h>
 
@@ -126,21 +127,17 @@ public:
   ///
   /// Two cases are handled:
   ///   1. The handle name names a function defined in the IModule
-  ///      directly — exact lookup wins. Free-function `__device__`
+  ///      directly — exact lookup wins. Free-function \c __device__
   ///      hooks tagged with \c LUTHIER_HOOK_ANNOTATE end up here.
-  ///   2. The handle name starts with \c __luthier_builtin_hook_handle_
-  ///      (the prefix the CXX compilation plugin gives every
-  ///      \c LUTHIER_EXPORT_FUNCTION_HANDLE_ATTR -tagged device function's
-  ///      synthesized kernel stub). The plugin's host-side AST rewrite
-  ///      means HIP registered the kernel-stub handle under that name,
-  ///      so \c lookupNameByHandle returns the prefixed form — but the
-  ///      embedded IModule bitcode contains the ORIGINAL device function
-  ///      under its plain Itanium mangling. We strip the prefix and then
-  ///      sanitize-match against every function in the IModule until we
-  ///      find one whose sanitized mangling equals the suffix. (We can't
-  ///      reverse the sanitization unambiguously — `_` is preserved by
-  ///      the forward pass and might also originate from a sanitized
-  ///      non-identifier byte. Forward-comparison is unambiguous.)
+  ///   2. The handle name is the Itanium-mangled symbol of a
+  ///      \c LUTHIER_EXPORT_FUNCTION_HANDLE_ATTR -tagged kernel stub the
+  ///      CXX compilation plugin synthesized. The plugin builds the stub
+  ///      as a plain C++ \c FunctionDecl at TU scope whose *base
+  ///      identifier* is \c __luthier_builtin_hook_handle_ followed by
+  ///      the original device function's Itanium-mangled name verbatim.
+  ///      We demangle the host shadow's symbol, take its base identifier,
+  ///      drop the prefix, and the remainder is the original mangled
+  ///      name — \c getFunction is the lookup.
   llvm::Expected<llvm::Function *>
   resolvePayloadHandle(const void *HostHandle,
                        llvm::Module &InstrumentationModule) {
@@ -154,27 +151,31 @@ public:
 
     static constexpr llvm::StringLiteral Prefix =
         "__luthier_builtin_hook_handle_";
-    if (NameOrErr->starts_with(Prefix)) {
-      llvm::StringRef Wanted = NameOrErr->drop_front(Prefix.size());
-      // Forward-sanitize each IModule function name and compare. Cheap:
-      // tools have on the order of tens of payload-eligible functions.
-      auto Sanitize = [](llvm::StringRef In) {
-        std::string Out;
-        Out.reserve(In.size());
-        for (unsigned char C : In) {
-          if (std::isalnum(C) || C == '_') {
-            Out.push_back(static_cast<char>(C));
-          } else {
-            char Buf[8];
-            std::snprintf(Buf, sizeof(Buf), "_%02x", C);
-            Out.append(Buf);
-          }
+
+    // The host shadow's symbol is Itanium-mangled because the plugin
+    // synthesizes the stub as a plain C++ function (no extern "C"). A
+    // failed demangle therefore means the handle was not produced by
+    // the plugin, which is an unrecoverable lookup error here.
+    llvm::ItaniumPartialDemangler Demangler;
+    std::string NameStr = NameOrErr->str();
+    if (!Demangler.partialDemangle(NameStr.c_str())) {
+      size_t BaseSize = 0;
+      if (char *BaseBuf =
+              Demangler.getFunctionBaseName(/*Buf=*/nullptr, &BaseSize)) {
+        llvm::StringRef BaseName(BaseBuf, BaseSize);
+        if (BaseName.starts_with(Prefix)) {
+          std::string OriginalMangled =
+              BaseName.drop_front(Prefix.size()).str();
+          std::free(BaseBuf);
+          if (llvm::Function *F =
+                  InstrumentationModule.getFunction(OriginalMangled))
+            return F;
+          return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+              "Payload handle '{0}' decoded to '{1}', which is not "
+              "present in the instrumentation module.",
+              *NameOrErr, OriginalMangled));
         }
-        return Out;
-      };
-      for (llvm::Function &Cand : InstrumentationModule) {
-        if (Sanitize(Cand.getName()) == Wanted)
-          return &Cand;
+        std::free(BaseBuf);
       }
     }
 

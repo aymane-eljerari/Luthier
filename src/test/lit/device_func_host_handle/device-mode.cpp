@@ -8,6 +8,5 @@
 __attribute__((device)) __attribute__((luthier_export_function_handle)) void
 myHook() {}
 
-/// CHECK: define {{.*}}amdgpu_kernel void
-/// @__luthier_builtin_hook_handle__Z6myHookv CHECK: define {{.*}}void
-/// @_Z6myHookv
+/// CHECK: define {{.*}}amdgpu_kernel void @_Z{{[0-9]+}}__luthier_builtin_hook_handle__Z6myHookvv
+/// CHECK: define {{.*}}void @_Z6myHookv
