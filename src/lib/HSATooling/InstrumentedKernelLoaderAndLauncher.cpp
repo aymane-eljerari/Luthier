@@ -22,6 +22,7 @@
 #include "luthier/HSA/HsaError.h"
 #include "luthier/HSA/LoadedCodeObject.h"
 #include "luthier/HSATooling/DeviceToolCodeLoader.h"
+#include "luthier/Linker/Linker.h"
 #include "luthier/Object/AMDGCNObjectFile.h"
 
 #include <llvm/ADT/STLExtras.h>
@@ -29,6 +30,8 @@
 #include <llvm/BinaryFormat/ELF.h>
 #include <llvm/Object/SymbolicFile.h>
 #include <llvm/Support/FormatVariadic.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/SmallVectorMemoryBuffer.h>
 
 namespace luthier {
 
@@ -299,8 +302,23 @@ InstrumentedKernelLoaderAndLauncher::loadInstrumented(
         "is already loaded",
         KDAddr, Preset));
 
-  // Parse the relocatable as an AMDGCN ELF. The parse is non-owning over
-  // the MemoryBuffer's bytes.
+  // The instrumented bytes come out of `NewPMAsmPrinter` as a REL
+  // (relocatable) — no `.dynsym`, so `kernel_functions()` (which iterates
+  // dynamic symbols) yields 0, and HSA's executable loader rejects it
+  // outright. Link to a shared object via `ld.lld` so we get a proper
+  // `.dynsym` + PT_DYNAMIC layout that downstream code expects.
+  llvm::SmallVector<char, 0> LinkedBuf;
+  LUTHIER_RETURN_ON_ERROR(linker::linkRelocatableToExecutable(
+      llvm::ArrayRef<char>(Relocatable->getBufferStart(),
+                           Relocatable->getBufferSize()),
+      LinkedBuf));
+  auto Linked = std::make_unique<llvm::SmallVectorMemoryBuffer>(
+      std::move(LinkedBuf), "luthier.instrumented.linked",
+      /*RequiresNullTerminator=*/false);
+  Relocatable = std::move(Linked);
+
+  // Parse the linked executable as an AMDGCN ELF. The parse is non-owning
+  // over the MemoryBuffer's bytes.
   llvm::MemoryBufferRef RelocRef = Relocatable->getMemBufferRef();
   auto ParsedOrErr =
       object::AMDGCNObjectFile::createAMDGCNObjectFile(RelocRef);

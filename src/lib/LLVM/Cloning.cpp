@@ -419,9 +419,33 @@ llvm::Error cloneMFInto(
 
   DstMF->setDebugInstrNumberingCount(SrcMF->DebugInstrNumberingCount);
 
-  if (!DstMF->cloneInfoFrom(*SrcMF, Src2DstMBB))
-    return llvm::make_error<LLVMError>(
-        "target does not implement MachineFunctionInfo cloning");
+  // `MachineFunction::cloneInfoFrom` asserts `!this->MFInfo` (and its
+  // delegate `cloneInfo<>` asserts the same). When DstMF was vended by
+  // `MachineFunctionAnalysis::run` (which always calls
+  // `initTargetMachineFunctionInfo` at MF construction), MFInfo is
+  // already a default-constructed target MFInfo and the assert fires.
+  // This path is hit when `TargetModulePatcherPass::cloneIModuleIntoTarget`
+  // clones a non-payload, non-hook IModule helper function (which has
+  // a body) into a target-side MF allocated through TargetFAM. Lit
+  // fixtures don't exercise this path because their IModules only
+  // contain payloads + hooks; runtime IModules from
+  // `getEmbeddedModule` carry many helpers.
+  //
+  // We can't reach `MachineFunction::MFInfo` from outside (private,
+  // no setter, write-once via `getInfo<>` or `cloneInfo<>`). Detect
+  // the situation via the const `getInfo<>` overload (returns the
+  // current MFInfo without creating one) and skip the clone in that
+  // case — the helper function's source-side MFInfo at this stage
+  // of the IModule MIR pipeline (post-ISel, pre-RA) doesn't carry
+  // state beyond what target defaults already provide, so the
+  // default MFInfo from `initTargetMachineFunctionInfo` is a
+  // reasonable substitute for non-payload helpers.
+  const auto *CDstMF = DstMF;
+  if (CDstMF->template getInfo<llvm::MachineFunctionInfo>() == nullptr) {
+    if (!DstMF->cloneInfoFrom(*SrcMF, Src2DstMBB))
+      return llvm::make_error<LLVMError>(
+          "target does not implement MachineFunctionInfo cloning");
+  }
   DstMRI->freezeReservedRegs();
   //  bool Verified = DstMF->verify(nullptr, "", /*AbortOnError=*/true);
   //  LUTHIER_RETURN_ON_ERROR(LUTHIER_ASSERTION(Verified));

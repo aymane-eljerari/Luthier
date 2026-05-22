@@ -307,11 +307,16 @@ runInstrumentationPipelineForDispatch(
 
   llvm::MachineModuleInfo MMI(TM.get());
 
-  llvm::ModuleAnalysisManager MAM;
-  llvm::FunctionAnalysisManager FAM;
+  // Declaration order matters: C++ destroys these in reverse, and
+  // MAM caches a `FunctionAnalysisManagerModuleProxy::Result` whose
+  // destructor calls `FAM->clear()`. So MAM must die before FAM. Keep
+  // MAM declared LAST among the managers (same convention LLVM uses
+  // in `PassBuilder` examples).
   llvm::LoopAnalysisManager LAM;
+  llvm::FunctionAnalysisManager FAM;
   llvm::CGSCCAnalysisManager CGAM;
   llvm::MachineFunctionAnalysisManager MFAM;
+  llvm::ModuleAnalysisManager MAM;
 
   llvm::PassBuilder PB(TM.get());
   PB.registerModuleAnalyses(MAM);

@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 #include <luthier/ToolCodeGen/FunctionAnnotations.h>
 
+
 __attribute__((device)) uint64_t ConvergedBranches;
 
 __attribute__((device)) uint64_t DivergedBranches;

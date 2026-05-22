@@ -166,10 +166,13 @@ runInstrumentationPipelineForDispatch(
   auto M = std::make_unique<llvm::Module>("luthier.target", Ctx);
   M->setTargetTriple(llvm::Triple("amdgcn-amd-amdhsa"));
 
-  llvm::ModuleAnalysisManager MAM;
-  llvm::FunctionAnalysisManager FAM;
+  // C++ destroys these in reverse order, and MAM caches a
+  // `FunctionAnalysisManagerModuleProxy::Result` whose destructor calls
+  // `FAM->clear()`. So MAM must die before FAM — declare MAM LAST.
   llvm::LoopAnalysisManager LAM;
+  llvm::FunctionAnalysisManager FAM;
   llvm::CGSCCAnalysisManager CGAM;
+  llvm::ModuleAnalysisManager MAM;
   llvm::PassBuilder PB;
   PB.registerModuleAnalyses(MAM);
   PB.registerFunctionAnalyses(FAM);

@@ -26,6 +26,14 @@ llvm::PreservedAnalyses
 ExternalizeGlobalsPass::run(llvm::Module &M, llvm::ModuleAnalysisManager &) {
   for (llvm::GlobalVariable &GV : llvm::make_early_inc_range(M.globals())) {
     llvm::StringRef GVName = GV.getName();
+    // Preserve `@llvm.compiler.used` / `@llvm.used` — `MarkAnnotationsPass`
+    // (the inner pipeline's first step) reanchors hook functions
+    // against `@llvm.compiler.used` so the loader's runtime IR pipeline
+    // doesn't `GlobalDCE` them. Stripping them here by virtue of their
+    // `"llvm.metadata"` section would undo that work and the embedded
+    // module would re-arrive at the loader with no hook anchors.
+    if (GVName == "llvm.compiler.used" || GVName == "llvm.used")
+      continue;
     if (GVName.ends_with(".managed") || GV.getSection() == "llvm.metadata") {
       GV.dropAllReferences();
       GV.eraseFromParent();

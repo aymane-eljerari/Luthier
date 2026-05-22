@@ -171,6 +171,20 @@ function(luthier_add_tool target)
           --offload-arch=${arch}
           ${_wave_flag}
           -std=c++20
+          # -O3 is non-optional, not a perf knob. Without it HIP-Clang
+          # leaves out-of-line device functions like `__assert_fail`,
+          # `__ockl_fprintf_*`, the lane/popcount intrinsics, and the
+          # `__cxa_*` glue as separate post-ISel pre-RA bodies in the
+          # embedded `.llvmbc`. `TargetModulePatcherPass::cloneIModuleIntoTarget`
+          # then drags those bodies into the target MIR module, where
+          # the AsmPrinter's `AMDGPUResourceUsageAnalysisImpl::analyzeResourceUsage`
+          # asserts on the first virtual register (it indexes
+          # `getPhysRegBaseClass` directly, no `isPhysical()` guard).
+          # -O3 inlines the helpers into the hooks and DCEs any
+          # unreachable helpers, so the patcher only ever clones the
+          # hooks' merged bodies — which are exactly what runs through
+          # the rest of the codegen chain anyway.
+          -O3
           -fpass-plugin=${_ir_plugin}
           # LuthierTooling exports `AMD_INTERNAL_BUILD` as a public
           # compile-definition, which switches the bundled HSA headers

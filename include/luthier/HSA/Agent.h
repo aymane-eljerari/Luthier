@@ -47,6 +47,7 @@ llvm::Error iterateAgents(const ApiTableContainer<::CoreApiTable> &CoreApi,
 
   auto Iterator = [](hsa_agent_t Agent, void *D) -> hsa_status_t {
     auto *Data = static_cast<CBData *>(D);
+    llvm::consumeError(std::move(Data->Err));
     Data->Err = Data->CB(Agent);
     if (Data->Err)
       return HSA_STATUS_INFO_BREAK;
@@ -171,6 +172,7 @@ llvm::Error agentIterateCaches(const ApiTableContainer<::CoreApiTable> &CoreApi,
 
   auto Iterator = [](hsa_cache_t Cache, void *D) -> hsa_status_t {
     auto *Data = static_cast<CBData *>(D);
+    llvm::consumeError(std::move(Data->Err));
     Data->Err = Data->CB(Cache);
     if (Data->Err)
       return HSA_STATUS_INFO_BREAK;
@@ -211,6 +213,7 @@ agentIterateRegions(const ApiTableContainer<::CoreApiTable> &CoreApi,
 
   auto Iterator = [](hsa_region_t Region, void *D) -> hsa_status_t {
     auto *Data = static_cast<CBData *>(D);
+    llvm::consumeError(std::move(Data->Err));
     Data->Err = Data->CB(Region);
     if (Data->Err)
       return HSA_STATUS_INFO_BREAK;
@@ -255,6 +258,7 @@ agentFindFirstRegion(const ApiTableContainer<::CoreApiTable> &CoreApi,
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     }
     llvm::Expected<bool> Res = Data->CB(ISA);
+    llvm::consumeError(std::move(Data->Err));
     Data->Err = Res.takeError();
     if (Data->Err)
       return HSA_STATUS_INFO_BREAK;
@@ -332,6 +336,7 @@ llvm::Error agentIterateISAs(const ApiTableContainer<::CoreApiTable> &CoreApi,
     if (!Data) {
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     }
+    llvm::consumeError(std::move(Data->Err));
     Data->Err = Data->CB(ISA);
     if (Data->Err)
       return HSA_STATUS_INFO_BREAK;
@@ -378,6 +383,7 @@ agentFindFirstISA(const ApiTableContainer<::CoreApiTable> &CoreApi,
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     }
     llvm::Expected<bool> Res = Data->CB(ISA);
+    llvm::consumeError(std::move(Data->Err));
     Data->Err = Res.takeError();
     if (Data->Err)
       return HSA_STATUS_INFO_BREAK;

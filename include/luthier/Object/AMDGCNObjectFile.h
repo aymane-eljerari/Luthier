@@ -480,7 +480,7 @@ inline llvm::Expected<bool> AMDGCNElfSymbolRef::isKernelFunction() const {
   LUTHIER_RETURN_ON_ERROR(SymbolNameOrErr.takeError());
 
   auto KDSymbolIfFoundOrError =
-      getObject()->lookupSymbol((*getName() + ".kd").str());
+      getObject()->lookupSymbol((*SymbolNameOrErr + ".kd").str());
   LUTHIER_RETURN_ON_ERROR(KDSymbolIfFoundOrError.takeError());
 
   return KDSymbolIfFoundOrError->has_value();

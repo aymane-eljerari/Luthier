@@ -681,6 +681,16 @@ llvm::Error cloneIModuleIntoTarget(llvm::Module &IModule,
     VMap[&GV] = NewGV;
   }
 
+  // Pass 1 — create every (non-payload) Function's IR handle in the
+  // target module and stash it in VMap. The MF-clone step in pass 2
+  // walks MIs whose `Global` operands may reference any other IModule
+  // function (e.g., a helper `__ockl_fprintf_stderr_begin` is called
+  // from another helper); resolving those operands through VMap
+  // requires every function's handle to already be present, regardless
+  // of iteration order. Without this two-pass split, cloning function
+  // A's MF when A's body calls function B (and B happens later in
+  // IModule iteration order) errors with "Failed to find the
+  // corresponding value for B in the cloned value map".
   for (auto &F : IModule.functions()) {
     // Hooks and payloads stay in the IModule. Hooks are not cloned at
     // all (they're a tool-author concept that never makes it to the
@@ -690,24 +700,23 @@ llvm::Error cloneIModuleIntoTarget(llvm::Module &IModule,
     if (F.hasFnAttribute(InjectedPayloadAttribute))
       continue;
 
-    // Always clone the IR-level handle into the target module — even
-    // for declarations — so target MIs that reference this Function
-    // (via GlobalAddress operands) can resolve through VMap during
-    // payload inlining. Declarations have no body to patch, so the
-    // MF-clone step below is skipped.
     auto *NewF = llvm::Function::Create(
         llvm::cast<llvm::FunctionType>(F.getValueType()), F.getLinkage(),
         F.getAddressSpace(), F.getName(), &TargetModule);
     NewF->copyAttributesFrom(&F);
     VMap[&F] = NewF;
+  }
 
+  // Pass 2 — for each definition with a body, give the target-side
+  // Function an unreachable entry block (so its IR is well-formed)
+  // and deep-clone the IModule MF into the FAM-managed target MF.
+  for (auto &F : IModule.functions()) {
+    if (F.hasFnAttribute(InjectedPayloadAttribute))
+      continue;
     if (F.isDeclaration())
       continue;
 
-    // Definition with a body. Give the new target-side Function a
-    // minimal unreachable entry block so its IR is well-formed (the
-    // executable behavior lives in the MF), then deep-clone the
-    // IModule MF into the FAM-managed target MF.
+    auto *NewF = llvm::cast<llvm::Function>(VMap[&F]);
     auto *BB = llvm::BasicBlock::Create(TargetModule.getContext(), "", NewF);
     new llvm::UnreachableInst(TargetModule.getContext(), BB);
 
@@ -988,6 +997,20 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   for (llvm::Function &F : TargetModule) {
     if (F.isDeclaration())
       continue;
+    // Skip non-kernel target functions. The helpers `cloneIModuleIntoTarget`
+    // copies in (utility functions referenced from hooks — atomics, lane
+    // ops, ockl printf helpers, etc.) carry terminator shapes
+    // (`S_SETPC_B64` returns, indirect calls) that LLVM AMDGPU's
+    // `analyzeBranch` doesn't fully understand. Running the long-branch
+    // relaxer on them trips `MachineOperand::getMBB()`'s `isMBB()`
+    // assert inside `analyzeBranch`. Lit fixtures don't hit this
+    // because they only carry payload IModules; the runtime path's
+    // embedded bitcode brings in real HIP helpers. Long branches only
+    // need correctness on the kernels themselves anyway — they're the
+    // ones whose post-instrumentation expansion grows the code far
+    // enough to need relaxing.
+    if (F.getCallingConv() != llvm::CallingConv::AMDGPU_KERNEL)
+      continue;
     llvm::MachineFunction *MF = &getTargetMF(F);
     llvm::DenseSet<llvm::MCPhysReg> ReservedForSVA;
     for (const auto &MBB : *MF) {
@@ -1175,6 +1198,10 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   llvm::SmallVector<OutOfRangeBranchRecord, 4> OutOfRange;
   for (llvm::Function &F : TargetModule) {
     if (F.isDeclaration())
+      continue;
+    // Same kernel-only filter as the relaxer loop — `analyzeBranch`
+    // on non-kernel cloned helpers crashes on `isMBB()`.
+    if (F.getCallingConv() != llvm::CallingConv::AMDGPU_KERNEL)
       continue;
     detectOutOfRangeBranches(getTargetMF(F), OutOfRange);
   }
