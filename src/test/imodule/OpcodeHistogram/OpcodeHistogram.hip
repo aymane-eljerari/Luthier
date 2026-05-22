@@ -12,8 +12,6 @@
 #include <luthier/Intrinsic/Intrinsics.h>
 #include <luthier/ToolCodeGen/FunctionAnnotations.h>
 
-MARK_LUTHIER_DEVICE_MODULE
-
 constexpr unsigned LUTHIER_TEST_OPCODE_LIST_END = 32768;
 
 __attribute__((device)) uint64_t KernelHistogram[LUTHIER_TEST_OPCODE_LIST_END];

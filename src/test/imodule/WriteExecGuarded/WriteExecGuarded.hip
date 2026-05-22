@@ -9,8 +9,6 @@
 #include <luthier/Intrinsic/Intrinsics.h>
 #include <luthier/ToolCodeGen/FunctionAnnotations.h>
 
-MARK_LUTHIER_DEVICE_MODULE
-
 __attribute__((device)) uint64_t SerializedBumps;
 
 LUTHIER_HOOK_ANNOTATE serializedBump() {

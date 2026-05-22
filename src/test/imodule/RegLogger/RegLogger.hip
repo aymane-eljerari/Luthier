@@ -11,8 +11,6 @@
 #include <luthier/Intrinsic/Intrinsics.h>
 #include <luthier/ToolCodeGen/FunctionAnnotations.h>
 
-MARK_LUTHIER_DEVICE_MODULE
-
 __attribute__((device)) uint64_t RegSum32[16];
 
 __attribute__((device)) uint64_t RegSum64[16];

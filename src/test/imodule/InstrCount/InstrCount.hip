@@ -7,8 +7,6 @@
 #include <luthier/Intrinsic/Intrinsics.h>
 #include <luthier/ToolCodeGen/FunctionAnnotations.h>
 
-MARK_LUTHIER_DEVICE_MODULE
-
 __attribute__((device)) uint64_t Counter;
 
 LUTHIER_HOOK_ANNOTATE countInstructionsVector(bool CountWaveFrontLevel) {
