@@ -1,5 +1,5 @@
 //===-- KernelInstrument.hip ----------------------------------------------===//
-// Copyright 2022-2025 @ Northeastern University Computer Architecture Lab
+// Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,225 +15,290 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// This file implements a sample kernel instrumentation tool.
+/// Sample kernel-instrumentation tool demonstrating the \c writeReg intrinsic.
+/// Inserts an \c instrumentationHook before a fixed offset in the entry MBB.
 //===----------------------------------------------------------------------===//
+#include <chrono>
+#include <hip/hip_runtime_api.h>
+#include <llvm/CodeGen/MachineBasicBlock.h>
+#include <llvm/CodeGen/MachineFunction.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/PassManager.h>
+#include <llvm/Passes/PassBuilder.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/FormatVariadic.h>
+#include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/PrettyStackTrace.h>
-#include <luthier/llvm/streams.h>
-#include <luthier/luthier.h>
-#include <luthier/tooling/Context.h>
+#include <llvm/Support/SmallVectorMemoryBuffer.h>
+#include <luthier/Common/ErrorCheck.h>
+#include <luthier/HSA/AqlPacket.h>
+#include <luthier/HSA/HsaError.h>
+#include <luthier/HSATooling/HSATool.h>
+#include <luthier/HSATooling/HsaMemoryAllocationAccessor.h>
+#include <luthier/Intrinsic/Intrinsics.h>
+#include <luthier/LLVM/streams.h>
+#include <luthier/Rocprofiler/ApiTableSnapshot.h>
+#include <luthier/ToolCodeGen/CodeDiscoveryPass.h>
+#include <luthier/ToolCodeGen/EntryPoint.h>
+#include <luthier/ToolCodeGen/FunctionAnnotations.h>
+#include <luthier/ToolCodeGen/InitialEntryPointAnalysis.h>
+#include <luthier/ToolCodeGen/InitialExecutionPointAnalysis.h>
+#include <luthier/ToolCodeGen/InstrumentationPMDriver.h>
+#include <luthier/ToolCodeGen/InstrumentationPass.h>
+#include <luthier/ToolCodeGen/IPPredicatedCFG.h>
+#include <luthier/ToolCodeGen/LuthierCallGraph.h>
+#include <luthier/ToolCodeGen/MemoryAllocationAccessor.h>
+#include <luthier/ToolCodeGen/MetadataParserAnalysis.h>
+#include <luthier/ToolCodeGen/NewPMAsmPrinter.h>
+#include <luthier/ToolCodeGen/PrePostAmbleEmitter.h>
+#include <mutex>
+#include <SIDefines.h>
 
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "luthier-kernel-instrument-tool"
 
-// template <typename Integral = uint64_t>
-// constexpr Integral
-// bit_mask (int first, int last)
-//{
-//   dbgapi_assert (last >= first && "invalid argument");
-//   size_t num_bits = last - first + 1;
-//   return ((num_bits >= sizeof (Integral) * 8)
-//               ? ~Integral{ 0 } /* num_bits exceed the size of Integral */
-//               : ((Integral{ 1 } << num_bits) - 1))
-//          << first;
-// }
-//
-// static __device__ constexpr uint32_t ttmp11_wave_in_group_mask = bit_mask (0,
-// 5); static __device__ constexpr int ttmp11_wave_in_group_shift = 0;
+namespace {
 
-using namespace luthier;
+struct KernelInstrumentTool
+    : public luthier::HSATool<KernelInstrumentTool, llvm::MachineFunction> {
+  using HSATool::HSATool;
 
-static Context *C{nullptr};
+  __attribute__((managed)) static uint64_t WaveID;
+  __attribute__((managed)) static hsa_dim3_t GroupIDs;
+  __attribute__((managed)) static uint64_t PositionInGroup;
 
-static std::mutex Mutex;
+  LUTHIER_HOOK_MEMBER_ATTR static void instrumentationHook(llvm::MCRegister Reg,
+                                                           uint32_t Val);
 
-MARK_LUTHIER_DEVICE_MODULE
+  struct Options {
+    llvm::cl::OptionCategory Cat{"Kernel Instrument Tool Options"};
+    luthier::InstrumentationPMDriverOptions DriverOpts;
+    luthier::CodeDiscoveryPassOptions DiscoveryOpts;
+  } Opts;
 
-__attribute__((managed)) uint64_t WaveID = 0;
+  std::mutex Mutex;
+  uint32_t NumKernelLaunched = 0;
 
-__attribute__((managed)) hsa_dim3_t GroupIDs{0, 0, 0};
+  void onPackets(const hsa_queue_t &Queue, uint64_t PacketIdx,
+                 llvm::ArrayRef<luthier::hsa::AqlPacket> Packets,
+                 hsa_amd_queue_intercept_packet_writer PacketWriter);
 
-__attribute__((managed)) uint64_t PositionInGroup{0};
+  luthier::InstrumentationPreservedAnalyses
+  runInstrumentationPass(llvm::Module &IModule, llvm::ModuleAnalysisManager &,
+                         llvm::MachineFunction &MF,
+                         llvm::FunctionAnalysisManager &);
+};
 
-// __attribute__((device, noinline)) void myFunc(const uint32_t &MyInt) {
-//   unsigned long long int ExecMask = __builtin_amdgcn_read_exec();
+__attribute__((managed)) uint64_t KernelInstrumentTool::WaveID = 0;
+__attribute__((managed)) hsa_dim3_t KernelInstrumentTool::GroupIDs{0, 0, 0};
+__attribute__((managed)) uint64_t KernelInstrumentTool::PositionInGroup{0};
 
-//   // Overwrite the exec mask with one so that only a single thread is active
-//   luthier::writeExec(1);
-//   // Increment the counter by 1
-//   atomicAdd(&WaveID, MyInt);
-//   // Restore the exec mask
-//   luthier::writeExec(ExecMask);
-// }
-
-LUTHIER_HOOK_ANNOTATE instrumentationHookUint32(const llvm::MCRegister Reg,
-                                                const uint32_t Val) {
+LUTHIER_HOOK_MEMBER_ATTR void
+KernelInstrumentTool::instrumentationHook(llvm::MCRegister Reg, uint32_t Val) {
   luthier::writeReg(Reg, Val);
 }
 
+static luthier::rocprofiler::HsaApiTableSnapshot<::CoreApiTable>
+    *CoreApiSnapshot{nullptr};
+static luthier::rocprofiler::HsaApiTableSnapshot<::AmdExtTable>
+    *AmdExtSnapshot{nullptr};
+static luthier::rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
+    *LoaderSnapshot{nullptr};
+static KernelInstrumentTool *Tool{nullptr};
 
-LUTHIER_HOOK_ANNOTATE instrumentationHookUint64(const llvm::MCRegister Reg,
-                                                const uint64_t Val) {
-  luthier::writeReg(Reg, Val);
+static llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>>
+runInstrumentationPipelineForDispatch(
+    KernelInstrumentTool &T, const hsa_kernel_dispatch_packet_t &Packet) {
+  llvm::LLVMContext Ctx;
+  auto M = std::make_unique<llvm::Module>("luthier.target", Ctx);
+  M->setTargetTriple(llvm::Triple("amdgcn-amd-amdhsa"));
+
+  llvm::ModuleAnalysisManager MAM;
+  llvm::FunctionAnalysisManager FAM;
+  llvm::LoopAnalysisManager LAM;
+  llvm::CGSCCAnalysisManager CGAM;
+  llvm::PassBuilder PB;
+  PB.registerModuleAnalyses(MAM);
+  PB.registerFunctionAnalyses(FAM);
+  PB.registerLoopAnalyses(LAM);
+  PB.registerCGSCCAnalyses(CGAM);
+  PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+
+  const auto &KD = *reinterpret_cast<const llvm::amdhsa::kernel_descriptor_t *>(
+      Packet.kernel_object);
+
+  MAM.registerPass([&] {
+    return luthier::InitialEntryPointAnalysis(
+        [&](llvm::Module &, llvm::ModuleAnalysisManager &) {
+          return luthier::EntryPoint(KD);
+        });
+  });
+  MAM.registerPass([&] {
+    return luthier::InitialExecutionPointAnalysis(
+        [&](llvm::Module &, llvm::ModuleAnalysisManager &)
+            -> const llvm::amdhsa::kernel_descriptor_t & { return KD; });
+  });
+  MAM.registerPass([&] {
+    return luthier::MemoryAllocationAnalysis(
+        std::make_unique<luthier::HsaMemoryAllocationAccessor>(
+            T, *::CoreApiSnapshot, *::AmdExtSnapshot,
+            ::LoaderSnapshot->getTable()));
+  });
+  luthier::amdgpu::hsamd::MetadataParser MetadataParserInstance;
+  MAM.registerPass([&] {
+    return luthier::MetadataParserAnalysis(MetadataParserInstance);
+  });
+  MAM.registerPass([] { return luthier::LuthierCallGraphAnalysis(); });
+  MAM.registerPass(
+      [] { return luthier::FunctionPreambleDescriptorAnalysis(); });
+  MAM.registerPass([] { return luthier::IPPredCFGAnalysis(); });
+
+  llvm::SmallVector<char, 0> ObjBuf;
+  llvm::raw_svector_ostream ObjOS(ObjBuf);
+
+  llvm::ModulePassManager MPM;
+  MPM.addPass(luthier::CodeDiscoveryPass(T.Opts.DiscoveryOpts));
+  MPM.addPass(T.buildPipeline(T.Opts.DriverOpts));
+  MPM.addPass(
+      luthier::NewPMAsmPrinter(llvm::CodeGenFileType::ObjectFile, ObjOS));
+  MPM.run(*M, MAM);
+
+  return std::make_unique<llvm::SmallVectorMemoryBuffer>(
+      std::move(ObjBuf), "luthier.instrumented",
+      /*RequiresNullTerminator=*/false);
 }
 
+luthier::InstrumentationPreservedAnalyses
+KernelInstrumentTool::runInstrumentationPass(llvm::Module &IModule,
+                                             llvm::ModuleAnalysisManager &,
+                                             llvm::MachineFunction &MF,
+                                             llvm::FunctionAnalysisManager &) {
+  if (MF.empty() || MF.front().empty())
+    return luthier::InstrumentationPreservedAnalyses{};
+  // Replicate the original tool's "fourth instruction in the entry MBB"
+  // insertion point — chase ->getNextNode() three times from the first
+  // instruction.
+  auto *Begin = &*MF.front().begin();
+  auto *Tgt = Begin->getNextNode();
+  if (!Tgt)
+    return luthier::InstrumentationPreservedAnalyses{};
+  auto *T2 = Tgt->getNextNode();
+  if (!T2)
+    return luthier::InstrumentationPreservedAnalyses{};
+  auto *T3 = T2->getNextNode();
+  if (!T3)
+    return luthier::InstrumentationPreservedAnalyses{};
 
-LUTHIER_HOOK_ANNOTATE instrumentationHook(const llvm::MCRegister Reg,
-                                          const uint32_t Val) {
-  luthier::writeReg(Reg, Val);
-
-  // uint32_t MyArray[20];
-  // for (int i = 0; i < 20; i++) {
-  //   MyArray[i] = i;
-  // }
-  // for (int i = 0; i < 20; i++) {
-  //   myFunc(MyArray[i]);
-  // }
-  //     writeReg<uint64_t>(llvm::AMDGPU::SGPR4_SGPR5, 5);
-  //  if (RegVal > 5)
-  //    PositionInGroup += RegVal;
-  //  else
-  //    WaveID = RegVal + 4;
-  //    writeReg<uint32_t>(llvm::AMDGPU::SGPR10, RegVal);
-  //    PositionInGroup = 5;
-  //   uint32_t MyReg = readReg<uint32_t>(llvm::AMDGPU::SGPR4);
-  //   int MyVal;
-  //   if (MyReg > 5) {
-  //     MyVal = MyReg;
-  //   }
-  //   else if (MyReg == 2)
-  //     MyVal = readReg<uint32_t>(llvm::AMDGPU::SGPR4);
-  //   else
-  //     MyVal = readReg<uint32_t>(llvm::AMDGPU::SGPR4);;
-  ////   PositionInGroup = readReg<uint32_t>(llvm::AMDGPU::SGPR5);
-  //   PositionInGroup = MyVal + 5;
-
-  //  uint32_t idy = readReg<uint32_t>(llvm::AMDGPU::TTMP9);
-  //  uint32_t v0 =  readReg<uint32_t>(llvm::AMDGPU::VGPR0);
-  //  uint32_t v1 = readReg<uint32_t>(llvm::AMDGPU::SRC_POPS_EXITING_WAVE_ID);
-  //  uint32_t groupPos =
-  //      (readReg<uint32_t>(llvm::AMDGPU::TTMP11) & 63) >> 0;
-  //  if (idx == 4 && v0 == 31) {
-  //    WaveID = readReg<uint64_t>(llvm::AMDGPU::TTMP4_TTMP5);
-  //    GroupIDs.x = readReg<uint32_t>(llvm::AMDGPU::TTMP8);
-  //    GroupIDs.y = readReg<uint32_t>(llvm::AMDGPU::TTMP9);
-  //    GroupIDs.z = readReg<uint32_t>(llvm::AMDGPU::TTMP10);
-  ////    PositionInGroup = (readReg<uint32_t>(llvm::AMDGPU::TTMP11) & 63);
-  //    PositionInGroup = v1;
-  //  }
+  auto &Ctx = IModule.getContext();
+  LUTHIER_REPORT_FATAL_ON_ERROR(this->createInjectedPayload(
+      reinterpret_cast<const void *>(&KernelInstrumentTool::instrumentationHook),
+      IModule, *T3,
+      {llvm::ConstantInt::get(llvm::Type::getInt32Ty(Ctx), llvm::AMDGPU::SCC),
+       llvm::ConstantInt::get(llvm::Type::getInt32Ty(Ctx), 1)}));
+  return luthier::InstrumentationPreservedAnalyses{};
 }
 
-
-static void
-atPacketDispatchCallback(const hsa_queue_t &Queue, uint64_t PacketIdx,
-                         llvm::ArrayRef<hsa::AqlPacket> Packets,
-                         hsa_amd_queue_intercept_packet_writer PacketWriter) {
-  std::vector<hsa::AqlPacket> AppPackets(Packets);
+void KernelInstrumentTool::onPackets(
+    const hsa_queue_t &, uint64_t,
+    llvm::ArrayRef<luthier::hsa::AqlPacket> Packets,
+    hsa_amd_queue_intercept_packet_writer PacketWriter) {
+  std::vector<luthier::hsa::AqlPacket> AppPackets(Packets.begin(),
+                                                  Packets.end());
   for (auto &Packet : AppPackets) {
-    if (auto *DispatchPacket = Packet.asKernelDispatch()) {
-      Mutex.lock();
-      const auto HsaCoreApiTable = C->getHsaCoreTable();
-      const auto &LoaderTable = C->getHsaLoaderTable();
-      auto KernelSymbol =
-          hsa::KernelDescriptor::fromKernelObject(DispatchPacket->kernel_object)
-              ->getLoadedCodeObjectKernelSymbol(HsaCoreApiTable, LoaderTable);
-
-      if (auto Err = KernelSymbol.takeError())
-        llvm::report_fatal_error(std::move(Err), true);
-      if (!llvm::cantFail(
-              isKernelInstrumented(**KernelSymbol, "instrumented"))) {
-
-        auto LiftedKernel = luthier::lift(**KernelSymbol);
-        if (auto Err = LiftedKernel.takeError())
-          llvm::report_fatal_error(std::move(Err), true);
-
-        if (auto Err = luthier::instrumentAndLoad(
-                **KernelSymbol, *LiftedKernel,
-                [&](InstrumentationTask &IT,
-                    LiftedRepresentation &LR) -> llvm::Error {
-                  // insert a hook after the first instruction of each basic
-                  // block
-                  return LR.iterateAllDefinedFunctionTypes(
-                      [&](const hsa::LoadedCodeObjectSymbol &Sym,
-                          llvm::MachineFunction &MF) -> llvm::Error {
-                        auto &MBB = MF.front();
-                        return IT.insertHookBefore(
-                            *MBB.begin()
-                                 ->getNextNode()
-                                 ->getNextNode()
-                                 ->getNextNode(),
-                            LUTHIER_GET_HOOK_HANDLE(instrumentationHookBool),
-                            {llvm::ConstantInt::get(
-                                 llvm::Type::getInt32Ty(LR.getContext()),
-                                 llvm::AMDGPU::SCC),
-                                 llvm::ConstantInt::get(
-                                  llvm::Type::getInt32Ty(LR.getContext()),
-                                  1)});
-                      });
-                },
-                "instrumented")) {
-          llvm::report_fatal_error(std::move(Err), true);
-        }
-        if (auto Err =
-                overrideWithInstrumented(*DispatchPacket, "instrumented"))
-          llvm::report_fatal_error(std::move(Err), true);
-      }
-      PacketWriter(DispatchPacket, 1);
-      Mutex.unlock();
-    } else {
+    auto *DispatchPacket = Packet.asKernelDispatch();
+    if (!DispatchPacket) {
       PacketWriter(&Packet, 1);
+      continue;
     }
+    std::lock_guard<std::mutex> Lock(Mutex);
+
+    const auto *KD =
+        reinterpret_cast<const llvm::amdhsa::kernel_descriptor_t *>(
+            DispatchPacket->kernel_object);
+    if (this->overrideWithInstrumented(*DispatchPacket, 0)) {
+      llvm::consumeError(this->overrideWithInstrumented(*DispatchPacket, 0));
+      std::unique_ptr<llvm::MemoryBuffer> ObjBuf;
+      LUTHIER_REPORT_FATAL_ON_ERROR(
+          runInstrumentationPipelineForDispatch(*this, *DispatchPacket)
+              .moveInto(ObjBuf));
+      LUTHIER_REPORT_FATAL_ON_ERROR(
+          this->loadInstrumented(std::move(ObjBuf), KD, 0).takeError());
+      LUTHIER_REPORT_FATAL_ON_ERROR(
+          this->overrideWithInstrumented(*DispatchPacket, 0));
+    }
+    PacketWriter(DispatchPacket, 1);
+    NumKernelLaunched++;
   }
 }
 
+} // anonymous namespace
+
 namespace luthier {
 
-void atToolFini(void *) {
-  luthier::outs() << llvm::formatv("WaveID: {0}\n", WaveID);
-  luthier::outs() << llvm::formatv("Group ID: ({0}, {1}, {2})\n", GroupIDs.z,
-                                   GroupIDs.y, GroupIDs.x);
-  luthier::outs() << llvm::formatv("Position in Group: {0}\n", PositionInGroup);
-  //    llvm::outs() << llvm::formatv("Counter 4 Value: {0:x}\n",
-  //    GlobalCounter4); llvm::outs() << llvm::formatv("Counter 5 Value:
-  //    {0:x}\n", GlobalCounter5); llvm::outs() << "Pointer of counter at
-  //    host: "
-  //                 << llvm::to_address(&GlobalCounter) << "\n";
-  //    llvm::outs() << "Reserved variable address: "
-  //                 << llvm::to_address(
-  //                        reinterpret_cast<uint64_t *>(&__luthier_reserved))
-  //                 << "\n";
-  luthier::outs() << "Kernel Instrument Tool is terminating!\n";
-  delete C;
+static void atToolFini(void *) {
+  static std::once_flag Once{};
+  std::call_once(Once, []() {
+    luthier::outs() << llvm::formatv("WaveID: {0}\n",
+                                     KernelInstrumentTool::WaveID);
+    luthier::outs() << llvm::formatv("Group ID: ({0}, {1}, {2})\n",
+                                     KernelInstrumentTool::GroupIDs.z,
+                                     KernelInstrumentTool::GroupIDs.y,
+                                     KernelInstrumentTool::GroupIDs.x);
+    luthier::outs() << llvm::formatv("Position in Group: {0}\n",
+                                     KernelInstrumentTool::PositionInGroup);
+    luthier::outs() << "Kernel Instrument Tool is terminating!\n";
+    delete Tool;
+    Tool = nullptr;
+    delete LoaderSnapshot;
+    LoaderSnapshot = nullptr;
+    delete AmdExtSnapshot;
+    AmdExtSnapshot = nullptr;
+    delete CoreApiSnapshot;
+    CoreApiSnapshot = nullptr;
+  });
 }
 
 static void atToolFini() { atToolFini(nullptr); }
 
-void atToolInit(void *) {
+static void atToolInit(void *) {
   static std::once_flag Once{};
   std::call_once(Once, [] {
-    llvm::outs() << "Kernel instrument tool is launching.\n";
+    luthier::outs() << "Kernel instrument tool is launching.\n";
     std::atexit(atToolFini);
+
+    llvm::Error Err = llvm::Error::success();
+    CoreApiSnapshot =
+        new luthier::rocprofiler::HsaApiTableSnapshot<::CoreApiTable>(Err);
+    if (Err)
+      llvm::report_fatal_error(std::move(Err));
+    AmdExtSnapshot =
+        new luthier::rocprofiler::HsaApiTableSnapshot<::AmdExtTable>(Err);
+    if (Err)
+      llvm::report_fatal_error(std::move(Err));
+    LoaderSnapshot = new luthier::rocprofiler::HsaExtensionTableSnapshot<
+        HSA_EXTENSION_AMD_LOADER>(Err);
+    if (Err)
+      llvm::report_fatal_error(std::move(Err));
+
+    Tool = new KernelInstrumentTool(*CoreApiSnapshot, *AmdExtSnapshot,
+                                    *LoaderSnapshot, Err);
+    if (Err)
+      llvm::report_fatal_error(std::move(Err));
 
     const auto Argv = "";
     LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         llvm::cl::ParseCommandLineOptions(0, &Argv,
                                           "Luthier Kernel Instrument Tool",
-                                          &luthier::errs(), "LUTHIER_ARGS"),
+                                          &luthier::errs(), nullptr,
+                                          "LUTHIER_ARGS"),
         "Failed to parse the command line arguments."));
     llvm::EnablePrettyStackTrace();
     llvm::sys::PrintStackTraceOnErrorSignal(llvm::StringRef());
     llvm::setBugReportMsg("PLEASE submit a bug report to "
                           "https://github.com/matinraayai/Luthier/issues/ and "
                           "include the crash error message and backtrace.\n");
-    // Add the rocprofiler finalize function as a signal handler to LLVM so that
-    // it executes in case of a fatal error
     llvm::sys::AddSignalHandler(atToolFini, nullptr);
-
-    llvm::Error Err = llvm::Error::success();
-    C = new Context(atPacketDispatchCallback, Err);
-    if (Err)
-      llvm::report_fatal_error(std::move(Err));
   });
 }
 
@@ -242,7 +307,6 @@ void atToolInit(void *) {
 extern "C" __attribute__((used)) rocprofiler_tool_configure_result_t *
 rocprofiler_configure(uint32_t Version, const char *RuntimeVersion,
                       uint32_t Priority, rocprofiler_client_id_t *ClientID) {
-  // Initialize the tooling library
   luthier::atToolInit(nullptr);
 
   LLVM_DEBUG(const uint32_t RocProfVerMajor = Version / 10000;
@@ -251,8 +315,7 @@ rocprofiler_configure(uint32_t Version, const char *RuntimeVersion,
              llvm::dbgs() << "Registering Luthier tool with rocprofiler-sdk.\n";
              llvm::dbgs() << "Rocprofiler-sdk version: " << RocProfVerMajor
                           << "." << RocProfVerMinor << "." << RocProfVerPatch
-                          << " (" << RuntimeVersion << ")"
-                          << "\n";
+                          << " (" << RuntimeVersion << ")\n";
              llvm::dbgs() << "Tool priority: " << Priority << ";\n";);
   ClientID->name = "Luthier Kernel Instrument tool";
 

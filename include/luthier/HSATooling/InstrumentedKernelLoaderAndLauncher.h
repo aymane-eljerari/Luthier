@@ -18,8 +18,8 @@
 /// Defines two collaborating classes:
 ///   - \c InstrumentedKernelLoaderAndLauncher: non-templated base.
 ///     Owns the per-tool cache of loaded instrumented-kernel HSA
-///     executables and exposes the load / unload / override entry
-///     points.
+///     executables keyed by the original kernel-descriptor pointer
+///     on the device.
 ///   - \c InstrumentedKernelLoaderAndLauncherTrait<Derived>: header-only
 ///     CRTP trait that extends the base and installs an
 ///     \c hsa_executable_destroy interceptor driving
@@ -42,6 +42,7 @@
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/DenseMapInfo.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/Support/AMDHSAKernelDescriptor.h>
 #include <llvm/Support/Error.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/RWMutex.h>
@@ -56,26 +57,32 @@ class DeviceToolCodeLoader;
 /// \brief Per-tool cache of instrumented HSA kernel executables.
 ///
 /// Each cached record packages, for a single
-/// <tt>(OriginalKernel, Preset)</tt> tuple, the relocatable ELF bytes
-/// (owned), the HSA code-object reader created over them, the HSA
+/// <tt>(OriginalKD, Preset)</tt> tuple (where \c OriginalKD is a pointer
+/// to the kernel descriptor on the device — the same value that lives in
+/// \c hsa_kernel_dispatch_packet_t::kernel_object), the relocatable ELF
+/// bytes (owned), the HSA code-object reader created over them, the HSA
 /// executable they were loaded into, and the resulting instrumented
 /// kernel symbol + descriptor address + private segment size.
 ///
 /// \c loadInstrumented is the cold-path entry point; it takes ownership
 /// of \p Relocatable so the HSA code-object reader's view into host
-/// memory stays valid for the record's lifetime. \c
-/// overrideWithInstrumented is the hot path called from a packet
+/// memory stays valid for the record's lifetime. The relocatable is
+/// expected to contain exactly one kernel function; the launcher does
+/// not validate its name against any expected name.
+/// \c overrideWithInstrumented is the hot path called from a packet
 /// interceptor and is reader-locked.
 ///
 /// \c invalidateOriginalExec is invoked by the
 /// \c InstrumentedKernelLoaderAndLauncherTrait subclass from inside its
 /// \c hsa_executable_destroy interceptor whenever an application
-/// executable is about to be torn down. It walks that executable's
-/// kernel symbols and erases any cache records keyed by those symbols.
+/// executable is about to be torn down. It walks the executable's
+/// loaded code objects and erases any cache records whose original KD
+/// pointer falls inside one of those loaded ranges.
 class InstrumentedKernelLoaderAndLauncher {
 public:
   InstrumentedKernelLoaderAndLauncher(
       const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
+      const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
       const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
           &Loader,
       DeviceToolCodeLoader &DeviceCode);
@@ -88,21 +95,32 @@ public:
   operator=(const InstrumentedKernelLoaderAndLauncher &) = delete;
 
   /// Parse \p Relocatable as an AMDGCN ELF, require it contain exactly
-  /// one kernel function whose name matches \p OriginalKernel, resolve
-  /// the relocatable's UND globals against the per-agent symbols
-  /// published by the tool's \c DeviceToolCodeLoader on
-  /// \p OriginalKernel's agent, create + load + freeze a fresh HSA
+  /// one kernel function (any name — assumed to be the instrumented
+  /// kernel), resolve the relocatable's UND globals against the
+  /// per-agent symbols published by the tool's \c DeviceToolCodeLoader
+  /// on the agent that owns \p OriginalKD (resolved via the application
+  /// \c LoadedCodeObjectCache), create + load + freeze a fresh HSA
   /// executable, and cache the resulting kernel symbol under the key
-  /// <tt>(OriginalKernel, Preset)</tt>.
+  /// <tt>(OriginalKD, Preset)</tt>.
   ///
   /// Takes ownership of \p Relocatable for the lifetime of the
   /// resulting record — the HSA code-object reader keeps a pointer
   /// into it.
   ///
+  /// \param OriginalKD pointer to the kernel descriptor on the device
+  /// of the original (un-instrumented) kernel. This is the value of the
+  /// \c kernel_object field on \c hsa_kernel_dispatch_packet_t cast to
+  /// \c const \c llvm::amdhsa::kernel_descriptor_t*. The agent that
+  /// owns the KD's allocation is queried via \c hsa_amd_pointer_info,
+  /// which works regardless of whether the KD was published through
+  /// the HSA loader or allocated directly out of an HSA memory pool.
+  ///
   /// Errors:
-  ///   - an entry for the same <tt>(OriginalKernel, Preset)</tt>
+  ///   - an entry for the same <tt>(OriginalKD, Preset)</tt>
   ///     already exists
-  ///   - the ELF contains zero, more than one, or a mis-named kernel
+  ///   - the ELF contains zero or more than one kernel function
+  ///   - \c hsa_amd_pointer_info fails or reports the pointer as
+  ///     not owned by an HSA allocation
   ///   - any UND global symbol does not resolve in the
   ///     \c DeviceToolCodeLoader
   ///   - any UND function symbol is present
@@ -110,14 +128,15 @@ public:
   ///     symbol lookup)
   llvm::Expected<hsa_executable_symbol_t>
   loadInstrumented(std::unique_ptr<llvm::MemoryBuffer> Relocatable,
-                   hsa_executable_symbol_t OriginalKernel, uint64_t Preset = 0);
+                   const llvm::amdhsa::kernel_descriptor_t *OriginalKD,
+                   uint64_t Preset = 0);
 
   /// Tear down the HSA executable + reader cached under
-  /// <tt>(OriginalKernel, Preset)</tt> and remove the entry from every
-  /// cache index. Idempotent: a missing entry is success. Returns any
+  /// <tt>(OriginalKD, Preset)</tt> and remove the entry from the
+  /// cache. Idempotent: a missing entry is success. Returns any
   /// joined HSA destruction errors.
-  llvm::Error unloadInstrumentedIfExists(hsa_executable_symbol_t OriginalKernel,
-                                         uint64_t Preset = 0);
+  llvm::Error unloadInstrumentedIfExists(
+      const llvm::amdhsa::kernel_descriptor_t *OriginalKD, uint64_t Preset = 0);
 
   /// Rewrite \p Packet 's <tt>kernel_object</tt> to the cached
   /// instrumented variant for <tt>(Packet.kernel_object, Preset)</tt>,
@@ -131,16 +150,22 @@ public:
   /// teardown succeeded). Idempotent.
   llvm::Error unloadAll();
 
-  /// Walk \p Exec 's kernel symbols and erase any cache records keyed
-  /// by those symbols (for every cached preset). Returns a joined
-  /// \c llvm::Error of any HSA failures collected along the way.
-  /// Called by the trait subclass from inside the
+  /// Walk \p Exec 's loaded code objects and erase any cache records
+  /// whose original KD pointer falls inside one of those loaded ranges.
+  /// Returns a joined \c llvm::Error of any HSA failures collected
+  /// along the way. Called by the trait subclass from inside the
   /// \c hsa_executable_destroy interceptor before chaining to the next
   /// wrapper.
   llvm::Error invalidateOriginalExec(hsa_executable_t Exec);
 
 protected:
   const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi;
+  /// AMD extension table — needed for \c hsa_amd_pointer_info to resolve
+  /// the agent that owns the kernel descriptor allocation. This path
+  /// works for both loader-published allocations and direct memory-pool
+  /// allocations, so the launcher doesn't have to assume the KD lives
+  /// inside a cached loaded code object.
+  const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt;
   const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
       &Loader;
   DeviceToolCodeLoader &DeviceCode;
@@ -151,7 +176,7 @@ protected:
   /// \c invalidateOriginalExec) takes the writer lock.
   mutable llvm::sys::RWMutex Mutex;
 
-  /// One per <tt>(OriginalKernel, Preset)</tt> entry. Stores the
+  /// One per <tt>(OriginalKD, Preset)</tt> entry. Stores the
   /// instrumented HSA executable and reader the launcher owns, plus
   /// the cached scalar fields needed by the override hot path.
   struct InstrumentedRecord {
@@ -170,62 +195,43 @@ protected:
     /// \c InstrumentedKernelSym. \c overrideWithInstrumented bumps
     /// \c Packet.private_segment_size to at least this value.
     uint32_t PrivateSegmentSize{0};
-    /// Cached \c hsa_executable_symbol_get_info(KERNEL_OBJECT) of the
-    /// original kernel. Backs the \c ByOriginalKO lookup that drives
-    /// the override hot path.
-    uint64_t OriginalKO{0};
     /// Agent the kernel runs on. Held for diagnostics / future use.
     hsa_agent_t Agent{};
   };
 
-  /// Cache key. Layered on top of LLVM's existing
-  /// \c DenseMapInfo<hsa_executable_symbol_t> so it composes cleanly.
+  /// Cache key — original KD pointer + preset. \c overrideWithInstrumented
+  /// builds the key from \c Packet.kernel_object cast to KD*.
   struct Key {
-    hsa_executable_symbol_t OriginalKernel;
+    const llvm::amdhsa::kernel_descriptor_t *KD;
     uint64_t Preset;
   };
 
   struct KeyDenseMapInfo {
-    using SymInfo = llvm::DenseMapInfo<hsa_executable_symbol_t>;
+    using PtrInfo =
+        llvm::DenseMapInfo<const llvm::amdhsa::kernel_descriptor_t *>;
     using U64Info = llvm::DenseMapInfo<uint64_t>;
     static Key getEmptyKey() {
-      return Key{SymInfo::getEmptyKey(), U64Info::getEmptyKey()};
+      return Key{PtrInfo::getEmptyKey(), U64Info::getEmptyKey()};
     }
     static Key getTombstoneKey() {
-      return Key{SymInfo::getTombstoneKey(), U64Info::getTombstoneKey()};
+      return Key{PtrInfo::getTombstoneKey(), U64Info::getTombstoneKey()};
     }
     static unsigned getHashValue(const Key &K) {
-      return llvm::detail::combineHashValue(
-          SymInfo::getHashValue(K.OriginalKernel),
-          U64Info::getHashValue(K.Preset));
+      return llvm::detail::combineHashValue(PtrInfo::getHashValue(K.KD),
+                                            U64Info::getHashValue(K.Preset));
     }
     static bool isEqual(const Key &L, const Key &R) {
-      return SymInfo::isEqual(L.OriginalKernel, R.OriginalKernel) &&
-             L.Preset == R.Preset;
+      return L.KD == R.KD && L.Preset == R.Preset;
     }
   };
 
   /// Authoritative storage of every cached record.
   llvm::DenseMap<Key, InstrumentedRecord, KeyDenseMapInfo> ByOriginal;
 
-  /// Override hot-path index: original \c kernel_object + preset →
-  /// record pointer. Pointers point into \c ByOriginal; both maps are
-  /// mutated together under the writer lock.
-  llvm::DenseMap<std::pair<uint64_t /*OriginalKO*/, uint64_t /*Preset*/>,
-                 InstrumentedRecord *>
-      ByOriginalKO;
-
-  /// Per-original-kernel secondary index used by
-  /// \c invalidateOriginalExec to enumerate every preset loaded
-  /// for a given kernel symbol.
-  llvm::DenseMap<hsa_executable_symbol_t,
-                 llvm::SmallVector<uint64_t /*Preset*/, 2>>
-      BySymbolPresets;
-
   /// Destroy the HSA executable + reader pointed to by \p It and erase
-  /// the corresponding entries from all three indices. Caller must
-  /// hold the writer lock. Returns the joined HSA destruction errors
-  /// (success if both teardowns succeeded).
+  /// the entry from \c ByOriginal. Caller must hold the writer lock.
+  /// Returns the joined HSA destruction errors (success if both
+  /// teardowns succeeded).
   llvm::Error eraseRecordLocked(
       llvm::DenseMap<Key, InstrumentedRecord, KeyDenseMapInfo>::iterator It);
 };
@@ -278,10 +284,12 @@ private:
 public:
   InstrumentedKernelLoaderAndLauncherTrait(
       const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
+      const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
       const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
           &Loader,
       DeviceToolCodeLoader &DeviceCode, llvm::Error &Err)
-      : InstrumentedKernelLoaderAndLauncher(CoreApi, Loader, DeviceCode) {
+      : InstrumentedKernelLoaderAndLauncher(CoreApi, AmdExt, Loader,
+                                            DeviceCode) {
     llvm::ErrorAsOutParameter EAO(Err);
     HsaWrapperInstaller = std::make_unique<
         rocprofiler::HsaApiTableWrapperInstaller<::CoreApiTable>>(

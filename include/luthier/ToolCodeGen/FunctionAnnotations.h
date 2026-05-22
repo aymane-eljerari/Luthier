@@ -121,6 +121,23 @@ static constexpr const char *TargetInstrPointAttr =
                  annotate(LUTHIER_STRINGIFY(LUTHIER_HOOK_ATTRIBUTE))))         \
   LUTHIER_EXPORT_FUNCTION_HANDLE_ATTR extern "C" void
 
+/// Attribute pack for hooks declared as \c static members of a tool
+/// class. The base \c LUTHIER_HOOK_ANNOTATE macro embeds an
+/// \c extern \c "C" linkage specifier plus a \c void return type, which
+/// is incompatible with class-scope (the linkage spec is illegal there)
+/// and with the out-of-line definition syntax for static member
+/// functions (where \c static is not repeated). This macro expands to
+/// just the device + hook-tag + export-handle attribute block so the
+/// caller writes \c static + the return type themselves at the
+/// declaration, and writes the same attributes at the definition. The
+/// host-shadow handle for a static member hook is \c &MyTool::myHook
+/// — HIP-Clang generates an \c __hipRegisterFunction entry for it the
+/// same way it does for free \c __device__ functions.
+#define LUTHIER_HOOK_MEMBER_ATTR                                               \
+  __attribute__((device, used,                                                 \
+                 annotate(LUTHIER_STRINGIFY(LUTHIER_HOOK_ATTRIBUTE))))         \
+  LUTHIER_EXPORT_FUNCTION_HANDLE_ATTR
+
 /// Marks a non-hook \c __device__ function as host-addressable. Use this
 /// when host code needs the address of a device function that is not a
 /// Luthier hook (e.g. a helper invoked indirectly).

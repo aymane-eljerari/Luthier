@@ -19,6 +19,7 @@
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/HSA/CodeObjectReader.h"
 #include "luthier/HSA/Executable.h"
+#include "luthier/HSA/HsaError.h"
 #include "luthier/HSA/LoadedCodeObject.h"
 #include "luthier/HSATooling/DeviceToolCodeLoader.h"
 #include "luthier/Object/AMDGCNObjectFile.h"
@@ -37,10 +38,12 @@ namespace luthier {
 
 InstrumentedKernelLoaderAndLauncher::InstrumentedKernelLoaderAndLauncher(
     const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
+    const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
     const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
         &Loader,
     DeviceToolCodeLoader &DeviceCode)
-    : CoreApi(CoreApi), Loader(Loader), DeviceCode(DeviceCode) {}
+    : CoreApi(CoreApi), AmdExt(AmdExt), Loader(Loader), DeviceCode(DeviceCode) {
+}
 
 InstrumentedKernelLoaderAndLauncher::~InstrumentedKernelLoaderAndLauncher() {
   llvm::consumeError(unloadAll());
@@ -54,17 +57,7 @@ llvm::Error InstrumentedKernelLoaderAndLauncher::eraseRecordLocked(
     llvm::DenseMap<Key, InstrumentedRecord, KeyDenseMapInfo>::iterator It) {
   llvm::Error E = llvm::Error::success();
   InstrumentedRecord &R = It->second;
-  const Key K = It->first;
   const auto Core = CoreApi.getTable();
-
-  // Detach from secondary indices first.
-  ByOriginalKO.erase({R.OriginalKO, K.Preset});
-  if (auto PIt = BySymbolPresets.find(K.OriginalKernel);
-      PIt != BySymbolPresets.end()) {
-    llvm::erase(PIt->second, K.Preset);
-    if (PIt->second.empty())
-      BySymbolPresets.erase(PIt);
-  }
 
   // Executable first (releases its references into the reader's host
   // memory), then reader. The retained MemoryBuffer drops with the map
@@ -96,9 +89,9 @@ llvm::Error InstrumentedKernelLoaderAndLauncher::unloadAll() {
 //===----------------------------------------------------------------------===//
 
 llvm::Error InstrumentedKernelLoaderAndLauncher::unloadInstrumentedIfExists(
-    hsa_executable_symbol_t OriginalKernel, uint64_t Preset) {
+    const llvm::amdhsa::kernel_descriptor_t *OriginalKD, uint64_t Preset) {
   llvm::sys::ScopedWriter W(Mutex);
-  auto It = ByOriginal.find(Key{OriginalKernel, Preset});
+  auto It = ByOriginal.find(Key{OriginalKD, Preset});
   if (It == ByOriginal.end())
     return llvm::Error::success();
   return eraseRecordLocked(It);
@@ -111,13 +104,15 @@ llvm::Error InstrumentedKernelLoaderAndLauncher::unloadInstrumentedIfExists(
 llvm::Error InstrumentedKernelLoaderAndLauncher::overrideWithInstrumented(
     hsa_kernel_dispatch_packet_t &Packet, uint64_t Preset) {
   llvm::sys::ScopedReader R(Mutex);
-  auto It = ByOriginalKO.find({Packet.kernel_object, Preset});
-  if (It == ByOriginalKO.end())
+  const auto *KD = reinterpret_cast<const llvm::amdhsa::kernel_descriptor_t *>(
+      Packet.kernel_object);
+  auto It = ByOriginal.find(Key{KD, Preset});
+  if (It == ByOriginal.end())
     return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
         "No instrumented variant cached for kernel_object {0:x} preset {1}",
         Packet.kernel_object, Preset));
 
-  const InstrumentedRecord &Rec = *It->second;
+  const InstrumentedRecord &Rec = It->second;
   Packet.kernel_object = Rec.InstrumentedKO;
   Packet.private_segment_size =
       std::max<uint32_t>(Packet.private_segment_size, Rec.PrivateSegmentSize);
@@ -132,57 +127,48 @@ llvm::Error InstrumentedKernelLoaderAndLauncher::invalidateOriginalExec(
     hsa_executable_t Exec) {
   llvm::sys::ScopedWriter W(Mutex);
   llvm::Error E = llvm::Error::success();
-  const auto Core = CoreApi.getTable();
 
-  // Walk the destroyed executable's LCOs so we can iterate its
-  // per-agent kernel symbols. We do this only on the agents this Exec
-  // was loaded onto; SmallSet dedups when an Exec has multiple LCOs on
-  // the same agent (uncommon but possible).
+  // Collect the loaded device-memory ranges of every LCO owned by the
+  // about-to-be-destroyed executable.
   llvm::SmallVector<hsa_loaded_code_object_t, 2> LCOs;
   if (auto Err = hsa::executableGetLoadedCodeObjects(Loader.getTable(), Exec,
                                                      LCOs))
     return llvm::joinErrors(std::move(E), std::move(Err));
 
-  llvm::SmallSet<uint64_t, 2> SeenAgents;
+  struct Range {
+    uint64_t Start;
+    uint64_t End;
+  };
+  llvm::SmallVector<Range, 2> Ranges;
+  Ranges.reserve(LCOs.size());
   for (hsa_loaded_code_object_t LCO : LCOs) {
-    auto AgentOrErr = hsa::loadedCodeObjectGetAgent(Loader.getTable(), LCO);
-    if (!AgentOrErr) {
-      E = llvm::joinErrors(std::move(E), AgentOrErr.takeError());
+    auto LoadedMemOrErr =
+        hsa::loadedCodeObjectGetLoadedMemory(Loader.getTable(), LCO);
+    if (!LoadedMemOrErr) {
+      E = llvm::joinErrors(std::move(E), LoadedMemOrErr.takeError());
       continue;
     }
-    if (!SeenAgents.insert(AgentOrErr->handle).second)
-      continue;
+    const uint64_t Start = reinterpret_cast<uint64_t>(LoadedMemOrErr->data());
+    Ranges.push_back(Range{Start, Start + LoadedMemOrErr->size()});
+  }
 
-    // Collect every (Sym, Preset) loaded under any kernel symbol we
-    // find in this exec on this agent. We collect first and erase
-    // afterwards so callbacks don't have to worry about iterator
-    // invalidation in ByOriginal.
-    llvm::SmallVector<Key, 4> Victims;
-    auto IterErr = hsa::executableIterateAgentSymbols(
-        Core, Exec, *AgentOrErr,
-        [&](hsa_executable_symbol_t Sym) -> llvm::Error {
-          auto KindOrErr = hsa::executableSymbolGetType(Core, Sym);
-          if (!KindOrErr)
-            return KindOrErr.takeError();
-          if (*KindOrErr != HSA_SYMBOL_KIND_KERNEL)
-            return llvm::Error::success();
-          auto PIt = BySymbolPresets.find(Sym);
-          if (PIt == BySymbolPresets.end())
-            return llvm::Error::success();
-          for (uint64_t Preset : PIt->second)
-            Victims.push_back(Key{Sym, Preset});
-          return llvm::Error::success();
-        });
-    if (IterErr) {
-      E = llvm::joinErrors(std::move(E), std::move(IterErr));
-      continue;
+  // Snapshot the victim keys first so we don't invalidate map iterators
+  // while erasing.
+  llvm::SmallVector<Key, 4> Victims;
+  for (const auto &[K, _] : ByOriginal) {
+    const auto Addr = reinterpret_cast<uint64_t>(K.KD);
+    for (const Range &R : Ranges) {
+      if (Addr >= R.Start && Addr < R.End) {
+        Victims.push_back(K);
+        break;
+      }
     }
+  }
 
-    for (const Key &K : Victims) {
-      auto It = ByOriginal.find(K);
-      if (It != ByOriginal.end())
-        E = llvm::joinErrors(std::move(E), eraseRecordLocked(It));
-    }
+  for (const Key &K : Victims) {
+    auto It = ByOriginal.find(K);
+    if (It != ByOriginal.end())
+      E = llvm::joinErrors(std::move(E), eraseRecordLocked(It));
   }
   return E;
 }
@@ -193,20 +179,16 @@ llvm::Error InstrumentedKernelLoaderAndLauncher::invalidateOriginalExec(
 
 namespace {
 
-/// Walk the parsed ELF and enumerate kernel-function symbols. Errors
-/// unless exactly one exists; errors if its name doesn't match
-/// \p ExpectedKernelName (no <tt>.kd</tt> suffix).
-llvm::Error verifySingleKernelMatches(const object::AMDGCNObjectFile &Obj,
-                                      llvm::StringRef ExpectedKernelName) {
+/// Walk the parsed ELF and find the single kernel-function symbol.
+/// Errors unless exactly one kernel function exists.
+llvm::Expected<object::AMDGCNKernelFuncSymbolRef>
+findSingleKernel(const object::AMDGCNObjectFile &Obj) {
   llvm::Error IterErr = llvm::Error::success();
+  std::optional<object::AMDGCNKernelFuncSymbolRef> Found;
   unsigned KernelCount = 0;
-  bool NameMatched = false;
   for (const auto &KSym : Obj.kernel_functions(IterErr)) {
     ++KernelCount;
-    auto NameOrErr = KSym.getName();
-    LUTHIER_RETURN_ON_ERROR(NameOrErr.takeError());
-    if (*NameOrErr == ExpectedKernelName)
-      NameMatched = true;
+    Found = KSym;
   }
   LUTHIER_RETURN_ON_ERROR(std::move(IterErr));
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
@@ -214,12 +196,7 @@ llvm::Error verifySingleKernelMatches(const object::AMDGCNObjectFile &Obj,
       llvm::formatv("Instrumented relocatable must contain exactly one "
                     "kernel function; found {0}",
                     KernelCount)));
-  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-      NameMatched,
-      llvm::formatv("Instrumented kernel name does not match original "
-                    "kernel name '{0}'",
-                    ExpectedKernelName)));
-  return llvm::Error::success();
+  return *Found;
 }
 
 /// Pair of (UND global variable name, its resolved device address) the
@@ -280,41 +257,47 @@ collectExternals(const hsa::ApiTableContainer<::CoreApiTable> &Core,
 llvm::Expected<hsa_executable_symbol_t>
 InstrumentedKernelLoaderAndLauncher::loadInstrumented(
     std::unique_ptr<llvm::MemoryBuffer> Relocatable,
-    hsa_executable_symbol_t OriginalKernel, uint64_t Preset) {
+    const llvm::amdhsa::kernel_descriptor_t *OriginalKD, uint64_t Preset) {
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       Relocatable != nullptr,
       "Null relocatable MemoryBuffer passed to loadInstrumented"));
+  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+      OriginalKD != nullptr,
+      "Null kernel-descriptor pointer passed to loadInstrumented"));
 
   const auto Core = CoreApi.getTable();
 
-  // Resolve the original kernel's agent / name / KO up front so the
-  // ELF-side checks can compare against them.
-  auto AgentOrErr = hsa::executableSymbolGetAgent(Core, OriginalKernel);
-  LUTHIER_RETURN_ON_ERROR(AgentOrErr.takeError());
-  hsa_agent_t Agent = *AgentOrErr;
-
-  auto NameOrErr = hsa::executableSymbolGetName(Core, OriginalKernel);
-  LUTHIER_RETURN_ON_ERROR(NameOrErr.takeError());
-  llvm::StringRef KDName(*NameOrErr);
+  // Resolve the agent that owns the kernel-descriptor allocation via
+  // hsa_amd_pointer_info. This works regardless of whether the KD was
+  // published through the HSA loader (the loader path) or allocated
+  // directly out of an HSA memory pool — the latter case can't be
+  // resolved through the LoadedCodeObjectCache.
+  auto KDAddr = reinterpret_cast<uint64_t>(OriginalKD);
+  hsa_amd_pointer_info_t PointerInfo{};
+  PointerInfo.size = sizeof(hsa_amd_pointer_info_t);
+  LUTHIER_RETURN_ON_ERROR(LUTHIER_HSA_CALL_ERROR_CHECK(
+      AmdExt.getTable().callFunction<hsa_amd_pointer_info>(
+          const_cast<void *>(reinterpret_cast<const void *>(OriginalKD)),
+          &PointerInfo, /*alloc=*/nullptr, /*num_agents_accessible=*/nullptr,
+          /*accessible=*/nullptr),
+      llvm::formatv("Failed to query HSA pointer info for kernel "
+                    "descriptor at {0:x}",
+                    KDAddr)));
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-      KDName.ends_with(".kd"),
-      llvm::formatv("Original kernel symbol name '{0}' does not end with "
-                    "'.kd'",
-                    KDName)));
-  std::string KernelName = KDName.drop_back(3).str();
-
-  auto OrigKOOrErr = hsa::executableSymbolGetAddress(Core, OriginalKernel);
-  LUTHIER_RETURN_ON_ERROR(OrigKOOrErr.takeError());
-  uint64_t OriginalKO = *OrigKOOrErr;
+      PointerInfo.type != HSA_EXT_POINTER_TYPE_UNKNOWN,
+      llvm::formatv("Kernel descriptor at {0:x} is not owned by any HSA "
+                    "allocation",
+                    KDAddr)));
+  hsa_agent_t Agent = PointerInfo.agentOwner;
 
   llvm::sys::ScopedWriter W(Mutex);
 
   // Duplicate-key check.
-  if (ByOriginal.contains(Key{OriginalKernel, Preset}))
+  if (ByOriginal.contains(Key{OriginalKD, Preset}))
     return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-        "An instrumented variant for kernel '{0}' preset {1} is already "
-        "loaded",
-        KernelName, Preset));
+        "An instrumented variant for kernel_descriptor {0:x} preset {1} "
+        "is already loaded",
+        KDAddr, Preset));
 
   // Parse the relocatable as an AMDGCN ELF. The parse is non-owning over
   // the MemoryBuffer's bytes.
@@ -324,7 +307,14 @@ InstrumentedKernelLoaderAndLauncher::loadInstrumented(
   LUTHIER_RETURN_ON_ERROR(ParsedOrErr.takeError());
   std::unique_ptr<object::AMDGCNObjectFile> Parsed = std::move(*ParsedOrErr);
 
-  LUTHIER_RETURN_ON_ERROR(verifySingleKernelMatches(*Parsed, KernelName));
+  // The relocatable is expected to contain exactly one kernel function;
+  // we make no claim about its name — the codegen pipeline picks it.
+  auto KernelSymOrErr = findSingleKernel(*Parsed);
+  LUTHIER_RETURN_ON_ERROR(KernelSymOrErr.takeError());
+  auto KernelNameOrErr = KernelSymOrErr->getName();
+  LUTHIER_RETURN_ON_ERROR(KernelNameOrErr.takeError());
+  std::string KernelName(*KernelNameOrErr);
+  std::string KDName = KernelName + ".kd";
 
   auto ExternsOrErr = collectExternals(Core, *Parsed, DeviceCode, Agent);
   LUTHIER_RETURN_ON_ERROR(ExternsOrErr.takeError());
@@ -384,8 +374,6 @@ InstrumentedKernelLoaderAndLauncher::loadInstrumented(
   if (!PrivSizeOrErr)
     return FailExecAndReader(PrivSizeOrErr.takeError());
 
-  // Commit: insert into ByOriginal first, then point the secondary
-  // indices at the live record.
   InstrumentedRecord Rec;
   Rec.RelocatableBuffer = std::move(Relocatable);
   Rec.Reader = Reader;
@@ -393,17 +381,12 @@ InstrumentedKernelLoaderAndLauncher::loadInstrumented(
   Rec.InstrumentedKernelSym = InstrSym;
   Rec.InstrumentedKO = *InstrKOOrErr;
   Rec.PrivateSegmentSize = *PrivSizeOrErr;
-  Rec.OriginalKO = OriginalKO;
   Rec.Agent = Agent;
 
   auto [It, Inserted] =
-      ByOriginal.try_emplace(Key{OriginalKernel, Preset}, std::move(Rec));
-  // We hold the writer lock and already checked above; the insert must
-  // succeed.
+      ByOriginal.try_emplace(Key{OriginalKD, Preset}, std::move(Rec));
   assert(Inserted && "Concurrent insert into ByOriginal under writer lock");
   (void)Inserted;
-  ByOriginalKO[{OriginalKO, Preset}] = &It->second;
-  BySymbolPresets[OriginalKernel].push_back(Preset);
 
   return InstrSym;
 }

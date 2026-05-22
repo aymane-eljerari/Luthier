@@ -91,8 +91,8 @@ public:
         LoadedCodeObjectCacheTrait<Derived>(CoreApi, VenLoader, Err),
         DeviceToolCodeFatBinaryLoader<Derived>(CoreApi, AmdExt, VenLoader, Err),
         InstrumentedKernelLoaderAndLauncherTrait<Derived>(
-            CoreApi, VenLoader, static_cast<DeviceToolCodeLoader &>(*this),
-            Err),
+            CoreApi, AmdExt, VenLoader,
+            static_cast<DeviceToolCodeLoader &>(*this), Err),
         PacketMonitorTrait<Derived>(CoreApi, AmdExt, VenLoader, Err) {}
 
   /// Build the instrumentation pass pipeline driver for a target application
@@ -135,6 +135,30 @@ public:
         F != nullptr,
         "Payload function not present in the instrumentation module."));
     return F;
+  }
+
+  /// Lift the inherited \c createInjectedPayload overloads from
+  /// \c InjectedPayloadCreationPass into the public surface so tool code
+  /// can call them directly from \c onPackets / \c runInstrumentationPass
+  /// without going through the protected base.
+  using InjectedPayloadCreationPass<Derived,
+                                    TargetUnitT>::createInjectedPayload;
+
+  /// Convenience overload that takes a HIP host-shadow handle (the
+  /// pointer used by HIP to reference a \c __device__ function from the
+  /// host side, e.g. \c &MyTool::myHook) instead of a pre-resolved
+  /// \c llvm::Function. Resolves the handle via \c resolvePayloadHandle
+  /// then forwards to the \c Function&-taking base overload.
+  llvm::Error
+  createInjectedPayload(const void *HostHandle, llvm::Module &IModule,
+                        const llvm::MachineInstr &TargetMI,
+                        llvm::ArrayRef<typename InjectedPayloadCreationPass<
+                            Derived, TargetUnitT>::PayloadArg>
+                            Args = {}) {
+    auto FnOrErr = resolvePayloadHandle(HostHandle, IModule);
+    LUTHIER_RETURN_ON_ERROR(FnOrErr.takeError());
+    return InjectedPayloadCreationPass<
+        Derived, TargetUnitT>::createInjectedPayload(**FnOrErr, TargetMI, Args);
   }
 };
 
