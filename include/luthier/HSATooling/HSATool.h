@@ -122,19 +122,65 @@ public:
   }
 
   /// Resolve a payload function's host shadow handle to the corresponding
-  /// \c llvm::Function inside the given instrumentation module. Convenience
-  /// over a two-step \c Derived::lookupNameByHandle / \c Module::getFunction.
+  /// \c llvm::Function inside the given instrumentation module.
+  ///
+  /// Two cases are handled:
+  ///   1. The handle name names a function defined in the IModule
+  ///      directly — exact lookup wins. Free-function `__device__`
+  ///      hooks tagged with \c LUTHIER_HOOK_ANNOTATE end up here.
+  ///   2. The handle name starts with \c __luthier_builtin_hook_handle_
+  ///      (the prefix the CXX compilation plugin gives every
+  ///      \c LUTHIER_EXPORT_FUNCTION_HANDLE_ATTR -tagged device function's
+  ///      synthesized kernel stub). The plugin's host-side AST rewrite
+  ///      means HIP registered the kernel-stub handle under that name,
+  ///      so \c lookupNameByHandle returns the prefixed form — but the
+  ///      embedded IModule bitcode contains the ORIGINAL device function
+  ///      under its plain Itanium mangling. We strip the prefix and then
+  ///      sanitize-match against every function in the IModule until we
+  ///      find one whose sanitized mangling equals the suffix. (We can't
+  ///      reverse the sanitization unambiguously — `_` is preserved by
+  ///      the forward pass and might also originate from a sanitized
+  ///      non-identifier byte. Forward-comparison is unambiguous.)
   llvm::Expected<llvm::Function *>
   resolvePayloadHandle(const void *HostHandle,
                        llvm::Module &InstrumentationModule) {
     auto &Self = static_cast<Derived &>(*this);
     auto NameOrErr = Self.lookupNameByHandle(HostHandle);
     LUTHIER_RETURN_ON_ERROR(NameOrErr.takeError());
-    llvm::Function *F = InstrumentationModule.getFunction(*NameOrErr);
-    LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-        F != nullptr,
-        "Payload function not present in the instrumentation module."));
-    return F;
+
+    if (llvm::Function *F =
+            InstrumentationModule.getFunction(*NameOrErr))
+      return F;
+
+    static constexpr llvm::StringLiteral Prefix =
+        "__luthier_builtin_hook_handle_";
+    if (NameOrErr->starts_with(Prefix)) {
+      llvm::StringRef Wanted = NameOrErr->drop_front(Prefix.size());
+      // Forward-sanitize each IModule function name and compare. Cheap:
+      // tools have on the order of tens of payload-eligible functions.
+      auto Sanitize = [](llvm::StringRef In) {
+        std::string Out;
+        Out.reserve(In.size());
+        for (unsigned char C : In) {
+          if (std::isalnum(C) || C == '_') {
+            Out.push_back(static_cast<char>(C));
+          } else {
+            char Buf[8];
+            std::snprintf(Buf, sizeof(Buf), "_%02x", C);
+            Out.append(Buf);
+          }
+        }
+        return Out;
+      };
+      for (llvm::Function &Cand : InstrumentationModule) {
+        if (Sanitize(Cand.getName()) == Wanted)
+          return &Cand;
+      }
+    }
+
+    return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+        "Payload function '{0}' not present in the instrumentation module.",
+        *NameOrErr));
   }
 
   /// Lift the inherited \c createInjectedPayload overloads from

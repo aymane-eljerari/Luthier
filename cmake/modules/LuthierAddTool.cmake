@@ -81,8 +81,12 @@ endfunction()
 function(luthier_add_tool target)
   cmake_parse_arguments(LAT ""
     ""
-    "SOURCES;OFFLOAD_ARCHES;WAVE_MODES;HIPCC_FLAGS;LIBRARIES"
+    "SOURCES;OFFLOAD_ARCHES;WAVE_MODES;HIPCC_FLAGS;HIPCC_HOST_FLAGS;LIBRARIES"
     ${ARGN})
+  # HIPCC_FLAGS applies to both halves; HIPCC_HOST_FLAGS is host-only.
+  # The CXX compilation plugin lives in HIPCC_HOST_FLAGS because its
+  # synthesis logic targets the host AST and the lit tests (and design
+  # intent) exercise it under `--cuda-host-only` only.
 
   if (NOT LAT_SOURCES)
     message(FATAL_ERROR "luthier_add_tool(${target}): SOURCES required")
@@ -100,6 +104,17 @@ function(luthier_add_tool target)
   # First source's basename is used as the file prefix for intermediates.
   list(GET LAT_SOURCES 0 _first_source)
   get_filename_component(_prefix "${_first_source}" NAME_WE)
+
+  # HIP-Clang emits per-TU symbols named `__hip_fatbin_<CUID>` and
+  # `__hip_gpubin_handle_<CUID>` where CUID defaults to a content hash
+  # (`-fuse-cuid=hash`). The host compile and our generated .S file
+  # have to agree on the suffix; the explicit `-cuid=` flag is silently
+  # ignored on host-only HIP compiles, so we use `-fuse-cuid=none` to
+  # strip the suffix entirely and emit plain `__hip_fatbin` /
+  # `__hip_gpubin_handle` symbols on both sides. This restricts a tool
+  # to one HIP TU's worth of fat binary (multiple TUs would collide on
+  # the unsuffixed name) — which is the single-source design
+  # `luthier_add_tool` already assumes.
 
   # Discover the Luthier IR-compilation plugin. If we're inside Luthier's
   # own tree, the target's TARGET_FILE generator expression works. If
@@ -143,6 +158,11 @@ function(luthier_add_tool target)
 
       set(_co
         "${CMAKE_CURRENT_BINARY_DIR}/${target}.${_prefix}.${arch}.${wave}.co")
+      # The device-side custom command runs outside the target-property
+      # system (no PUBLIC INCLUDE_DIRECTORIES propagation), so we splice
+      # Luthier's standard header roots in by hand. The same set is what
+      # `LuthierTooling`'s target_include_directories exports, and what
+      # the test/imodule fixtures use.
       add_custom_command(
         OUTPUT "${_co}"
         COMMAND "${_clang}"
@@ -150,7 +170,31 @@ function(luthier_add_tool target)
           --cuda-device-only
           --offload-arch=${arch}
           ${_wave_flag}
+          -std=c++20
           -fpass-plugin=${_ir_plugin}
+          # LuthierTooling exports `AMD_INTERNAL_BUILD` as a public
+          # compile-definition, which switches the bundled HSA headers
+          # to the direct-include form (`#include "hsa_ext_*.h"` rather
+          # than `#include "inc/hsa_ext_*.h"`). The macro's custom
+          # command doesn't pick up that PUBLIC define from the linked
+          # target, so we set it here.
+          -DAMD_INTERNAL_BUILD
+          # `hip_api_trace.hpp` (pulled in by `luthier/Rocprofiler/...`)
+          # references GLuint / hipGraphicsResource / hipDeviceProp_tR0000
+          # / hipGLDeviceList unconditionally. The first two come from
+          # `hip_gl_interop.h`; the last two from `hip_deprecated.h`; the
+          # base types come from `hip_runtime.h`. Pre-include all three so
+          # `luthier/HIP/ApiTable.h` can name those API entries in its
+          # `ApiInfo<HipFunc>` specializations.
+          -include hip/hip_runtime.h
+          -include hip/hip_deprecated.h
+          -include hip/hip_gl_interop.h
+          -isystem "${CMAKE_SOURCE_DIR}/include"
+          -isystem "${CMAKE_BINARY_DIR}/include"
+          -isystem "${CMAKE_BINARY_DIR}/include/luthier/AMDGPU"
+          -isystem "${CMAKE_BINARY_DIR}/src/lib/AMDGPU"
+          -isystem "${LLVM_INCLUDE_DIRS}"
+          -idirafter /opt/rocm/include
           ${LAT_HIPCC_FLAGS}
           -c ${LAT_SOURCES}
           -o "${_co}"
@@ -166,27 +210,35 @@ function(luthier_add_tool target)
     endforeach ()
   endforeach ()
 
-  # Bundle the .co files. clang-offload-bundler stores the target-id
-  # strings verbatim; per the ELF-derived-ISA design in the loader, the
-  # entry id text is not consulted at runtime, so the simple bare-arch
-  # form here is sufficient.
-  string(REPLACE ";" "," _targets_csv "${_bundler_targets}")
-  set(_inputs_args "")
-  foreach (in IN LISTS _bundler_inputs)
-    list(APPEND _inputs_args "--input=${in}")
-  endforeach ()
-
+  # `clang --cuda-device-only -c file.hip -o file.co` already emits an
+  # offload bundle in the same shape the HIP runtime + loader expect
+  # (`[host-x86_64..., hipv4-amdgcn-amd-amdhsa--<arch>]`). Running
+  # `clang-offload-bundler` again would double-bundle and the inner
+  # bundle's "AMDGCN slice" would itself start with the offload-bundle
+  # magic, which `ObjectFile::createObjectFile` rejects.
+  # Single-arch path: use the .co directly.
+  list(LENGTH _co_files _num_cos)
   set(_fatbin "${CMAKE_CURRENT_BINARY_DIR}/${target}.${_prefix}.hipfb")
-  add_custom_command(
-    OUTPUT "${_fatbin}"
-    COMMAND "${_bundler}"
-      --type=o
-      --targets=${_targets_csv}
-      ${_inputs_args}
-      --output="${_fatbin}"
-    DEPENDS ${_co_files}
-    COMMENT "luthier_add_tool(${target}): bundling ${_prefix}.hipfb"
-    VERBATIM)
+  if (_num_cos EQUAL 1)
+    list(GET _co_files 0 _the_co)
+    add_custom_command(
+      OUTPUT "${_fatbin}"
+      COMMAND ${CMAKE_COMMAND} -E copy "${_the_co}" "${_fatbin}"
+      DEPENDS "${_the_co}"
+      COMMENT "luthier_add_tool(${target}): reusing single-arch .co as fatbin"
+      VERBATIM)
+  else ()
+    # Multi-arch path: each .co is itself a [host, gfxN] bundle; merging
+    # them into one [host, gfxA, gfxB, ...] bundle requires
+    # extract-then-rebundle. clang-offload-bundler concatenation isn't
+    # the right tool for that. This is a TODO; until then, refuse to
+    # generate an incorrect fat binary.
+    message(FATAL_ERROR
+      "luthier_add_tool(${target}): multi-arch (${_num_cos} arches) bundling "
+      "is not yet supported by this helper. Use one OFFLOAD_ARCHES entry per "
+      "tool, or extend the helper to extract-then-rebundle the per-arch .co "
+      "files.")
+  endif ()
 
   # Wrap the bundle in HIP's __CudaFatBinaryWrapper shape. We emit a
   # small assembly file that pulls in the bundle bytes via .incbin and
@@ -194,28 +246,32 @@ function(luthier_add_tool target)
   # compilation's __hipRegisterFatBinary call references at link time.
   set(_fatbin_asm
     "${CMAKE_CURRENT_BINARY_DIR}/${target}.${_prefix}.fatbin.S")
+  # Emit a C file whose `__hip_fatbin` is a real definition — a
+  # uint8_t array with a literal initializer (built from the bundle
+  # bytes at compile time) — rather than an `.incbin` in a .S. The IR
+  # plugin's `LoadHIPFATBinaryInfoPass` walks IR-visible globals to
+  # find the wrapper's binary pointer and reads the bundle SIZE from
+  # the `ArrayType` of its initializer; an `.incbin`-defined symbol is
+  # invisible at IR level, so the pass would treat it as extern and
+  # skip emitting an entry into `HipFatBinaries`. Compiling the bytes
+  # through clang gives the pass a proper `GlobalVariable` with an
+  # `ArrayType` it can inspect.
+  set(_fatbin_c
+    "${CMAKE_CURRENT_BINARY_DIR}/${target}.${_prefix}.fatbin.c")
   add_custom_command(
-    OUTPUT "${_fatbin_asm}"
-    COMMAND ${CMAKE_COMMAND} -E echo
-      "// Generated by luthier_add_tool"
-      "    .section .hip_fatbin, \"a\""
-      "    .globl __hip_fatbin"
-      "    .align 4096"
-      "__hip_fatbin:"
-      "    .incbin \"${_fatbin}\""
-      ""
-      "    .section .data"
-      "    .globl __hip_fatbin_wrapper"
-      "    .align 8"
-      "__hip_fatbin_wrapper:"
-      "    .long 0x48495046    // 'HIPF'"
-      "    .long 1              // version"
-      "    .quad __hip_fatbin   // binary"
-      "    .quad 0              // dummy"
-      > "${_fatbin_asm}"
+    OUTPUT "${_fatbin_c}"
+    COMMAND ${CMAKE_COMMAND}
+      -DFATBIN_INPUT=${_fatbin}
+      -DFATBIN_OUTPUT=${_fatbin_c}
+      -P "${CMAKE_SOURCE_DIR}/cmake/modules/LuthierGenerateFatbinC.cmake"
     DEPENDS "${_fatbin}"
-    COMMENT "luthier_add_tool(${target}): emitting fatbin wrapper .S"
+       "${CMAKE_SOURCE_DIR}/cmake/modules/LuthierGenerateFatbinC.cmake"
+    COMMENT "luthier_add_tool(${target}): embedding fatbin bytes into C"
     VERBATIM)
+  add_custom_target(${target}-fatbin-c-dep DEPENDS "${_fatbin_c}")
+  # Keep _fatbin_asm-named variable so the rest of the macro doesn't
+  # need to know the wrapper is now C instead of .S.
+  set(_fatbin_asm "${_fatbin_c}")
 
   # Final shared library target. Sources are:
   #   * The host TU(s), built host-only with the HIP front end.
@@ -224,21 +280,31 @@ function(luthier_add_tool target)
 
   # The host TU must NOT do its own device compilation — `--cuda-host-only`
   # makes Clang emit only the host stubs + register calls + extern
-  # reference to __hip_fatbin_wrapper, which our .S supplies.
+  # references to __hip_fatbin_<cuid> and __hip_gpubin_handle_<cuid>,
+  # which our .S supplies. The explicit -cuid= flag pins the symbol
+  # suffix so the .S and the host compile agree.
   set_source_files_properties(${LAT_SOURCES} PROPERTIES
     LANGUAGE HIP
-    COMPILE_OPTIONS "--cuda-host-only;-fno-gpu-rdc")
+    COMPILE_OPTIONS "--cuda-host-only;-fno-gpu-rdc;-fuse-cuid=none")
 
-  # The fatbin .S goes through the assembler.
+  # The fatbin wrapper is a generated C file now (see above) — let CMake
+  # detect its language from the .c extension.
   set_source_files_properties("${_fatbin_asm}" PROPERTIES
-    LANGUAGE ASM)
+    LANGUAGE C)
 
+  # The IR compilation plugin (LoadHIPFATBinaryInfoPass etc.) must run on
+  # the host TU too — it's what populates the per-tool `HipFatBinaries` /
+  # `HipFunctions` / `HipDeviceVars` / etc. annotated slots from the
+  # `__hipRegister*` call sites HIP-Clang emits there. Without it on the
+  # host side the loader sees an empty `HipFatBinaries` and can't find
+  # the embedded bundle bytes (the device-side plugin run wouldn't help —
+  # `__hipRegisterFatBinary` calls only exist in the host TU).
   target_compile_options(${target} PRIVATE
-    $<$<COMPILE_LANGUAGE:HIP>:${LAT_HIPCC_FLAGS}>)
+    $<$<COMPILE_LANGUAGE:HIP>:-fpass-plugin=${_ir_plugin};${LAT_HIPCC_FLAGS};${LAT_HIPCC_HOST_FLAGS}>)
 
   target_link_libraries(${target} PRIVATE hip::host ${LAT_LIBRARIES})
 
-  # Make the .S file's generation depend on the fat-bin existing.
-  add_custom_target(${target}-fatbin DEPENDS "${_fatbin_asm}")
-  add_dependencies(${target} ${target}-fatbin)
+  # The fatbin-C generator is registered as a custom target above; wire
+  # it as a build-order dependency of the final target.
+  add_dependencies(${target} ${target}-fatbin-c-dep)
 endfunction()

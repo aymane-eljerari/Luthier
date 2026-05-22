@@ -1,14 +1,16 @@
 cmake_minimum_required(VERSION 3.21)
-project(LuthierOpcodeHistogram LANGUAGES HIP CXX)
+
+project(LuthierOpcodeHistogram LANGUAGES HIP CXX ASM C)
 
 set(CMAKE_HIP_STANDARD 20)
 
 find_package(hip REQUIRED)
-
 find_package(LLVM REQUIRED)
 
-add_library(LuthierOpcodeHistogram SHARED OpcodeHistogram.hip)
-
-luthier_add_compiler_plugin(LuthierOpcodeHistogram LuthierToolIRCompilationPlugin)
-
-target_link_libraries(LuthierOpcodeHistogram PUBLIC LuthierTooling LLVMDemangle hip::device hip::host)
+luthier_add_tool(LuthierOpcodeHistogram
+        SOURCES OpcodeHistogram.hip
+        OFFLOAD_ARCHES gfx908
+        HIPCC_HOST_FLAGS
+            -fplugin=$<TARGET_FILE:LuthierToolCXXCompilationPlugin>
+        LIBRARIES LuthierTooling LLVMDemangle hip::device hip::host)
+add_dependencies(LuthierOpcodeHistogram LuthierToolCXXCompilationPlugin)

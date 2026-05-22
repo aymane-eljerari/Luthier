@@ -139,6 +139,11 @@ llvm::Error executableIterateAgentSymbols(
     if (!Data) {
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     }
+    // Drain the previous iteration's Err (always success here — a real
+    // error would have broken iteration via INFO_BREAK below) so the
+    // move-assign doesn't trip Error's unchecked-success assertion in
+    // debug builds.
+    llvm::consumeError(std::move(Data->Err));
     Data->Err = Data->CB(S);
     if (Data->Err)
       return HSA_STATUS_INFO_BREAK;
@@ -173,6 +178,7 @@ executableFindFirstAgentSymbol(
     if (!Data) {
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     }
+    llvm::consumeError(std::move(Data->Err));
     llvm::Expected<bool> Res = Data->CB(S);
     Data->Err = Res.takeError();
     if (Data->Err)

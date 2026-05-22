@@ -1,14 +1,16 @@
 cmake_minimum_required(VERSION 3.21)
-project(LuthierKernelArgumentIntrinsic LANGUAGES HIP CXX)
+
+project(LuthierKernelArgumentIntrinsic LANGUAGES HIP CXX ASM C)
 
 set(CMAKE_HIP_STANDARD 20)
 
 find_package(hip REQUIRED)
-
 find_package(LLVM REQUIRED)
 
-add_library(LuthierKernelArgumentIntrinsic SHARED KernelArgumentIntrinsic.hip)
-
-luthier_add_compiler_plugin(LuthierKernelArgumentIntrinsic LuthierToolIRCompilationPlugin)
-
-target_link_libraries(LuthierKernelArgumentIntrinsic PUBLIC LuthierTooling LLVMDemangle hip::device hip::host)
+luthier_add_tool(LuthierKernelArgumentIntrinsic
+        SOURCES KernelArgumentIntrinsic.hip
+        OFFLOAD_ARCHES gfx908
+        HIPCC_HOST_FLAGS
+            -fplugin=$<TARGET_FILE:LuthierToolCXXCompilationPlugin>
+        LIBRARIES LuthierTooling LLVMDemangle hip::device hip::host)
+add_dependencies(LuthierKernelArgumentIntrinsic LuthierToolCXXCompilationPlugin)

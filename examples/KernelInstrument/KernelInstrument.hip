@@ -216,8 +216,8 @@ void KernelInstrumentTool::onPackets(
     const auto *KD =
         reinterpret_cast<const llvm::amdhsa::kernel_descriptor_t *>(
             DispatchPacket->kernel_object);
-    if (this->overrideWithInstrumented(*DispatchPacket, 0)) {
-      llvm::consumeError(this->overrideWithInstrumented(*DispatchPacket, 0));
+    if (auto MissErr = this->overrideWithInstrumented(*DispatchPacket, 0)) {
+      llvm::consumeError(std::move(MissErr));
       std::unique_ptr<llvm::MemoryBuffer> ObjBuf;
       LUTHIER_REPORT_FATAL_ON_ERROR(
           runInstrumentationPipelineForDispatch(*this, *DispatchPacket)

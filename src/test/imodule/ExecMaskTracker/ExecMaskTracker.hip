@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 #include <luthier/ToolCodeGen/FunctionAnnotations.h>
 
+
 __attribute__((device)) uint64_t FullWaves;
 
 __attribute__((device)) uint64_t PartialWaves;

@@ -631,12 +631,21 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
         !Options.IModuleMIRPasses.getValue().empty();
     bool MustRunCodeGen =
         MIRPassPipelineNotSpecified || MIRPassPipelineSpecifiedAndNotEmpty;
-    if (!OutPath.empty() && !IsLuthierOutput && !MustRunCodeGen) {
-      std::error_code EC;
-      llvm::ToolOutputFile Out(OutPath, EC, llvm::sys::fs::OF_Text);
-      if (!EC) {
-        IModule->print(Out.os(), /*AAW=*/nullptr);
-        Out.keep();
+    if (!OutPath.empty() && !MustRunCodeGen) {
+      if (IsLuthierOutput) {
+        // IR-only mode (--imodule-mir-passes=) with a .luthier sink:
+        // still need to emit the bundled IModule+target+slot-map dump
+        // tests FileCheck against.
+        if (auto Err = writeLuthierFile(OutPath, TargetAppM, *IModule)) {
+          LUTHIER_CTX_EMIT_ON_ERROR(Context, std::move(Err));
+        }
+      } else {
+        std::error_code EC;
+        llvm::ToolOutputFile Out(OutPath, EC, llvm::sys::fs::OF_Text);
+        if (!EC) {
+          IModule->print(Out.os(), /*AAW=*/nullptr);
+          Out.keep();
+        }
       }
     }
   }

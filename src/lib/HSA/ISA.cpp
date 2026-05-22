@@ -296,6 +296,7 @@ llvm::Error isaIterateWavefronts(
 
   auto Iterator = [](hsa_wavefront_t WF, void *D) -> hsa_status_t {
     auto *Data = static_cast<CBData *>(D);
+    llvm::consumeError(std::move(Data->Err));
     Data->Err = Data->CB(WF);
     if (Data->Err)
       return HSA_STATUS_INFO_BREAK;

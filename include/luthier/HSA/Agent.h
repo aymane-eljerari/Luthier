@@ -42,6 +42,8 @@ llvm::Error iterateAgents(const ApiTableContainer<::CoreApiTable> &CoreApi,
     const CBType &CB;
     llvm::Error Err;
   } Data{Callback, llvm::Error::success()};
+  /// Set the error to be checked before the first iteration
+  (void)Data.Err.operator bool();
 
   auto Iterator = [](hsa_agent_t Agent, void *D) -> hsa_status_t {
     auto *Data = static_cast<CBData *>(D);
@@ -164,6 +166,8 @@ llvm::Error agentIterateCaches(const ApiTableContainer<::CoreApiTable> &CoreApi,
     const CBType &CB;
     llvm::Error Err;
   } Data{Callback, llvm::Error::success()};
+  /// Set the error to be checked before the first iteration
+  (void)Data.Err.operator bool();
 
   auto Iterator = [](hsa_cache_t Cache, void *D) -> hsa_status_t {
     auto *Data = static_cast<CBData *>(D);
@@ -202,6 +206,8 @@ agentIterateRegions(const ApiTableContainer<::CoreApiTable> &CoreApi,
     const CBType &CB;
     llvm::Error Err;
   } Data{Callback, llvm::Error::success()};
+  /// Set the error to be checked before the first iteration
+  (void)Data.Err.operator bool();
 
   auto Iterator = [](hsa_region_t Region, void *D) -> hsa_status_t {
     auto *Data = static_cast<CBData *>(D);
@@ -239,6 +245,9 @@ agentFindFirstRegion(const ApiTableContainer<::CoreApiTable> &CoreApi,
     std::optional<hsa_region_t> ISA;
     llvm::Error Err;
   } CBData{Predicate, std::nullopt, llvm::Error::success()};
+
+  /// Set the error to be checked before the first iteration
+  (void)CBData.Err.operator bool();
 
   auto Iterator = [](const hsa_region_t ISA, void *D) -> hsa_status_t {
     auto *Data = static_cast<CallbackDataType *>(D);
@@ -315,6 +324,9 @@ llvm::Error agentIterateISAs(const ApiTableContainer<::CoreApiTable> &CoreApi,
     llvm::Error Err;
   } CBData{Callback, llvm::Error::success()};
 
+  /// Set the error to be checked before the first iteration
+  (void)CBData.Err.operator bool();
+
   auto Iterator = [](const hsa_isa_t ISA, void *D) -> hsa_status_t {
     auto *Data = static_cast<CallbackDataType *>(D);
     if (!Data) {
@@ -356,6 +368,9 @@ agentFindFirstISA(const ApiTableContainer<::CoreApiTable> &CoreApi,
     std::optional<hsa_isa_t> ISA;
     llvm::Error Err;
   } CBData{Predicate, std::nullopt, llvm::Error::success()};
+
+  /// Set the error to be checked before the first iteration
+  (void)CBData.Err.operator bool();
 
   auto Iterator = [](const hsa_isa_t ISA, void *D) -> hsa_status_t {
     auto *Data = static_cast<CallbackDataType *>(D);

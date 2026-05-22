@@ -227,11 +227,53 @@ protected:
   llvm::ArrayRef<HipManagedVarInfo> InputManagedVars;
   llvm::DenseMap<const void *, std::string> HandleToName;
 
+  /// Walk a Clang offload-bundle header at \p Bundle and return its
+  /// total byte extent. Used when \c LoadHIPFATBinaryInfoPass couldn't
+  /// determine the size at IR time (split-compile layout produced by
+  /// \c luthier_add_tool — the host TU sees only an opaque \c extern
+  /// for \c __hip_fatbin and the pass writes \c Size=0). The bundle's
+  /// own header carries enough information: an entry table where
+  /// every entry's \c (offset+size) pair bounds the bundle bytes;
+  /// the high-water mark across all entries is the bundle's end.
+  static uint64_t discoverOffloadBundleSize(const void *Bundle) {
+    if (Bundle == nullptr)
+      return 0;
+    static constexpr llvm::StringLiteral Magic{
+        "__CLANG_OFFLOAD_BUNDLE__"};
+    const auto *P = static_cast<const uint8_t *>(Bundle);
+    if (std::memcmp(P, Magic.data(), Magic.size()) != 0)
+      return 0;
+    P += Magic.size();
+    auto ReadU64 = [&]() {
+      uint64_t V;
+      std::memcpy(&V, P, sizeof(V));
+      P += sizeof(V);
+      return V;
+    };
+    const uint64_t NumEntries = ReadU64();
+    uint64_t MaxEnd = 0;
+    for (uint64_t I = 0; I < NumEntries; ++I) {
+      const uint64_t Off = ReadU64();
+      const uint64_t Sz = ReadU64();
+      const uint64_t TIDLen = ReadU64();
+      P += TIDLen;
+      const uint64_t End = Off + Sz;
+      if (End > MaxEnd)
+        MaxEnd = End;
+    }
+    return MaxEnd;
+  }
+
   /// Build a non-owning \c MemoryBuffer wrapper around the single fat-bin
   /// recorded in \p Slots. Sets \p Err if \p Slots has more than one entry
   /// (Luthier requires one fat binary per loader; multi-fat-bin tools must
   /// use multiple \c Derived instances). Returns \c nullptr if \p Slots is
   /// empty or its sole entry has no bundle.
+  ///
+  /// If the entry's \c Size is zero (the IR pass couldn't read it at
+  /// compile time because the host TU sees \c __hip_fatbin as opaque
+  /// \c extern), discover it by parsing the bundle's own header via
+  /// \c discoverOffloadBundleSize.
   static std::unique_ptr<llvm::MemoryBuffer>
   buildBundleBuffer(llvm::ArrayRef<HipFatBinaryInfo> Slots, llvm::Error &Err) {
     llvm::ErrorAsOutParameter EAO(&Err);
@@ -247,8 +289,18 @@ protected:
     if (Slots.empty() || Slots.front().Bundle == nullptr)
       return nullptr;
     const auto &S = Slots.front();
+    uint64_t Size = S.Size;
+    if (Size == 0)
+      Size = discoverOffloadBundleSize(S.Bundle);
+    if (Size == 0) {
+      Err = LUTHIER_MAKE_GENERIC_ERROR(
+          "Cannot determine fat-bin bundle size: HipFatBinaries slot "
+          "recorded size 0 and the bundle header didn't start with "
+          "the Clang offload magic.");
+      return nullptr;
+    }
     return llvm::MemoryBuffer::getMemBuffer(
-        llvm::StringRef(static_cast<const char *>(S.Bundle), S.Size), "fatbin",
+        llvm::StringRef(static_cast<const char *>(S.Bundle), Size), "fatbin",
         /*RequiresNullTerminator=*/false);
   }
 

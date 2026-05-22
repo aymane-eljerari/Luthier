@@ -831,7 +831,7 @@ foreach i = 0-7 in {
   }
 
   // U64 unsigned
-  defvar cmpPredU64 = [LLVMICmpEQ, LLVMICmpNE, LLVMFCmpUGT, LLVMFCmpUGE, LLVMFCmpULT, LLVMFCmpULE, LLVMICmpEQ, LLVMICmpEQ][i];
+  defvar cmpPredU64 = [LLVMICmpEQ, LLVMICmpNE, LLVMICmpUGT, LLVMICmpUGE, LLVMICmpULT, LLVMICmpULE, LLVMICmpEQ, LLVMICmpEQ][i];
 
   def V_CMP_#cmpName#_U64_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_U64_e64")> {

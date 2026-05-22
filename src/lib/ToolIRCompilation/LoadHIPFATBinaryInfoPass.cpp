@@ -305,11 +305,21 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
         WrapperInit->getOperand(2)->stripPointerCasts());
     if (!BundleGV)
       continue;
-    auto *ArrTy = llvm::dyn_cast<llvm::ArrayType>(BundleGV->getValueType());
-    if (!ArrTy)
-      continue;
-    uint64_t Size = ArrTy->getNumElements() *
-                    ArrTy->getElementType()->getScalarSizeInBits() / 8;
+    // HIP-Clang's dual-emission gives `__hip_fatbin` a fully-typed
+    // `[N x i8]` initializer in the SAME TU as the
+    // `__hipRegisterFatBinary` call, so the size is visible at IR time.
+    // `luthier_add_tool`'s split-compile design separates the bytes
+    // (a generated C TU) from the registration (the user's --cuda-host-only
+    // TU), leaving `__hip_fatbin` as `external constant i8` here — no
+    // ArrayType, no compile-time size. In that case emit Size=0 and let
+    // the loader discover the bundle extent at runtime by walking the
+    // `.hip_fatbin` ELF section that contains the BundleGV's address.
+    uint64_t Size = 0;
+    if (auto *ArrTy =
+            llvm::dyn_cast<llvm::ArrayType>(BundleGV->getValueType())) {
+      Size = ArrTy->getNumElements() *
+             ArrTy->getElementType()->getScalarSizeInBits() / 8;
+    }
     FatBinInfos.push_back(llvm::ConstantStruct::get(
         FatBinInfoTy,
         {BundleGV, llvm::ConstantInt::get(I64Ty, Size)}));

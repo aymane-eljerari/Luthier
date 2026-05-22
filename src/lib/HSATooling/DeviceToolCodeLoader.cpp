@@ -93,13 +93,20 @@ parseOffloadBundle(llvm::MemoryBufferRef Bundle,
     return BundleOrErr.takeError();
 
   for (auto &Entry : (*BundleOrErr)->getEntries()) {
+    if (Entry.Size == 0)
+      continue;
     llvm::MemoryBufferRef CodeObjectBuf{
         llvm::StringRef(ParseBuf.getBufferStart() + Entry.Offset, Entry.Size),
         "code object buffer"};
-    // Filter non-AMDGCN slices (host slot, etc.) early.
+    // The bundle may contain a host slot whose payload isn't a valid
+    // object file. Try-parse, and skip rather than fail when the parse
+    // doesn't recognize the bytes; AMDGCN slices have a well-formed ELF
+    // header and will always succeed.
     auto ObjOrErr = llvm::object::ObjectFile::createObjectFile(CodeObjectBuf);
-    if (!ObjOrErr)
-      return ObjOrErr.takeError();
+    if (!ObjOrErr) {
+      llvm::consumeError(ObjOrErr.takeError());
+      continue;
+    }
     if (!llvm::isa<object::AMDGCNObjectFile>(*ObjOrErr))
       continue;
     ElfSlices.push_back(CodeObjectBuf);
@@ -704,9 +711,39 @@ DeviceToolCodeLoader::getEmbeddedModule(
     return std::move(E);
   std::string Key = canonicalLLVMISAKey(T, CPU, Features);
   auto It = Slices.find(Key);
-  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-      It != Slices.end(),
-      "No embedded bitcode cached for the requested LLVM ISA tuple."));
+  if (It == Slices.end()) {
+    // Fall back to a triple+CPU-only match. The slice's feature list
+    // comes from its ELF metadata, which may have fewer qualifiers than
+    // an HSA agent reports (e.g. agents surface +sramecc/-xnack while
+    // a HIP fat-binary slice typically records bare gfxNNN). The HSA
+    // loader does its own compatibility check at load time, so a
+    // triple+CPU agreement is sufficient at this stage.
+    // Match by CPU substring. Triple stringification differs in dash
+    // count between an HSA-derived Triple (which surfaces an empty
+    // Environment as a trailing dash) and an ELF-derived Triple (which
+    // omits an unset Environment), so the leading prefix isn't stable.
+    // CPU names (gfxNNN) are unique enough for an unambiguous match
+    // among installed slices.
+    std::string CPUMarker = ("-" + CPU + ",").str();
+    std::string CPUTail = ("-" + CPU).str();
+    for (auto &KV : Slices) {
+      llvm::StringRef K = KV.first();
+      if (K.contains(CPUMarker) || K.ends_with(CPUTail)) {
+        It = Slices.find(KV.first());
+        break;
+      }
+    }
+  }
+  if (It == Slices.end()) {
+    std::string AvailKeys;
+    llvm::raw_string_ostream OS(AvailKeys);
+    for (const auto &KV : Slices)
+      OS << "  [" << KV.first() << "]\n";
+    return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+        "No embedded bitcode cached for the requested LLVM ISA tuple. "
+        "Requested: [{0}]. Available ({1} slices):\n{2}",
+        Key, Slices.size(), AvailKeys));
+  }
   return llvm::parseBitcodeFile(It->second.Bitcode, Ctx);
 }
 

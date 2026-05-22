@@ -31,7 +31,7 @@ namespace luthier {
 /// \tparam T The concrete Singleton object itself
 template <typename T> class Singleton {
 private:
-  static T *Instance;
+  inline static T *Instance{nullptr};
 
 public:
   /// Constructor for explicit initialization of the Singleton instance \n
@@ -66,12 +66,6 @@ public:
 
   static bool isInitialized() { return Instance != nullptr; }
 };
-
-#ifdef __clang__
-// Template definition of the Instance pointer to suppress clang warnings
-// regarding translation units
-template <typename T> T *luthier::Singleton<T>::Instance{nullptr};
-#endif
 
 } // namespace luthier
 

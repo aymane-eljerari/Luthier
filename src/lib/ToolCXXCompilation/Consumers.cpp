@@ -19,6 +19,7 @@
 #include <clang/AST/AST.h>
 #include <clang/AST/ASTConsumer.h>
 #include <clang/AST/Attr.h>
+#include <clang/AST/DeclCXX.h>
 #include <clang/AST/RecursiveASTVisitor.h>
 #include <clang/Sema/Sema.h>
 #include <llvm/Support/Casting.h>
@@ -28,10 +29,13 @@ namespace luthier {
 namespace {
 
 bool hasAnnotation(const clang::FunctionDecl *FD, llvm::StringRef Tag) {
-  for (const auto *A : FD->specific_attrs<clang::AnnotateAttr>()) {
-    if (A->getAnnotation() == Tag)
-      return true;
-  }
+  // Attributes can live on any redeclaration. Inspect every form before
+  // declaring the function untagged so an out-of-line definition whose
+  // attribute appears only on the in-class declaration still matches.
+  for (const clang::FunctionDecl *Redecl : FD->redecls())
+    for (const auto *A : Redecl->specific_attrs<clang::AnnotateAttr>())
+      if (A->getAnnotation() == Tag)
+        return true;
   return false;
 }
 
@@ -97,16 +101,17 @@ public:
     auto *FD = llvm::dyn_cast<clang::FunctionDecl>(E->getDecl());
     if (!FD)
       return true;
-    // Already-processed decls remain in the map after their AnnotateAttrs
-    // are dropped, so consult the map first to avoid the attribute check
-    // missing them.
-    auto It = Map.find(FD);
+    // Different redeclarations of the same method share a canonical decl;
+    // key the map by it so the in-class declaration and the out-of-line
+    // definition both resolve to the same synthesized handle.
+    clang::FunctionDecl *Key = FD->getCanonicalDecl();
+    auto It = Map.find(Key);
     if (It == Map.end()) {
       if (!hasExportHandleAttr(FD) || FD->isTemplated())
         return true;
       clang::FunctionDecl *Handle = makeKernelHandle(SemaRef, FD);
-      Map[FD] = Handle;
-      It = Map.find(FD);
+      Map[Key] = Handle;
+      It = Map.find(Key);
     }
     clang::FunctionDecl *Handle = It->second;
     E->setDecl(Handle);
@@ -139,26 +144,37 @@ void HostHandleSynthConsumer::handleDecl(clang::Decl *D, clang::ASTContext &Ctx,
                                          bool IsHostCompile) {
   if (auto *FD = llvm::dyn_cast<clang::FunctionDecl>(D)) {
     if (hasExportHandleAttr(FD) && !FD->isTemplated()) {
-      auto It = DeviceFnToHandle.find(FD);
+      // Always key by the canonical decl so the in-class declaration and
+      // the out-of-line definition (different FunctionDecl objects) share
+      // one synthesized handle.
+      clang::FunctionDecl *Key = FD->getCanonicalDecl();
+      auto It = DeviceFnToHandle.find(Key);
       if (It == DeviceFnToHandle.end()) {
         clang::FunctionDecl *Handle = makeKernelHandle(*SemaRef, FD);
-        DeviceFnToHandle[FD] = Handle;
+        DeviceFnToHandle[Key] = Handle;
       }
       if (IsHostCompile && FD->hasBody()) {
-        // Clear the body and strip the anchors that would otherwise keep
-        // the dead host emission alive: UsedAttr (-> @llvm.compiler.used)
-        // and AnnotateAttrs (-> @llvm.global.annotations). All host-side
+        // Replace the body with an empty CompoundStmt. The function is
+        // still emitted host-side as an empty `void name()` symbol so
+        // every IR-level anchor the codegen has already registered for
+        // it stays valid:
+        //   * @llvm.compiler.used (from UsedAttr)
+        //   * @llvm.global.annotations (from AnnotateAttr)
+        // We deliberately do NOT drop those attributes — CodeGenModule
+        // has already deferred annotation emission keyed on this Decl
+        // by the time the parser finishes the in-class body, and
+        // dropping the AnnotateAttr behind CGM's back trips the
+        // `D->hasAttr<AnnotateAttr>()` assert inside
+        // `EmitGlobalAnnotations` at module finalize. Keeping the
+        // attributes is harmless: the empty body has no AMDGCN
+        // intrinsics, so nothing illegal leaks to x86 codegen. Host
         // DeclRefExprs are rewritten to the synthesized kernel handle
-        // below, so nothing references this symbol from host code. The
-        // function is still emitted as an empty extern-"C" symbol with
-        // no callers; --gc-sections will drop it at link time.
+        // below, so nothing CALLS this symbol from host code; the
+        // empty stub is dead weight that --gc-sections drops at link
+        // time.
         FD->setBody(clang::CompoundStmt::Create(
             Ctx, {}, clang::FPOptionsOverride(), clang::SourceLocation(),
             clang::SourceLocation()));
-        while (FD->hasAttr<clang::UsedAttr>())
-          FD->dropAttr<clang::UsedAttr>();
-        while (FD->hasAttr<clang::AnnotateAttr>())
-          FD->dropAttr<clang::AnnotateAttr>();
       }
     }
   }
@@ -166,6 +182,30 @@ void HostHandleSynthConsumer::handleDecl(clang::Decl *D, clang::ASTContext &Ctx,
   if (auto *FTD = llvm::dyn_cast<clang::FunctionTemplateDecl>(D)) {
     for (clang::FunctionDecl *Spec : FTD->specializations())
       handleDecl(Spec, Ctx, IsHostCompile);
+  }
+
+  // Tagged hooks may be static members of a class (possibly inside a
+  // namespace, including an anonymous one). The lit suite only covers
+  // namespace-scope free functions, but tool authors are encouraged to
+  // group hooks as `static` members of their `HSATool` subclass. Recurse
+  // into NamespaceDecl and TagDecl so those nested FunctionDecls are
+  // found and processed the same way as top-level ones.
+  if (auto *ND = llvm::dyn_cast<clang::NamespaceDecl>(D)) {
+    for (clang::Decl *Child : ND->decls())
+      handleDecl(Child, Ctx, IsHostCompile);
+  } else if (auto *RD = llvm::dyn_cast<clang::CXXRecordDecl>(D)) {
+    if (RD->isThisDeclarationADefinition()) {
+      for (clang::Decl *Child : RD->decls())
+        handleDecl(Child, Ctx, IsHostCompile);
+    }
+  } else if (auto *TD = llvm::dyn_cast<clang::TagDecl>(D)) {
+    if (TD->isThisDeclarationADefinition()) {
+      for (clang::Decl *Child : TD->decls())
+        handleDecl(Child, Ctx, IsHostCompile);
+    }
+  } else if (auto *LSD = llvm::dyn_cast<clang::LinkageSpecDecl>(D)) {
+    for (clang::Decl *Child : LSD->decls())
+      handleDecl(Child, Ctx, IsHostCompile);
   }
 
   RewriteVisitor V(*SemaRef, DeviceFnToHandle);
