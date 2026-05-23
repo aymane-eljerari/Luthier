@@ -46,11 +46,11 @@ public:
 
 static clang::FrontendPluginRegistry::Add<Action>
     XAction("luthier-export-device-function-host-handle",
-            "Exports host-side kernel handles for tagged device functions");
+            "Exports host-side handles for tagged device functions");
 
 static clang::ParsedAttrInfoRegistry::Add<
     luthier::LuthierExportFunctionHandleAttrInfo>
     XAttr("luthier_export_function_handle",
           "Marks a __device__ function as host-accessible; the Luthier "
-          "host-handle synthesis plugin will generate a __global__ kernel "
+          "host-handle export plugin will generate a corresponding __host__ "
           "stub for each ODR-use of the function from host code");
