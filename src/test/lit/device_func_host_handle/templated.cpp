@@ -24,10 +24,10 @@ void hostFunction(const void **out) {
 
 // clang-format off
 /// One handle per concrete specialization.
-/// CHECK-DAG: define dso_local void @_Z{{[0-9]+}}__luthier_export_handle__Z6myHookIiEvT_i(i32
-/// CHECK-DAG: define dso_local void @_Z{{[0-9]+}}__luthier_export_handle__Z6myHookIfEvT_f(float
+/// CHECK-DAG: define dso_local void @_Z{{[0-9]+}}__luthier_builtin_dev_func_handle__Z6myHookIiEvT_i(i32
+/// CHECK-DAG: define dso_local void @_Z{{[0-9]+}}__luthier_builtin_dev_func_handle__Z6myHookIfEvT_f(float
 
 /// Host use-sites are retargeted at the handles.
-/// CHECK-DAG: store ptr @_Z{{[0-9]+}}__luthier_export_handle__Z6myHookIiEvT_i
-/// CHECK-DAG: store ptr @_Z{{[0-9]+}}__luthier_export_handle__Z6myHookIfEvT_f
+/// CHECK-DAG: store ptr @_Z{{[0-9]+}}__luthier_builtin_dev_func_handle__Z6myHookIiEvT_i
+/// CHECK-DAG: store ptr @_Z{{[0-9]+}}__luthier_builtin_dev_func_handle__Z6myHookIfEvT_f
 // clang-format on

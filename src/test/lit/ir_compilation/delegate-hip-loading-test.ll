@@ -41,7 +41,7 @@ declare dso_local void @__hipUnregisterFatBinary(ptr)
 declare dso_local i32 @atexit(ptr)
 
 ; --- After the pass: element structs exist, ArrayRef slots are init'd ---
-; CHECK-DAG: %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipFunctionInfo" = type { ptr, ptr }
+; CHECK-DAG: %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipKernelInfo" = type { ptr, ptr }
 ; CHECK-DAG: %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipManagedVarInfo" = type { ptr, ptr, ptr, i64, i32 }
 ; CHECK-DAG: %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipDeviceVarInfo" = type { ptr, ptr }
 ; CHECK-DAG: %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipTextureInfo" = type { ptr, ptr }
@@ -63,7 +63,7 @@ declare dso_local i32 @atexit(ptr)
 @HipSurfaceVars = dso_local global %"class.llvm::ArrayRef" zeroinitializer, align 8
 
 @.str.fb  = private unnamed_addr constant [32 x i8] c"luthier.loader.hip_fat_binaries\00", section "llvm.metadata"
-@.str.fn  = private unnamed_addr constant [29 x i8] c"luthier.loader.hip_functions\00", section "llvm.metadata"
+@.str.fn  = private unnamed_addr constant [27 x i8] c"luthier.loader.hip_kernels\00", section "llvm.metadata"
 @.str.dv  = private unnamed_addr constant [31 x i8] c"luthier.loader.hip_device_vars\00", section "llvm.metadata"
 @.str.mv  = private unnamed_addr constant [32 x i8] c"luthier.loader.hip_managed_vars\00", section "llvm.metadata"
 @.str.tx  = private unnamed_addr constant [32 x i8] c"luthier.loader.hip_texture_vars\00", section "llvm.metadata"
@@ -90,7 +90,7 @@ declare dso_local i32 @atexit(ptr)
 ; CHECK-DAG: @[[FB_DATA:[._a-zA-Z0-9]+]] = private constant [1 x %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipFatBinaryInfo"] [%"struct.luthier::DeviceToolCodeFatBinaryLoader::HipFatBinaryInfo" { ptr @__hip_fatbin, i64 32 }]
 ; CHECK-DAG: @HipFatBinaries = dso_local constant %"class.llvm::ArrayRef" { ptr @[[FB_DATA]], i64 1 }
 ;
-; CHECK-DAG: @[[FN_DATA:[._a-zA-Z0-9]+]] = private constant [2 x %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipFunctionInfo"]
+; CHECK-DAG: @[[FN_DATA:[._a-zA-Z0-9]+]] = private constant [2 x %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipKernelInfo"]
 ; CHECK-DAG: @HipFunctions = dso_local constant %"class.llvm::ArrayRef" { ptr @[[FN_DATA]], i64 2 }
 ;
 ; CHECK-DAG: @[[MV_DATA:[._a-zA-Z0-9]+]] = private constant [1 x %"struct.luthier::DeviceToolCodeFatBinaryLoader::HipManagedVarInfo"] [%"struct.luthier::DeviceToolCodeFatBinaryLoader::HipManagedVarInfo" { ptr @VarManaged, ptr @DummyManagedVariable, ptr @VarName, i64 0, i32 0 }]

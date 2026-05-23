@@ -69,7 +69,7 @@ clang::FunctionDecl *makeHandle(clang::Sema &S, clang::FunctionDecl *FD) {
   clang::SourceLocation Loc = FD->getLocation();
 
   std::string Mangled = mangleDecl(Ctx, FD);
-  std::string HandleName = (llvm::Twine(HandlePrefix) + Mangled).str();
+  std::string HandleName = (llvm::Twine(DevFuncHandlePrefix) + Mangled).str();
   clang::IdentifierInfo &II = Ctx.Idents.get(HandleName);
 
   auto *Handle = clang::FunctionDecl::Create(

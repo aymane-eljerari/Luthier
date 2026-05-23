@@ -24,9 +24,11 @@
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
+#include <cstring>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Analysis/ValueTracking.h>
+#include <llvm/Demangle/Demangle.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Passes/PassBuilder.h>
@@ -328,21 +330,132 @@ LoadHIPFATBinaryInfoPass::run(llvm::Module &M,
       HipFatBinariesAttr, FatBinInfoTy, FatBinInfos, M, NameToVar));
 
   if (RFUN) {
-    llvm::StructType *FunInfoTy = getOrCreateStruct(
-        "struct.luthier::DeviceToolCodeFatBinaryLoader::HipFunctionInfo", {PtrTy, PtrTy});
-    llvm::SmallVector<llvm::Constant *, 10> FunctionHandles{};
+    llvm::StructType *KernelInfoTy = getOrCreateStruct(
+        "struct.luthier::DeviceToolCodeFatBinaryLoader::HipKernelInfo",
+        {PtrTy, PtrTy});
+    llvm::SmallVector<llvm::Constant *, 10> KernelHandles{};
     for (llvm::User *U : RFUN->users()) {
       if (auto *CB = llvm::dyn_cast<llvm::CallBase>(U)) {
         auto *Ptr = llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(1));
         auto *Name = llvm::dyn_cast<llvm::Constant>(CB->getArgOperand(3));
         if (Ptr && Name)
-          FunctionHandles.push_back(
-              llvm::ConstantStruct::get(FunInfoTy, {Ptr, Name}));
+          KernelHandles.push_back(
+              llvm::ConstantStruct::get(KernelInfoTy, {Ptr, Name}));
       }
     }
     LUTHIER_REPORT_FATAL_ON_ERROR(populateArrayRefSlot(
-        HipFunctionsAttr, FunInfoTy, FunctionHandles, M,
-        NameToVar));
+        HipKernelsAttr, KernelInfoTy, KernelHandles, M, NameToVar));
+  }
+
+  /// Harvest device-function handles. Unlike kernels, these don't go
+  /// through \c __hipRegisterFunction — they're synthesized by the CXX
+  /// plugin as plain \c __host__ functions tagged with the
+  /// \c luthier.export_function_handle AnnotateAttr. The annotation
+  /// lands in \c @llvm.global.annotations; scan it and collect each
+  /// tagged \c Function as a \c { HostHandle, DeviceName } record where
+  /// \c DeviceName is the function's own Itanium-mangled name (it's
+  /// shared between the host sibling and the original \c __device__
+  /// emission, so the loader can use it directly to look up the
+  /// device-side hook in the IModule).
+  {
+    llvm::StructType *DevFnInfoTy = getOrCreateStruct(
+        "struct.luthier::DeviceToolCodeFatBinaryLoader::HipDeviceFunctionInfo",
+        {PtrTy, PtrTy});
+    llvm::SmallVector<llvm::Constant *, 10> DevFnEntries{};
+    if (const llvm::GlobalVariable *Annots =
+            M.getGlobalVariable("llvm.global.annotations")) {
+      const auto *CA =
+          llvm::dyn_cast<llvm::ConstantArray>(Annots->getOperand(0));
+      if (CA) {
+        for (llvm::Value *Op : CA->operands()) {
+          auto *CS = llvm::dyn_cast<llvm::ConstantStruct>(Op);
+          if (!CS || CS->getNumOperands() < 2)
+            continue;
+          /// Operand 0: pointer to the annotated GV (here, the host
+          /// sibling Function); operand 1: pointer to the annotation
+          /// string GV.
+          auto *AnnotatedFn = llvm::dyn_cast<llvm::Function>(
+              CS->getOperand(0)->stripPointerCasts());
+          if (!AnnotatedFn)
+            continue;
+          auto *NameGV = llvm::dyn_cast<llvm::GlobalVariable>(
+              CS->getOperand(1)->stripPointerCasts());
+          if (!NameGV)
+            continue;
+          llvm::StringRef AnnoStr;
+          if (!llvm::getConstantStringInfo(NameGV, AnnoStr))
+            continue;
+          if (AnnoStr != ExportFunctionHandleMarker)
+            continue;
+          /// Compute the device-side name corresponding to this host
+          /// sibling. The CXX plugin uses two different synthesis paths
+          /// that we have to decode uniformly:
+          ///
+          /// * Non-templated dual-overload (most cases): the sibling
+          ///   has the *same* source identifier as the original
+          ///   \c __device__ function. Their IR symbols match
+          ///   verbatim, so the sibling's IR symbol IS the device
+          ///   function's name in the IModule. No further work
+          ///
+          /// * Templated per-specialization handle: the sibling has a
+          ///   distinct source identifier of the form
+          ///   \c <DevFuncHandlePrefix><orig-Itanium-mangling>, then
+          ///   gets Itanium-mangled itself (C++ linkage at TU scope).
+          ///   We have to recover the source identifier and strip
+          ///   the prefix to get the original's mangled name
+          ///
+          /// We try to decode as a templated handle first: demangle
+          /// the sibling's IR symbol (or use it directly if it isn't
+          /// Itanium-mangled, e.g. inside an \c extern \c "C" block),
+          /// and check whether its source identifier starts with
+          /// \c DevFuncHandlePrefix. If yes, strip and use that. If
+          /// no, fall through to the non-templated case: the IR symbol
+          /// is already the device-side name
+          llvm::StringRef SibFullName = AnnotatedFn->getName();
+          llvm::ItaniumPartialDemangler Demangler;
+          std::string SibName = SibFullName.str();
+          char *BaseBuf = nullptr;
+          llvm::StringRef SourceIdent;
+          if (!Demangler.partialDemangle(SibName.c_str())) {
+            size_t BaseSize = 0;
+            BaseBuf = Demangler.getFunctionBaseName(/*Buf=*/nullptr, &BaseSize);
+            if (BaseBuf)
+              /// \c BaseSize is the buffer size including the trailing
+              /// NUL (and possibly slack); use \c strlen to get the
+              /// actual string length so we don't carry the NUL through
+              /// into the DeviceName string we emit.
+              SourceIdent = llvm::StringRef(BaseBuf, std::strlen(BaseBuf));
+          } else {
+            /// Not Itanium-mangled — the IR symbol IS the source
+            /// identifier (C linkage sibling, e.g. inside extern "C").
+            SourceIdent = SibFullName;
+          }
+          std::string OrigMangled;
+          if (SourceIdent.starts_with(DevFuncHandlePrefix))
+            OrigMangled =
+                SourceIdent.drop_front(DevFuncHandlePrefix.size()).str();
+          else
+            OrigMangled = SibFullName.str();
+          std::free(BaseBuf);
+          llvm::Constant *DeviceNameStr = llvm::ConstantDataArray::getString(
+              C, OrigMangled, /*AddNull=*/true);
+          auto *DeviceNameGV = new llvm::GlobalVariable(
+              M, DeviceNameStr->getType(), /*isConstant=*/true,
+              llvm::GlobalValue::PrivateLinkage, DeviceNameStr,
+              ".luthier.device_fn_name");
+          DevFnEntries.push_back(llvm::ConstantStruct::get(
+              DevFnInfoTy, {AnnotatedFn, DeviceNameGV}));
+        }
+      }
+    }
+    /// Skip the slot population entirely when no tagged device-function
+    /// handles were found. Tests / TUs that don't use the export-handle
+    /// machinery (or only have kernels) don't emit the
+    /// \c HipDeviceFunctions slot, and \c populateArrayRefSlot would
+    /// otherwise error trying to find a missing annotated GV.
+    if (!DevFnEntries.empty())
+      LUTHIER_REPORT_FATAL_ON_ERROR(populateArrayRefSlot(
+          HipDeviceFunctionsAttr, DevFnInfoTy, DevFnEntries, M, NameToVar));
   }
 
   if (RMV) {

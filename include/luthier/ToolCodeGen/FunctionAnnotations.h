@@ -85,17 +85,20 @@ static constexpr llvm::StringLiteral InjectedPayloadAttribute{
 /// \c LUTHIER_ANNOTATE_VARIABLE for the \c __attribute__((annotate(...)))
 /// site, and a \c static \c constexpr \c StringLiteral for runtime
 /// comparisons in the IR pass.
-#define LUTHIER_HIP_FAT_BINARIES_ATTR luthier.loader.hip_fat_binaries
-#define LUTHIER_HIP_FUNCTIONS_ATTR    luthier.loader.hip_functions
-#define LUTHIER_HIP_DEVICE_VARS_ATTR  luthier.loader.hip_device_vars
-#define LUTHIER_HIP_MANAGED_VARS_ATTR luthier.loader.hip_managed_vars
-#define LUTHIER_HIP_TEXTURE_VARS_ATTR luthier.loader.hip_texture_vars
-#define LUTHIER_HIP_SURFACE_VARS_ATTR luthier.loader.hip_surface_vars
+#define LUTHIER_HIP_FAT_BINARIES_ATTR     luthier.loader.hip_fat_binaries
+#define LUTHIER_HIP_KERNELS_ATTR          luthier.loader.hip_kernels
+#define LUTHIER_HIP_DEVICE_FUNCTIONS_ATTR luthier.loader.hip_device_functions
+#define LUTHIER_HIP_DEVICE_VARS_ATTR      luthier.loader.hip_device_vars
+#define LUTHIER_HIP_MANAGED_VARS_ATTR     luthier.loader.hip_managed_vars
+#define LUTHIER_HIP_TEXTURE_VARS_ATTR     luthier.loader.hip_texture_vars
+#define LUTHIER_HIP_SURFACE_VARS_ATTR     luthier.loader.hip_surface_vars
 
 static constexpr llvm::StringLiteral HipFatBinariesAttr{
     LUTHIER_STRINGIFY(LUTHIER_HIP_FAT_BINARIES_ATTR)};
-static constexpr llvm::StringLiteral HipFunctionsAttr{
-    LUTHIER_STRINGIFY(LUTHIER_HIP_FUNCTIONS_ATTR)};
+static constexpr llvm::StringLiteral HipKernelsAttr{
+    LUTHIER_STRINGIFY(LUTHIER_HIP_KERNELS_ATTR)};
+static constexpr llvm::StringLiteral HipDeviceFunctionsAttr{
+    LUTHIER_STRINGIFY(LUTHIER_HIP_DEVICE_FUNCTIONS_ATTR)};
 static constexpr llvm::StringLiteral HipDeviceVarsAttr{
     LUTHIER_STRINGIFY(LUTHIER_HIP_DEVICE_VARS_ATTR)};
 static constexpr llvm::StringLiteral HipManagedVarsAttr{
@@ -150,18 +153,6 @@ static constexpr const char *TargetInstrPointAttr =
 /// is host-addressable.
 inline constexpr llvm::StringLiteral ExportFunctionHandleMarker =
     "luthier.export_function_handle";
-
-/// Symbol-name prefix of every kernel handle the plugin synthesizes. The
-/// suffix is a sanitized form of the device function's mangled name.
-inline constexpr llvm::StringLiteral HookHandleSymbolPrefix =
-    "__luthier_builtin_hook_handle_";
-
-/// Source-only prefix used when minting per-decl handle names. The prefix
-/// doesn't carry IR-pass semantics — \c LoadHIPFATBinaryInfoPass walks
-/// \c @llvm.global.annotations for \c luthier.export_function_handle.
-/// We just need the synthesized identifiers to not collide with anything
-/// the user wrote.
-inline constexpr llvm::StringLiteral HandlePrefix = "__luthier_export_handle_";
 
 /// Tag a variable declaration with a Clang \c annotate attribute. \p Sym
 /// is a bare-token macro (e.g. \c LUTHIER_HIP_FAT_BINARIES_ATTR) that

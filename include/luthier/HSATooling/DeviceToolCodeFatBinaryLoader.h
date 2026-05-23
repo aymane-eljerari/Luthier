@@ -93,8 +93,23 @@ public:
     size_t Size{0};
   };
 
-  /// Per-function entry produced from a \c __hipRegisterFunction call
-  struct HipFunctionInfo {
+  /// Per-kernel entry produced from a \c __hipRegisterFunction call.
+  /// (Despite HIP's API name, \c __hipRegisterFunction registers
+  /// \c __global__ kernels — user-launchable entry points whose host
+  /// shadow is what \c hipLaunchKernel takes as its first argument.)
+  struct HipKernelInfo {
+    void *HostHandle{nullptr};
+    const char *DeviceName{nullptr};
+  };
+
+  /// Per-device-function entry produced by the Luthier CXX plugin's
+  /// \c [[luthier::export_function_handle]] machinery: a synthesized
+  /// \c __host__ sibling for a tagged \c __device__ function. Harvested
+  /// by \c LoadHIPFATBinaryInfoPass from \c @llvm.global.annotations
+  /// (entries with the \c luthier.export_function_handle marker), not
+  /// from \c __hipRegisterFunction — these are not kernels and HIP does
+  /// not register them.
+  struct HipDeviceFunctionInfo {
     void *HostHandle{nullptr};
     const char *DeviceName{nullptr};
   };
@@ -134,8 +149,12 @@ public:
       llvm::ArrayRef<HipFatBinaryInfo> HipFatBinaries{};
 
   inline static __attribute__((used))
-  LUTHIER_ANNOTATE_VARIABLE(LUTHIER_HIP_FUNCTIONS_ATTR)
-      llvm::ArrayRef<HipFunctionInfo> HipFunctions{};
+  LUTHIER_ANNOTATE_VARIABLE(LUTHIER_HIP_KERNELS_ATTR)
+      llvm::ArrayRef<HipKernelInfo> HipKernels{};
+
+  inline static __attribute__((used))
+  LUTHIER_ANNOTATE_VARIABLE(LUTHIER_HIP_DEVICE_FUNCTIONS_ATTR)
+      llvm::ArrayRef<HipDeviceFunctionInfo> HipDeviceFunctions{};
 
   inline static __attribute__((used))
   LUTHIER_ANNOTATE_VARIABLE(LUTHIER_HIP_DEVICE_VARS_ATTR)
@@ -172,7 +191,9 @@ public:
       if (Handle != nullptr && Name != nullptr)
         HandleToName[Handle] = std::string(Name);
     };
-    for (const auto &E : HipFunctions)
+    for (const auto &E : HipKernels)
+      Record(E.HostHandle, E.DeviceName);
+    for (const auto &E : HipDeviceFunctions)
       Record(E.HostHandle, E.DeviceName);
     for (const auto &E : HipDeviceVars)
       Record(E.HostHandle, E.DeviceName);

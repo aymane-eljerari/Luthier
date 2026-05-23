@@ -125,19 +125,15 @@ public:
   /// Resolve a payload function's host shadow handle to the corresponding
   /// \c llvm::Function inside the given instrumentation module.
   ///
-  /// Two cases are handled:
-  ///   1. The handle name names a function defined in the IModule
-  ///      directly — exact lookup wins. Free-function \c __device__
-  ///      hooks tagged with \c LUTHIER_HOOK_ANNOTATE end up here.
-  ///   2. The handle name is the Itanium-mangled symbol of a
-  ///      \c LUTHIER_EXPORT_FUNCTION_HANDLE_ATTR -tagged kernel stub the
-  ///      CXX compilation plugin synthesized. The plugin builds the stub
-  ///      as a plain C++ \c FunctionDecl at TU scope whose *base
-  ///      identifier* is \c __luthier_builtin_hook_handle_ followed by
-  ///      the original device function's Itanium-mangled name verbatim.
-  ///      We demangle the host shadow's symbol, take its base identifier,
-  ///      drop the prefix, and the remainder is the original mangled
-  ///      name — \c getFunction is the lookup.
+  /// \c lookupNameByHandle returns the device-side mangled name as
+  /// recorded by \c LoadHIPFATBinaryInfoPass. For \c __global__ kernels
+  /// (HIP \c __hipRegisterFunction path) the recorded name is the
+  /// kernel's natural Itanium mangling; for tagged \c __device__
+  /// functions (CXX-plugin export-handle path) the IR pass already
+  /// demangles the synthesized host sibling and stores the original
+  /// device function's Itanium-mangled name. In both cases a single
+  /// \c Module::getFunction lookup against the IModule resolves the
+  /// payload.
   llvm::Expected<llvm::Function *>
   resolvePayloadHandle(const void *HostHandle,
                        llvm::Module &InstrumentationModule) {
@@ -145,44 +141,24 @@ public:
     auto NameOrErr = Self.lookupNameByHandle(HostHandle);
     LUTHIER_RETURN_ON_ERROR(NameOrErr.takeError());
 
-    if (llvm::Function *F =
-            InstrumentationModule.getFunction(*NameOrErr))
+    if (llvm::Function *F = InstrumentationModule.getFunction(*NameOrErr))
       return F;
-
-    static constexpr llvm::StringLiteral Prefix =
-        "__luthier_builtin_hook_handle_";
-
-    // The host shadow's symbol is Itanium-mangled because the plugin
-    // synthesizes the stub as a plain C++ function (no extern "C"). A
-    // failed demangle therefore means the handle was not produced by
-    // the plugin, which is an unrecoverable lookup error here.
-    llvm::ItaniumPartialDemangler Demangler;
-    std::string NameStr = NameOrErr->str();
-    if (!Demangler.partialDemangle(NameStr.c_str())) {
-      size_t BaseSize = 0;
-      if (char *BaseBuf =
-              Demangler.getFunctionBaseName(/*Buf=*/nullptr, &BaseSize)) {
-        llvm::StringRef BaseName(BaseBuf, BaseSize);
-        if (BaseName.starts_with(Prefix)) {
-          std::string OriginalMangled =
-              BaseName.drop_front(Prefix.size()).str();
-          std::free(BaseBuf);
-          if (llvm::Function *F =
-                  InstrumentationModule.getFunction(OriginalMangled))
-            return F;
-          return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-              "Payload handle '{0}' decoded to '{1}', which is not "
-              "present in the instrumentation module.",
-              *NameOrErr, OriginalMangled));
-        }
-        std::free(BaseBuf);
-      }
-    }
 
     return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
         "Payload function '{0}' not present in the instrumentation module.",
         *NameOrErr));
   }
+
+  /// Module marker. HIP host CodeGen only emits the \c __hipRegister*
+  /// machinery (and hence the fat-binary registration the rest of the
+  /// loader machinery depends on) when the TU contains at least one
+  /// device-side entity HIP recognises. A tool TU whose only device
+  /// content is \c __device__ functions tagged with
+  /// \c LUTHIER_EXPORT_FUNCTION_HANDLE_ATTR (and no kernels) would
+  /// otherwise skip fat-binary registration entirely. Having every
+  /// \c HSATool instantiation pull in a \c __managed__ variable
+  /// guarantees the registration ctor exists.
+  inline static __attribute__((managed, used)) char LuthierModuleMarker = 0;
 
   /// Lift the inherited \c createInjectedPayload overloads from
   /// \c InjectedPayloadCreationPass into the public surface so tool code
