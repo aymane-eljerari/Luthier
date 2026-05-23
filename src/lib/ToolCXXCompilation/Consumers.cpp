@@ -16,12 +16,14 @@
 #include "luthier/ToolCXXCompilation/Consumers.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include <clang/AST/AST.h>
-#include <clang/AST/ASTConsumer.h>
 #include <clang/AST/Attr.h>
-#include <clang/AST/DeclCXX.h>
+#include <clang/AST/DeclTemplate.h>
 #include <clang/AST/Mangle.h>
 #include <clang/AST/RecursiveASTVisitor.h>
+#include <clang/Basic/Cuda.h>
 #include <clang/Sema/Sema.h>
+#include <clang/Sema/SemaCUDA.h>
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/raw_ostream.h>
@@ -32,200 +34,209 @@ namespace luthier {
 namespace {
 
 bool hasAnnotation(const clang::FunctionDecl *FD, llvm::StringRef Tag) {
-  // Attributes can live on any redeclaration. Inspect every form before
-  // declaring the function untagged so an out-of-line definition whose
-  // attribute appears only on the in-class declaration still matches.
-  for (const clang::FunctionDecl *Redecl : FD->redecls())
-    for (const auto *A : Redecl->specific_attrs<clang::AnnotateAttr>())
+  for (const clang::FunctionDecl *ReDecl : FD->redecls())
+    for (const auto *A : ReDecl->specific_attrs<clang::AnnotateAttr>())
       if (A->getAnnotation() == Tag)
         return true;
   return false;
 }
 
-bool hasExportHandleAttr(const clang::FunctionDecl *FD) {
-  return hasAnnotation(FD, ExportFunctionHandleMarker);
+/// Returns the tagged template pattern \c FD specializes, or nullptr if
+/// \c FD is not a specialization of an export-handle-tagged template.
+clang::FunctionDecl *getTaggedPattern(clang::FunctionDecl *FD) {
+  if (auto *PrimaryTpl = FD->getPrimaryTemplate()) {
+    auto *Pattern = PrimaryTpl->getTemplatedDecl();
+    if (hasAnnotation(Pattern, ExportFunctionHandleMarker))
+      return Pattern;
+  }
+  return nullptr;
 }
 
-std::string buildHandleBaseIdentifier(clang::FunctionDecl *FD,
-                                      clang::ASTContext &Ctx) {
-  std::string OriginalSymbol;
-  llvm::raw_string_ostream OS(OriginalSymbol);
+std::string mangleDecl(clang::ASTContext &Ctx, clang::FunctionDecl *FD) {
+  std::string Out;
+  llvm::raw_string_ostream OS(Out);
   std::unique_ptr<clang::MangleContext> MC(Ctx.createMangleContext());
   if (MC->shouldMangleDeclName(FD))
     MC->mangleName(FD, OS);
   else
     OS << FD->getName();
-  return (llvm::Twine(HookHandleSymbolPrefix) + OriginalSymbol).str();
+  return Out;
 }
 
-/// Synthesizes <tt>__global__ __used__ void
-/// __luthier_builtin_hook_handle_<original-mangled-name>() {}</tt> at
-/// translation-unit scope as a plain C++ function (no \c extern "C"
-/// wrapper). Clang Itanium-mangles it normally, so the host-side symbol
-/// is itself Itanium-mangled and demangleable. The base identifier
-/// embeds the original device function's Itanium-mangled name verbatim,
-/// which makes the reverse direction (host shadow pointer → IModule
-/// hook function) a single \c partialDemangle + \c drop_front + direct
-/// \c Module::getFunction lookup. HIP's dual emission produces both the
-/// device kernel symbol (registered with the runtime) and the host stub
-/// whose address is what host code will obtain after the use-site
-/// rewrite.
-clang::FunctionDecl *makeKernelHandle(clang::Sema &S,
-                                      clang::FunctionDecl *Original) {
+clang::FunctionDecl *makeHandle(clang::Sema &S, clang::FunctionDecl *FD) {
   clang::ASTContext &Ctx = S.Context;
   clang::TranslationUnitDecl *TU = Ctx.getTranslationUnitDecl();
+  clang::SourceLocation Loc = FD->getLocation();
 
-  std::string Name = buildHandleBaseIdentifier(Original, Ctx);
-  clang::IdentifierInfo &II = Ctx.Idents.get(Name);
+  std::string Mangled = mangleDecl(Ctx, FD);
+  std::string HandleName = (llvm::Twine(HandlePrefix) + Mangled).str();
+  clang::IdentifierInfo &II = Ctx.Idents.get(HandleName);
 
-  clang::FunctionProtoType::ExtProtoInfo EPI;
-  clang::QualType FnTy = Ctx.getFunctionType(Ctx.VoidTy, {}, EPI);
-
-  auto *FD = clang::FunctionDecl::Create(
-      Ctx, TU, clang::SourceLocation(), clang::SourceLocation(),
-      clang::DeclarationName(&II), FnTy,
-      /*TInfo=*/nullptr, clang::SC_Extern, /*UsesFPIntrin=*/false,
-      /*isInlineSpecified=*/false, /*hasWrittenPrototype=*/true,
+  auto *Handle = clang::FunctionDecl::Create(
+      Ctx, TU, Loc, Loc, clang::DeclarationName(&II), FD->getType(),
+      FD->getTypeSourceInfo(), clang::SC_None,
+      /*UsesFPIntrin=*/false,
+      /*isInline=*/false, /*hasWrittenPrototype=*/true,
       clang::ConstexprSpecKind::Unspecified);
 
-  FD->addAttr(clang::CUDAGlobalAttr::CreateImplicit(Ctx));
-  FD->addAttr(clang::UsedAttr::CreateImplicit(Ctx));
+  llvm::SmallVector<clang::ParmVarDecl *, 4> Params;
+  for (clang::ParmVarDecl *P : FD->parameters()) {
+    Params.push_back(clang::ParmVarDecl::Create(
+        Ctx, Handle, P->getLocation(), P->getLocation(), P->getIdentifier(),
+        P->getType(), P->getTypeSourceInfo(), P->getStorageClass(),
+        /*DefArg=*/nullptr));
+  }
+  Handle->setParams(Params);
 
-  FD->setBody(clang::CompoundStmt::Create(Ctx, {}, clang::FPOptionsOverride(),
-                                          clang::SourceLocation(),
-                                          clang::SourceLocation()));
+  Handle->addAttr(clang::CUDAHostAttr::CreateImplicit(Ctx));
+  Handle->addAttr(clang::UsedAttr::CreateImplicit(Ctx));
+  Handle->addAttr(clang::AnnotateAttr::Create(Ctx, ExportFunctionHandleMarker,
+                                              /*Args=*/nullptr, /*NumArgs=*/0,
+                                              Loc));
+  Handle->setBody(clang::CompoundStmt::Create(
+      Ctx, /*Stmts=*/{}, clang::FPOptionsOverride(), Loc, Loc));
 
-  TU->addDecl(FD);
+  TU->addDecl(Handle);
+  S.PushOnScopeChains(Handle, S.TUScope, /*AddToContext=*/false);
+  S.MarkFunctionReferenced(Loc, Handle, /*MightBeOdrUse=*/true);
+  S.Consumer.HandleTopLevelDecl(clang::DeclGroupRef(Handle));
+  return Handle;
+}
 
-  S.PushOnScopeChains(FD, S.TUScope, /*AddToContext=*/false);
-  S.MarkFunctionReferenced(clang::SourceLocation(), FD, /*MightBeOdrUse=*/true);
-  S.Consumer.HandleTopLevelDecl(clang::DeclGroupRef(FD));
-  return FD;
+/// Returns true if \p FD is tagged with the export-handle marker, either
+/// directly (non-templated case) or via its primary template (template
+/// specialization case).
+bool isTaggedCallee(clang::FunctionDecl *FD) {
+  if (hasAnnotation(FD, ExportFunctionHandleMarker))
+    return true;
+  if (FD->isFunctionTemplateSpecialization())
+    return getTaggedPattern(FD) != nullptr;
+  return false;
 }
 
 class RewriteVisitor : public clang::RecursiveASTVisitor<RewriteVisitor> {
-  clang::Sema &SemaRef;
+  clang::Sema &S;
+
   llvm::DenseMap<clang::FunctionDecl *, clang::FunctionDecl *> &Map;
+
+  /// Stack of enclosing FunctionDecls maintained by the
+  /// \c TraverseFunctionDecl override below. Top-of-stack is the
+  /// directly-enclosing function of whatever expression we're visiting.
+  llvm::SmallVector<clang::FunctionDecl *, 4> EnclosingFn;
 
 public:
   RewriteVisitor(
-      clang::Sema &S,
+      clang::Sema &SR,
       llvm::DenseMap<clang::FunctionDecl *, clang::FunctionDecl *> &M)
-      : SemaRef(S), Map(M) {}
+      : S(SR), Map(M) {}
+
+  bool TraverseFunctionDecl(clang::FunctionDecl *FD) {
+    EnclosingFn.push_back(FD);
+    bool Ok =
+        clang::RecursiveASTVisitor<RewriteVisitor>::TraverseFunctionDecl(FD);
+    EnclosingFn.pop_back();
+    return Ok;
+  }
+
+  bool TraverseCXXMethodDecl(clang::CXXMethodDecl *MD) {
+    EnclosingFn.push_back(MD);
+    bool Ok =
+        clang::RecursiveASTVisitor<RewriteVisitor>::TraverseCXXMethodDecl(MD);
+    EnclosingFn.pop_back();
+    return Ok;
+  }
+
+  bool VisitCallExpr(clang::CallExpr *CE) {
+    auto *Callee =
+        llvm::dyn_cast_or_null<clang::FunctionDecl>(CE->getCalleeDecl());
+    if (!Callee || !isTaggedCallee(Callee))
+      return true;
+    // Only diagnose calls whose enclosing function is host-context;
+    // device→device calls (e.g. an export-handle hook invoked from
+    // inside a __global__ kernel during the same TU's host compile —
+    // Sema still parses the __global__ body in host compile to type-
+    // check it) are legal and must not error.
+    if (EnclosingFn.empty())
+      return true;
+    clang::FunctionDecl *Caller = EnclosingFn.back();
+    clang::CUDAFunctionTarget Target = S.CUDA().IdentifyTarget(Caller);
+    if (Target != clang::CUDAFunctionTarget::Host &&
+        Target != clang::CUDAFunctionTarget::HostDevice)
+      return true;
+    // Host context: the export-handle attribute only enables host-side
+    // address-take of the tagged device function. A direct call would
+    // either dispatch to the empty sibling (non-templated case) or to
+    // the original whose body uses device-only intrinsics (templated
+    // case, with CUDAHostAttr promotion). Both are silently wrong;
+    // emit a diagnostic so the user fails loudly instead.
+    unsigned DiagID = S.getDiagnostics().getCustomDiagID(
+        clang::DiagnosticsEngine::Error,
+        "calling a device function tagged with "
+        "[[luthier::export_function_handle]] from host context is not "
+        "supported; the attribute only enables taking the function's "
+        "address");
+    S.Diag(CE->getExprLoc(), DiagID);
+    return true;
+  }
 
   bool VisitDeclRefExpr(clang::DeclRefExpr *E) {
     auto *FD = llvm::dyn_cast<clang::FunctionDecl>(E->getDecl());
     if (!FD)
       return true;
-    // Different redeclarations of the same method share a canonical decl;
-    // key the map by it so the in-class declaration and the out-of-line
-    // definition both resolve to the same synthesized handle.
+    // Only template specializations need rewriting; non-template tagged
+    // functions are handled at attribute-parse time via the dual-overload
+    // sibling synthesized in handleDeclAttribute.
+    if (!FD->isFunctionTemplateSpecialization())
+      return true;
+    clang::FunctionDecl *Pattern = getTaggedPattern(FD);
+    if (!Pattern)
+      return true;
+
     clang::FunctionDecl *Key = FD->getCanonicalDecl();
     auto It = Map.find(Key);
     if (It == Map.end()) {
-      if (!hasExportHandleAttr(FD) || FD->isTemplated())
-        return true;
-      clang::FunctionDecl *Handle = makeKernelHandle(SemaRef, FD);
+      clang::FunctionDecl *Handle = makeHandle(S, FD);
       Map[Key] = Handle;
       It = Map.find(Key);
     }
-    clang::FunctionDecl *Handle = It->second;
-    E->setDecl(Handle);
-    E->setType(Handle->getType());
+    E->setDecl(It->second);
+    E->setType(It->second->getType());
+
+    // The CUDAHostAttr on the original specialization (inherited from the
+    // template pattern) existed only to let Sema accept the address-take
+    // at parse time. With the DeclRefExpr retargeted at the
+    // per-specialization handle, the original is no longer addressable
+    // from host; drop the attr from both the specialization and the
+    // pattern so any future host reference falls back to the normal
+    // err_ref_bad_target diag. dropAttr is idempotent.
+    FD->dropAttr<clang::CUDAHostAttr>();
+    Pattern->dropAttr<clang::CUDAHostAttr>();
     return true;
   }
 };
 
 } // namespace
 
-void HostHandleSynthConsumer::InitializeSema(clang::Sema &S) {
+void ExportDevFuncHostHandleConsumer::InitializeSema(clang::Sema &S) {
   SemaRef = &S;
-  DeviceFnToHandle.clear();
+  OrigToHandle.clear();
 }
 
-void HostHandleSynthConsumer::ForgetSema() { SemaRef = nullptr; }
+void ExportDevFuncHostHandleConsumer::ForgetSema() { SemaRef = nullptr; }
 
-bool HostHandleSynthConsumer::HandleTopLevelDecl(clang::DeclGroupRef DG) {
+bool ExportDevFuncHostHandleConsumer::HandleTopLevelDecl(
+    clang::DeclGroupRef DG) {
   if (!SemaRef)
     return true;
   clang::ASTContext &Ctx = SemaRef->Context;
   const bool IsHostCompile =
       Ctx.getLangOpts().CUDA && !Ctx.getLangOpts().CUDAIsDevice;
+  if (!IsHostCompile)
+    return true;
+  RewriteVisitor V(*SemaRef, OrigToHandle);
   for (clang::Decl *D : DG)
-    handleDecl(D, Ctx, IsHostCompile);
+    V.TraverseDecl(D);
   return true;
-}
-
-void HostHandleSynthConsumer::handleDecl(clang::Decl *D, clang::ASTContext &Ctx,
-                                         bool IsHostCompile) {
-  if (auto *FD = llvm::dyn_cast<clang::FunctionDecl>(D)) {
-    if (hasExportHandleAttr(FD) && !FD->isTemplated()) {
-      // Always key by the canonical decl so the in-class declaration and
-      // the out-of-line definition (different FunctionDecl objects) share
-      // one synthesized handle.
-      clang::FunctionDecl *Key = FD->getCanonicalDecl();
-      auto It = DeviceFnToHandle.find(Key);
-      if (It == DeviceFnToHandle.end()) {
-        clang::FunctionDecl *Handle = makeKernelHandle(*SemaRef, FD);
-        DeviceFnToHandle[Key] = Handle;
-      }
-      if (IsHostCompile && FD->hasBody()) {
-        // Replace the body with an empty CompoundStmt. The function is
-        // still emitted host-side as an empty `void name()` symbol so
-        // every IR-level anchor the codegen has already registered for
-        // it stays valid:
-        //   * @llvm.compiler.used (from UsedAttr)
-        //   * @llvm.global.annotations (from AnnotateAttr)
-        // We deliberately do NOT drop those attributes — CodeGenModule
-        // has already deferred annotation emission keyed on this Decl
-        // by the time the parser finishes the in-class body, and
-        // dropping the AnnotateAttr behind CGM's back trips the
-        // `D->hasAttr<AnnotateAttr>()` assert inside
-        // `EmitGlobalAnnotations` at module finalize. Keeping the
-        // attributes is harmless: the empty body has no AMDGCN
-        // intrinsics, so nothing illegal leaks to x86 codegen. Host
-        // DeclRefExprs are rewritten to the synthesized kernel handle
-        // below, so nothing CALLS this symbol from host code; the
-        // empty stub is dead weight that --gc-sections drops at link
-        // time.
-        FD->setBody(clang::CompoundStmt::Create(
-            Ctx, {}, clang::FPOptionsOverride(), clang::SourceLocation(),
-            clang::SourceLocation()));
-      }
-    }
-  }
-
-  if (auto *FTD = llvm::dyn_cast<clang::FunctionTemplateDecl>(D)) {
-    for (clang::FunctionDecl *Spec : FTD->specializations())
-      handleDecl(Spec, Ctx, IsHostCompile);
-  }
-
-  // Tagged hooks may be static members of a class (possibly inside a
-  // namespace, including an anonymous one). The lit suite only covers
-  // namespace-scope free functions, but tool authors are encouraged to
-  // group hooks as `static` members of their `HSATool` subclass. Recurse
-  // into NamespaceDecl and TagDecl so those nested FunctionDecls are
-  // found and processed the same way as top-level ones.
-  if (auto *ND = llvm::dyn_cast<clang::NamespaceDecl>(D)) {
-    for (clang::Decl *Child : ND->decls())
-      handleDecl(Child, Ctx, IsHostCompile);
-  } else if (auto *RD = llvm::dyn_cast<clang::CXXRecordDecl>(D)) {
-    if (RD->isThisDeclarationADefinition()) {
-      for (clang::Decl *Child : RD->decls())
-        handleDecl(Child, Ctx, IsHostCompile);
-    }
-  } else if (auto *TD = llvm::dyn_cast<clang::TagDecl>(D)) {
-    if (TD->isThisDeclarationADefinition()) {
-      for (clang::Decl *Child : TD->decls())
-        handleDecl(Child, Ctx, IsHostCompile);
-    }
-  } else if (auto *LSD = llvm::dyn_cast<clang::LinkageSpecDecl>(D)) {
-    for (clang::Decl *Child : LSD->decls())
-      handleDecl(Child, Ctx, IsHostCompile);
-  }
-
-  RewriteVisitor V(*SemaRef, DeviceFnToHandle);
-  V.TraverseDecl(D);
 }
 
 } // namespace luthier

@@ -31,7 +31,7 @@ namespace luthier {
 /// device code keeps seeing the original \c __device__ implementation.
 ///
 /// For templated tagged device functions, the per-specialization sibling
-/// is synthesized in \c HostHandleSynthConsumer at the point of use (the
+/// is synthesized in \c ExportDevFuncHostHandleConsumer at the point of use (the
 /// dual-overload trick is ambiguous for explicit-template-id address
 /// takes, so we use a distinctly named per-specialization handle there).
 struct LuthierExportFunctionHandleAttrInfo : public clang::ParsedAttrInfo {

@@ -23,7 +23,6 @@
 #include <llvm/ADT/DenseMap.h>
 
 namespace clang {
-class ASTContext;
 class Decl;
 class FunctionDecl;
 class Sema;
@@ -31,28 +30,36 @@ class Sema;
 
 namespace luthier {
 
-/// \brief A SemaConsumer that, alongside the
-/// \c LuthierExportFunctionHandleAttrInfo attribute, synthesizes
-/// per-instantiation kernel handles for tagged device functions and rewrites
-/// host-side use sites to point at them.
-class HostHandleSynthConsumer : public clang::SemaConsumer {
+/// \brief SemaConsumer that materializes host-side handles for tagged
+/// device functions and retargets host-context references to them.
+///
+/// \c LuthierExportFunctionHandleAttrInfo promotes every tagged
+/// \c __device__ function to \c __host__ \c __device__ so Sema accepts
+/// \c &deviceFn from host context at parse time, but doesn't otherwise
+/// touch the AST. This consumer walks every host-context
+/// \c DeclRefExpr; if the referent (or, for template specializations,
+/// the primary template) carries the export-handle annotation, it
+/// synthesizes a concrete \c __host__ \c FunctionDecl with a unique
+/// mangled-suffix name, empty body, and the export-handle annotation,
+/// then retargets the \c DeclRefExpr. After retargeting it drops
+/// \c CUDAHostAttr from the original so any future host reference falls
+/// back to the normal \c err_ref_bad_target diagnostic.
+class ExportDevFuncHostHandleConsumer : public clang::SemaConsumer {
 public:
-  HostHandleSynthConsumer() = default;
+  ExportDevFuncHostHandleConsumer() = default;
 
   void InitializeSema(clang::Sema &S) override;
+
   void ForgetSema() override;
+
   bool HandleTopLevelDecl(clang::DeclGroupRef DG) override;
 
 private:
-  void handleDecl(clang::Decl *D, clang::ASTContext &Ctx, bool IsHostCompile);
-
   clang::Sema *SemaRef = nullptr;
 
-  /// Per-consumer state: tagged device FunctionDecl -> synthesized kernel
-  /// handle FunctionDecl
-  /// Lives for the duration of the consumer; reset by \c InitializeSema so
-  /// two consecutive TUs don't bleed into each other.
-  llvm::DenseMap<clang::FunctionDecl *, clang::FunctionDecl *> DeviceFnToHandle;
+  /// Canonical original FunctionDecl → its synthesized host handle.
+  /// Cleared per TU on \c InitializeSema.
+  llvm::DenseMap<clang::FunctionDecl *, clang::FunctionDecl *> OrigToHandle;
 };
 
 } // namespace luthier

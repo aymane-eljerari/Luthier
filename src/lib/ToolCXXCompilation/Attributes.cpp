@@ -71,7 +71,7 @@ LuthierExportFunctionHandleAttrInfo::handleDeclAttribute(
     return AttributeNotApplied;
   }
 
-  /// The marker on the original is what the \c HostHandleSynthConsumer keys off
+  /// The marker on the original is what the \c ExportDevFuncHostHandleConsumer keys off
   /// to detect tagged templates during AST traversal (for the
   /// per-specialization handle synthesis at use sites). For non-templated decls
   /// the host-emittable artifact is the sibling we synthesize below, and that's
@@ -82,7 +82,7 @@ LuthierExportFunctionHandleAttrInfo::handleDeclAttribute(
                                           Attr.getRange()));
 
   /// Templated decls: defer per-specialization synthesis to the
-  /// \c HostHandleSynthConsumer (the dual-overload trick is ambiguous for
+  /// \c ExportDevFuncHostHandleConsumer (the dual-overload trick is ambiguous for
   /// explicit-template-id address-takes). Promote the template to __host__
   /// __device__ so Sema accepts &myHook<T> from host context at parse time; the
   /// consumer retargets the DeclRefExpr to the per-specialization handle before
