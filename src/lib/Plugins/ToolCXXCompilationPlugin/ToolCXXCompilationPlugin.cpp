@@ -31,7 +31,7 @@ class Action : public clang::PluginASTAction {
 public:
   std::unique_ptr<clang::ASTConsumer>
   CreateASTConsumer(clang::CompilerInstance &, llvm::StringRef) override {
-    return std::make_unique<luthier::HostHandleSynthConsumer>();
+    return std::make_unique<luthier::ExportDevFuncHostHandleConsumer>();
   }
 
   bool ParseArgs(const clang::CompilerInstance &,
