@@ -14,7 +14,7 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 /// \file Attributes.h
-/// Defines attributes used in Luthier's CXX tool compilation.
+/// Defines attributes infos used in Luthier's CXX tool compilation.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOL_CXX_COMPILATION_ATTRIBUTES_H
 #define LUTHIER_TOOL_CXX_COMPILATION_ATTRIBUTES_H
@@ -23,10 +23,17 @@
 namespace luthier {
 
 /// \brief Handles the \c [[luthier::export_function_handle]] ParsedAttrInfo
-/// Tagged device functions (and their template instantiations) are
-/// promoted to \c __host__ \c __device__ so host code can take their
-/// address; the Consumer pass synthesizes the kernel handle and rewrites
-/// use sites.
+///
+/// For non-templated tagged device functions, synthesizes a sibling
+/// \c __host__ overload at the same scope with the same name and
+/// signature but an empty body. Standard CUDA overload resolution then
+/// routes \c &deviceFn from host context to the empty sibling, while
+/// device code keeps seeing the original \c __device__ implementation.
+///
+/// For templated tagged device functions, the per-specialization sibling
+/// is synthesized in \c HostHandleSynthConsumer at the point of use (the
+/// dual-overload trick is ambiguous for explicit-template-id address
+/// takes, so we use a distinctly named per-specialization handle there).
 struct LuthierExportFunctionHandleAttrInfo : public clang::ParsedAttrInfo {
   LuthierExportFunctionHandleAttrInfo();
 
