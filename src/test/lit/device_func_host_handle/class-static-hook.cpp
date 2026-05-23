@@ -2,22 +2,21 @@
 /// RUN:   -fplugin=%luthier_tool_cxx_compilation_plugin_path \
 /// RUN:   -I/opt/rocm/include \
 /// RUN:   --cuda-host-only -emit-llvm -S %s -o - 2>&1 | %tee_out FileCheck %s
-/// Verifies the host-side rewrite when the tagged device function is
-/// a `static` member of a class living inside an anonymous namespace, and
-/// has a real body that calls `__builtin_amdgcn_*` builtins. This is the
-/// HSATool-singleton design pattern: hooks are nested in the tool class,
-/// and their bodies do non-trivial device work.
+/// Verifies the dual-overload synthesis when the tagged hook is a
+/// static member of an anonymous-namespace class, with a non-trivial
+/// body that uses AMDGCN intrinsics. The original __device__ member
+/// stays pure __device__ (never enters host emission), so its body's
+/// intrinsics never leak to x86 codegen; the synthesized __host__
+/// sibling is the empty host-side shadow.
 
 #include <hip/hip_runtime.h>
 
 namespace {
 
 struct Tool {
-  __attribute__((device, used, annotate("luthier.function.hook")))
+  __attribute__((device, used))
   __attribute__((luthier_export_function_handle)) static void
   hook() {
-    // A real hook does AMDGPU-specific work — exercises the path that
-    // crashed before this fix when the body leaked into host IR.
     unsigned long long Exec = __builtin_amdgcn_read_exec();
     (void)Exec;
   }
@@ -30,24 +29,15 @@ void hostFunction(const void **out) {
 }
 
 // clang-format off
-/// The synthesized kernel handle host shadow is generated regardless of
-/// scope: the embedded original Itanium-mangled name carries the
-/// anonymous-namespace + class scope.
-/// CHECK: @_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv = dso_local
+/// The sibling is emitted with an empty body; the original's body
+/// (with the AMDGCN intrinsic) is not in the host module.
+/// CHECK: define internal void @_ZN12_GLOBAL__N_14Tool4hookEv()
+/// CHECK-NEXT: entry:
+/// CHECK-NEXT: ret void
 
-/// The host stub for the kernel handle is also emitted (HIP launch stub).
-/// CHECK: @_Z{{[0-9]+}}__device_stub____luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
+/// Host-side address-take resolves to the sibling.
+/// CHECK: store ptr @_ZN12_GLOBAL__N_14Tool4hookEv
 
-/// The host-side address-take is rewritten to point at the kernel handle,
-/// not at the host stub of the (now bodyless) device function.
-/// CHECK: define dso_local void @_Z12hostFunctionPPKv
-/// CHECK: store ptr @_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
-
-/// HIP runtime registers the kernel handle.
-/// CHECK: __hipRegisterFunction({{.*}}@_Z{{[0-9]+}}__luthier_builtin_hook_handle__ZN{{[A-Za-z0-9_]*}}Tool4hookEvv
-
-/// Critically: the original device function's body must NOT have leaked
-/// into host IR. The plugin clears it; any `amdgcn` intrinsic surviving
-/// to the host module would mean the leak is back.
+/// No AMDGCN intrinsic leaks to host emission.
 /// CHECK-NOT: llvm.amdgcn.
 // clang-format on

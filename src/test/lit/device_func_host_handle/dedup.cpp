@@ -2,8 +2,9 @@
 /// RUN:   -fplugin=%luthier_tool_cxx_compilation_plugin_path \
 /// RUN:   -I/opt/rocm/include \
 /// RUN:   --cuda-host-only -emit-llvm -S %s -o - 2>&1 | %tee_out FileCheck %s
-/// Verifies that multiple references to the same hook produce a single
-/// kernel handle (deduplication).
+/// Verifies that multiple host references to the same tagged device
+/// function all resolve to the single synthesized __host__ sibling
+/// (Sema's overload resolution naturally dedupes).
 
 #include <hip/hip_runtime.h>
 
@@ -16,6 +17,8 @@ void useThrice(const void **out) {
   out[2] = reinterpret_cast<const void *>(&myHook);
 }
 
-/// Exactly one host shadow constant for the kernel handle.
-/// CHECK-COUNT-1: @_Z{{[0-9]+}}__luthier_builtin_hook_handle__Z6myHookvv = dso_local constant
-/// CHECK-NOT: @_Z{{[0-9]+}}__luthier_builtin_hook_handle__Z6myHookvv = dso_local constant
+// clang-format off
+/// Exactly one host sibling for myHook, with one annotation entry.
+/// CHECK-COUNT-1: define dso_local void @_Z6myHookv()
+/// CHECK-NOT: define dso_local void @_Z6myHookv()
+// clang-format on

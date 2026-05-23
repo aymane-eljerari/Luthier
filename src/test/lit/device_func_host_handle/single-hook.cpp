@@ -2,10 +2,10 @@
 /// RUN:   -fplugin=%luthier_tool_cxx_compilation_plugin_path \
 /// RUN:   -I/opt/rocm/include \
 /// RUN:   --cuda-host-only -emit-llvm -S %s -o - 2>&1 | %tee_out FileCheck %s
-/// Verifies the host-side rewrite: &myHook is rewritten to point at the
-/// synthesized kernel handle, and HIP runtime registration is generated for
-/// the handle. The handle's symbol is the Itanium mangling of a plain C++
-/// function named `__luthier_builtin_hook_handle_<original-mangled-name>`.
+/// Verifies the dual-overload synthesis for a non-templated tagged
+/// device function. The CXX plugin creates a sibling __host__ overload
+/// with the same name and an empty body; Sema's CUDA overload
+/// resolution routes &myHook from host context to the sibling.
 
 #include <hip/hip_runtime.h>
 
@@ -16,15 +16,17 @@ void hostFunction(const void **out) {
   out[0] = reinterpret_cast<const void *>(&myHook);
 }
 
-/// Kernel handle host shadow + registration are generated. The base
-/// identifier of the synth stub is `__luthier_builtin_hook_handle__Z6myHookv`
-/// (30-char prefix + original Itanium mangled name `_Z6myHookv`).
-/// CHECK-DAG: @_Z{{[0-9]+}}__luthier_builtin_hook_handle__Z6myHookvv = dso_local constant
-/// CHECK-DAG: @_Z{{[0-9]+}}__device_stub____luthier_builtin_hook_handle__Z6myHookvv
+// clang-format off
+/// The sibling carries the export-handle annotation; the IR pass will
+/// later harvest this from @llvm.global.annotations.
+/// CHECK: @llvm.global.annotations {{.*}}@_Z6myHookv
 
-/// Host code stores the kernel handle's address, not the host stub of myHook.
+/// The sibling is emitted host-side with an empty body.
+/// CHECK: define dso_local void @_Z6myHookv()
+/// CHECK-NEXT: entry:
+/// CHECK-NEXT: ret void
+
+/// Host code's address-take resolves to the sibling.
 /// CHECK: define dso_local void @_Z12hostFunctionPPKv
-/// CHECK: store ptr @_Z{{[0-9]+}}__luthier_builtin_hook_handle__Z6myHookvv
-
-/// HIP registers the kernel handle with the runtime.
-/// CHECK: __hipRegisterFunction({{.*}}@_Z{{[0-9]+}}__luthier_builtin_hook_handle__Z6myHookvv
+/// CHECK: store ptr @_Z6myHookv
+// clang-format on
