@@ -29,9 +29,12 @@
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/BinaryFormat/ELF.h>
 #include <llvm/Object/SymbolicFile.h>
+#include <llvm/Support/Debug.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
+
+#define DEBUG_TYPE "luthier-instrumented-kernel-loader-and-launcher"
 
 namespace luthier {
 
@@ -46,9 +49,11 @@ InstrumentedKernelLoaderAndLauncher::InstrumentedKernelLoaderAndLauncher(
         &Loader,
     DeviceToolCodeLoader &DeviceCode)
     : CoreApi(CoreApi), AmdExt(AmdExt), Loader(Loader), DeviceCode(DeviceCode) {
+  LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher] ctor\n");
 }
 
 InstrumentedKernelLoaderAndLauncher::~InstrumentedKernelLoaderAndLauncher() {
+  LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher] dtor\n");
   llvm::consumeError(unloadAll());
 }
 
@@ -58,6 +63,10 @@ InstrumentedKernelLoaderAndLauncher::~InstrumentedKernelLoaderAndLauncher() {
 
 llvm::Error InstrumentedKernelLoaderAndLauncher::eraseRecordLocked(
     llvm::DenseMap<Key, InstrumentedRecord, KeyDenseMapInfo>::iterator It) {
+  LLVM_DEBUG(llvm::dbgs()
+             << "[InstrumentedKernelLoaderAndLauncher] eraseRecordLocked KD="
+             << It->first.KD << " preset=" << It->first.Preset << " instrKO=0x"
+             << llvm::Twine::utohexstr(It->second.InstrumentedKO) << "\n");
   llvm::Error E = llvm::Error::success();
   InstrumentedRecord &R = It->second;
   const auto Core = CoreApi.getTable();
@@ -79,6 +88,8 @@ llvm::Error InstrumentedKernelLoaderAndLauncher::eraseRecordLocked(
 
 llvm::Error InstrumentedKernelLoaderAndLauncher::unloadAll() {
   llvm::sys::ScopedWriter W(Mutex);
+  LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher] unloadAll: "
+                          << ByOriginal.size() << " record(s)\n");
   llvm::Error E = llvm::Error::success();
   for (auto It = ByOriginal.begin(); It != ByOriginal.end();) {
     auto Curr = It++;
@@ -94,9 +105,15 @@ llvm::Error InstrumentedKernelLoaderAndLauncher::unloadAll() {
 llvm::Error InstrumentedKernelLoaderAndLauncher::unloadInstrumentedIfExists(
     const llvm::amdhsa::kernel_descriptor_t *OriginalKD, uint64_t Preset) {
   llvm::sys::ScopedWriter W(Mutex);
+  LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher] "
+                             "unloadInstrumentedIfExists KD="
+                          << OriginalKD << " preset=" << Preset << "\n");
   auto It = ByOriginal.find(Key{OriginalKD, Preset});
-  if (It == ByOriginal.end())
+  if (It == ByOriginal.end()) {
+    LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher]   "
+                               "no matching record\n");
     return llvm::Error::success();
+  }
   return eraseRecordLocked(It);
 }
 
@@ -109,16 +126,30 @@ llvm::Error InstrumentedKernelLoaderAndLauncher::overrideWithInstrumented(
   llvm::sys::ScopedReader R(Mutex);
   const auto *KD = reinterpret_cast<const llvm::amdhsa::kernel_descriptor_t *>(
       Packet.kernel_object);
+  LLVM_DEBUG(
+      llvm::dbgs()
+      << "[InstrumentedKernelLoaderAndLauncher] overrideWithInstrumented "
+         "origKO=0x"
+      << llvm::Twine::utohexstr(Packet.kernel_object) << " preset=" << Preset
+      << "\n");
   auto It = ByOriginal.find(Key{KD, Preset});
-  if (It == ByOriginal.end())
+  if (It == ByOriginal.end()) {
+    LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher]   "
+                               "no cached instrumented variant\n");
     return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
         "No instrumented variant cached for kernel_object {0:x} preset {1}",
         Packet.kernel_object, Preset));
+  }
 
   const InstrumentedRecord &Rec = It->second;
   Packet.kernel_object = Rec.InstrumentedKO;
   Packet.private_segment_size =
       std::max<uint32_t>(Packet.private_segment_size, Rec.PrivateSegmentSize);
+  LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher]   "
+                             "swapped to instrKO=0x"
+                          << llvm::Twine::utohexstr(Rec.InstrumentedKO)
+                          << " privSegSize=" << Packet.private_segment_size
+                          << "\n");
   return llvm::Error::success();
 }
 
@@ -129,14 +160,20 @@ llvm::Error InstrumentedKernelLoaderAndLauncher::overrideWithInstrumented(
 llvm::Error InstrumentedKernelLoaderAndLauncher::invalidateOriginalExec(
     hsa_executable_t Exec) {
   llvm::sys::ScopedWriter W(Mutex);
+  LLVM_DEBUG(llvm::dbgs()
+             << "[InstrumentedKernelLoaderAndLauncher] invalidateOriginalExec "
+                "exec="
+             << Exec.handle << "\n");
   llvm::Error E = llvm::Error::success();
 
   // Collect the loaded device-memory ranges of every LCO owned by the
   // about-to-be-destroyed executable.
   llvm::SmallVector<hsa_loaded_code_object_t, 2> LCOs;
-  if (auto Err = hsa::executableGetLoadedCodeObjects(Loader.getTable(), Exec,
-                                                     LCOs))
+  if (auto Err =
+          hsa::executableGetLoadedCodeObjects(Loader.getTable(), Exec, LCOs))
     return llvm::joinErrors(std::move(E), std::move(Err));
+  LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher]   "
+                          << LCOs.size() << " LCO(s)\n");
 
   struct Range {
     uint64_t Start;
@@ -153,6 +190,11 @@ llvm::Error InstrumentedKernelLoaderAndLauncher::invalidateOriginalExec(
     }
     const uint64_t Start = reinterpret_cast<uint64_t>(LoadedMemOrErr->data());
     Ranges.push_back(Range{Start, Start + LoadedMemOrErr->size()});
+    LLVM_DEBUG(llvm::dbgs()
+               << "[InstrumentedKernelLoaderAndLauncher]   LCO range [0x"
+               << llvm::Twine::utohexstr(Start) << ", 0x"
+               << llvm::Twine::utohexstr(Start + LoadedMemOrErr->size())
+               << ")\n");
   }
 
   // Snapshot the victim keys first so we don't invalidate map iterators
@@ -167,6 +209,9 @@ llvm::Error InstrumentedKernelLoaderAndLauncher::invalidateOriginalExec(
       }
     }
   }
+  LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher]   "
+                          << Victims.size() << " victim record(s) of "
+                          << ByOriginal.size() << " total\n");
 
   for (const Key &K : Victims) {
     auto It = ByOriginal.find(K);
@@ -194,6 +239,9 @@ findSingleKernel(const object::AMDGCNObjectFile &Obj) {
     Found = KSym;
   }
   LUTHIER_RETURN_ON_ERROR(std::move(IterErr));
+  LLVM_DEBUG(llvm::dbgs()
+             << "[InstrumentedKernelLoaderAndLauncher]   findSingleKernel: "
+             << KernelCount << " kernel function(s)\n");
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       KernelCount == 1,
       llvm::formatv("Instrumented relocatable must contain exactly one "
@@ -217,6 +265,10 @@ llvm::Expected<llvm::SmallVector<ExternRef, 4>>
 collectExternals(const hsa::ApiTableContainer<::CoreApiTable> &Core,
                  const object::AMDGCNObjectFile &Obj,
                  DeviceToolCodeLoader &DeviceCode, hsa_agent_t Agent) {
+  LLVM_DEBUG(llvm::dbgs()
+             << "[InstrumentedKernelLoaderAndLauncher]   collectExternals "
+                "for agent "
+             << Agent.handle << "\n");
   llvm::SmallVector<ExternRef, 4> Out;
   for (const auto &Sym : Obj.symbols()) {
     auto FlagsOrErr = Sym.getFlags();
@@ -248,10 +300,18 @@ collectExternals(const hsa::ApiTableContainer<::CoreApiTable> &Core,
     LUTHIER_RETURN_ON_ERROR(ExtSymOrErr.takeError());
     auto AddrOrErr = hsa::executableSymbolGetAddress(Core, *ExtSymOrErr);
     LUTHIER_RETURN_ON_ERROR(AddrOrErr.takeError());
+    LLVM_DEBUG(llvm::dbgs()
+               << "[InstrumentedKernelLoaderAndLauncher]     resolved extern "
+               << *NameOrErr << " -> 0x" << llvm::Twine::utohexstr(*AddrOrErr)
+               << "\n");
 
-    Out.push_back(ExternRef{NameOrErr->str(),
-                            reinterpret_cast<void *>(*AddrOrErr)});
+    Out.push_back(
+        ExternRef{NameOrErr->str(), reinterpret_cast<void *>(*AddrOrErr)});
   }
+  LLVM_DEBUG(llvm::dbgs()
+             << "[InstrumentedKernelLoaderAndLauncher]   collectExternals "
+                "produced "
+             << Out.size() << " entries\n");
   return Out;
 }
 
@@ -261,6 +321,10 @@ llvm::Expected<hsa_executable_symbol_t>
 InstrumentedKernelLoaderAndLauncher::loadInstrumented(
     std::unique_ptr<llvm::MemoryBuffer> Relocatable,
     const llvm::amdhsa::kernel_descriptor_t *OriginalKD, uint64_t Preset) {
+  LLVM_DEBUG(llvm::dbgs()
+             << "[InstrumentedKernelLoaderAndLauncher] loadInstrumented KD="
+             << OriginalKD << " preset=" << Preset << " relocSize="
+             << (Relocatable ? Relocatable->getBufferSize() : 0) << "\n");
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       Relocatable != nullptr,
       "Null relocatable MemoryBuffer passed to loadInstrumented"));
@@ -292,15 +356,21 @@ InstrumentedKernelLoaderAndLauncher::loadInstrumented(
                     "allocation",
                     KDAddr)));
   hsa_agent_t Agent = PointerInfo.agentOwner;
+  LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher]   "
+                             "owning agent "
+                          << Agent.handle << "\n");
 
   llvm::sys::ScopedWriter W(Mutex);
 
   // Duplicate-key check.
-  if (ByOriginal.contains(Key{OriginalKD, Preset}))
+  if (ByOriginal.contains(Key{OriginalKD, Preset})) {
+    LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher]   "
+                               "duplicate key, refusing\n");
     return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
         "An instrumented variant for kernel_descriptor {0:x} preset {1} "
         "is already loaded",
         KDAddr, Preset));
+  }
 
   // The instrumented bytes come out of `NewPMAsmPrinter` as a REL
   // (relocatable) — no `.dynsym`, so `kernel_functions()` (which iterates
@@ -312,6 +382,9 @@ InstrumentedKernelLoaderAndLauncher::loadInstrumented(
       llvm::ArrayRef<char>(Relocatable->getBufferStart(),
                            Relocatable->getBufferSize()),
       LinkedBuf));
+  LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher]   "
+                             "linked relocatable -> "
+                          << LinkedBuf.size() << " bytes\n");
   auto Linked = std::make_unique<llvm::SmallVectorMemoryBuffer>(
       std::move(LinkedBuf), "luthier.instrumented.linked",
       /*RequiresNullTerminator=*/false);
@@ -320,8 +393,7 @@ InstrumentedKernelLoaderAndLauncher::loadInstrumented(
   // Parse the linked executable as an AMDGCN ELF. The parse is non-owning
   // over the MemoryBuffer's bytes.
   llvm::MemoryBufferRef RelocRef = Relocatable->getMemBufferRef();
-  auto ParsedOrErr =
-      object::AMDGCNObjectFile::createAMDGCNObjectFile(RelocRef);
+  auto ParsedOrErr = object::AMDGCNObjectFile::createAMDGCNObjectFile(RelocRef);
   LUTHIER_RETURN_ON_ERROR(ParsedOrErr.takeError());
   std::unique_ptr<object::AMDGCNObjectFile> Parsed = std::move(*ParsedOrErr);
 
@@ -333,6 +405,9 @@ InstrumentedKernelLoaderAndLauncher::loadInstrumented(
   LUTHIER_RETURN_ON_ERROR(KernelNameOrErr.takeError());
   std::string KernelName(*KernelNameOrErr);
   std::string KDName = KernelName + ".kd";
+  LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher]   "
+                             "kernel='"
+                          << KernelName << "', KD='" << KDName << "'\n");
 
   auto ExternsOrErr = collectExternals(Core, *Parsed, DeviceCode, Agent);
   LUTHIER_RETURN_ON_ERROR(ExternsOrErr.takeError());
@@ -392,6 +467,11 @@ InstrumentedKernelLoaderAndLauncher::loadInstrumented(
   if (!PrivSizeOrErr)
     return FailExecAndReader(PrivSizeOrErr.takeError());
 
+  LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher]   "
+                             "instrumented KO=0x"
+                          << llvm::Twine::utohexstr(*InstrKOOrErr)
+                          << " privSegSize=" << *PrivSizeOrErr << "\n");
+
   InstrumentedRecord Rec;
   Rec.RelocatableBuffer = std::move(Relocatable);
   Rec.Reader = Reader;
@@ -406,6 +486,9 @@ InstrumentedKernelLoaderAndLauncher::loadInstrumented(
   assert(Inserted && "Concurrent insert into ByOriginal under writer lock");
   (void)Inserted;
 
+  LLVM_DEBUG(llvm::dbgs() << "[InstrumentedKernelLoaderAndLauncher]   "
+                             "record inserted; total now "
+                          << ByOriginal.size() << "\n");
   return InstrSym;
 }
 
