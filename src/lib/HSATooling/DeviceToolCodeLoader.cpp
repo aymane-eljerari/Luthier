@@ -583,6 +583,8 @@ DeviceToolCodeLoader::loadOntoAgents(llvm::ArrayRef<hsa_agent_t> Agents) {
 //===----------------------------------------------------------------------===//
 
 llvm::Error DeviceToolCodeLoader::clearLoadedState() {
+  if (State == LoadState::Pending)
+    return llvm::Error::success();
   LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader] clearLoadedState: "
                           << PerAgentLoadRecords.size()
                           << " per-agent record(s)\n");
