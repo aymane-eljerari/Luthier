@@ -56,8 +56,6 @@
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "luthier-kernarg-instrinsic"
 
-namespace {
-
 struct KernelArgumentIntrinsicTool
     : public luthier::HSATool<KernelArgumentIntrinsicTool,
                               llvm::MachineFunction> {
@@ -291,8 +289,6 @@ void KernelArgumentIntrinsicTool::onPackets(
     NumKernelLaunched++;
   }
 }
-
-} // anonymous namespace
 
 namespace luthier {
 

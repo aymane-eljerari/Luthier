@@ -73,8 +73,6 @@
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "luthier-instr-counter-tool"
 
-namespace {
-
 //===----------------------------------------------------------------------===//
 // InstrCountTool — per-tool singleton subclass of HSATool
 //===----------------------------------------------------------------------===//
@@ -536,8 +534,6 @@ void InstrCountTool::onPackets(
     NumKernelLaunched++;
   }
 }
-
-} // anonymous namespace
 
 //===----------------------------------------------------------------------===//
 // rocprofiler-sdk init / fini

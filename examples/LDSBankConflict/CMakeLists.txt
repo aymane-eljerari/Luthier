@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(LuthierLDSBankConflict LANGUAGES HIP CXX ASM C)
+project(LuthierLDSBankConflict LANGUAGES HIP)
 
 set(CMAKE_HIP_STANDARD 20)
 

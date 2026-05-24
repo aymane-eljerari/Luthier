@@ -82,6 +82,16 @@ class HSATool : public Singleton<Derived>,
                 public InjectedPayloadCreationPass<Derived, TargetUnitT>,
                 public IntrinsicProcessorRegistryTraitBase<Derived>,
                 public PacketMonitorTrait<Derived> {
+private:
+  /// Sentinel \c __managed__ variable. Its only purpose is to give HIP-Clang's
+  /// host emission *something* to register so that every Luthier tool TU emits
+  /// \c __hipRegisterFatBinary + \c __hip_fatbin_wrapper + the bundle bytes
+  /// (via \c -fcuda-include-gpubinary) — even tools whose own code is purely
+  /// passthrough
+  /// \c inline lets the in-class initializer also serve as the definition;
+  /// \c used keeps the host TU from optimizing it away
+  static inline __attribute__((managed, used)) char LuthierMarker = 0;
+
 public:
   HSATool(const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
           const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
@@ -94,7 +104,12 @@ public:
         InstrumentedKernelLoaderAndLauncherTrait<Derived>(
             CoreApi, AmdExt, VenLoader,
             static_cast<DeviceToolCodeLoader &>(*this), Err),
-        PacketMonitorTrait<Derived>(CoreApi, AmdExt, VenLoader, Err) {}
+        PacketMonitorTrait<Derived>(CoreApi, AmdExt, VenLoader, Err) {
+    /// Force instantiation of LuthierMarker so HIP-Clang's host emission
+    /// sees the managed variable even in tools that have no managed/device
+    /// statics of their own
+    (void)&LuthierMarker;
+  }
 
   /// Build the instrumentation pass pipeline driver for a target application
   /// module. The returned \c InstrumentationPMDriver is a
@@ -148,17 +163,6 @@ public:
         "Payload function '{0}' not present in the instrumentation module.",
         *NameOrErr));
   }
-
-  /// Module marker. HIP host CodeGen only emits the \c __hipRegister*
-  /// machinery (and hence the fat-binary registration the rest of the
-  /// loader machinery depends on) when the TU contains at least one
-  /// device-side entity HIP recognises. A tool TU whose only device
-  /// content is \c __device__ functions tagged with
-  /// \c LUTHIER_EXPORT_FUNCTION_HANDLE_ATTR (and no kernels) would
-  /// otherwise skip fat-binary registration entirely. Having every
-  /// \c HSATool instantiation pull in a \c __managed__ variable
-  /// guarantees the registration ctor exists.
-  inline static __attribute__((managed, used)) char LuthierModuleMarker = 0;
 
   /// Lift the inherited \c createInjectedPayload overloads from
   /// \c InjectedPayloadCreationPass into the public surface so tool code

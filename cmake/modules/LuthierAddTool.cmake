@@ -254,57 +254,39 @@ function(luthier_add_tool target)
       "files.")
   endif ()
 
-  # Wrap the bundle in HIP's __CudaFatBinaryWrapper shape. We emit a
-  # small assembly file that pulls in the bundle bytes via .incbin and
-  # exposes the wrapper as @__hip_fatbin_wrapper, which the host
-  # compilation's __hipRegisterFatBinary call references at link time.
-  set(_fatbin_asm
-    "${CMAKE_CURRENT_BINARY_DIR}/${target}.${_prefix}.fatbin.S")
-  # Emit a C file whose `__hip_fatbin` is a real definition — a
-  # uint8_t array with a literal initializer (built from the bundle
-  # bytes at compile time) — rather than an `.incbin` in a .S. The IR
-  # plugin's `LoadHIPFATBinaryInfoPass` walks IR-visible globals to
-  # find the wrapper's binary pointer and reads the bundle SIZE from
-  # the `ArrayType` of its initializer; an `.incbin`-defined symbol is
-  # invisible at IR level, so the pass would treat it as extern and
-  # skip emitting an entry into `HipFatBinaries`. Compiling the bytes
-  # through clang gives the pass a proper `GlobalVariable` with an
-  # `ArrayType` it can inspect.
-  set(_fatbin_c
-    "${CMAKE_CURRENT_BINARY_DIR}/${target}.${_prefix}.fatbin.c")
-  add_custom_command(
-    OUTPUT "${_fatbin_c}"
-    COMMAND ${CMAKE_COMMAND}
-      -DFATBIN_INPUT=${_fatbin}
-      -DFATBIN_OUTPUT=${_fatbin_c}
-      -P "${CMAKE_SOURCE_DIR}/cmake/modules/LuthierGenerateFatbinC.cmake"
-    DEPENDS "${_fatbin}"
-       "${CMAKE_SOURCE_DIR}/cmake/modules/LuthierGenerateFatbinC.cmake"
-    COMMENT "luthier_add_tool(${target}): embedding fatbin bytes into C"
-    VERBATIM)
-  add_custom_target(${target}-fatbin-c-dep DEPENDS "${_fatbin_c}")
-  # Keep _fatbin_asm-named variable so the rest of the macro doesn't
-  # need to know the wrapper is now C instead of .S.
-  set(_fatbin_asm "${_fatbin_c}")
+  # Hand the bundle to the host compile via Clang's internal -cc1 flag
+  # `-fcuda-include-gpubinary=<path>`. This is the same mechanism the
+  # HIP driver uses internally for normal HIP builds: Clang emits
+  # `__hip_fatbin` as `[N x i8]` in section `.hip_fatbin` (typed
+  # initializer — exactly what `LoadHIPFATBinaryInfoPass` needs to
+  # read the bundle size from `ArrayType::getNumElements()`), the
+  # matching `__hip_fatbin_wrapper` in `.hipFatBinSegment`, and the
+  # `__hipRegisterFatBinary` call. No separate bin2c step, no
+  # ad-hoc `.S`/`.c` source containing the bytes.
+  #
+  # CMake doesn't see the bundle as a source dependency of the host TU
+  # (it's threaded in via a compile flag), so we expose it through a
+  # custom target + `OBJECT_DEPENDS` on the source. The custom target
+  # gives ninja a build-order edge; `OBJECT_DEPENDS` forces the host
+  # `.o` to rebuild when the bundle bytes change.
+  add_custom_target(${target}-fatbin-dep DEPENDS "${_fatbin}")
 
-  # Final shared library target. Sources are:
-  #   * The host TU(s), built host-only with the HIP front end.
-  #   * The .S file that embeds the fat-bin and the wrapper struct.
-  add_library(${target} MODULE ${LAT_SOURCES} "${_fatbin_asm}")
+  # Final shared library target. The bundle bytes are spliced into
+  # the host TU by Clang via `-fcuda-include-gpubinary`, so the only
+  # source slot is the user's HIP TU(s).
+  add_library(${target} MODULE ${LAT_SOURCES})
 
   # The host TU must NOT do its own device compilation — `--cuda-host-only`
   # makes Clang emit only the host stubs + register calls + extern
-  # references to __hip_fatbin_<cuid> and __hip_gpubin_handle_<cuid>,
-  # which our .S supplies. The explicit -cuid= flag pins the symbol
-  # suffix so the .S and the host compile agree.
+  # references to __hip_fatbin / __hip_gpubin_handle, all of which are
+  # then resolved by the bytes Clang itself splices in via
+  # `-fcuda-include-gpubinary`. `-fuse-cuid=none` strips the per-TU
+  # CUID suffix so the symbols are the unsuffixed `__hip_fatbin` /
+  # `__hip_gpubin_handle` the loader (and IR plugin) expect.
   set_source_files_properties(${LAT_SOURCES} PROPERTIES
     LANGUAGE HIP
-    COMPILE_OPTIONS "--cuda-host-only;-fno-gpu-rdc;-fuse-cuid=none")
-
-  # The fatbin wrapper is a generated C file now (see above) — let CMake
-  # detect its language from the .c extension.
-  set_source_files_properties("${_fatbin_asm}" PROPERTIES
-    LANGUAGE C)
+    COMPILE_OPTIONS "--cuda-host-only;-fno-gpu-rdc;-fuse-cuid=none"
+    OBJECT_DEPENDS "${_fatbin}")
 
   # The IR compilation plugin (LoadHIPFATBinaryInfoPass etc.) must run on
   # the host TU too — it's what populates the per-tool `HipFatBinaries` /
@@ -313,12 +295,24 @@ function(luthier_add_tool target)
   # host side the loader sees an empty `HipFatBinaries` and can't find
   # the embedded bundle bytes (the device-side plugin run wouldn't help —
   # `__hipRegisterFatBinary` calls only exist in the host TU).
+  #
+  # `-Xclang -fcuda-include-gpubinary -Xclang <path>` is the `-cc1`
+  # flag pair that asks Clang's host compilation to embed the bundle.
+  # cc1's `-fcuda-include-gpubinary` takes the path as a *separate*
+  # argument (not joined with `=`), so the flag and the path each
+  # need their own `-Xclang` wrapper. The flag isn't exposed as a
+  # driver-level option, which is why `-Xclang` is required at all.
+  #
+  # `SHELL:` is mandatory here. Without it CMake de-duplicates
+  # adjacent identical option tokens, and `-Xclang;-Xclang` collapses
+  # to a single `-Xclang` — which would consume the bundle path as
+  # the cc1 arg and leave `-fcuda-include-gpubinary` orphaned at the
+  # driver level. `SHELL:` opts out of de-dup and keeps each pair as
+  # one unit.
   target_compile_options(${target} PRIVATE
-    $<$<COMPILE_LANGUAGE:HIP>:-fpass-plugin=${_ir_plugin};${LAT_HIPCC_FLAGS};${LAT_HIPCC_HOST_FLAGS}>)
+    $<$<COMPILE_LANGUAGE:HIP>:-fpass-plugin=${_ir_plugin};SHELL:-Xclang -fcuda-include-gpubinary -Xclang ${_fatbin};${LAT_HIPCC_FLAGS};${LAT_HIPCC_HOST_FLAGS}>)
 
   target_link_libraries(${target} PRIVATE hip::host ${LAT_LIBRARIES})
 
-  # The fatbin-C generator is registered as a custom target above; wire
-  # it as a build-order dependency of the final target.
-  add_dependencies(${target} ${target}-fatbin-c-dep)
+  add_dependencies(${target} ${target}-fatbin-dep)
 endfunction()

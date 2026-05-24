@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(LuthierInstrCount LANGUAGES HIP CXX ASM C)
+project(LuthierInstrCount LANGUAGES HIP)
 
 set(CMAKE_HIP_STANDARD 20)
 

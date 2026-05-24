@@ -61,8 +61,6 @@
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "luthier-example-lds-bank-conflict"
 
-namespace {
-
 struct LDSBankConflictTool
     : public luthier::HSATool<LDSBankConflictTool, llvm::MachineFunction> {
   using HSATool::HSATool;
@@ -488,8 +486,6 @@ void LDSBankConflictTool::onPackets(
     NumKernelLaunched++;
   }
 }
-
-} // anonymous namespace
 
 namespace luthier {
 

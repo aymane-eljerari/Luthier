@@ -50,8 +50,6 @@
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "luthier-lift-launched-kernels-tool"
 
-namespace {
-
 struct LiftLaunchedKernelsTool
     : public luthier::HSATool<LiftLaunchedKernelsTool, llvm::MachineFunction> {
   using HSATool::HSATool;
@@ -161,8 +159,6 @@ void LiftLaunchedKernelsTool::onPackets(
     PacketWriter(&Packet, 1);
   }
 }
-
-} // anonymous namespace
 
 namespace luthier {
 

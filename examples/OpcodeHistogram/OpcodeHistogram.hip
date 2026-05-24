@@ -63,8 +63,6 @@
 #undef DEBUG_TYPE
 #define DEBUG_TYPE "luthier-opcode-hist-tool"
 
-namespace {
-
 struct OpcodeHistogramTool
     : public luthier::HSATool<OpcodeHistogramTool, llvm::MachineFunction> {
   using HSATool::HSATool;
@@ -328,8 +326,6 @@ void OpcodeHistogramTool::onPackets(
     NumKernelLaunched++;
   }
 }
-
-} // anonymous namespace
 
 namespace luthier {
 
