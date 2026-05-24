@@ -202,6 +202,14 @@ isaGetWavefronts(const ApiTableContainer<::CoreApiTable> &CoreApi,
 wavefrontGetSize(const ApiTableContainer<::CoreApiTable> &CoreApi,
                  hsa_wavefront_t Wavefront);
 
+/// Queries whether the \p CodeObjectISA is compatible with the \p AgentISA.
+/// \returns Expects \c true if code compiled for \p CodeObjectISA can run on an
+/// agent associated with \p AgentISA, \c false otherwise.
+/// \sa hsa_isa_compatible
+[[nodiscard]] llvm::Expected<bool>
+isaCompatible(const ApiTableContainer<::CoreApiTable> &CoreApi,
+              hsa_isa_t CodeObjectISA, hsa_isa_t AgentISA);
+
 } // namespace luthier::hsa
 
 //===----------------------------------------------------------------------===//

@@ -335,4 +335,17 @@ wavefrontGetSize(const ApiTableContainer<::CoreApiTable> &CoreApi,
   return Size;
 }
 
+llvm::Expected<bool>
+isaCompatible(const ApiTableContainer<::CoreApiTable> &CoreApi,
+              hsa_isa_t CodeObjectISA, hsa_isa_t AgentISA) {
+  bool Result = false;
+  LUTHIER_RETURN_ON_ERROR(LUTHIER_HSA_CALL_ERROR_CHECK(
+      CoreApi.callFunction<&::CoreApiTable::hsa_isa_compatible_fn>(
+          CodeObjectISA, AgentISA, &Result),
+      llvm::formatv("Failed to check compatibility of code object ISA {0:x} "
+                    "with agent ISA {1:x}.",
+                    CodeObjectISA.handle, AgentISA.handle)));
+  return Result;
+}
+
 } // namespace luthier::hsa
