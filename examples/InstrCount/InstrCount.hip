@@ -35,6 +35,7 @@
 #include <llvm/IR/PassManager.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Passes/PassBuilder.h>
+#include <llvm/Passes/StandardInstrumentations.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -272,7 +273,7 @@ buildTargetMachineForKD(const llvm::amdhsa::kernel_descriptor_t *KD) {
 
   std::string ErrMsg;
   const llvm::Target *TheTarget =
-      llvm::TargetRegistry::lookupTarget(TripleOrErr->str(), ErrMsg);
+      llvm::TargetRegistry::lookupTarget(*TripleOrErr, ErrMsg);
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       TheTarget != nullptr,
       llvm::formatv("TargetRegistry::lookupTarget failed for triple {0}: {1}",
@@ -284,6 +285,7 @@ buildTargetMachineForKD(const llvm::amdhsa::kernel_descriptor_t *KD) {
       /*RM=*/std::nullopt));
   LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       TM != nullptr, "createTargetMachine returned nullptr."));
+  TM->setOptLevel(llvm::CodeGenOptLevel::Default);
   return TM;
 }
 
@@ -316,13 +318,24 @@ runInstrumentationPipelineForDispatch(
   llvm::MachineFunctionAnalysisManager MFAM;
   llvm::ModuleAnalysisManager MAM;
 
-  llvm::PassBuilder PB(TM.get());
+  // PIC + SI must outlive MPM.run(). StandardInstrumentations is what reads
+  // --print-after-all / --print-before-all / --print-changed / -time-passes
+  // and registers the corresponding PassInstrumentationCallbacks. Without
+  // passing &PIC to the PassBuilder ctor, the outer PM has no instrumentation
+  // hooks — so dumps only fire for passes inside InstrumentationPMDriver,
+  // which sets up its own PIC/SI pair internally.
+  llvm::PassInstrumentationCallbacks PIC;
+  llvm::StandardInstrumentations SI(Ctx, /*DebugLogging=*/false);
+
+  llvm::PassBuilder PB(TM.get(), llvm::PipelineTuningOptions(), std::nullopt,
+                       &PIC);
   PB.registerModuleAnalyses(MAM);
   PB.registerFunctionAnalyses(FAM);
   PB.registerLoopAnalyses(LAM);
   PB.registerCGSCCAnalyses(CGAM);
   PB.registerMachineFunctionAnalyses(MFAM);
   PB.crossRegisterProxies(LAM, FAM, CGAM, MAM, &MFAM);
+  SI.registerCallbacks(PIC, &MAM);
 
   MAM.registerPass([&] { return llvm::MachineModuleAnalysis(MMI); });
   MFAM.registerPass([] { return luthier::InstructionTracesAnalysis(); });
