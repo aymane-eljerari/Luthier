@@ -118,9 +118,9 @@ parseOffloadBundle(llvm::MemoryBufferRef Bundle,
     // header and will always succeed.
     auto ObjOrErr = llvm::object::ObjectFile::createObjectFile(CodeObjectBuf);
     if (!ObjOrErr) {
-      LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader] entry " << EntryIdx
-                              << " (" << Entry.Size
-                              << " B): unrecognized object, skipping\n");
+      LLVM_DEBUG(llvm::dbgs()
+                 << "[DeviceToolCodeLoader] entry " << EntryIdx << " ("
+                 << Entry.Size << " B): unrecognized object, skipping\n");
       llvm::consumeError(ObjOrErr.takeError());
       ++EntryIdx;
       continue;
@@ -137,8 +137,8 @@ parseOffloadBundle(llvm::MemoryBufferRef Bundle,
     ++EntryIdx;
   }
   LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader] parseOffloadBundle "
-                             "produced " << ElfSlices.size()
-                          << " AMDGCN slice(s)\n");
+                             "produced "
+                          << ElfSlices.size() << " AMDGCN slice(s)\n");
   return llvm::Error::success();
 }
 
@@ -182,15 +182,14 @@ extractEmbeddedBitcode(llvm::StringRef Elf) {
 
 llvm::Expected<hsa_amd_memory_pool_t>
 DeviceToolCodeLoader::selectManagedVarPool(
-    const hsa::ApiTableContainer<::AmdExtTable> &AmdExt,
-    hsa_agent_t CpuAgent) {
+    const hsa::ApiTableContainer<::AmdExtTable> &AmdExt, hsa_agent_t CpuAgent) {
   LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader] selectManagedVarPool "
-                             "for CPU agent " << CpuAgent.handle << "\n");
+                             "for CPU agent "
+                          << CpuAgent.handle << "\n");
   hsa_amd_memory_pool_t Found{};
   bool DidFind = false;
   LUTHIER_RETURN_ON_ERROR(hsa::agentIterateMemoryPools(
-      AmdExt, CpuAgent,
-      [&](hsa_amd_memory_pool_t Pool) -> llvm::Error {
+      AmdExt, CpuAgent, [&](hsa_amd_memory_pool_t Pool) -> llvm::Error {
         if (DidFind)
           return llvm::Error::success();
         llvm::Expected<bool> FGOrErr =
@@ -240,7 +239,8 @@ DeviceToolCodeLoader::allocateManagedStorage(
     llvm::ArrayRef<hsa_agent_t> GpuAgents, hsa_amd_memory_pool_t Pool,
     size_t Size, unsigned Align, bool HmmSupported) {
   LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader] allocateManagedStorage "
-                             "size=" << Size << " align=" << Align
+                             "size="
+                          << Size << " align=" << Align
                           << " hmm=" << HmmSupported
                           << " gpus=" << GpuAgents.size() << "\n");
   if (Size == 0)
@@ -258,8 +258,8 @@ DeviceToolCodeLoader::allocateManagedStorage(
           Align, PageSize));
     const size_t RoundedSize = (Size + PageSize - 1) & ~(PageSize - 1);
     LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader] HMM/SVM path, "
-                               "page=" << PageSize
-                            << " rounded=" << RoundedSize << "\n");
+                               "page="
+                            << PageSize << " rounded=" << RoundedSize << "\n");
 
     llvm::Expected<void *> VAOrErr = hsa::vmemAddressReserveAlign(
         AmdExt, RoundedSize, /*Address=*/0, /*Alignment=*/PageSize,
@@ -323,9 +323,10 @@ llvm::Error DeviceToolCodeLoader::freeManagedStorage(
 // Canonical LLVM ISA key
 //===----------------------------------------------------------------------===//
 
-std::string DeviceToolCodeLoader::canonicalLLVMISAKey(
-    const llvm::Triple &T, llvm::StringRef CPU,
-    const llvm::SubtargetFeatures &F) {
+std::string
+DeviceToolCodeLoader::canonicalLLVMISAKey(const llvm::Triple &T,
+                                          llvm::StringRef CPU,
+                                          const llvm::SubtargetFeatures &F) {
   std::vector<std::string> Sorted = F.getFeatures();
   std::sort(Sorted.begin(), Sorted.end());
   std::string Out;
@@ -340,8 +341,7 @@ std::string DeviceToolCodeLoader::canonicalLLVMISAKey(
 // addSlice
 //===----------------------------------------------------------------------===//
 
-llvm::Error
-DeviceToolCodeLoader::addSlice(llvm::MemoryBufferRef CodeObject) {
+llvm::Error DeviceToolCodeLoader::addSlice(llvm::MemoryBufferRef CodeObject) {
   auto ObjOrErr = luthier::object::AMDGCNObjectFile::createAMDGCNObjectFile(
       CodeObject.getBuffer());
   if (!ObjOrErr)
@@ -353,8 +353,7 @@ DeviceToolCodeLoader::addSlice(llvm::MemoryBufferRef CodeObject) {
 
   std::string Key = canonicalLLVMISAKey(T, CPU, Features);
   LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader] addSlice key=[" << Key
-                          << "] coSize=" << CodeObject.getBufferSize()
-                          << "\n");
+                          << "] coSize=" << CodeObject.getBufferSize() << "\n");
   if (Slices.contains(Key))
     return LUTHIER_MAKE_GENERIC_ERROR(
         "Duplicate LLVM ISA in code-object input: " + Key);
@@ -445,7 +444,8 @@ DeviceToolCodeLoader::DeviceToolCodeLoader(
     }
   }
   LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader] ctor(code-objects): "
-                             "registered " << Slices.size() << " slice(s)\n");
+                             "registered "
+                          << Slices.size() << " slice(s)\n");
 }
 
 DeviceToolCodeLoader::~DeviceToolCodeLoader() {
@@ -475,13 +475,12 @@ DeviceToolCodeLoader::loadOntoAgents(llvm::ArrayRef<hsa_agent_t> Agents) {
       return IsaOrErr.takeError();
     // try_emplace: first slice wins on hsa_isa_t collision (e.g. wave32
     // and wave64 share the same hsa_isa_t — HSA can't differentiate them).
-    bool Inserted =
-        SliceByIsaHandle.try_emplace(*IsaOrErr, &Entry).second;
-    LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader]   slice key=["
-                            << KV.first() << "] isa=" << IsaOrErr->handle
-                            << (Inserted ? " (registered)"
-                                         : " (collision; first wins)")
-                            << "\n");
+    bool Inserted = SliceByIsaHandle.try_emplace(*IsaOrErr, &Entry).second;
+    LLVM_DEBUG(llvm::dbgs()
+               << "[DeviceToolCodeLoader]   slice key=[" << KV.first()
+               << "] isa=" << IsaOrErr->handle
+               << (Inserted ? " (registered)" : " (collision; first wins)")
+               << "\n");
   }
 
   for (hsa_agent_t Agent : Agents) {
@@ -491,22 +490,45 @@ DeviceToolCodeLoader::loadOntoAgents(llvm::ArrayRef<hsa_agent_t> Agents) {
       continue; // Idempotent on already-loaded agents.
     }
 
-    auto MatchedOrErr = hsa::agentFindFirstISA(
-        Core, Agent, [&](hsa_isa_t AgentIsa) -> llvm::Expected<bool> {
-          return SliceByIsaHandle.contains(AgentIsa);
-        });
-    if (!MatchedOrErr)
-      return MatchedOrErr.takeError();
-    if (!*MatchedOrErr) {
-      LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader]   agent "
-                              << Agent.handle
-                              << " has no compatible slice, skipping\n");
+    hsa_isa_t MatchedISA{0};
+    for (hsa_isa_t SliceISA : SliceByIsaHandle.keys()) {
+
+      auto MatchedOrErr = hsa::agentFindFirstISA(
+          Core, Agent, [&](hsa_isa_t AgentIsa) -> llvm::Expected<bool> {
+            llvm::Expected<bool> IsCompatible =
+                hsa::isaCompatible(Core, SliceISA, AgentIsa);
+            LUTHIER_RETURN_ON_ERROR(IsCompatible.takeError());
+            LLVM_DEBUG(
+                llvm::Expected<std::string> SliceISANameOrErr =
+                    hsa::isaGetName(Core, SliceISA);
+                if (!SliceISANameOrErr) return SliceISANameOrErr.takeError();
+                llvm::Expected<std::string> AgentISANameOrErr =
+                    hsa::isaGetName(Core, AgentIsa);
+                if (!AgentISANameOrErr)
+                  return AgentISANameOrErr.takeError();
+                llvm::dbgs()
+                << "[DeviceToolCodeLoader]   compat check: slice ISA=["
+                << *SliceISANameOrErr << "] vs agent ISA=["
+                << *AgentISANameOrErr << "] -> "
+                << (*IsCompatible ? "compatible" : "incompatible") << "\n");
+            if (*IsCompatible) {
+              MatchedISA = SliceISA;
+              return true;
+            }
+            return false;
+          });
+      if (!MatchedOrErr)
+        return MatchedOrErr.takeError();
+    }
+    if (MatchedISA.handle == 0) {
+      LLVM_DEBUG(llvm::dbgs()
+                 << "[DeviceToolCodeLoader]   agent " << Agent.handle
+                 << " has no compatible slice, skipping\n");
       continue; // No slice compatible with this agent.
     }
-    SliceCacheEntry *Match = SliceByIsaHandle.lookup(**MatchedOrErr);
-    LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader]   agent "
-                            << Agent.handle << " matched slice CPU="
-                            << Match->CPU << "\n");
+    SliceCacheEntry *Match = SliceByIsaHandle.lookup(MatchedISA);
+    LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader]   agent " << Agent.handle
+                            << " matched slice CPU=" << Match->CPU << "\n");
 
     auto ReaderOrErr = hsa::codeObjectReaderCreateFromMemory(
         Core, Match->CodeObject.getBuffer());
@@ -548,9 +570,9 @@ DeviceToolCodeLoader::loadOntoAgents(llvm::ArrayRef<hsa_agent_t> Agents) {
     if (auto E = hsa::executableIterateAgentSymbols(Core, *ExeOrErr, Agent,
                                                     Callback))
       return E;
-    LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader]   agent "
-                            << Agent.handle << " loaded; " << VarCount
-                            << " variable symbol(s) indexed\n");
+    LLVM_DEBUG(llvm::dbgs()
+               << "[DeviceToolCodeLoader]   agent " << Agent.handle
+               << " loaded; " << VarCount << " variable symbol(s) indexed\n");
   }
   LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader] loadOntoAgents done\n");
   return llvm::Error::success();
@@ -582,8 +604,8 @@ llvm::Error DeviceToolCodeLoader::clearLoadedState() {
 // loadDynamicManagedVars / freeManagedVars
 //===----------------------------------------------------------------------===//
 
-llvm::Error DeviceToolCodeLoader::loadManagedVars(
-    llvm::ArrayRef<hsa_agent_t> Agents) {
+llvm::Error
+DeviceToolCodeLoader::loadManagedVars(llvm::ArrayRef<hsa_agent_t> Agents) {
   LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader] loadManagedVars: "
                           << Agents.size() << " agent(s), " << Slices.size()
                           << " slice(s)\n");
@@ -673,19 +695,12 @@ llvm::Error DeviceToolCodeLoader::loadManagedVars(
         llvm::consumeError(SymValOrErr.takeError());
         continue;
       }
-      const uint64_t SymVal = *SymValOrErr;
-      const uint64_t SectAddr = (*SectionOrErr)->getAddress();
-      if (SymVal < SectAddr ||
-          (SymVal - SectAddr) + Size > ContentsOrErr->size()) {
-        LLVM_DEBUG(llvm::dbgs()
-                   << "[luthier] managed-var symbol " << *NameOrErr
-                   << " out of section bounds, skipping\n");
+      auto VarContentsOrErr = object::getContents(Var);
+      if (!VarContentsOrErr) {
+        llvm::consumeError(VarContentsOrErr.takeError());
         continue;
       }
-      llvm::ArrayRef<uint8_t> InitBytes(
-          reinterpret_cast<const uint8_t *>(ContentsOrErr->data()) +
-              (SymVal - SectAddr),
-          Size);
+      llvm::ArrayRef<uint8_t> InitBytes = *VarContentsOrErr;
       const unsigned Align = (*SectionOrErr)->getAlignment().value();
 
       // Resolve the CPU pool the first time we need it on the non-HMM
@@ -724,9 +739,10 @@ llvm::Error DeviceToolCodeLoader::loadManagedVars(
       // base symbol go to the managed allocation.
       auto NameIt = NameToAgentGlobal.find(BaseName);
       if (NameIt == NameToAgentGlobal.end()) {
-        LLVM_DEBUG(llvm::dbgs()
-                   << "[luthier] base symbol not found for managed var "
-                   << BaseName << "\n");
+        LLVM_DEBUG(
+            llvm::dbgs()
+            << "[DeviceToolCodeLoader] base symbol not found for managed var "
+            << BaseName << "\n");
       } else {
         for (hsa_agent_t Agent : Agents) {
           auto AgentIt = NameIt->second.find(Agent);
@@ -736,20 +752,18 @@ llvm::Error DeviceToolCodeLoader::loadManagedVars(
               hsa::executableSymbolGetAddress(Core, AgentIt->second);
           if (!AddrOrErr)
             return FreeOnError(AddrOrErr.takeError());
-          LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader]   publish "
-                                  << BaseName << " ptr=" << Alloc.Ptr
-                                  << " to agent " << Agent.handle
-                                  << " base addr=0x"
-                                  << llvm::Twine::utohexstr(*AddrOrErr)
-                                  << "\n");
+          LLVM_DEBUG(llvm::dbgs()
+                     << "[DeviceToolCodeLoader]   publish " << BaseName
+                     << " ptr=" << Alloc.Ptr << " to agent " << Agent.handle
+                     << " base addr=0x" << llvm::Twine::utohexstr(*AddrOrErr)
+                     << "\n");
           if (auto E = LUTHIER_HSA_CALL_ERROR_CHECK(
                   Core.callFunction<hsa_memory_copy>(
                       reinterpret_cast<void *>(*AddrOrErr), &Alloc.Ptr,
                       sizeof(void *)),
-                  llvm::formatv(
-                      "hsa_memory_copy failed publishing managed-var "
-                      "pointer for {0}",
-                      BaseName)))
+                  llvm::formatv("hsa_memory_copy failed publishing managed-var "
+                                "pointer for {0}",
+                                BaseName)))
             return FreeOnError(std::move(E));
         }
       }
@@ -784,8 +798,7 @@ llvm::Error DeviceToolCodeLoader::freeManagedVars() {
   for (auto &KV : ManagedVarRecords) {
     if (KV.second.Allocation == nullptr)
       continue;
-    ManagedAlloc A{KV.second.Allocation, KV.second.AllocSize,
-                   KV.second.ViaSvm};
+    ManagedAlloc A{KV.second.Allocation, KV.second.AllocSize, KV.second.ViaSvm};
     E = llvm::joinErrors(std::move(E), freeManagedStorage(AmdExt, A));
   }
   ManagedVarRecords.clear();
@@ -829,9 +842,10 @@ llvm::Error DeviceToolCodeLoader::ensureLoaded() {
 //===----------------------------------------------------------------------===//
 
 llvm::Expected<std::unique_ptr<llvm::Module>>
-DeviceToolCodeLoader::getEmbeddedModule(
-    const llvm::Triple &T, llvm::StringRef CPU,
-    const llvm::SubtargetFeatures &Features, llvm::LLVMContext &Ctx) {
+DeviceToolCodeLoader::getEmbeddedModule(const llvm::Triple &T,
+                                        llvm::StringRef CPU,
+                                        const llvm::SubtargetFeatures &Features,
+                                        llvm::LLVMContext &Ctx) {
   std::lock_guard Lock(Mutex);
   if (auto E = ensureLoaded())
     return std::move(E);
@@ -861,7 +875,8 @@ DeviceToolCodeLoader::getEmbeddedModule(
       llvm::StringRef K = KV.first();
       if (K.contains(CPUMarker) || K.ends_with(CPUTail)) {
         LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader]   CPU-substring "
-                                   "match: [" << K << "]\n");
+                                   "match: ["
+                                << K << "]\n");
         It = Slices.find(KV.first());
         break;
       }
