@@ -387,7 +387,6 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
   SI.registerCallbacks(PIC, &IMAM);
 
   // TODO: re-enable when production-pipeline deps are compiled in:
-  // IMAM.registerPass([&]() { return IntrinsicIRLoweringInfoMapAnalysis(); });
   IMAM.registerPass([&]() { return InjectedPayloadAndInstPointAnalysis(); });
   IMAM.registerPass([&]() { return IntrinsicsProcessorsAnalysis(Registry); });
 
@@ -426,11 +425,10 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
       PreIRIntrinsicLoweringCallback(IMPM);
       for (const auto &Plugin : PassPlugins)
         Plugin.invokePreLuthierIRIntrinsicLoweringPassesCallback(IMPM);
-      // IMPM.addPass(ProcessIntrinsicsAtIRLevelPass(*ITM));
-      // PostIRIntrinsicLoweringCallback(IMPM);
-      // for (const auto &Plugin : PassPlugins)
-      //   Plugin.invokePostLuthierIRIntrinsicLoweringPassesCallback(IMPM);
-      // IMPM.run(*IModule, IMAM);
+      IMPM.addPass(ProcessIntrinsicsAtIRLevelPass(*ITM));
+      PostIRIntrinsicLoweringCallback(IMPM);
+      for (const auto &Plugin : PassPlugins)
+        Plugin.invokePostLuthierIRIntrinsicLoweringPassesCallback(IMPM);
     } else if (IsIRPipelineSpecifiedAndNotEmpty) {
       // Run caller-supplied IR pipeline.
       if (auto Err =

@@ -101,7 +101,7 @@ struct InstrumentationPMDriverOptions {
           "Optimization level for the instrumentation module IR pipeline "
           "(0=none, 1=less, 2=default, 3=aggressive); defaults to the "
           "global -O level if not specified"),
-      llvm::cl::cat(InstrumentationPMDriverOptionsCat)};
+      llvm::cl::cat(InstrumentationPMDriverOptionsCat), llvm::cl::init(3)};
 
   /// Skip inserting Luthier's InjectedPayloadPEIPass. Useful when running a
   /// truncated codegen pipeline for testing, or when a downstream consumer
