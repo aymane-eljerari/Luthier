@@ -170,15 +170,6 @@ private:
           Singleton<Derived>::instance());
       LUTHIER_REPORT_FATAL_ON_ERROR(hsa::executableGetLoadedCodeObjects(
           COC.VenLoaderSnapshot.getTable(), Executable, LCOs));
-    }
-
-    hsa_status_t Out = UnderlyingHsaExecutableDestroyFn(Executable);
-    if (Out != HSA_STATUS_SUCCESS)
-      return Out;
-
-    if (Singleton<Derived>::isInitialized()) {
-      auto &COC = static_cast<LoadedCodeObjectCacheTrait<Derived> &>(
-          Singleton<Derived>::instance());
       std::lock_guard Lock(COC.CacheMutex);
       for (hsa_loaded_code_object_t LCO : LCOs) {
         COC.LCOCache.erase(LCO);
@@ -190,7 +181,8 @@ private:
         COC.LoadedBaseToLCOMap.erase(LoadedMemory.data());
       }
     }
-    return Out;
+
+    return UnderlyingHsaExecutableDestroyFn(Executable);
   }
 
 public:
