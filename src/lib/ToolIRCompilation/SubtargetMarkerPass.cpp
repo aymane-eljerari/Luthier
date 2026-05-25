@@ -38,15 +38,23 @@ namespace {
 constexpr unsigned Wave64Bit = 1u << 0;
 constexpr unsigned CuModeBit = 1u << 1;
 
-/// Returns the first non-declaration function in \p M, or nullptr if the
-/// module has only declarations. Used as the donor for the codegen-flag
-/// attributes (target-cpu, target-features) — clang sets both on every
-/// function in the TU with the same values.
-const llvm::Function *firstDefinedFunction(const llvm::Module &M) {
-  for (const llvm::Function &F : M.functions())
+/// Returns a function to read codegen-flag attributes (target-cpu,
+/// target-features) from. Clang sets both attributes on every \c Function
+/// in the TU — definitions and declarations alike — with the same values.
+/// We prefer a definition (more likely to have all attributes populated
+/// even on stripped/minified bitcode), but fall back to any declaration
+/// if the module is declarations-only. Returns nullptr only for a
+/// completely empty module (no functions at all), in which case there is
+/// nothing to instrument anyway and the marker can be safely omitted.
+const llvm::Function *firstAttrDonor(const llvm::Module &M) {
+  const llvm::Function *FirstDecl = nullptr;
+  for (const llvm::Function &F : M.functions()) {
     if (!F.isDeclaration())
       return &F;
-  return nullptr;
+    if (!FirstDecl)
+      FirstDecl = &F;
+  }
+  return FirstDecl;
 }
 
 /// Returns true if \p Features (a comma-separated `target-features` string)
@@ -116,7 +124,7 @@ SubtargetMarkerPass::run(llvm::Module &M, llvm::ModuleAnalysisManager &) {
   if (T.getArch() != llvm::Triple::amdgcn)
     return llvm::PreservedAnalyses::all();
 
-  const llvm::Function *Donor = firstDefinedFunction(M);
+  const llvm::Function *Donor = firstAttrDonor(M);
   if (!Donor)
     return llvm::PreservedAnalyses::all();
 

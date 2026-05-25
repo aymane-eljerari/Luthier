@@ -25,6 +25,7 @@
 #include "luthier/HSA/Agent.h"
 #include "luthier/Rocprofiler/ApiTableSnapshot.h"
 #include <cstdint>
+#include <optional>
 #include <hsa/hsa.h>
 #include <hsa/hsa_ext_amd.h>
 #include <hsa/hsa_ven_amd_loader.h>
@@ -84,6 +85,17 @@ protected:
     llvm::Triple TT;
     std::string CPU;
     llvm::SubtargetFeatures Features;
+    /// Decoded from the slice's \c __luthier_subtarget ELF symbol if the
+    /// slice was built through the Luthier IR-compilation plugin. When
+    /// present, \c Wave64 is true for a wave64 slice / false for wave32,
+    /// and \c CuMode is true for CU mode / false for WGP mode. The same
+    /// information is also injected into \c Features (as
+    /// \c +/-wavefrontsize64 and \c +/-cumode) so the canonical-ISA key
+    /// disambiguates wave32 and wave64 variants for the same gfx — these
+    /// fields are kept here for cheap O(1) inspection by the
+    /// dispatch-time slice selector.
+    std::optional<bool> Wave64;
+    std::optional<bool> CuMode;
   };
 
   /// Bookkeeping for an allocated managed variable. One per

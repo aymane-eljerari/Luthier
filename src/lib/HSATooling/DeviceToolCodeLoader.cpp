@@ -174,6 +174,66 @@ extractEmbeddedBitcode(llvm::StringRef Elf) {
       "ELF slice does not contain a .llvmbc section.");
 }
 
+//===----------------------------------------------------------------------===//
+// Luthier subtarget marker (`__luthier_subtarget`) extraction
+//===----------------------------------------------------------------------===//
+
+/// Reads the \c __luthier_subtarget symbol from \p Obj if present and returns
+/// its 4-byte encoded value. \c SubtargetMarkerPass writes this in section
+/// \c .luthier.subtarget when the IR plugin runs on the tool's device
+/// compile. The encoding is:
+///   bit 0 — set if the slice runs in wave64; clear for wave32
+///   bit 1 — set if the slice runs in CU mode; clear for WGP mode
+///
+/// Returns \c std::nullopt for code objects that weren't built through the
+/// Luthier IR plugin (e.g. legacy artifacts or HIP TUs compiled with stock
+/// hipcc). Callers should treat that as "wave/cumode unknown" and fall back
+/// to whatever they were doing before this marker existed.
+std::optional<uint32_t>
+readSubtargetMarker(const llvm::object::ObjectFile &Obj) {
+  for (const auto &Sym : Obj.symbols()) {
+    auto NameOrErr = Sym.getName();
+    if (!NameOrErr) {
+      llvm::consumeError(NameOrErr.takeError());
+      continue;
+    }
+    if (*NameOrErr != "__luthier_subtarget")
+      continue;
+    auto SecOrErr = Sym.getSection();
+    if (!SecOrErr) {
+      llvm::consumeError(SecOrErr.takeError());
+      continue;
+    }
+    auto SecIt = *SecOrErr;
+    if (SecIt == Obj.section_end())
+      continue;
+    auto ContentsOrErr = SecIt->getContents();
+    if (!ContentsOrErr) {
+      llvm::consumeError(ContentsOrErr.takeError());
+      continue;
+    }
+    auto AddrOrErr = Sym.getAddress();
+    if (!AddrOrErr) {
+      llvm::consumeError(AddrOrErr.takeError());
+      continue;
+    }
+    uint64_t Off = *AddrOrErr - SecIt->getAddress();
+    if (Off + sizeof(uint32_t) > ContentsOrErr->size())
+      continue;
+    uint32_t V;
+    std::memcpy(&V, ContentsOrErr->data() + Off, sizeof(uint32_t));
+    LLVM_DEBUG(llvm::dbgs()
+               << "[DeviceToolCodeLoader] __luthier_subtarget = 0x"
+               << llvm::Twine::utohexstr(V) << " (wave64="
+               << ((V & 1u) ? "1" : "0") << ", cumode="
+               << ((V & 2u) ? "1" : "0") << ")\n");
+    return V;
+  }
+  LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader] ELF slice has no "
+                             "__luthier_subtarget symbol\n");
+  return std::nullopt;
+}
+
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -351,6 +411,21 @@ llvm::Error DeviceToolCodeLoader::addSlice(llvm::MemoryBufferRef CodeObject) {
     return TupleOrErr.takeError();
   auto &[T, CPU, Features] = *TupleOrErr;
 
+  // Read the SubtargetMarkerPass's `__luthier_subtarget` symbol, if the
+  // slice has one. `getObjectFileTargetTuple` only recovers what the ELF
+  // e_flags encode (xnack, sramecc) — wave size and CU mode aren't in
+  // there. Inject them into `Features` so two slices that target the
+  // same gfx but differ in wave/cumode get distinct canonical ISA keys
+  // and both survive the duplicate-key check below.
+  std::optional<bool> SliceWave64;
+  std::optional<bool> SliceCuMode;
+  if (auto Encoded = readSubtargetMarker(**ObjOrErr)) {
+    SliceWave64 = (*Encoded & 1u) != 0;
+    SliceCuMode = (*Encoded & 2u) != 0;
+    Features.AddFeature("wavefrontsize64", *SliceWave64);
+    Features.AddFeature("cumode", *SliceCuMode);
+  }
+
   std::string Key = canonicalLLVMISAKey(T, CPU, Features);
   LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader] addSlice key=[" << Key
                           << "] coSize=" << CodeObject.getBufferSize() << "\n");
@@ -368,6 +443,8 @@ llvm::Error DeviceToolCodeLoader::addSlice(llvm::MemoryBufferRef CodeObject) {
   Entry.TT = std::move(T);
   Entry.CPU = CPU.str();
   Entry.Features = std::move(Features);
+  Entry.Wave64 = SliceWave64;
+  Entry.CuMode = SliceCuMode;
   Slices.insert({std::move(Key), std::move(Entry)});
 
   return llvm::Error::success();
