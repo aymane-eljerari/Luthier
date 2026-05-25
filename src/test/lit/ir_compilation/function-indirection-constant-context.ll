@@ -15,7 +15,7 @@ define void @Foo() {
 ; Constant-context address-take.
 @fp = addrspace(1) global ptr @Foo
 
-; CHECK-DAG: @__luthier_function_table = internal addrspace(1) constant [1 x ptr] [ptr @Foo]
+; CHECK-DAG: @__luthier_function_table = addrspace(1) constant [1 x ptr] [ptr @Foo]
 ; CHECK-DAG: @fp = addrspace(1) global ptr @Foo
 ; CHECK: define void @Foo() #[[FN_ATTRS:[0-9]+]]
 ; CHECK: attributes #[[FN_ATTRS]] = {{.*}}"luthier.function-id"="0"

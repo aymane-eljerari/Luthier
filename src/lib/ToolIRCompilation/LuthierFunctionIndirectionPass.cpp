@@ -61,8 +61,17 @@ bool hasInstructionUser(const llvm::User *U) {
 }
 
 /// Collect every \c Instruction that ultimately references \p F via
-/// (zero or more) \c ConstantExpr layers. We re-build each such
-/// instruction's operand referring to \p F into the table-load equivalent.
+/// (zero or more) \c ConstantExpr layers, EXCLUDING the callee operand
+/// of a direct \c CallBase. We re-build each such instruction's operand
+/// referring to \p F into the table-load equivalent — but direct calls
+/// must remain direct calls, even when \p F is classified as
+/// address-taken by Phase 1 (which can fire on metadata-like
+/// references such as \c @llvm.global.annotations entries from the
+/// \c LUTHIER_INTRINSIC_ANNOTATE macro). Rewriting a direct call to an
+/// indirect-call-through-table breaks the C calling convention for the
+/// caller — the load + indirect call gets tail-call-optimized and the
+/// ABI arg setup (\c $vgpr0..3) clobbers caller-side physregs the
+/// caller expected to flow through the call unchanged.
 void collectInstructionUses(llvm::Function *F,
                             llvm::SmallVectorImpl<llvm::Use *> &Uses) {
   llvm::SmallVector<llvm::Use *, 8> Worklist;
@@ -149,9 +158,17 @@ LuthierFunctionIndirectionPass::run(llvm::Module &M,
         "Module already contains __luthier_function_table; pass run twice?",
         /*gen_crash_diag=*/false);
 
+  // External linkage so the device-tool .hipfb exports the table.
+  // The launcher resolves the EMBEDDED bitcode's external `@__luthier_
+  // function_table` reference against the symbol the device-tool
+  // loader registered from the loaded .hipfb; that handoff only works
+  // if the .hipfb actually exports the symbol (internal symbols are
+  // invisible to `hsa_executable_iterate_agent_symbols`). The IModule-
+  // side copy is then re-externalized + initializer-stripped by
+  // ExternalizeGlobalsPass when the embedded clone is built.
   auto *Table = new llvm::GlobalVariable(
       M, TableTy, /*isConstant=*/true,
-      llvm::GlobalValue::InternalLinkage, TableInit, kTableName);
+      llvm::GlobalValue::ExternalLinkage, TableInit, kTableName);
 
   // Phase 4: stamp each function with its ID attribute and rewrite
   // instruction-context address-takes to load through the table.

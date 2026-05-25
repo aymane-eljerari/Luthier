@@ -20,7 +20,7 @@ define void @Caller() {
 
 ; The table is emitted with internal-constant linkage (in addrspace 1 —
 ; AMDGPU's default global address space) and points at @Foo.
-; CHECK: @__luthier_function_table = internal addrspace(1) constant [1 x ptr] [ptr @Foo]
+; CHECK: @__luthier_function_table = addrspace(1) constant [1 x ptr] [ptr @Foo]
 ;
 ; Foo is stamped with its assigned ID (0, since it's the only address-taken
 ; function).

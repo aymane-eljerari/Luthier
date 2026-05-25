@@ -529,6 +529,73 @@ parseKDRsrc3(const llvm::amdhsa::kernel_descriptor_t &KD,
   return llvm::Error::success();
 }
 
+/// Mirror each \c kernel_code_properties bit that's NOT set in the original
+/// \p KD as the corresponding \c amdgpu-no-* function attribute. Must run
+/// BEFORE the \c MachineFunction is constructed for \p F. The AMDGPU
+/// backend's \c GCNUserSGPRUsageInfo (a private sub-object of
+/// \c SIMachineFunctionInfo) is what \c AMDGPUAsmPrinter reads to decide
+/// which \c KERNEL_CODE_PROPERTY_ENABLE_SGPR_* bits to set on the emitted
+/// KD — NOT \c MFI->ArgInfo or the \c MFI->addX(TRI)-style calls below.
+/// \c UserSGPRInfo's private bool flags are populated once, by its
+/// constructor reading the function's \c amdgpu-no-* attrs (default-TRUE
+/// if absent, see GCNSubtarget.cpp:706-716), and the class exposes no
+/// setter to flip a flag back to false post-construction. Setting the
+/// attrs here, before \c MachineFunctionAnalysis::run materializes the
+/// MF, keeps \c UserSGPRInfo in lockstep with the original KD: the asm
+/// printer then emits a KD whose \c kernel_code_properties matches what
+/// the lifted kernel code was compiled for. Without this, the kernarg
+/// pointer ends up at a later SGPR pair than \c $sgpr0_sgpr1 and the
+/// lifted code reads garbage as kernargs.
+static inline llvm::Error
+parseKDKernelCodeAttrs(const llvm::amdhsa::kernel_descriptor_t &KD,
+                       const llvm::GCNTargetMachine &TM, llvm::Function &F) {
+  auto &ST = TM.getSubtarget<llvm::GCNSubtarget>(F);
+
+  if (AMDHSA_BITS_GET(
+          KD.kernel_code_properties,
+          llvm::amdhsa::KERNEL_CODE_PROPERTY_ENABLE_SGPR_DISPATCH_PTR) == 0)
+    F.addFnAttr("amdgpu-no-dispatch-ptr");
+
+  if (AMDHSA_BITS_GET(
+          KD.kernel_code_properties,
+          llvm::amdhsa::KERNEL_CODE_PROPERTY_ENABLE_SGPR_QUEUE_PTR) == 0)
+    F.addFnAttr("amdgpu-no-queue-ptr");
+
+  if (AMDHSA_BITS_GET(
+          KD.kernel_code_properties,
+          llvm::amdhsa::KERNEL_CODE_PROPERTY_ENABLE_SGPR_KERNARG_SEGMENT_PTR) ==
+      0)
+    F.addFnAttr("amdgpu-no-kernarg-segment-ptr");
+
+  if (AMDHSA_BITS_GET(
+          KD.kernel_code_properties,
+          llvm::amdhsa::KERNEL_CODE_PROPERTY_ENABLE_SGPR_DISPATCH_ID) == 0)
+    F.addFnAttr("amdgpu-no-dispatch-id");
+
+  // FLAT_SCRATCH_INIT is subtarget-dependent: under flatScratchIsArchitected
+  // (gfx10.3+, gfx11+, gfx12) the FS is preloaded into a fixed architectural
+  // register and the user-SGPR FS-init path is never used, so the negative
+  // attr is correct unconditionally. On non-architected targets the attr
+  // mirrors the KD bit.
+  if (ST.flatScratchIsArchitected() ||
+      AMDHSA_BITS_GET(
+          KD.kernel_code_properties,
+          llvm::amdhsa::KERNEL_CODE_PROPERTY_ENABLE_SGPR_FLAT_SCRATCH_INIT) ==
+          0)
+    F.addFnAttr("amdgpu-no-flat-scratch-init");
+
+  return llvm::Error::success();
+}
+
+/// Slim post-\c MachineFunction kernel-code parser: now responsible only for
+/// the parts that genuinely need an MF (frame-info dynamic stack setup) and
+/// for seeding \c MFI->ArgInfo physreg slots from the same KD bits the
+/// pre-MF \c parseKDKernelCodeAttrs already mirrored into the function
+/// attribute set. The attr-driven \c GCNUserSGPRUsageInfo path is what
+/// drives the emitted KD's \c kernel_code_properties bits (see
+/// \c parseKDKernelCodeAttrs); the \c MFI->addX(*TRI) calls below populate
+/// \c ArgInfo so later passes can ask "what physreg holds dispatch_ptr?"
+/// without re-deriving it from attrs.
 inline llvm::Error
 parseKDKernelCode(const llvm::amdhsa::kernel_descriptor_t &KD,
                   const llvm::GCNTargetMachine &TM, llvm::MachineFunction &MF) {
@@ -712,6 +779,14 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
   LUTHIER_RETURN_ON_ERROR(parseKDRsrc1(KDOnHost, TM, *F));
   LUTHIER_RETURN_ON_ERROR(parseKDRsrc2(KDOnHost, TM, *F));
   LUTHIER_RETURN_ON_ERROR(parseKDRsrc3(KDOnHost, TM, *F));
+
+  /// Stamp the kernel_code_properties-derived `amdgpu-no-*` attrs BEFORE
+  /// the MF is constructed. SIMachineFunctionInfo's GCNUserSGPRUsageInfo
+  /// sub-object reads them only at ctor time and exposes no setters, so
+  /// missing this pre-MF write would leave UserSGPRInfo with all the
+  /// default-enabled user-SGPR slots set even when the original KD had
+  /// those bits cleared.
+  LUTHIER_RETURN_ON_ERROR(parseKDKernelCodeAttrs(KDOnHost, TM, *F));
 
   // Populate the MFI ==========================================================
 

@@ -29,7 +29,7 @@ attributes #0 = { "target-cpu"="gfx1030" "target-features"="+wavefrontsize32" }
 attributes #1 = { nounwind readnone willreturn }
 
 ; Table emitted, Foo gets ID 0.
-; CHECK: @__luthier_function_table = internal addrspace(1) constant [1 x ptr] [ptr @Foo]
+; CHECK: @__luthier_function_table = addrspace(1) constant [1 x ptr] [ptr @Foo]
 ;
 ; ballot.i32 left intact.
 ; CHECK-LABEL: define i32 @Caller()

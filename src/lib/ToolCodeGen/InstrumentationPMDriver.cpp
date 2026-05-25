@@ -48,6 +48,7 @@
 #include <llvm/CodeGen/MIRPrinter.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/MachinePassManager.h>
+#include <llvm/CodeGen/Passes.h>
 #include <llvm/CodeGen/TargetPassConfig.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassManager.h>
@@ -500,25 +501,35 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
     bool UserInsertedMIRPrint = false;
 
     if (MIRPassPipelineNotSpecified) {
-      // Default IModule codegen pipeline. Mirrors what users have been
-      // spelling out via --imodule-mir-passes in lit tests:
-      //   isel, mir-lowering, injected-payload-accessed-regs,
-      //   imodule-ip-pred-liveness, payload-preserve-live-regs,
-      //   lr-sv-storage-load-locs, injected-payload-pei,
-      //   target-module-patcher.
+      // Default IModule codegen pipeline:
+      //   isel,
+      //   mir-lowering,
+      //   injected-payload-accessed-regs,
+      //   imodule-ip-pred-liveness,
+      //   payload-preserve-live-regs,
+      //   lr-sv-storage-load-locs,
+      //   machine-passes — runs the full AMDGPU MIR pipeline:
+      //     - RA (with SVAPhysVGPRPinPass inserted before
+      //       SIPreAllocateWWMRegs so WWM honors the SVA-lane hint)
+      //     - stock PrologEpilogInserter
+      //     - InjectedPayloadPEIPass inserted via TPC->insertPass
+      //       so it fires AFTER stock PEI (it relies on the spill
+      //       slots stock PEI materializes) and gets called per-MF
+      //       inside the machine-passes block.
+      //     - frame finalization, branch folding, block placement.
+      //     NOTE: addMachinePasses does NOT call addAsmPrinter
+      //     (AsmPrinter is added by addPassesToEmitFile), so the
+      //     IModule's MIR ends in physreg form without an emission
+      //     step — exactly what we need to hand off to the patcher.
+      //   target-module-patcher — runs after the TPC chain finishes.
+      //     The IModule's payload + hook MFs are now in physreg form;
+      //     inlineInjectedPayload deep-copies them into target MFs
+      //     and NewPMAsmPrinter consumes the patched target module.
       //
-      // Each step is bracketed by TPC->addMachinePrePasses() /
-      // addMachinePostPasses() the same way parseCodeGenPipeline does
-      // when adding registered legacy passes. That preserves the
-      // expected pre/post setup hooks around every pass.
-      //
-      // Note: this path does NOT call TPC->addMachinePasses() — the
-      // existing lit tests for the chain (regalloc-pressure.ll, the
-      // target-module-patcher tests) run with just the module-pass
-      // sequence above, not the full AMDGPU codegen pipeline. The
-      // explicit `machine-passes` token in --imodule-mir-passes
-      // remains the way to opt into the full RA + WWM + frame
-      // lowering chain (e.g., regalloc-pressure-lowered.ll).
+      // Each non-machine-passes step is bracketed by
+      // TPC->addMachinePrePasses() / addMachinePostPasses() the same
+      // way parseCodeGenPipeline does when adding registered legacy
+      // passes.
       TPC->addISelPasses();
 
       auto AddModulePass = [&](llvm::Pass *P, llvm::StringRef Name) {
@@ -538,12 +549,21 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
                     "Luthier PreserveLiveRegs");
       AddModulePass(new LRStateValueStorageAndLoadLocationsAnalysis(),
                     "Luthier LRStateValueStorage");
+
+      // Schedule SVAPhysVGPRPinPass before SIPreAllocateWWMRegs so
+      // the WWM greedy regalloc honors the SVA-lane hint. Schedule
+      // InjectedPayloadPEIPass after PrologEpilogCodeInserterID so
+      // our payload PEI sees stock-PEI-materialized spill slots.
+      // Both must be insertPass-d BEFORE addMachinePasses for the
+      // AMDGPU TPC to honor them.
+      TPC->insertPass(&llvm::SIPreAllocateWWMRegsLegacyID,
+                      &SVAPhysVGPRPinPass::ID);
       if (!Options.DisableInjectedPayloadPEI) {
-        // PEI is a MachineFunctionPass; the legacy PM auto-handles it
-        // by iterating Functions. Same wrapping as the module passes.
-        AddModulePass(new InjectedPayloadPEIPass(),
-                      "Luthier InjectedPayloadPEI");
+        TPC->insertPass(&llvm::PrologEpilogCodeInserterID,
+                        &InjectedPayloadPEIPass::ID);
       }
+      TPC->addMachinePasses();
+
       AddModulePass(new TargetModulePatcherPass(),
                     "Luthier TargetModulePatcher");
     } else if (MIRPassPipelineSpecifiedAndNotEmpty) {
@@ -587,19 +607,27 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
           return IRStagePA.areAllPreserved() ? llvm::PreservedAnalyses::all()
                                              : llvm::PreservedAnalyses::none();
         }
-        // Dump IR (with the stripped attrs visible) + every target-MMI
+        // Dump IR (with the stripped attrs visible) + every target-FAM
         // MachineFunction. Use plain MF::print rather than MIRPrinter so
-        // stale-stack-object indices don't crash the dumper.
+        // stale-stack-object indices don't crash the dumper. Note that
+        // target MFs live in the TargetFAM (new-PM), NOT in TargetMMI
+        // (legacy MMI) — the legacy MMI is for IModule MFs only.
         TgtFile.os() << "; Luthier target-module-output\n";
         TargetAppM.print(TgtFile.os(), /*AAW=*/nullptr);
-        auto &TargetMMI =
-            TargetMAM.getResult<llvm::MachineModuleAnalysis>(TargetAppM).getMMI();
-        for (const llvm::Function &F : TargetAppM) {
-          if (auto *MF = TargetMMI.getMachineFunction(F)) {
-            TgtFile.os() << "\n# Machine code for function " << F.getName()
-                         << ":\n";
-            MF->print(TgtFile.os());
-          }
+        auto &TargetFAM =
+            TargetMAM
+                .getResult<llvm::FunctionAnalysisManagerModuleProxy>(TargetAppM)
+                .getManager();
+        for (llvm::Function &F : TargetAppM) {
+          if (F.isDeclaration())
+            continue;
+          auto *MFRes =
+              TargetFAM.getCachedResult<llvm::MachineFunctionAnalysis>(F);
+          if (!MFRes)
+            continue;
+          TgtFile.os() << "\n# Machine code for function " << F.getName()
+                       << ":\n";
+          MFRes->getMF().print(TgtFile.os());
         }
         TgtFile.keep();
       }

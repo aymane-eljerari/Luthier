@@ -58,13 +58,20 @@ void registerEmbedIModulePasses(llvm::PassBuilder &PB) {
                tryParsePass<luthier::CreateAndEmbedIModulePass>(Name, MPM);
       });
 
-  // LuthierFunctionIndirectionPass rewrites address-takes of device
-  // functions to load through a per-module function table. Must run on
-  // M *before* CreateAndEmbedIModulePass clones it, so the rewrite is
-  // captured in both the embedded bitcode and the final binary.
-  // CreateAndEmbedIModulePass then clones M, runs the inner worker
-  // passes on the clone, and embeds bitcode. Both internally bail on
-  // non-AMD GCN modules, so registering at the optimizer-last EP is safe.
+  // LuthierFunctionIndirectionPass is currently DISABLED: its Phase 1
+  // address-take check treats any non-direct-call reference to a
+  // function (including metadata-like @llvm.global.annotations entries
+  // from LUTHIER_INTRINSIC_ANNOTATE) as "address-taken," then Phase 4
+  // rewrites EVERY instruction use — including direct calls — into a
+  // load-through-table + indirect-call. For Luthier intrinsics like
+  // `luthier::sAtomicAdd`, that turns a direct call (which
+  // ProcessIntrinsicsAtIRLevelPass would then rewrite into an
+  // inline-asm placeholder) into a tail-call through the function
+  // table, whose AMDGPU C-calling-convention arg setup clobbers
+  // caller-side physregs the kernel needs to preserve. Re-enable once
+  // the pass (a) restricts Phase 1 to genuine address-takes (skipping
+  // metadata-like global references), and (b) skips direct-call uses
+  // in Phase 4's rewrite.
   PB.registerOptimizerLastEPCallback(
       [](llvm::ModulePassManager &MPM, llvm::OptimizationLevel
 #if LLVM_VERSION_MAJOR >= 20
@@ -72,7 +79,6 @@ void registerEmbedIModulePasses(llvm::PassBuilder &PB) {
          llvm::ThinOrFullLTOPhase
 #endif
       ) {
-        MPM.addPass(luthier::LuthierFunctionIndirectionPass());
         MPM.addPass(luthier::CreateAndEmbedIModulePass());
         // Final-binary trim: keep symbols, drop bodies. Runs on M after
         // the clone is taken so the .llvmbc bitcode keeps full bodies.

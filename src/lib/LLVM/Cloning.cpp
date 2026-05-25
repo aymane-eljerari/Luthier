@@ -397,8 +397,15 @@ llvm::Error cloneMFInto(
 
   DstMF->getProperties().reset().set(SrcMF->getProperties());
 
-  if (!SrcMF->getFrameInstructions().empty() ||
-      !SrcMF->getLongjmpTargets().empty() || !SrcMF->getEHContTargets().empty())
+  // Clone CFI frame instructions in source order. CFI_INSTRUCTION MIs
+  // reference these via a CFIIndex operand, so preserving order keeps
+  // the indices stable across cloning (DstMF's frame-instruction
+  // vector starts empty after MachineFunctionAnalysis::run).
+  for (const llvm::MCCFIInstruction &CFI : SrcMF->getFrameInstructions())
+    (void)DstMF->addFrameInst(CFI);
+
+  if (!SrcMF->getLongjmpTargets().empty() ||
+      !SrcMF->getEHContTargets().empty())
     return llvm::make_error<luthier::LLVMError>(
         "cloning not implemented for machine function property");
 

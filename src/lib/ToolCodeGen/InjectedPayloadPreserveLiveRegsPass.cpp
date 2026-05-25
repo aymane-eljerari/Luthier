@@ -80,6 +80,14 @@ bool InjectedPayloadPreserveLiveRegsPass::runOnModule(llvm::Module &IModule) {
                  << "  no liveness for payload " << F.getName() << "\n");
       continue;
     }
+    LLVM_DEBUG({
+      const llvm::TargetRegisterInfo *TRIDbg =
+          MF->getSubtarget().getRegisterInfo();
+      llvm::dbgs() << "  payload " << F.getName() << " Active={";
+      for (llvm::MCPhysReg R : LS->Active)
+        llvm::dbgs() << " " << llvm::printReg(R, TRIDbg);
+      llvm::dbgs() << " }\n";
+    });
 
     // Compute Preserve = Active \ (Reads U Writes). Under the C calling
     // convention used today, only the active-lane live set matters for
@@ -130,7 +138,18 @@ bool InjectedPayloadPreserveLiveRegsPass::runOnModule(llvm::Module &IModule) {
                    << ": no cross-copy class\n");
         continue;
       }
-
+      // Architectural regs like $exec, $vcc, $scc, $flat_scr report a
+      // cross-copy class that's not allocatable. createVirtualRegister
+      // asserts on those. The inlined payload's effects on them are
+      // either handled separately (frame regs by InjectedPayloadPEIPass)
+      // or are application-level architectural state that the lifted
+      // code doesn't expect to survive an instrumentation boundary.
+      if (!CrossCopyRC->isAllocatable()) {
+        LLVM_DEBUG(llvm::dbgs()
+                   << "  skipping " << llvm::printReg(PhysReg, TRI)
+                   << ": cross-copy class not allocatable\n");
+        continue;
+      }
       llvm::Register SaveVReg = MRI.createVirtualRegister(CrossCopyRC);
       // Entry: %savevreg = COPY $physreg ; mark $physreg live-in.
       llvm::BuildMI(EntryMBB, EntryInsertPt, llvm::DebugLoc(),

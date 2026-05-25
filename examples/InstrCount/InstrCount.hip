@@ -90,9 +90,14 @@ struct InstrCountTool
   // entries for them into the loader's slot table.
   //===---------------------------------------------------------------===//
 
-  /// Per-kernel instruction counter. Zeroed before each instrumented
-  /// dispatch and read back after.
-  __attribute__((managed)) static uint64_t Counter;
+  /// Per-agent instruction counter, device-resident. Read after each
+  /// kernel via \c hsa_memory_copy from the host (see \c onPackets);
+  /// `__managed__` was previously used but its host-shadow pointer
+  /// indirection adds a memory load to every increment site that
+  /// drives RA toward a calling-convention mismatch on
+  /// `luthier::sAtomicAdd`. A plain `__device__` global avoids the
+  /// indirection — host I/O goes through HSA explicit copies.
+  __attribute__((device)) static uint64_t Counter;
 
   /// Wave-fronts-as-warps counter hook. Atomically increments \c Counter
   /// by either 1 (wavefront-level) or by the active-lane count.
@@ -383,6 +388,8 @@ runInstrumentationPipelineForDispatch(
     explicit InjectPayloadsAdapter(InstrCountTool *T) : T(T) {}
     llvm::PreservedAnalyses run(llvm::Module &IModule,
                                 llvm::ModuleAnalysisManager &IMAM) {
+      luthier::errs() << "[InjectPayloadsAdapter] run on IModule '"
+                      << IModule.getName() << "'\n";
       using Base =
           luthier::InstrumentationPass<InstrCountTool, llvm::Module,
                                         llvm::MachineFunction>;
@@ -433,6 +440,10 @@ InstrCountTool::runInstrumentationPass(llvm::Module &IModule,
                                        llvm::ModuleAnalysisManager &,
                                        llvm::MachineFunction &MF,
                                        llvm::FunctionAnalysisManager &) {
+  luthier::errs() << "[InstrCountTool] runInstrumentationPass for MF '"
+                  << MF.getName() << "' starting at instr idx "
+                  << NextInstrIdx << "\n";
+  unsigned StartIdx = NextInstrIdx;
   auto *CountWavefrontLevelConstVal = llvm::ConstantInt::getBool(
       IModule.getContext(), Opts.CountWavefrontLevel);
   for (auto &MBB : MF) {
@@ -455,6 +466,9 @@ InstrCountTool::runInstrumentationPass(llvm::Module &IModule,
           this->createInjectedPayload(HostHandle, IModule, MI, Args));
     }
   }
+  luthier::errs() << "[InstrCountTool] runInstrumentationPass for MF '"
+                  << MF.getName() << "' visited "
+                  << (NextInstrIdx - StartIdx) << " MI(s)\n";
   return luthier::InstrumentationPreservedAnalyses{};
 }
 
@@ -541,6 +555,53 @@ void InstrCountTool::onPackets(
           Core.callFunction<&::CoreApiTable::hsa_signal_destroy_fn>(
               DispatchPacket->completion_signal),
           "Failed to destroy the dispatch packet's completion signal."));
+    }
+
+    // Read Counter back from the device and accumulate. Counter is now
+    // `__device__` (was `__managed__`), so host access goes through
+    // an explicit `hsa_memory_copy` from the symbol's per-agent device
+    // address. Agent comes from the same `hsa_amd_pointer_info(KD)`
+    // call the dispatch path already uses; counter address comes from
+    // the device-tool code loader's HSA executable symbol record.
+    if (ActiveRegion) {
+      const auto *KernelDesc =
+          reinterpret_cast<const llvm::amdhsa::kernel_descriptor_t *>(
+              DispatchPacket->kernel_object);
+      hsa_amd_pointer_info_t CounterAgentInfo{};
+      CounterAgentInfo.size = sizeof(CounterAgentInfo);
+      hsa_status_t PInfoStatus = AmdExt.callFunction<hsa_amd_pointer_info>(
+          const_cast<void *>(reinterpret_cast<const void *>(KernelDesc)),
+          &CounterAgentInfo,
+          /*alloc=*/nullptr, /*num_agents_accessible=*/nullptr,
+          /*accessible=*/nullptr);
+      if (PInfoStatus == HSA_STATUS_SUCCESS &&
+          CounterAgentInfo.type != HSA_EXT_POINTER_TYPE_UNKNOWN) {
+        hsa_agent_t Agent = CounterAgentInfo.agentOwner;
+        auto SymOrErr = this->lookupGlobalVariable(
+            "_ZN14InstrCountTool7CounterE", Agent);
+        if (!SymOrErr) {
+          llvm::consumeError(SymOrErr.takeError());
+        } else {
+          auto AddrOrErr =
+              luthier::hsa::executableSymbolGetAddress(Core, *SymOrErr);
+          if (!AddrOrErr) {
+            llvm::consumeError(AddrOrErr.takeError());
+          } else {
+            uint64_t CounterSnapshot = 0;
+            hsa_status_t RC = Core.callFunction<hsa_memory_copy>(
+                &CounterSnapshot,
+                reinterpret_cast<void *>(*AddrOrErr),
+                sizeof(CounterSnapshot));
+            if (RC == HSA_STATUS_SUCCESS) {
+              TotalNumInstructions += CounterSnapshot;
+              // Zero the device-side counter for the next dispatch.
+              const uint64_t Zero = 0;
+              (void)Core.callFunction<hsa_memory_copy>(
+                  reinterpret_cast<void *>(*AddrOrErr), &Zero, sizeof(Zero));
+            }
+          }
+        }
+      }
     }
 
     (void)T1;

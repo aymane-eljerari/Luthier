@@ -26,7 +26,7 @@ declare i64 @llvm.amdgcn.ballot.i64(i1) #1
 attributes #0 = { "target-cpu"="gfx906" "target-features"="+wavefrontsize64" }
 attributes #1 = { nounwind readnone willreturn }
 
-; CHECK: @__luthier_function_table = internal addrspace(1) constant [1 x ptr] [ptr @Foo]
+; CHECK: @__luthier_function_table = addrspace(1) constant [1 x ptr] [ptr @Foo]
 ;
 ; CHECK-LABEL: define i64 @Caller()
 ; CHECK: call i64 @llvm.amdgcn.ballot.i64(i1 true)

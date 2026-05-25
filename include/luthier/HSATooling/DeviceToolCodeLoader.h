@@ -319,11 +319,14 @@ public:
     auto It = NameToAgentGlobal.find(Name);
     LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         It != NameToAgentGlobal.end(),
-        "Global variable has no per-agent symbol record."));
+        llvm::formatv("Global variable '{0}' has no per-agent symbol record.",
+                      Name)));
     auto AgentIt = It->second.find(Agent);
     LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         AgentIt != It->second.end(),
-        "Global variable is not loaded on the requested agent."));
+        llvm::formatv(
+            "Global variable '{0}' is not loaded on the requested agent.",
+            Name)));
     return AgentIt->second;
   }
 

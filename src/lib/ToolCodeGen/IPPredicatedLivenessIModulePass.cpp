@@ -232,7 +232,15 @@ static void stepBackward(const llvm::MachineInstr &MI,
          ++AI)
       L.erase(*AI);
   }
-  // Pass 3: add uses.
+  // Pass 3: add uses. Mirror LLVM's LivePhysRegs::addReg by walking
+  // `subregs_inclusive` and inserting each sub-reg. Without this, a USE
+  // of a wider composite reg (e.g. `$vgpr0_vgpr1 = V_LSHLREV_B64 2,
+  // $vgpr0_vgpr1`) only re-adds the pair to the live set after Pass 1's
+  // alias-erase, leaving the leaf `$vgpr0` / `$vgpr1` out — even though
+  // the wider use's bits cover them. A later (going backward = earlier
+  // in program order) MI that uses only the leaf then doesn't see prior
+  // liveness propagated past the wider USE+DEF and the analysis drops
+  // the leaf from the Active set at IPs upstream of that point.
   for (const llvm::MachineOperand &MO : MI.operands()) {
     if (!MO.isReg() || !MO.readsReg())
       continue;
@@ -241,7 +249,11 @@ static void stepBackward(const llvm::MachineInstr &MI,
       continue;
     if (isReadOnlyForLuthier(Reg.asMCReg()))
       continue;
-    L.insert(Reg.asMCReg());
+    for (llvm::MCPhysReg SubReg : TRI.subregs_inclusive(Reg.asMCReg())) {
+      if (isReadOnlyForLuthier(SubReg))
+        continue;
+      L.insert(SubReg);
+    }
   }
 }
 
@@ -256,8 +268,14 @@ static void stepBackwardOverPayload(const InjectedPayloadAccessedRegs &Eff,
       L.erase(*AI);
   }
   for (llvm::MCRegister R : Eff.Reads) {
-    if (!isReadOnlyForLuthier(R))
-      L.insert(R);
+    // Mirror stepBackward Pass 3: insert the read reg AND its sub-regs
+    // so the leaf entries from later uses survive a payload that
+    // declares a wider read.
+    for (llvm::MCPhysReg SubReg : TRI.subregs_inclusive(R)) {
+      if (isReadOnlyForLuthier(SubReg))
+        continue;
+      L.insert(SubReg);
+    }
   }
 }
 
@@ -298,8 +316,29 @@ static void walkPMBBBackward(
   for (auto MIt = MBB.rbegin(), MEnd = MBB.rend(); MIt != MEnd; ++MIt) {
     const llvm::MachineInstr &MI = *MIt;
 
-    // Insertion point: per-payload snapshot, then step backward over
-    // payload effects (reverse execution order).
+    // EXEC manipulation: apply swap/union BEFORE stepping backward over the
+    // MI's own def/uses (the MI's def of EXEC is then a normal liveness
+    // step).
+    ExecEffect EE = classifyExecEffect(MI, TRI);
+    if (EE == ExecEffect::CompleteFlip) {
+      std::swap(OutA, OutI);
+    } else if (EE == ExecEffect::PartialFlip) {
+      unionInto(OutA, OutI);
+      OutI = OutA;
+    }
+
+    stepBackward(MI, OutA, TRI);
+    if (!Vector)
+      stepBackward(MI, OutI, TRI);
+
+    // Snapshot AFTER stepBackward(MI) so it represents "live just before
+    // MI[X] starts forward" — i.e., what the kernel needs alive at the
+    // payload's IP from the kernel's perspective. The patcher inlines
+    // payloads BEFORE the target MI, so the payload sees exactly this
+    // state. Capturing BEFORE stepBackward(MI) would yield "live after
+    // MI[X] forward" which is off by one. Then step backward over the
+    // payload's declared effects so its writes don't leak as "still
+    // live" into MIs upstream of the IP.
     if (IPIP.contains(MI)) {
       auto Payloads = IPIP.at(MI);
       for (auto It = Payloads.rbegin(); It != Payloads.rend(); ++It) {
@@ -317,21 +356,6 @@ static void walkPMBBBackward(
         }
       }
     }
-
-    // EXEC manipulation: apply swap/union BEFORE stepping backward over the
-    // MI's own def/uses (the MI's def of EXEC is then a normal liveness
-    // step).
-    ExecEffect EE = classifyExecEffect(MI, TRI);
-    if (EE == ExecEffect::CompleteFlip) {
-      std::swap(OutA, OutI);
-    } else if (EE == ExecEffect::PartialFlip) {
-      unionInto(OutA, OutI);
-      OutI = OutA;
-    }
-
-    stepBackward(MI, OutA, TRI);
-    if (!Vector)
-      stepBackward(MI, OutI, TRI);
   }
 }
 

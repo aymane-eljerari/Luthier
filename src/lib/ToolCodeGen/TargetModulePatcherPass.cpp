@@ -675,8 +675,30 @@ void inlineInjectedPayload(const llvm::MachineFunction &InjectedPayloadMF,
   const llvm::TargetSubtargetInfo &STI = ToBeInstrumentedMF.getSubtarget();
   const llvm::TargetInstrInfo *TII = STI.getInstrInfo();
   const llvm::TargetRegisterInfo *TRI = STI.getRegisterInfo();
-  auto &TargetMFMRI = ToBeInstrumentedMF.getRegInfo();
-  (void)TargetMFMRI;
+  auto &SrcMRI = InjectedPayloadMF.getRegInfo();
+  auto &DstMRI = ToBeInstrumentedMF.getRegInfo();
+
+  // Allocate fresh virtual registers in the target MF's MRI for every
+  // virtual register used by the payload, copying register class /
+  // register bank / type / allocation hints. Operand cloning below uses
+  // this map to translate payload vreg references into target vreg
+  // references. Without this remap, MachineInstr::addOperand walks
+  // DstMRI's per-vreg storage tables with payload vreg indices and OOBs
+  // when the payload's vreg count exceeds the target MF's.
+  llvm::DenseMap<llvm::Register, llvm::Register> SrcToDstVReg;
+  for (unsigned I = 0, E = SrcMRI.getNumVirtRegs(); I != E; ++I) {
+    llvm::Register SrcReg = llvm::Register::index2VirtReg(I);
+    llvm::Register NewReg =
+        DstMRI.createIncompleteVirtualRegister(SrcMRI.getVRegName(SrcReg));
+    DstMRI.setRegClassOrRegBank(NewReg, SrcMRI.getRegClassOrRegBank(SrcReg));
+    llvm::LLT RegTy = SrcMRI.getType(SrcReg);
+    if (RegTy.isValid())
+      DstMRI.setType(NewReg, RegTy);
+    if (const auto *Hints = SrcMRI.getRegAllocationHints(SrcReg))
+      for (llvm::Register PrefReg : Hints->second)
+        DstMRI.addRegAllocationHint(NewReg, PrefReg);
+    SrcToDstVReg[SrcReg] = NewReg;
+  }
 
   llvm::DenseSet<const uint32_t *> ConstRegisterMasks;
   for (const uint32_t *Mask : TRI->getRegMasks())
@@ -710,7 +732,12 @@ void inlineInjectedPayload(const llvm::MachineFunction &InjectedPayloadMF,
       for (auto &SrcMO : SrcMI.operands()) {
         llvm::MachineOperand DstMO(SrcMO);
         DstMO.clearParent();
-        if (DstMO.isMBB()) {
+        if (DstMO.isReg() && DstMO.getReg().isVirtual()) {
+          auto It = SrcToDstVReg.find(DstMO.getReg());
+          assert(It != SrcToDstVReg.end() &&
+                 "payload references vreg not in source MRI");
+          DstMO.setReg(It->second);
+        } else if (DstMO.isMBB()) {
           DstMO.setMBB(MBBMap[DstMO.getMBB()]);
         } else if (DstMO.isRegMask()) {
           if (!ConstRegisterMasks.count(DstMO.getRegMask())) {
@@ -1095,6 +1122,27 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
                             "injected payloads ===\n");
   const InjectedPayloadAndInstPoint &IPIP =
       IMAM.getResult<InjectedPayloadAndInstPointAnalysis>(IModule);
+
+  // `MachineBasicBlock::splitAt` (called by `inlineInjectedPayload` when
+  // the payload entry isn't the first MI of its MBB) needs `TracksLiveness`
+  // + populated MBB liveins on the target MF. CodeDiscoveryPass-lifted MFs
+  // don't carry liveness info by default. Set this up once per unique
+  // target MF before any inlining happens. Phase B.4's per-kernel relaxer
+  // recomputes again, but `fullyRecomputeLiveIns` is idempotent (the
+  // fixed-point converges in 0 extra iterations when the state is
+  // already consistent).
+  llvm::DenseSet<llvm::MachineFunction *> TargetMFsTouchedByPayloads;
+  for (const auto &[InjectedPayloadFunc, InsertionPointMI] :
+       IPIP.payload_mi()) {
+    TargetMFsTouchedByPayloads.insert(InsertionPointMI->getMF());
+  }
+  for (llvm::MachineFunction *MF : TargetMFsTouchedByPayloads) {
+    MF->getProperties().setTracksLiveness();
+    llvm::SmallVector<llvm::MachineBasicBlock *, 16> AllMBBs;
+    for (llvm::MachineBasicBlock &MBB : *MF)
+      AllMBBs.push_back(&MBB);
+    llvm::fullyRecomputeLiveIns(AllMBBs);
+  }
 
   unsigned PayloadCount = 0;
   for (const auto &[InjectedPayloadFunc, InsertionPointMI] :

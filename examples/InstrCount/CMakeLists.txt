@@ -17,7 +17,7 @@ find_package(LLVM REQUIRED CONFIG)
 # matching kernel symbol the host registration binds to.
 luthier_add_tool(LuthierInstrCount
         SOURCES InstrCount.hip
-        OFFLOAD_ARCHES gfx908
+        OFFLOAD_ARCHES gfx942
         HIPCC_HOST_FLAGS
             -fplugin=$<TARGET_FILE:LuthierToolCXXCompilationPlugin>
         LIBRARIES LuthierTooling hip::device)

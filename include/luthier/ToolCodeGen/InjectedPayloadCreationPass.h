@@ -35,6 +35,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/MC/MCRegister.h>
 #include <llvm/Support/Error.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <variant>
 
 namespace luthier {
@@ -173,6 +174,13 @@ protected:
     // prologue/epilogue + CSR-save/restore emission inside
     // PrologEpilogInserter (see PrologEpilogInserter.cpp:259, 679).
     PayloadFn.addFnAttr(llvm::Attribute::Naked);
+
+    // Payloads have internal linkage and no static caller (the patcher
+    // inlines them at MIR time, after the IR pipeline runs). Anchor them
+    // against `@llvm.compiler.used` so the IModule's default `-O` pipeline
+    // (specifically GlobalDCE) doesn't strip them before the patcher gets
+    // a chance to inline them into the target MFs.
+    llvm::appendToCompilerUsed(*PayloadFn.getParent(), {&PayloadFn});
 
     if (!TargetMachineInstrMDNode::getInstrMDNodeIfExists(TargetMI)) {
       auto MDOrErr = TargetMachineInstrMDNode::initializeMDNode(

@@ -210,11 +210,10 @@ public:
     // \c HipManagedVarInfo entries past the loader's lifetime see a clean
     // \c nullptr rather than a stale pointer into freed storage. The
     // storage itself is owned by the base and gets freed by the base's
-    // destructor.
+    // destructor (called automatically when this destructor returns).
     std::lock_guard Lock(Mutex);
     if (State == LoadState::Loaded)
       nullManagedVarHostShadows();
-    DeviceToolCodeLoader::~DeviceToolCodeLoader();
   }
 
   /// Resolve a HIP host shadow handle (the \c __hipRegister* host-side

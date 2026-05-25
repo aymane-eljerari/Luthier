@@ -24,7 +24,7 @@ define void @Baz() {
 @fp_baz = addrspace(1) global ptr @Baz
 
 ; Slots are ordered Bar, Baz, Foo.
-; CHECK: @__luthier_function_table = internal addrspace(1) constant [3 x ptr] [ptr @Bar, ptr @Baz, ptr @Foo]
+; CHECK: @__luthier_function_table = addrspace(1) constant [3 x ptr] [ptr @Bar, ptr @Baz, ptr @Foo]
 ;
 ; And the attributes line up.
 ; CHECK-DAG: define void @Bar() #[[BAR_ATTRS:[0-9]+]]
