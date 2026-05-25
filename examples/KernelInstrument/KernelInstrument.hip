@@ -19,7 +19,7 @@
 /// Inserts an \c instrumentationHook before a fixed offset in the entry MBB.
 //===----------------------------------------------------------------------===//
 #include <chrono>
-#include <hip/hip_runtime_api.h>
+#include <hip/hip_runtime.h>
 #include <llvm/CodeGen/MachineBasicBlock.h>
 #include <llvm/CodeGen/MachineFunction.h>
 #include <llvm/IR/Constants.h>

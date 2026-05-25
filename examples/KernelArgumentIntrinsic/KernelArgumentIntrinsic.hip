@@ -20,7 +20,7 @@
 /// variable so host code can observe it after the kernel completes.
 //===----------------------------------------------------------------------===//
 #include <chrono>
-#include <hip/hip_runtime_api.h>
+#include <hip/hip_runtime.h>
 #include <llvm/Demangle/Demangle.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/PassManager.h>

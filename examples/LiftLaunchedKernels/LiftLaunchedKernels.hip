@@ -20,6 +20,7 @@
 /// The tool uses \c CodeDiscoveryPass to materialize the dispatched kernel
 /// into the target module, then dumps the module to stderr.
 //===----------------------------------------------------------------------===//
+#include <hip/hip_runtime.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/PassManager.h>

@@ -20,6 +20,13 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_HIP_API_TABLE_H
 #define LUTHIER_HIP_API_TABLE_H
+/// hip_api_trace.hpp declares function-pointer typedefs for the *entire* HIP
+/// API surface — including the R0000-suffixed deprecated entries and the GL
+/// interop entries — but doesn't include the headers that define those
+/// types. Pull them in here so this header is self-sufficient
+#include <hip/hip_runtime.h>
+#include <hip/hip_deprecated.h>
+#include <hip/hip_gl_interop.h>
 #include <hip/amd_detail/hip_api_trace.hpp>
 #include <rocprofiler-sdk/intercept_table.h>
 

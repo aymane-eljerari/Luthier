@@ -7,7 +7,8 @@ add_library(LuthierToolIRCompilation OBJECT
         SubstituteAMDGCNIntrinsicsPass.cpp
         LoadHIPFATBinaryInfoPass.cpp
         LuthierFunctionIndirectionPass.cpp
-        StripDeviceFunctionBodiesPass.cpp)
+        StripDeviceFunctionBodiesPass.cpp
+        SubtargetMarkerPass.cpp)
 
 target_compile_definitions(LuthierToolIRCompilation
         PRIVATE ${LLVM_DEFINITIONS})

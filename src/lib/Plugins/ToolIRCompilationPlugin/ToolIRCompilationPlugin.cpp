@@ -26,6 +26,7 @@
 #include "luthier/ToolIRCompilation/StripDeviceFunctionBodiesPass.h"
 #include "luthier/ToolIRCompilation/StripKernelsPass.h"
 #include "luthier/ToolIRCompilation/SubstituteAMDGCNIntrinsicsPass.h"
+#include "luthier/ToolIRCompilation/SubtargetMarkerPass.h"
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Plugins/PassPlugin.h>
 
@@ -55,6 +56,7 @@ void registerEmbedIModulePasses(llvm::PassBuilder &PB) {
                tryParsePass<luthier::LoadHIPFATBinaryInfoPass>(Name, MPM) ||
                tryParsePass<luthier::LuthierFunctionIndirectionPass>(Name, MPM) ||
                tryParsePass<luthier::StripDeviceFunctionBodiesPass>(Name, MPM) ||
+               tryParsePass<luthier::SubtargetMarkerPass>(Name, MPM) ||
                tryParsePass<luthier::CreateAndEmbedIModulePass>(Name, MPM);
       });
 
@@ -80,6 +82,12 @@ void registerEmbedIModulePasses(llvm::PassBuilder &PB) {
 #endif
       ) {
         MPM.addPass(luthier::CreateAndEmbedIModulePass());
+        // Add the __luthier_subtarget marker before stripping function
+        // bodies so the marker (and its appendToUsed entry) participates
+        // in any final symbol-table cleanup the strip pass might do.
+        // Runs after CreateAndEmbedIModule so the marker is NOT included
+        // in the embedded IModule snapshot.
+        MPM.addPass(luthier::SubtargetMarkerPass());
         // Final-binary trim: keep symbols, drop bodies. Runs on M after
         // the clone is taken so the .llvmbc bitcode keeps full bodies.
         MPM.addPass(luthier::StripDeviceFunctionBodiesPass());

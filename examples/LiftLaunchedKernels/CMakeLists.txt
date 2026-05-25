@@ -13,5 +13,4 @@ find_package(LLVM REQUIRED CONFIG)
 # wires that up automatically.
 luthier_add_tool(LiftLaunchedKernels
         SOURCES LiftLaunchedKernels.hip
-        OFFLOAD_ARCHES gfx908
-        LIBRARIES LuthierTooling)
+        OFFLOAD_ARCHES gfx908)

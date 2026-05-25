@@ -23,7 +23,7 @@
 #include <GCNSubtarget.h>
 #include <SIInstrInfo.h>
 #include <chrono>
-#include <hip/hip_runtime_api.h>
+#include <hip/hip_runtime.h>
 #include <llvm/CodeGen/TargetInstrInfo.h>
 #include <llvm/Demangle/Demangle.h>
 #include <llvm/IR/Constants.h>

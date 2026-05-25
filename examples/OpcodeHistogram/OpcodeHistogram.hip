@@ -21,7 +21,7 @@
 //===----------------------------------------------------------------------===//
 #include <SIInstrInfo.h>
 #include <chrono>
-#include <hip/hip_runtime_api.h>
+#include <hip/hip_runtime.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/CodeGen/TargetInstrInfo.h>
 #include <llvm/Demangle/Demangle.h>
