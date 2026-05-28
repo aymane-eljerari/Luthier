@@ -25,6 +25,7 @@
 /// same target with multiple sub-target features both enabled and disabled
 /// at the same time.
 //===----------------------------------------------------------------------===//
+#include <array>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/SmallVector.h>
@@ -37,8 +38,6 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/TargetParser.h>
-
-#include <array>
 #include <optional>
 #include <string>
 
