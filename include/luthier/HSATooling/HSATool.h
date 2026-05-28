@@ -64,15 +64,22 @@ public:
 ///
 /// \c Singleton<Derived> is listed first so its constructor runs before any
 /// trait's constructor. The traits' destructors run in reverse-inheritance
-/// order, i.e. before \c Singleton<Derived>'s destructor clears
-/// \c Singleton<Derived>::Instance. This invariant matters once the traits
-/// install HSA API-table interceptors that look the tool up via
-/// \c Singleton<Derived>::instance().
+/// order, i.e. before \c Singleton<Derived>'s destructor clears the published
+/// instance pointer. This invariant matters once the traits install HSA
+/// API-table interceptors that look the tool up via
+/// \c Singleton<Derived>::withInstance().
 ///
-/// Installed HSA API-table wrappers are NOT uninstalled at tool teardown.
-/// Trait wrappers are expected to consult \c Singleton<Derived>::isInitialized
-/// before doing any tool-specific work; uninstalling a wrapper while the
-/// HSA runtime may still call it would be racy and unsafe.
+/// \par Construction/teardown (see \c Singleton)
+/// Because the trait constructors install HSA API-table interceptors that may
+/// fire on runtime threads, an \c HSATool must be constructed and destroyed via
+/// \c createInstance and \c destroyInstance from inside \c rocprofiler's/// configure callback.
+///
+/// Installed HSA API-table wrappers are NOT uninstalled at tool teardown;
+/// uninstalling a wrapper the runtime may still call would cause a race
+/// condition. Instead, every trait wrapper does its tool-specific work inside
+/// \c Singleton<Derived>::withInstance(), which runs the work under a shared
+/// lock and forwards to the underlying HSA function untouched if the tool is
+/// not destroyed.
 template <typename Derived, typename TargetUnitT = llvm::MachineFunction>
 class HSATool : public Singleton<Derived>,
                 public LLVMUserTrait<Derived>,

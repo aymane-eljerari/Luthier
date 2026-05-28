@@ -167,7 +167,7 @@ static void atToolFini(void *) {
   static std::once_flag Once{};
   std::call_once(Once, []() {
     luthier::errs() << "Luthier lift launched kernels tool is terminating!\n";
-    delete Tool;
+    LiftLaunchedKernelsTool::destroyInstance();
     Tool = nullptr;
     delete LoaderSnapshot;
     LoaderSnapshot = nullptr;
@@ -200,8 +200,8 @@ static void atToolInit(void *) {
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 
-    Tool = new LiftLaunchedKernelsTool(*CoreApiSnapshot, *AmdExtSnapshot,
-                                       *LoaderSnapshot, Err);
+    Tool = &LiftLaunchedKernelsTool::createInstance(
+        *CoreApiSnapshot, *AmdExtSnapshot, *LoaderSnapshot, Err);
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 

@@ -498,7 +498,7 @@ static void atToolFini(void *) {
       luthier::errs() << "Total number of bank conflicts detected: "
                       << Tool->TotalNumBankConflicts << "\n";
     }
-    delete Tool;
+    LDSBankConflictTool::destroyInstance();
     Tool = nullptr;
     delete LoaderSnapshot;
     LoaderSnapshot = nullptr;
@@ -531,8 +531,9 @@ static void atToolInit(void *) {
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 
-    Tool = new LDSBankConflictTool(*CoreApiSnapshot, *AmdExtSnapshot,
-                                   *LoaderSnapshot, Err);
+    Tool = &LDSBankConflictTool::createInstance(*CoreApiSnapshot,
+                                                *AmdExtSnapshot,
+                                                *LoaderSnapshot, Err);
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 

@@ -250,8 +250,8 @@ protected:
 /// Following the convention used by \c PacketMonitorTrait and
 /// \c LoadedCodeObjectCacheTrait, the wrapper is NOT uninstalled at
 /// trait teardown — uninstalling while the runtime may still call us
-/// would be racy. The wrapper gates on
-/// <tt>Singleton<Derived>::isInitialized()</tt>.
+/// would cause a race condition. The wrapper does its tool-specific work inside
+/// <tt>Singleton<Derived>::withInstance()</tt>.
 template <typename Derived>
 class InstrumentedKernelLoaderAndLauncherTrait
     : public InstrumentedKernelLoaderAndLauncher {
@@ -270,14 +270,14 @@ private:
         UnderlyingHsaExecutableDestroyFn != nullptr,
         "The underlying hsa_executable_destroy function for "
         "InstrumentedKernelLoaderAndLauncherTrait is nullptr"));
-    if (Singleton<Derived>::isInitialized()) {
+    (void)Singleton<Derived>::withInstance([&](Derived &Inst) {
       auto &Self = static_cast<InstrumentedKernelLoaderAndLauncher &>(
           static_cast<InstrumentedKernelLoaderAndLauncherTrait<Derived> &>(
-              Singleton<Derived>::instance()));
+              Inst));
       // Swallow the accumulated invalidation error here, as the
       // hsa_executable_destroy ABI cannot surface llvm::Errors.
       llvm::consumeError(Self.invalidateOriginalExec(Exec));
-    }
+    });
     return UnderlyingHsaExecutableDestroyFn(Exec);
   }
 

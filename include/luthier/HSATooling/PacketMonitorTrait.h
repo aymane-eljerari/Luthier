@@ -25,9 +25,7 @@
 ///                  hsa_amd_queue_intercept_packet_writer Writer);
 /// \endcode
 ///
-/// Wrappers are installed in the trait constructor and NEVER uninstalled —
-/// see \c LoadedCodeObjectCacheTrait for the rationale. The wrappers gate
-/// on \c Singleton<Derived>::isInitialized().
+/// Wrappers are installed in the trait constructor and never uninstalled.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_TOOLING_PACKET_MONITOR_TRAIT_H
 #define LUTHIER_TOOLING_PACKET_MONITOR_TRAIT_H
@@ -57,11 +55,12 @@ private:
 
   inline static decltype(hsa_queue_create) *UnderlyingHsaQueueCreateFn{};
 
-  static hsa_status_t hsaQueueCreateWrapper(
-      hsa_agent_t Agent, uint32_t Size, hsa_queue_type32_t Type,
-      void (*Callback)(hsa_status_t, hsa_queue_t *, void *), void *Data,
-      uint32_t PrivateSegmentSize, uint32_t GroupSegmentSize,
-      hsa_queue_t **Queue) {
+  static hsa_status_t
+  hsaQueueCreateWrapper(hsa_agent_t Agent, uint32_t Size,
+                        hsa_queue_type32_t Type,
+                        void (*Callback)(hsa_status_t, hsa_queue_t *, void *),
+                        void *Data, uint32_t PrivateSegmentSize,
+                        uint32_t GroupSegmentSize, hsa_queue_t **Queue) {
     LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         UnderlyingHsaQueueCreateFn != nullptr,
         "The underlying hsa_queue_create function for "
@@ -69,40 +68,41 @@ private:
     hsa_status_t Out =
         UnderlyingHsaQueueCreateFn(Agent, Size, Type, Callback, Data,
                                    PrivateSegmentSize, GroupSegmentSize, Queue);
-    if (!Singleton<Derived>::isInitialized() || Out != HSA_STATUS_SUCCESS)
+    if (Out != HSA_STATUS_SUCCESS)
       return Out;
 
-    auto &Trait = static_cast<PacketMonitorTrait<Derived> &>(
-        Singleton<Derived>::instance());
+    (void)Singleton<Derived>::withInstance([&](Derived &Self) {
+      auto &Trait = static_cast<PacketMonitorTrait<Derived> &>(Self);
 
-    /// Try to install an event handler on the newly-created queue.
-    const hsa_status_t EventHandlerStatus =
-        Trait.AmdExtSnapshot.getTable()
-            .template callFunction<hsa_amd_queue_intercept_register>(
-                *Queue, interceptQueuePacketHandler, *Queue);
-    /// If we failed to install an event handler, the queue was a normal queue;
-    /// destroy it and recreate an intercept queue in its place.
-    if (EventHandlerStatus == HSA_STATUS_ERROR_INVALID_QUEUE) {
-      LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_HSA_CALL_ERROR_CHECK(
-          Trait.CoreApiSnapshot.getTable()
-              .template callFunction<hsa_queue_destroy>(*Queue),
-          "Failed to destroy the application's queue"));
-      LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_HSA_CALL_ERROR_CHECK(
-          Trait.AmdExtSnapshot.getTable()
-              .template callFunction<hsa_amd_queue_intercept_create>(
-                  Agent, Size, Type, Callback, Data, PrivateSegmentSize,
-                  GroupSegmentSize, Queue),
-          "Failed to create an intercept queue"));
-      LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_HSA_CALL_ERROR_CHECK(
+      /// Try to install an event handler on the newly-created queue.
+      const hsa_status_t EventHandlerStatus =
           Trait.AmdExtSnapshot.getTable()
               .template callFunction<hsa_amd_queue_intercept_register>(
-                  *Queue, interceptQueuePacketHandler, *Queue),
-          "Failed to assign a packet handler to the intercept queue"));
-    } else {
-      LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_HSA_CALL_ERROR_CHECK(
-          EventHandlerStatus,
-          "Failed to install HSA queue intercept handler"));
-    }
+                  *Queue, interceptQueuePacketHandler, *Queue);
+      /// If we failed to install an event handler, the queue was a normal
+      /// queue; destroy it and recreate an intercept queue in its place.
+      if (EventHandlerStatus == HSA_STATUS_ERROR_INVALID_QUEUE) {
+        LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_HSA_CALL_ERROR_CHECK(
+            Trait.CoreApiSnapshot.getTable()
+                .template callFunction<hsa_queue_destroy>(*Queue),
+            "Failed to destroy the application's queue"));
+        LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_HSA_CALL_ERROR_CHECK(
+            Trait.AmdExtSnapshot.getTable()
+                .template callFunction<hsa_amd_queue_intercept_create>(
+                    Agent, Size, Type, Callback, Data, PrivateSegmentSize,
+                    GroupSegmentSize, Queue),
+            "Failed to create an intercept queue"));
+        LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_HSA_CALL_ERROR_CHECK(
+            Trait.AmdExtSnapshot.getTable()
+                .template callFunction<hsa_amd_queue_intercept_register>(
+                    *Queue, interceptQueuePacketHandler, *Queue),
+            "Failed to assign a packet handler to the intercept queue"));
+      } else {
+        LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_HSA_CALL_ERROR_CHECK(
+            EventHandlerStatus,
+            "Failed to install HSA queue intercept handler"));
+      }
+    });
     return Out;
   }
 
@@ -110,20 +110,20 @@ private:
   interceptQueuePacketHandler(const void *Packets, uint64_t PacketCount,
                               uint64_t UserPacketIdx, void *Data,
                               hsa_amd_queue_intercept_packet_writer Writer) {
-    /// If the tool is gone, just forward the packets unchanged.
-    if (!Singleton<Derived>::isInitialized()) {
-      Writer(Packets, PacketCount);
-      return;
-    }
-    LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-        Data != nullptr, "Failed to get the queue used to dispatch packets."));
-    auto &Queue = *static_cast<hsa_queue_t *>(Data);
+    bool Handled = Singleton<Derived>::withInstance([&](Derived &Self) {
+      LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+          Data != nullptr,
+          "Failed to get the queue used to dispatch packets."));
+      auto &Queue = *static_cast<hsa_queue_t *>(Data);
 
-    Singleton<Derived>::instance().onPackets(
-        Queue, UserPacketIdx,
-        llvm::ArrayRef(static_cast<const hsa::AqlPacket *>(Packets),
-                       PacketCount),
-        Writer);
+      Self.onPackets(
+          Queue, UserPacketIdx,
+          llvm::ArrayRef(static_cast<const hsa::AqlPacket *>(Packets),
+                         PacketCount),
+          Writer);
+    });
+    if (!Handled)
+      Writer(Packets, PacketCount);
   }
 
 public:

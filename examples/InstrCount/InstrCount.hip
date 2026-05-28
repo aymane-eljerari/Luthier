@@ -622,7 +622,7 @@ static void atToolFini(void *) {
       luthier::errs() << "Total instructions executed: "
                       << Tool->TotalNumInstructions << "\n";
     }
-    delete Tool;
+    InstrCountTool::destroyInstance();
     Tool = nullptr;
     delete LoaderSnapshot;
     LoaderSnapshot = nullptr;
@@ -655,8 +655,8 @@ static void atToolInit(void *) {
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 
-    Tool = new InstrCountTool(*CoreApiSnapshot, *AmdExtSnapshot,
-                              *LoaderSnapshot, Err);
+    Tool = &InstrCountTool::createInstance(*CoreApiSnapshot, *AmdExtSnapshot,
+                                           *LoaderSnapshot, Err);
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 

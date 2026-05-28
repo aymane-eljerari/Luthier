@@ -32,6 +32,24 @@ struct CompileCheckTool : public luthier::HSATool<CompileCheckTool> {
                  hsa_amd_queue_intercept_packet_writer) {}
 };
 
+/// Trivial singleton used only to force-instantiate \c Singleton::createInstance
+/// — a member template the explicit \c HSATool instantiation does not reach,
+/// and which \c CompileCheckTool cannot exercise here (its constructor needs a
+/// live HSA API table).
+struct CreateCheckSingleton : luthier::Singleton<CreateCheckSingleton> {
+  explicit CreateCheckSingleton(int) {}
+};
+
+/// Force instantiation of the \c Singleton lifetime/access helpers that no
+/// library code odr-uses (tools call them from their init/fini/packet paths).
+[[maybe_unused]] static void forceSingletonHelperInstantiation() {
+  (void)&CompileCheckTool::destroyInstance;
+  CompileCheckTool::withInstance([](CompileCheckTool &) {});
+  CompileCheckTool::withInstance([](const CompileCheckTool &) {});
+  CreateCheckSingleton::createInstance(0);
+  CreateCheckSingleton::destroyInstance();
+}
+
 } // namespace luthier::detail
 
 template class luthier::HSATool<luthier::detail::CompileCheckTool>;

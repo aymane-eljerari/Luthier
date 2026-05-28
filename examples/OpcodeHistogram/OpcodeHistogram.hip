@@ -339,7 +339,7 @@ static void atToolFini(void *) {
       luthier::errs() << "Total number of instructions counted: "
                       << Tool->TotalNumInstructions << "\n";
     }
-    delete Tool;
+    OpcodeHistogramTool::destroyInstance();
     Tool = nullptr;
     delete LoaderSnapshot;
     LoaderSnapshot = nullptr;
@@ -372,8 +372,9 @@ static void atToolInit(void *) {
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 
-    Tool = new OpcodeHistogramTool(*CoreApiSnapshot, *AmdExtSnapshot,
-                                   *LoaderSnapshot, Err);
+    Tool = &OpcodeHistogramTool::createInstance(*CoreApiSnapshot,
+                                                *AmdExtSnapshot,
+                                                *LoaderSnapshot, Err);
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 

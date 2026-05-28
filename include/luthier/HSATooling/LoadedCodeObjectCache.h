@@ -109,52 +109,52 @@ private:
     if (LoadedCodeObject != nullptr)
       *LoadedCodeObject = LCO;
 
-    /// Short-circuit if the tool is gone (post-tool-dtor) or if the
-    /// underlying call failed.
-    if (!Singleton<Derived>::isInitialized() || Out != HSA_STATUS_SUCCESS)
+    /// Short-circuit if the underlying call failed
+    if (Out != HSA_STATUS_SUCCESS)
       return Out;
 
-    auto &COC = static_cast<LoadedCodeObjectCacheTrait<Derived> &>(
-        Singleton<Derived>::instance());
+    (void)Singleton<Derived>::withInstance([&](Derived &Self) {
+      auto &COC = static_cast<LoadedCodeObjectCacheTrait<Derived> &>(Self);
 
-    llvm::ArrayRef<uint8_t> StorageMemory;
-    LUTHIER_REPORT_FATAL_ON_ERROR(hsa::loadedCodeObjectGetStorageMemory(
-                                      COC.VenLoaderSnapshot.getTable(), LCO)
-                                      .moveInto(StorageMemory));
+      llvm::ArrayRef<uint8_t> StorageMemory;
+      LUTHIER_REPORT_FATAL_ON_ERROR(hsa::loadedCodeObjectGetStorageMemory(
+                                        COC.VenLoaderSnapshot.getTable(), LCO)
+                                        .moveInto(StorageMemory));
 
-    /// Guard the copy against the host's storage buffer being unmapped
-    /// underneath us — see \c LoadedCodeObjectCache.cpp for the same pattern
-    /// On signal we skip the cache insert and let HSA's own load succeed; a
-    /// later lookup via \c LoadedCodeObjectCache will surface the error to
-    /// the caller
-    auto StorageCopy = std::make_unique<llvm::SmallVector<uint8_t>>();
-    StorageCopy->resize(StorageMemory.size());
-    llvm::CrashRecoveryContext CRC;
-    bool CopyOk = CRC.RunSafely([&] {
-      std::memcpy(StorageCopy->data(), StorageMemory.data(),
-                  StorageMemory.size());
+      /// Guard the copy against the host's storage buffer being unmapped
+      /// underneath us — see \c LoadedCodeObjectCache.cpp for the same pattern
+      /// On signal we skip the cache insert and let HSA's own load succeed; a
+      /// later lookup via \c LoadedCodeObjectCache will surface the error to
+      /// the caller
+      auto StorageCopy = std::make_unique<llvm::SmallVector<uint8_t>>();
+      StorageCopy->resize(StorageMemory.size());
+      llvm::CrashRecoveryContext CRC;
+      bool CopyOk = CRC.RunSafely([&] {
+        std::memcpy(StorageCopy->data(), StorageMemory.data(),
+                    StorageMemory.size());
+      });
+      if (!CopyOk) {
+        llvm::errs() << llvm::formatv(
+            "luthier: storage memory for loaded code object {0:x} is "
+            "unreadable; skipping cache insert.\n",
+            LCO.handle);
+        return;
+      }
+
+      auto ParsedElfOrErr =
+          object::AMDGCNObjectFile::createAMDGCNObjectFile(*StorageCopy);
+      LUTHIER_REPORT_FATAL_ON_ERROR(ParsedElfOrErr.takeError());
+
+      llvm::ArrayRef<uint8_t> LoadedMemory;
+      LUTHIER_REPORT_FATAL_ON_ERROR(hsa::loadedCodeObjectGetLoadedMemory(
+                                        COC.VenLoaderSnapshot.getTable(), LCO)
+                                        .moveInto(LoadedMemory));
+
+      std::lock_guard Lock(COC.CacheMutex);
+      COC.LCOCache.insert({LCO, LCOCacheEntry{std::move(StorageCopy),
+                                              std::move(*ParsedElfOrErr)}});
+      COC.LoadedBaseToLCOMap.insert({LoadedMemory.data(), LCO});
     });
-    if (!CopyOk) {
-      llvm::errs() << llvm::formatv(
-          "luthier: storage memory for loaded code object {0:x} is "
-          "unreadable; skipping cache insert.\n",
-          LCO.handle);
-      return Out;
-    }
-
-    auto ParsedElfOrErr =
-        object::AMDGCNObjectFile::createAMDGCNObjectFile(*StorageCopy);
-    LUTHIER_REPORT_FATAL_ON_ERROR(ParsedElfOrErr.takeError());
-
-    llvm::ArrayRef<uint8_t> LoadedMemory;
-    LUTHIER_REPORT_FATAL_ON_ERROR(hsa::loadedCodeObjectGetLoadedMemory(
-                                      COC.VenLoaderSnapshot.getTable(), LCO)
-                                      .moveInto(LoadedMemory));
-
-    std::lock_guard Lock(COC.CacheMutex);
-    COC.LCOCache.insert({LCO, LCOCacheEntry{std::move(StorageCopy),
-                                            std::move(*ParsedElfOrErr)}});
-    COC.LoadedBaseToLCOMap.insert({LoadedMemory.data(), LCO});
 
     return Out;
   }
@@ -164,10 +164,9 @@ private:
         UnderlyingHsaExecutableDestroyFn != nullptr,
         "Underlying hsa_executable_destroy is nullptr"));
 
-    llvm::SmallVector<hsa_loaded_code_object_t, 2> LCOs;
-    if (Singleton<Derived>::isInitialized()) {
-      auto &COC = static_cast<LoadedCodeObjectCacheTrait<Derived> &>(
-          Singleton<Derived>::instance());
+    Singleton<Derived>::withInstance([&](Derived &Self) {
+      auto &COC = static_cast<LoadedCodeObjectCacheTrait<Derived> &>(Self);
+      llvm::SmallVector<hsa_loaded_code_object_t, 2> LCOs;
       LUTHIER_REPORT_FATAL_ON_ERROR(hsa::executableGetLoadedCodeObjects(
           COC.VenLoaderSnapshot.getTable(), Executable, LCOs));
       std::lock_guard Lock(COC.CacheMutex);
@@ -180,7 +179,7 @@ private:
                                           .moveInto(LoadedMemory));
         COC.LoadedBaseToLCOMap.erase(LoadedMemory.data());
       }
-    }
+    });
 
     return UnderlyingHsaExecutableDestroyFn(Executable);
   }

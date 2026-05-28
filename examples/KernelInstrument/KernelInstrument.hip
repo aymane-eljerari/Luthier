@@ -250,7 +250,7 @@ static void atToolFini(void *) {
     luthier::outs() << llvm::formatv("Position in Group: {0}\n",
                                      KernelInstrumentTool::PositionInGroup);
     luthier::outs() << "Kernel Instrument Tool is terminating!\n";
-    delete Tool;
+    KernelInstrumentTool::destroyInstance();
     Tool = nullptr;
     delete LoaderSnapshot;
     LoaderSnapshot = nullptr;
@@ -283,8 +283,9 @@ static void atToolInit(void *) {
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 
-    Tool = new KernelInstrumentTool(*CoreApiSnapshot, *AmdExtSnapshot,
-                                    *LoaderSnapshot, Err);
+    Tool = &KernelInstrumentTool::createInstance(*CoreApiSnapshot,
+                                                 *AmdExtSnapshot,
+                                                 *LoaderSnapshot, Err);
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 

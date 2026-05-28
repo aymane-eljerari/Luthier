@@ -295,7 +295,7 @@ namespace luthier {
 static void atToolFini(void *) {
   static std::once_flag Once{};
   std::call_once(Once, []() {
-    delete Tool;
+    KernelArgumentIntrinsicTool::destroyInstance();
     Tool = nullptr;
     delete LoaderSnapshot;
     LoaderSnapshot = nullptr;
@@ -328,8 +328,8 @@ static void atToolInit(void *) {
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 
-    Tool = new KernelArgumentIntrinsicTool(*CoreApiSnapshot, *AmdExtSnapshot,
-                                           *LoaderSnapshot, Err);
+    Tool = &KernelArgumentIntrinsicTool::createInstance(
+        *CoreApiSnapshot, *AmdExtSnapshot, *LoaderSnapshot, Err);
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 
