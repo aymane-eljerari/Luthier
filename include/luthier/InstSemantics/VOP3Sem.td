@@ -785,8 +785,11 @@ def V_ASHR_I32_e64_sem : InstSISemantic<V_ASHR_I32_e64> {
 //   rdna4-instruction-set-architecture.pdf, page 299.
 def V_CNDMASK_B32_e64_sem : InstSISemantic<V_CNDMASK_B32_e64> {
   let Semantic = [
+    // $src2 is a wave-sized SGPR lane mask (i32 / i64). LLVMSelect needs
+    // an i1 condition, so extract the current lane's bit from the mask
+    // before selecting between src0/src1.
     (SetNamedOperand $vdst,
-      (LLVMSelect (GetNamedOperand $src2),
+      (LLVMSelect LaneBitFromWaveMask<(GetNamedOperand $src2)>.ret,
                   (GetNamedOperand $src1), (GetNamedOperand $src0)))
   ];
 }
@@ -1996,7 +1999,7 @@ def V_CVT_NORM_U16_F16_e64_sem : InstSISemantic<V_CVT_NORM_U16_F16_e64> {
 def V_SQRT_F32_e64_sem : InstSISemantic<V_SQRT_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 // Sources:
@@ -2014,13 +2017,13 @@ def V_SQRT_F32_e64_sem : InstSISemantic<V_SQRT_F32_e64> {
 def V_SQRT_F64_e64_sem : InstSISemantic<V_SQRT_F64_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 def V_SQRT_F16_e64_sem : InstSISemantic<V_SQRT_F16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -2040,19 +2043,19 @@ def V_SQRT_F16_e64_sem : InstSISemantic<V_SQRT_F16_e64> {
 def V_RSQ_F32_e64_sem : InstSISemantic<V_RSQ_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rsq, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rsq, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_RSQ_F64_e64_sem : InstSISemantic<V_RSQ_F64_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rsq, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rsq, [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 def V_RSQ_F16_e64_sem : InstSISemantic<V_RSQ_F16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rsq, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rsq, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -2072,19 +2075,22 @@ def V_RSQ_F16_e64_sem : InstSISemantic<V_RSQ_F16_e64> {
 def V_RCP_F32_e64_sem : InstSISemantic<V_RCP_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_RCP_F64_e64_sem : InstSISemantic<V_RCP_F64_e64> {
   let Semantic = [
+    // See V_RCP_F64_e32_sem: `llvm.amdgcn.rcp` requires its argument
+    // type to match the return type, so request the f64 view of src0.
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rcp,
+        [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 def V_RCP_F16_e64_sem : InstSISemantic<V_RCP_F16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rcp, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -2104,7 +2110,7 @@ def V_RCP_F16_e64_sem : InstSISemantic<V_RCP_F16_e64> {
 def V_RCP_IFLAG_F32_e64_sem : InstSISemantic<V_RCP_IFLAG_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -2112,13 +2118,13 @@ def V_RCP_IFLAG_F32_e64_sem : InstSISemantic<V_RCP_IFLAG_F32_e64> {
 def V_RCP_CLAMP_F32_e64_sem : InstSISemantic<V_RCP_CLAMP_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_RCP_CLAMP_F64_e64_sem : InstSISemantic<V_RCP_CLAMP_F64_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rcp, [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 
@@ -2126,13 +2132,13 @@ def V_RCP_CLAMP_F64_e64_sem : InstSISemantic<V_RCP_CLAMP_F64_e64> {
 def V_RSQ_CLAMP_F32_e64_sem : InstSISemantic<V_RSQ_CLAMP_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rsq_clamp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rsq_clamp, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_RSQ_CLAMP_F64_e64_sem : InstSISemantic<V_RSQ_CLAMP_F64_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rsq_clamp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rsq_clamp, [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 
@@ -2140,7 +2146,7 @@ def V_RSQ_CLAMP_F64_e64_sem : InstSISemantic<V_RSQ_CLAMP_F64_e64> {
 def V_RSQ_LEGACY_F32_e64_sem : InstSISemantic<V_RSQ_LEGACY_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rsq_legacy, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rsq_legacy, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -2148,7 +2154,7 @@ def V_RSQ_LEGACY_F32_e64_sem : InstSISemantic<V_RSQ_LEGACY_F32_e64> {
 def V_RCP_LEGACY_F32_e64_sem : InstSISemantic<V_RCP_LEGACY_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp_legacy, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp_legacy, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -2172,13 +2178,13 @@ def V_RCP_LEGACY_F32_e64_sem : InstSISemantic<V_RCP_LEGACY_F32_e64> {
 def V_SIN_F32_e64_sem : InstSISemantic<V_SIN_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_sin, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_sin, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_SIN_F16_e64_sem : InstSISemantic<V_SIN_F16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sin, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sin, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -2198,13 +2204,13 @@ def V_SIN_F16_e64_sem : InstSISemantic<V_SIN_F16_e64> {
 def V_COS_F32_e64_sem : InstSISemantic<V_COS_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_cos, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_cos, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_COS_F16_e64_sem : InstSISemantic<V_COS_F16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_cos, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_cos, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -2228,19 +2234,19 @@ def V_COS_F16_e64_sem : InstSISemantic<V_COS_F16_e64> {
 def V_EXP_F32_e64_sem : InstSISemantic<V_EXP_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_exp2, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_exp2, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_EXP_F16_e64_sem : InstSISemantic<V_EXP_F16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_exp2, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_exp2, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 def V_EXP_LEGACY_F32_e64_sem : InstSISemantic<V_EXP_LEGACY_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_exp2, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_exp2, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -2260,25 +2266,25 @@ def V_EXP_LEGACY_F32_e64_sem : InstSISemantic<V_EXP_LEGACY_F32_e64> {
 def V_LOG_F32_e64_sem : InstSISemantic<V_LOG_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_log, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_log, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_LOG_F16_e64_sem : InstSISemantic<V_LOG_F16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_log, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_log, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 def V_LOG_LEGACY_F32_e64_sem : InstSISemantic<V_LOG_LEGACY_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_log, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_log, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_LOG_CLAMP_F32_e64_sem : InstSISemantic<V_LOG_CLAMP_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_log_clamp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_log_clamp, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -2566,19 +2572,19 @@ def V_RNDNE_F16_e64_sem : InstSISemantic<V_RNDNE_F16_e64> {
 def V_FRACT_F32_e64_sem : InstSISemantic<V_FRACT_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_fract, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_fract, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_FRACT_F64_e64_sem : InstSISemantic<V_FRACT_F64_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_fract, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_fract, [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 def V_FRACT_F16_e64_sem : InstSISemantic<V_FRACT_F16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_fract, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_fract, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -2602,13 +2608,13 @@ def V_FRACT_F16_e64_sem : InstSISemantic<V_FRACT_F16_e64> {
 def V_FREXP_MANT_F32_e64_sem : InstSISemantic<V_FREXP_MANT_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_FREXP_MANT_F64_e64_sem : InstSISemantic<V_FREXP_MANT_F64_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 // Sources:
@@ -2626,7 +2632,7 @@ def V_FREXP_MANT_F64_e64_sem : InstSISemantic<V_FREXP_MANT_F64_e64> {
 def V_FREXP_MANT_F16_e64_sem : InstSISemantic<V_FREXP_MANT_F16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -2646,13 +2652,15 @@ def V_FREXP_MANT_F16_e64_sem : InstSISemantic<V_FREXP_MANT_F16_e64> {
 def V_FREXP_EXP_I32_F32_e64_sem : InstSISemantic<V_FREXP_EXP_I32_F32_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_frexp_exp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_frexp_exp,
+        [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_FREXP_EXP_I32_F64_e64_sem : InstSISemantic<V_FREXP_EXP_I32_F64_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_frexp_exp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_frexp_exp,
+        [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 // Sources:
@@ -2670,7 +2678,8 @@ def V_FREXP_EXP_I32_F64_e64_sem : InstSISemantic<V_FREXP_EXP_I32_F64_e64> {
 def V_FREXP_EXP_I16_F16_e64_sem : InstSISemantic<V_FREXP_EXP_I16_F16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_frexp_exp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_frexp_exp,
+        [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -5026,7 +5035,7 @@ def V_CEIL_F16_t16_e64_sem : InstSISemantic<V_CEIL_F16_t16_e64> {
 def V_COS_F16_fake16_e64_sem : InstSISemantic<V_COS_F16_fake16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_cos, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_cos, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -5034,7 +5043,7 @@ def V_COS_F16_fake16_e64_sem : InstSISemantic<V_COS_F16_fake16_e64> {
 def V_COS_F16_t16_e64_sem : InstSISemantic<V_COS_F16_t16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_cos, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_cos, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -5266,7 +5275,7 @@ def V_CVT_U32_U16_t16_e64_sem : InstSISemantic<V_CVT_U32_U16_t16_e64> {
 def V_EXP_F16_fake16_e64_sem : InstSISemantic<V_EXP_F16_fake16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_exp2, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_exp2, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -5274,7 +5283,7 @@ def V_EXP_F16_fake16_e64_sem : InstSISemantic<V_EXP_F16_fake16_e64> {
 def V_EXP_F16_t16_e64_sem : InstSISemantic<V_EXP_F16_t16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_exp2, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_exp2, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -5346,7 +5355,7 @@ def V_FMAC_F16_t16_e64_sem : InstSISemantic<V_FMAC_F16_t16_e64> {
 def V_FRACT_F16_fake16_e64_sem : InstSISemantic<V_FRACT_F16_fake16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_fract, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_fract, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -5354,7 +5363,7 @@ def V_FRACT_F16_fake16_e64_sem : InstSISemantic<V_FRACT_F16_fake16_e64> {
 def V_FRACT_F16_t16_e64_sem : InstSISemantic<V_FRACT_F16_t16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_fract, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_fract, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -5362,7 +5371,8 @@ def V_FRACT_F16_t16_e64_sem : InstSISemantic<V_FRACT_F16_t16_e64> {
 def V_FREXP_EXP_I16_F16_fake16_e64_sem : InstSISemantic<V_FREXP_EXP_I16_F16_fake16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_frexp_exp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_frexp_exp,
+        [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -5370,7 +5380,8 @@ def V_FREXP_EXP_I16_F16_fake16_e64_sem : InstSISemantic<V_FREXP_EXP_I16_F16_fake
 def V_FREXP_EXP_I16_F16_t16_e64_sem : InstSISemantic<V_FREXP_EXP_I16_F16_t16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_frexp_exp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_frexp_exp,
+        [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -5378,7 +5389,7 @@ def V_FREXP_EXP_I16_F16_t16_e64_sem : InstSISemantic<V_FREXP_EXP_I16_F16_t16_e64
 def V_FREXP_MANT_F16_fake16_e64_sem : InstSISemantic<V_FREXP_MANT_F16_fake16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -5386,7 +5397,7 @@ def V_FREXP_MANT_F16_fake16_e64_sem : InstSISemantic<V_FREXP_MANT_F16_fake16_e64
 def V_FREXP_MANT_F16_t16_e64_sem : InstSISemantic<V_FREXP_MANT_F16_t16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -5424,7 +5435,7 @@ def V_LDEXP_F16_t16_e64_sem : InstSISemantic<V_LDEXP_F16_t16_e64> {
 def V_LOG_F16_fake16_e64_sem : InstSISemantic<V_LOG_F16_fake16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_log, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_log, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -5432,7 +5443,7 @@ def V_LOG_F16_fake16_e64_sem : InstSISemantic<V_LOG_F16_fake16_e64> {
 def V_LOG_F16_t16_e64_sem : InstSISemantic<V_LOG_F16_t16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_log, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_log, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -6098,7 +6109,7 @@ def V_NOT_B16_t16_e64_sem : InstSISemantic<V_NOT_B16_t16_e64> {
 def V_RCP_F16_fake16_e64_sem : InstSISemantic<V_RCP_F16_fake16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rcp, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -6106,7 +6117,7 @@ def V_RCP_F16_fake16_e64_sem : InstSISemantic<V_RCP_F16_fake16_e64> {
 def V_RCP_F16_t16_e64_sem : InstSISemantic<V_RCP_F16_t16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rcp, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -6142,7 +6153,7 @@ def V_RNDNE_F16_t16_e64_sem : InstSISemantic<V_RNDNE_F16_t16_e64> {
 def V_RSQ_F16_fake16_e64_sem : InstSISemantic<V_RSQ_F16_fake16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rsq, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rsq, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -6150,7 +6161,7 @@ def V_RSQ_F16_fake16_e64_sem : InstSISemantic<V_RSQ_F16_fake16_e64> {
 def V_RSQ_F16_t16_e64_sem : InstSISemantic<V_RSQ_F16_t16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rsq, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rsq, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -6158,7 +6169,7 @@ def V_RSQ_F16_t16_e64_sem : InstSISemantic<V_RSQ_F16_t16_e64> {
 def V_SIN_F16_fake16_e64_sem : InstSISemantic<V_SIN_F16_fake16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sin, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sin, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -6166,7 +6177,7 @@ def V_SIN_F16_fake16_e64_sem : InstSISemantic<V_SIN_F16_fake16_e64> {
 def V_SIN_F16_t16_e64_sem : InstSISemantic<V_SIN_F16_t16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sin, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sin, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -6174,7 +6185,7 @@ def V_SIN_F16_t16_e64_sem : InstSISemantic<V_SIN_F16_t16_e64> {
 def V_SQRT_F16_fake16_e64_sem : InstSISemantic<V_SQRT_F16_fake16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -6182,7 +6193,7 @@ def V_SQRT_F16_fake16_e64_sem : InstSISemantic<V_SQRT_F16_fake16_e64> {
 def V_SQRT_F16_t16_e64_sem : InstSISemantic<V_SQRT_F16_t16_e64> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0, si_llvm_half_ty)]))
   ];
 }
 
@@ -7424,7 +7435,7 @@ def V_FMAC_F16_fake16_e32_sem : InstSISemantic<V_FMAC_F16_fake16_e32> {
 
 // alias of V_FREXP_EXP_I16_F16_e32
 def V_FREXP_EXP_I16_F16_fake16_e32_sem : InstSISemantic<V_FREXP_EXP_I16_F16_fake16_e32> {
-  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_frexp_exp, [(GetNamedOperand ?:$src0)]))];
+  let Semantic = [(SetNamedOperand ?:$vdst, (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_frexp_exp, [(GetNamedOperand ?:$src0, si_llvm_half_ty)]))];
 }
 
 // alias of V_LDEXP_F16_e32

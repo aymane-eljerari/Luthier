@@ -272,8 +272,14 @@ def S_LSHR_B32_sem : InstSISemantic<S_LSHR_B32> {
 //   rdna4-instruction-set-architecture.pdf, page 219.
 def S_LSHR_B64_sem : InstSISemantic<S_LSHR_B64> {
   let Semantic = [
+    // src0 is a 64-bit pair (i64 by default), src1 is a 32-bit count.
+    // \c LLVMAnd requires same-width operands, so request src1 as i64
+    // explicitly — matches S_ASHR_I64 / S_LSHL_B64's pattern (the
+    // sibling S_LSHL_B64 uses \c LLVMZExt; \c GetNamedOperand with an
+    // explicit OutType achieves the same widening via the cached
+    // zext-or-trunc inside getOperandAsValue).
     (DefVal $shifted, (LLVMLShr (GetNamedOperand $src0),
-                                 (LLVMAnd (GetNamedOperand $src1),
+                                 (LLVMAnd (GetNamedOperand $src1, si_llvm_i64_ty),
                                           (ConstantInt si_llvm_i64_ty, 63)))),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $shifted),
                                       (ConstantInt si_llvm_i64_ty, 0))>.ret,
@@ -435,7 +441,11 @@ def S_LSHL4_ADD_U32_sem : InstSISemantic<S_LSHL4_ADD_U32> {
 //   rdna4-instruction-set-architecture.pdf, page 221 (MIN), page 221-222 (MAX).
 foreach i = 0-3 in {
   defvar op = [S_MIN_I32, S_MIN_U32, S_MAX_I32, S_MAX_U32][i];
-  defvar cmpSgn = [LLVMFCmpOLT, LLVMFCmpULT, LLVMFCmpOGE, LLVMFCmpUGE][i];
+  // Integer min/max — the original predicate list used \c LLVMFCmpO*/U*
+  // (float-compare) variants on integer operands, which emits an FCmp
+  // on i32 and fails IR builder type checks. Use the matching ICmp
+  // signed-vs-unsigned predicates.
+  defvar cmpSgn = [LLVMICmpSLT, LLVMICmpULT, LLVMICmpSGE, LLVMICmpUGE][i];
 
   def op#_sem : InstSISemantic<op> {
     let Semantic = [

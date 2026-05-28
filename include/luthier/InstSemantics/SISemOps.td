@@ -670,6 +670,30 @@ class GetSCCImplicit {
   dag ret = (LLVMTrunc (ImplicitUse SCC), si_llvm_i1_ty);
 }
 
+/// Inverse of \c BallotWaveMask: extracts the current lane's bit from a
+/// wave-mask SGPR value (i32 on wave32, i64 on wave64) as an \c i1.
+/// Implemented as \c trunc(((mask >> laneId) & 1), i1) where the lane id
+/// is produced by \c mbcnt.hi(-1, mbcnt.lo(-1, 0)) — that idiom resolves
+/// to a per-lane 0..31 / 0..63 value on wave32 and wave64 respectively,
+/// because \c mbcnt.hi on wave32 simply returns its base operand. Use
+/// when consuming wave-mask values (VCC, EXEC, sdst-pair, arbitrary
+/// SReg-pair masks) where the IR builder expects an \c i1, e.g. as the
+/// condition of \c LLVMSelect.
+class LaneBitFromWaveMask<dag mask> {
+  dag ret = (LLVMTrunc
+    (LLVMAnd
+      (LLVMLShr mask,
+        (LLVMZExtOrTrunc
+          (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_mbcnt_hi,
+            [(ConstantInt si_llvm_i32_ty, -1),
+             (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_mbcnt_lo,
+               [(ConstantInt si_llvm_i32_ty, -1),
+                (ConstantInt si_llvm_i32_ty, 0)])]),
+          (LLVMIntNTy (GetWavefrontSize)))),
+      (ConstantInt (LLVMIntNTy (GetWavefrontSize)), 1)),
+    si_llvm_i1_ty);
+}
+
 //class LLVMExtractBitsDagStartIntNumBits<dag val, SILLVMType inputType, dag startIdx, int numBits = 1> {
 //  assert !eq(inputType.VT.nElem, 1), "type must be a scalar";
 //  defvar rightShiftOp = !if(isSigned, LLVMAShr, LLVMLShr);

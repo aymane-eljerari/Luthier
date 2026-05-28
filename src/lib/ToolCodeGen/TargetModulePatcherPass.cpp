@@ -96,117 +96,150 @@ llvm::Error emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
                                    unsigned PrivateSegmentFixedSize,
                                    const StateValueArraySpecs &Specs) {
   auto &MF = *EntryInstr.getMF();
-  const auto &TII = *MF.getSubtarget().getInstrInfo();
-  const auto &TRI = *MF.getSubtarget().getRegisterInfo();
+  const auto &ST = MF.getSubtarget<llvm::GCNSubtarget>();
+  const auto &TII = *ST.getInstrInfo();
+  const auto &TRI = *ST.getRegisterInfo();
   auto &MFI = *MF.getInfo<llvm::SIMachineFunctionInfo>();
+  // On architected-flat-scratch subtargets (gfx9-CDNA, gfx10.3+, gfx11+,
+  // gfx12) FLAT_SCRATCH_INIT is not a preloaded SGPR — the hardware sets
+  // up the flat-scratch state into the architectural register directly,
+  // so the kernel prolog has no SGPR pair to spill into the SVA. The
+  // matching slot lookup returns nullopt, and the corresponding spill/
+  // restore step must be skipped. \c InjectedPayloadPEIPass already
+  // gates its FrameSpillSlots on this same predicate.
+  const bool ArchitectedFS = ST.flatScratchIsArchitected();
   LLVM_DEBUG(llvm::dbgs()
              << "[TargetModulePatcherPass]   emitCodeToSetupScratch MF='"
              << MF.getName() << "' SVSVGPR=" << llvm::printReg(SVSStorageVGPR, &TRI)
              << " dynStack=" << UsesDynamicStack
-             << " privSegFixedSize=" << PrivateSegmentFixedSize << "\n");
-  // First make a copy of SGPR0, SGPR1, FLAT_SCR_LO, FLAT_SCR_HI in the state
-  // value register at the lanes the StateValueArraySpecs layout reserves
-  // for them. Layout is documented in SVAFrameLanes.h; we assert the
-  // lookups succeed (they always do on a properly-set-up Specs).
+             << " privSegFixedSize=" << PrivateSegmentFixedSize
+             << " archFS=" << ArchitectedFS << "\n");
+  // Copy SGPR0, SGPR1 (and on non-architected-FS targets,
+  // FLAT_SCR_LO / FLAT_SCR_HI) into the state-value register at the
+  // lanes the StateValueArraySpecs layout reserves for them. Layout is
+  // documented in SVAFrameLanes.h.
   auto SGPR0SpillSlot =
       getKernelPrologFrameSpillLane(llvm::AMDGPU::SGPR0, Specs);
   auto SGPR1SpillSlot =
       getKernelPrologFrameSpillLane(llvm::AMDGPU::SGPR1, Specs);
-  auto SGPRFlatScrLoSpillSlot =
-      getKernelPrologFrameSpillLane(llvm::AMDGPU::FLAT_SCR_LO, Specs);
-  auto SGPRFlatScrHiSpillSlot =
-      getKernelPrologFrameSpillLane(llvm::AMDGPU::FLAT_SCR_HI, Specs);
-  assert(SGPR0SpillSlot && SGPR1SpillSlot && SGPRFlatScrLoSpillSlot &&
-         SGPRFlatScrHiSpillSlot &&
-         "kernel-prolog SVA lanes must exist for SGPR0/1 + FS_LO/HI");
+  std::optional<unsigned> SGPRFlatScrLoSpillSlot;
+  std::optional<unsigned> SGPRFlatScrHiSpillSlot;
+  if (!ArchitectedFS) {
+    SGPRFlatScrLoSpillSlot =
+        getKernelPrologFrameSpillLane(llvm::AMDGPU::FLAT_SCR_LO, Specs);
+    SGPRFlatScrHiSpillSlot =
+        getKernelPrologFrameSpillLane(llvm::AMDGPU::FLAT_SCR_HI, Specs);
+  }
+  assert(SGPR0SpillSlot && SGPR1SpillSlot &&
+         (ArchitectedFS ||
+          (SGPRFlatScrLoSpillSlot && SGPRFlatScrHiSpillSlot)) &&
+         "kernel-prolog SVA lanes must exist for SGPR0/1 (+ FS_LO/HI on "
+         "non-architected-FS targets)");
 
-  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
-                TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
-      .addReg(TRI.getSubReg(
-          MFI.getPreloadedReg(
-              llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
-          llvm::AMDGPU::sub0))
-      .addImm(*SGPR0SpillSlot)
-      .addReg(SVSStorageVGPR);
+  // The spill/recompute/restore dance around \c PRIVATE_SEGMENT_BUFFER
+  // (PSB) and \c FLAT_SCRATCH_INIT is only meaningful on non-
+  // architected-FS targets, where (1) the kernel prolog needs the
+  // unmodified PSB.sub0/sub1 + FS_LO/HI to compute its own scratch base
+  // via PSWO, and (2) the payload's prologue reads those same SGPRs to
+  // set up its scratch. On architected-FS subtargets the hardware
+  // sets up the per-wave scratch into the architectural register
+  // automatically; PSB and FLAT_SCRATCH_INIT are not preloaded SGPRs
+  // (so calling \c getPreloadedReg on them returns the null register
+  // and any \c getSubReg below would assert), and there is no
+  // PSWO-style adjustment to apply.
+  if (!ArchitectedFS) {
+    llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
+        .addReg(TRI.getSubReg(
+            MFI.getPreloadedReg(
+                llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
+            llvm::AMDGPU::sub0))
+        .addImm(*SGPR0SpillSlot)
+        .addReg(SVSStorageVGPR);
 
-  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
-                TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
-      .addReg(TRI.getSubReg(
-          MFI.getPreloadedReg(
-              llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
-          llvm::AMDGPU::sub1))
-      .addImm(*SGPR1SpillSlot)
-      .addReg(SVSStorageVGPR);
+    llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
+        .addReg(TRI.getSubReg(
+            MFI.getPreloadedReg(
+                llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
+            llvm::AMDGPU::sub1))
+        .addImm(*SGPR1SpillSlot)
+        .addReg(SVSStorageVGPR);
 
-  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
-                TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
-      .addReg(TRI.getSubReg(
-          MFI.getPreloadedReg(llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-          llvm::AMDGPU::sub0))
-      .addImm(*SGPRFlatScrLoSpillSlot)
-      .addReg(SVSStorageVGPR);
+    llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
+        .addReg(TRI.getSubReg(
+            MFI.getPreloadedReg(llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+            llvm::AMDGPU::sub0))
+        .addImm(*SGPRFlatScrLoSpillSlot)
+        .addReg(SVSStorageVGPR);
 
-  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
-                TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
-      .addReg(TRI.getSubReg(
-          MFI.getPreloadedReg(llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-          llvm::AMDGPU::sub1))
-      .addImm(*SGPRFlatScrHiSpillSlot)
-      .addReg(SVSStorageVGPR);
+    llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
+        .addReg(TRI.getSubReg(
+            MFI.getPreloadedReg(llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+            llvm::AMDGPU::sub1))
+        .addImm(*SGPRFlatScrHiSpillSlot)
+        .addReg(SVSStorageVGPR);
 
-  // Add the PSWO to SGPR0/its carry to SGPR1
-  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
-                TII.get(llvm::AMDGPU::S_ADD_U32))
-      .addReg(TRI.getSubReg(
-                  MFI.getPreloadedReg(
-                      llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
-                  llvm::AMDGPU::sub0),
-              llvm::RegState::Define)
-      .addReg(TRI.getSubReg(
-                  MFI.getPreloadedReg(
-                      llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
-                  llvm::AMDGPU::sub0),
-              llvm::RegState::Kill)
-      .addReg(MFI.getPreloadedReg(
-          llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_WAVE_BYTE_OFFSET));
+    // Add the PSWO to SGPR0/its carry to SGPR1
+    llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::S_ADD_U32))
+        .addReg(TRI.getSubReg(
+                    MFI.getPreloadedReg(
+                        llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
+                    llvm::AMDGPU::sub0),
+                llvm::RegState::Define)
+        .addReg(TRI.getSubReg(
+                    MFI.getPreloadedReg(
+                        llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
+                    llvm::AMDGPU::sub0),
+                llvm::RegState::Kill)
+        .addReg(MFI.getPreloadedReg(
+            llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_WAVE_BYTE_OFFSET));
 
-  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
-                TII.get(llvm::AMDGPU::S_ADDC_U32))
-      .addReg(TRI.getSubReg(
-                  MFI.getPreloadedReg(
-                      llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
-                  llvm::AMDGPU::sub1),
-              llvm::RegState::Define)
-      .addReg(TRI.getSubReg(
-                  MFI.getPreloadedReg(
-                      llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
-                  llvm::AMDGPU::sub1),
-              llvm::RegState::Kill)
-      .addImm(0);
-  // Add the PSWO to FS_init_lo/its carry to FS_init_hi
-  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
-                TII.get(llvm::AMDGPU::S_ADD_U32))
-      .addReg(TRI.getSubReg(MFI.getPreloadedReg(
-                                llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-                            llvm::AMDGPU::sub0),
-              llvm::RegState::Define)
-      .addReg(TRI.getSubReg(MFI.getPreloadedReg(
-                                llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-                            llvm::AMDGPU::sub0),
-              llvm::RegState::Kill)
-      .addReg(MFI.getPreloadedReg(
-          llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_WAVE_BYTE_OFFSET));
-  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
-                TII.get(llvm::AMDGPU::S_ADDC_U32))
-      .addReg(TRI.getSubReg(MFI.getPreloadedReg(
-                                llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-                            llvm::AMDGPU::sub1),
-              llvm::RegState::Define)
-      .addReg(TRI.getSubReg(MFI.getPreloadedReg(
-                                llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-                            llvm::AMDGPU::sub1),
-              llvm::RegState::Kill)
-      .addImm(0);
+    llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::S_ADDC_U32))
+        .addReg(TRI.getSubReg(
+                    MFI.getPreloadedReg(
+                        llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
+                    llvm::AMDGPU::sub1),
+                llvm::RegState::Define)
+        .addReg(TRI.getSubReg(
+                    MFI.getPreloadedReg(
+                        llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_BUFFER),
+                    llvm::AMDGPU::sub1),
+                llvm::RegState::Kill)
+        .addImm(0);
+  }
+  // Add the PSWO to FS_init_lo/its carry to FS_init_hi. Only needed on
+  // non-architected-FS targets — on architected-FS the FS is set up by
+  // HW directly and FLAT_SCRATCH_INIT isn't a preloaded SGPR.
+  if (!ArchitectedFS) {
+    llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::S_ADD_U32))
+        .addReg(TRI.getSubReg(MFI.getPreloadedReg(
+                                  llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                              llvm::AMDGPU::sub0),
+                llvm::RegState::Define)
+        .addReg(TRI.getSubReg(MFI.getPreloadedReg(
+                                  llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                              llvm::AMDGPU::sub0),
+                llvm::RegState::Kill)
+        .addReg(MFI.getPreloadedReg(
+            llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_WAVE_BYTE_OFFSET));
+    llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::S_ADDC_U32))
+        .addReg(TRI.getSubReg(MFI.getPreloadedReg(
+                                  llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                              llvm::AMDGPU::sub1),
+                llvm::RegState::Define)
+        .addReg(TRI.getSubReg(MFI.getPreloadedReg(
+                                  llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                              llvm::AMDGPU::sub1),
+                llvm::RegState::Kill)
+        .addImm(0);
+  }
 
   unsigned int InstrumentationStackStart{0};
   if (UsesDynamicStack)
@@ -239,34 +272,39 @@ llvm::Error emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
         .addReg(SVSStorageVGPR);
   }
 
-  // Restore S0, S1, FS_init_lo, and FS_init_hi
-  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
-                TII.get(llvm::AMDGPU::V_READLANE_B32), llvm::AMDGPU::SGPR0)
-      .addReg(SVSStorageVGPR)
-      .addImm(*SGPR0SpillSlot);
+  // Restore S0, S1 (and FS_init_lo/hi). The restore is symmetric to the
+  // spill above — on architected-FS targets we never spilled SGPR0/1
+  // (they hold the kernarg-segment ptr, not PSB, and don't get
+  // PSWO-adjusted), so there's nothing to restore.
+  if (!ArchitectedFS) {
+    llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::V_READLANE_B32), llvm::AMDGPU::SGPR0)
+        .addReg(SVSStorageVGPR)
+        .addImm(*SGPR0SpillSlot);
 
-  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
-                TII.get(llvm::AMDGPU::V_READLANE_B32), llvm::AMDGPU::SGPR1)
-      .addReg(SVSStorageVGPR)
-      .addImm(*SGPR1SpillSlot);
+    llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::V_READLANE_B32), llvm::AMDGPU::SGPR1)
+        .addReg(SVSStorageVGPR)
+        .addImm(*SGPR1SpillSlot);
 
-  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
-                TII.get(llvm::AMDGPU::V_READLANE_B32))
-      .addReg(TRI.getSubReg(MFI.getPreloadedReg(
-                                llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-                            llvm::AMDGPU::sub0),
-              llvm::RegState::Define)
-      .addReg(SVSStorageVGPR)
-      .addImm(*SGPRFlatScrLoSpillSlot);
+    llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::V_READLANE_B32))
+        .addReg(TRI.getSubReg(MFI.getPreloadedReg(
+                                  llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                              llvm::AMDGPU::sub0),
+                llvm::RegState::Define)
+        .addReg(SVSStorageVGPR)
+        .addImm(*SGPRFlatScrLoSpillSlot);
 
-  llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
-                TII.get(llvm::AMDGPU::V_READLANE_B32))
-      .addReg(TRI.getSubReg(MFI.getPreloadedReg(
-                                llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-                            llvm::AMDGPU::sub1),
-              llvm::RegState::Define)
-      .addReg(SVSStorageVGPR)
-      .addImm(*SGPRFlatScrHiSpillSlot);
+    llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
+                  TII.get(llvm::AMDGPU::V_READLANE_B32))
+        .addReg(TRI.getSubReg(MFI.getPreloadedReg(
+                                  llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                              llvm::AMDGPU::sub1),
+                llvm::RegState::Define)
+        .addReg(SVSStorageVGPR)
+        .addImm(*SGPRFlatScrHiSpillSlot);
+  }
 
   return llvm::Error::success();
 }
@@ -628,18 +666,34 @@ void inlineInjectedPayload(const llvm::MachineFunction &InjectedPayloadMF,
       } else if (InjectedPayloadMF.size() == 1) {
         MBBMap.insert({&InjectedPayloadMF.front(), &InsertionPointMBB});
       } else {
+        // Multi-MBB payload, IP at host MBB's first instruction. We
+        // create a NewEntryBlock that holds the payload's entry MIs,
+        // splice it into the MF's MBB list directly before the host
+        // MBB, and reroute every predecessor.
+        //
+        // `addSuccessor` / `removeSuccessor` only update CFG metadata
+        // — the predecessor's ACTUAL terminator `MachineInstr`
+        // operands still reference the host MBB. Without rewriting
+        // those operands, a predecessor that reaches the host MBB
+        // via an explicit branch (e.g. `s_cbranch_execnz` with a
+        // target MBB operand) jumps straight past NewEntryBlock and
+        // skips the instrumentation; the wave then deadlocks on a
+        // later `s_waitcnt` because its half of the wave-mode
+        // instrumentation never ran. `ReplaceUsesOfBlockWith` walks
+        // the terminator's MBB operands, swaps the reference, AND
+        // calls `replaceSuccessor` — so it subsumes the manual
+        // `removeSuccessor` call.
         auto *NewEntryBlock = ToBeInstrumentedMF.CreateMachineBasicBlock();
         ToBeInstrumentedMF.insert(HookLastReturnMBBDest->getIterator(),
                                   NewEntryBlock);
         llvm::SmallVector<llvm::MachineBasicBlock *, 2> PredMBBs;
         for (auto It = InsertionPointMBB.pred_begin();
              It != InsertionPointMBB.pred_end(); ++It) {
-          auto *PredMBB = *It;
-          PredMBB->addSuccessor(NewEntryBlock);
-          PredMBBs.push_back(PredMBB);
+          PredMBBs.push_back(*It);
         }
-        for (auto *PredMBB : PredMBBs)
-          PredMBB->removeSuccessor(&InsertionPointMBB);
+        for (auto *PredMBB : PredMBBs) {
+          PredMBB->ReplaceUsesOfBlockWith(&InsertionPointMBB, NewEntryBlock);
+        }
         NewEntryBlock->addSuccessor(&InsertionPointMBB);
         MBBMap.insert({&InjectedPayloadMF.front(), NewEntryBlock});
       }
@@ -707,10 +761,16 @@ void inlineInjectedPayload(const llvm::MachineFunction &InjectedPayloadMF,
   for (const auto &MBB : InjectedPayloadMF) {
     auto *DstMBB = MBBMap[&MBB];
     llvm::MachineBasicBlock::iterator InsertionPoint;
-    if (MBB.isReturnBlock() && NumReturnBlocksInHook == 1)
-      InsertionPoint = DstMBB->begin();
-    else if (MBB.isEntryBlock() && InjectedPayloadMF.size() == 1)
+    // A single-MBB payload's only MBB is BOTH its entry and its (sole)
+    // return block. We need the entry-block case (insert at the IP MI)
+    // to win — otherwise the return-block branch maps the payload's MIs
+    // to DstMBB->begin() and we end up inserting the payload at the
+    // start of the host MBB, BEFORE every original MI that was supposed
+    // to run prior to the IP.
+    if (MBB.isEntryBlock() && InjectedPayloadMF.size() == 1)
       InsertionPoint = InsertionPointMI.getIterator();
+    else if (MBB.isReturnBlock() && NumReturnBlocksInHook == 1)
+      InsertionPoint = DstMBB->begin();
     else
       InsertionPoint = DstMBB->end();
 

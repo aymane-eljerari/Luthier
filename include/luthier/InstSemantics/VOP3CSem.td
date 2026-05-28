@@ -753,7 +753,12 @@ foreach i = 0-7 in {
 
 foreach i = 0-7 in {
   defvar cmpName = ["EQ", "NE", "GT", "GE", "LT", "LE", "F", "T"][i];
-  defvar cmpPredU32 = [LLVMICmpEQ, LLVMICmpNE, LLVMFCmpUGT, LLVMFCmpUGE, LLVMFCmpULT, LLVMFCmpULE, LLVMICmpEQ, LLVMICmpEQ][i];
+  // Unsigned 32-bit integer compare predicates. The original list used
+  // \c LLVMFCmpU* (float-compare) variants for the strict / non-strict
+  // ordering rows — those are float predicates and emit an \c FCmp on
+  // integer operands, which fails the IR builder's type assertion.
+  // \c LLVMICmpU* are the correct ICmp counterparts.
+  defvar cmpPredU32 = [LLVMICmpEQ, LLVMICmpNE, LLVMICmpUGT, LLVMICmpUGE, LLVMICmpULT, LLVMICmpULE, LLVMICmpEQ, LLVMICmpEQ][i];
 
   def V_CMP_#cmpName#_U32_e64_sem
     : InstSISemantic<!cast<InstSI>("V_CMP_"#cmpName#"_U32_e64")> {
@@ -965,23 +970,73 @@ foreach i = 0-7 in {
 // _t16 variants: RDNA3+/RDNA4 only.
 
 // V_CMP_CLASS → $sdst
-foreach inst = [V_CMP_CLASS_F32_e64, V_CMP_CLASS_F64_e64,
-                V_CMP_CLASS_F16_e64, V_CMP_CLASS_F16_t16_e64] in {
+//
+// `llvm.amdgcn.class(anyfloat, i32) -> i1` is per-lane: src0 must be
+// supplied as a specific float type, and the i1 result needs to be
+// wrapped into a wave-sized mask via ballot before being written into
+// the wave-mask $sdst register, matching every other V_CMP_*_e64 form.
+foreach inst = [V_CMP_CLASS_F32_e64] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $sdst,
-      (LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))
+        BallotWaveMask<(LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class,
+          [(GetNamedOperand $src0, si_llvm_float_ty),
+           (GetNamedOperand $src1, si_llvm_i32_ty)])>.ret)
+    ];
+  }
+}
+foreach inst = [V_CMP_CLASS_F64_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (SetNamedOperand $sdst,
+        BallotWaveMask<(LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class,
+          [(GetNamedOperand $src0, si_llvm_double_ty),
+           (GetNamedOperand $src1, si_llvm_i32_ty)])>.ret)
+    ];
+  }
+}
+foreach inst = [V_CMP_CLASS_F16_e64, V_CMP_CLASS_F16_t16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (SetNamedOperand $sdst,
+        BallotWaveMask<(LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class,
+          [(GetNamedOperand $src0, si_llvm_half_ty),
+           (GetNamedOperand $src1, si_llvm_i32_ty)])>.ret)
     ];
   }
 }
 
 // V_CMPX_CLASS → $sdst + EXEC
-foreach inst = [V_CMPX_CLASS_F32_e64, V_CMPX_CLASS_F64_e64,
-                V_CMPX_CLASS_F16_e64, V_CMPX_CLASS_F16_t16_e64] in {
+foreach inst = [V_CMPX_CLASS_F32_e64] in {
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
-      (SetNamedOperand $sdst,
-      (LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class, [(GetNamedOperand $src0), (GetNamedOperand $src1)]))
+      (DefVal $r, BallotWaveMask<(LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class,
+        [(GetNamedOperand $src0, si_llvm_float_ty),
+         (GetNamedOperand $src1, si_llvm_i32_ty)])>.ret),
+      (SetNamedOperand $sdst, (GetVal $r)),
+      (ImplicitDef EXEC, (GetVal $r))
+    ];
+  }
+}
+foreach inst = [V_CMPX_CLASS_F64_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (DefVal $r, BallotWaveMask<(LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class,
+        [(GetNamedOperand $src0, si_llvm_double_ty),
+         (GetNamedOperand $src1, si_llvm_i32_ty)])>.ret),
+      (SetNamedOperand $sdst, (GetVal $r)),
+      (ImplicitDef EXEC, (GetVal $r))
+    ];
+  }
+}
+foreach inst = [V_CMPX_CLASS_F16_e64, V_CMPX_CLASS_F16_t16_e64] in {
+  def inst#_sem : InstSISemantic<inst> {
+    let Semantic = [
+      (DefVal $r, BallotWaveMask<(LLVMIntrinsic si_llvm_i1_ty, int_amdgcn_class,
+        [(GetNamedOperand $src0, si_llvm_half_ty),
+         (GetNamedOperand $src1, si_llvm_i32_ty)])>.ret),
+      (SetNamedOperand $sdst, (GetVal $r)),
+      (ImplicitDef EXEC, (GetVal $r))
     ];
   }
 }

@@ -51,9 +51,13 @@ isaFromName(const ApiTableContainer<::CoreApiTable> &CoreApi,
 }
 
 /// Queries the \c ISA handle associated with the given <tt>TT</tt>,
-/// <tt>CPU</tt>, and <tt>Features</tt> from LLVM
-/// \note refer to the LLVM AMDGPU backend documentation for more details
-/// on the supported ISA and their names
+/// <tt>GPUName</tt>, and <tt>Features</tt> from LLVM. The features are
+/// emitted in HSA's grammar (\c <name><sign>, no leading \c '+'/<tt>'-'</tt>),
+/// e.g. \c amdgcn-amd-amdhsa--gfx942:xnack+:sramecc-. HSA's ISA name
+/// grammar only recognizes \c xnack and \c sramecc qualifiers, so callers
+/// must ensure \p Features contains nothing else (in particular, no
+/// \c wavefrontsize64 or \c cumode markers) — \c isaFromLLVM passes the
+/// whole feature list through to HSA verbatim.
 /// \returns Expects \c hsa_isa_t handle of the queried ISA
 llvm::Expected<hsa_isa_t>
 isaFromLLVM(const ApiTableContainer<::CoreApiTable> &CoreApi,

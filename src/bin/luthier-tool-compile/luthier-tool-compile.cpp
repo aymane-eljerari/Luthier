@@ -462,6 +462,13 @@ static int rebundle(StringRef Bundler, ArrayRef<ISASpec> Specs,
   for (const auto &SP : SlicePaths)
     Argv.emplace_back("--input=" + SP);
   Argv.emplace_back("--output=" + OutFatbin.str());
+  /// Pad each slice's offset to 8 bytes so LLVM's ELF parser, which
+  /// requires \c alignof(uint64_t) at the buffer start, can read the
+  /// AMDGCN slice in-place without an aligned-copy in the loader. The
+  /// default bundler packs slices immediately after the metadata, which
+  /// frequently lands them at non-8 offsets (e.g. 0x8d when the two
+  /// triples sum to 141 metadata bytes).
+  Argv.emplace_back("--bundle-align=8");
 
   return runCmd(Bundler, Argv);
 }

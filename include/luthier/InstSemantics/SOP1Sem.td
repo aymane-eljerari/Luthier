@@ -676,10 +676,13 @@ def S_BCNT0_I32_B32_sem : InstSISemantic<S_BCNT0_I32_B32> {
 //   rdna4-instruction-set-architecture.pdf, page 236.
 def S_BCNT0_I32_B64_sem : InstSISemantic<S_BCNT0_I32_B64> {
   let Semantic = [
+    // `int_ctpop` is type-overloaded and returns the same width as its
+    // argument — i.e. i64 here. The instruction writes an i32 sdst, so
+    // truncate before storing.
     (DefVal $popcnt, (LLVMUnaryIntrinsic int_ctpop, (GetNamedOperand $src0))),
     (DefVal $result, (LLVMSub (ConstantInt si_llvm_i64_ty, 64), (GetVal $popcnt))),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt si_llvm_i64_ty, 0))>.ret,
-    (SetNamedOperand $sdst, (GetVal $result))
+    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $result), si_llvm_i32_ty))
   ];
 }
 
@@ -719,9 +722,12 @@ def S_BCNT1_I32_B32_sem : InstSISemantic<S_BCNT1_I32_B32> {
 //   rdna4-instruction-set-architecture.pdf, page 237.
 def S_BCNT1_I32_B64_sem : InstSISemantic<S_BCNT1_I32_B64> {
   let Semantic = [
+    // `int_ctpop` is type-overloaded and returns the same width as its
+    // argument — i.e. i64 here. The instruction writes an i32 sdst, so
+    // truncate before storing.
     (DefVal $result, (LLVMUnaryIntrinsic int_ctpop, (GetNamedOperand $src0))),
     SetSCCImplicit<(LLVMCmp LLVMICmpNE, (GetVal $result), (ConstantInt si_llvm_i64_ty, 0))>.ret,
-    (SetNamedOperand $sdst, (GetVal $result))
+    (SetNamedOperand $sdst, (LLVMTrunc (GetVal $result), si_llvm_i32_ty))
   ];
 }
 

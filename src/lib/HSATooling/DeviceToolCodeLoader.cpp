@@ -61,6 +61,14 @@ namespace {
 /// into the contained ELFs. Handles compressed (CCOB) and uncompressed
 /// bundles. On a compressed input, \p DecompressedHolder receives the owning
 /// buffer of the decompressed payload — caller must retain it.
+///
+/// Each AMDGCN slice's bundle-relative start address must be aligned to
+/// \c alignof(uint64_t) (LLVM's ELF parser requires \c uint64_t-aligned
+/// headers). Bundles produced by \c luthier-tool-compile satisfy this
+/// because the rebundle step passes \c --bundle-align=8 to
+/// \c clang-offload-bundler. If a foreign bundle arrives with a
+/// misaligned slice we return an error — silently copying the bytes to
+/// a freshly-aligned buffer would mask producer-side bugs.
 llvm::Error
 parseOffloadBundle(llvm::MemoryBufferRef Bundle,
                    llvm::SmallVectorImpl<llvm::MemoryBufferRef> &ElfSlices,
@@ -109,9 +117,21 @@ parseOffloadBundle(llvm::MemoryBufferRef Bundle,
       ++EntryIdx;
       continue;
     }
-    llvm::MemoryBufferRef CodeObjectBuf{
-        llvm::StringRef(ParseBuf.getBufferStart() + Entry.Offset, Entry.Size),
-        "code object buffer"};
+    // LLVM's ELF parser requires the buffer start to be aligned to
+    // \c alignof(uint64_t). Reject misaligned slices outright rather
+    // than masking the producer-side bug with a silent copy.
+    llvm::StringRef SliceBytes(ParseBuf.getBufferStart() + Entry.Offset,
+                               Entry.Size);
+    if (reinterpret_cast<uintptr_t>(SliceBytes.data()) %
+            alignof(uint64_t) !=
+        0)
+      return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+          "Bundle entry {0} starts at byte offset {1} within the bundle, "
+          "which is not aligned to alignof(uint64_t) = {2} bytes. Rebuild "
+          "the producing bundle with `clang-offload-bundler "
+          "--bundle-align={2}` so LLVM's ELF parser can read it in place.",
+          EntryIdx, Entry.Offset, alignof(uint64_t)));
+    llvm::MemoryBufferRef CodeObjectBuf{SliceBytes, "code object buffer"};
     // The bundle may contain a host slot whose payload isn't a valid
     // object file. Try-parse, and skip rather than fail when the parse
     // doesn't recognize the bytes; AMDGCN slices have a well-formed ELF
@@ -478,12 +498,14 @@ DeviceToolCodeLoader::DeviceToolCodeLoader(
 
   llvm::SmallVector<llvm::MemoryBufferRef, 4> ElfSlices;
   std::unique_ptr<llvm::MemoryBuffer> DecompressedHolder;
-  if (auto E = parseOffloadBundle(BundleRef, ElfSlices, DecompressedHolder)) {
+  if (auto E =
+          parseOffloadBundle(BundleRef, ElfSlices, DecompressedHolder)) {
     Err = std::move(E);
     return;
   }
   if (DecompressedHolder)
     RetainedBuffers.push_back(std::move(DecompressedHolder));
+
 
   for (llvm::MemoryBufferRef Elf : ElfSlices) {
     if (auto E = addSlice(Elf)) {
@@ -541,13 +563,25 @@ DeviceToolCodeLoader::loadOntoAgents(llvm::ArrayRef<hsa_agent_t> Agents) {
                           << " slice(s)\n");
   auto Core = CoreApiSnapshot.getTable();
 
-  // Resolve hsa_isa_t for each slice and build the lookup map. Construction
-  // is HSA-free, so this is the first time we make these calls.
+  // Build the agent-side lookup map. The HSA ApiTable wasn't ready
+  // during \c addSlice, so we resolve each slice's \c hsa_isa_t here.
+  // Re-parse the ELF to recover a clean SubtargetFeatures (just what
+  // \c e_flags encodes — xnack/sramecc) rather than reuse
+  // \c Entry.Features, which has been augmented with the wave/cumode
+  // markers for the in-process cache key and would confuse HSA's ISA
+  // name grammar.
   llvm::DenseMap<hsa_isa_t, SliceCacheEntry *> SliceByIsaHandle;
   for (auto &KV : Slices) {
     SliceCacheEntry &Entry = KV.second;
-    llvm::Expected<hsa_isa_t> IsaOrErr =
-        hsa::isaFromLLVM(Core, Entry.TT, Entry.CPU, Entry.Features);
+    auto ObjOrErr = luthier::object::AMDGCNObjectFile::createAMDGCNObjectFile(
+        Entry.CodeObject.getBuffer());
+    if (!ObjOrErr)
+      return ObjOrErr.takeError();
+    auto TupleOrErr = luthier::object::getObjectFileTargetTuple(**ObjOrErr);
+    if (!TupleOrErr)
+      return TupleOrErr.takeError();
+    auto &[T, CPU, Features] = *TupleOrErr;
+    auto IsaOrErr = hsa::isaFromLLVM(Core, T, CPU, Features);
     if (!IsaOrErr)
       return IsaOrErr.takeError();
     // try_emplace: first slice wins on hsa_isa_t collision (e.g. wave32
@@ -663,6 +697,18 @@ llvm::Error DeviceToolCodeLoader::clearLoadedState() {
   LLVM_DEBUG(llvm::dbgs() << "[DeviceToolCodeLoader] clearLoadedState: "
                           << PerAgentLoadRecords.size()
                           << " per-agent record(s)\n");
+  // If the HSA api-table snapshot was never populated (e.g. the
+  // application aborted before dispatching any kernel, so
+  // rocprofiler-sdk never delivered its registration callback), there
+  // is no HSA-side state to tear down. Bail out quietly instead of
+  // pulling the snapshot through \c getTable() and fatal-erroring.
+  if (!CoreApiSnapshot.wasRegistrationCallbackInvoked()) {
+    PerAgentLoadRecords.clear();
+    NameToAgentGlobal.clear();
+    ManagedVarRecords.clear();
+    State = LoadState::Pending;
+    return llvm::Error::success();
+  }
   auto Core = CoreApiSnapshot.getTable();
   llvm::Error E = freeManagedVars();
   for (auto &KV : PerAgentLoadRecords) {

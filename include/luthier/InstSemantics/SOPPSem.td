@@ -106,7 +106,11 @@ def S_WAITCNT_sem : InstSISemantic<S_WAITCNT> {
 //   rdna4-instruction-set-architecture.pdf, page 286.
 def S_SENDMSG_sem : InstSISemantic<S_SENDMSG> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_sendmsg, [(GetNamedOperand $simm16)])
+    // `int_amdgcn_s_sendmsg` is (i32 immediate, i32 value-in-M0).
+    // The instruction takes the message in $simm16 and implicitly
+    // reads M0 as the data payload.
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_sendmsg,
+      [(GetNamedOperand $simm16), (ImplicitUse M0)])
   ];
 }
 
@@ -114,7 +118,8 @@ def S_SENDMSG_sem : InstSISemantic<S_SENDMSG> {
 // Sources: same pages as S_SENDMSG.
 def S_SENDMSGHALT_sem : InstSISemantic<S_SENDMSGHALT> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_sendmsghalt, [(GetNamedOperand $simm16)])
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_sendmsghalt,
+      [(GetNamedOperand $simm16), (ImplicitUse M0)])
   ];
 }
 
@@ -180,7 +185,12 @@ def S_SETHALT_sem : InstSISemantic<S_SETHALT> {
 //   rdna4-instruction-set-architecture.pdf, page 286.
 def S_SETPRIO_sem : InstSISemantic<S_SETPRIO> {
   let Semantic = [
-    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_setprio, [(GetNamedOperand $simm16)])
+    // \c int_amdgcn_s_setprio is declared with \c [llvm_i16_ty]
+    // (unlike s_sethalt / s_sleep / s_setprio_inc_wg which all take i32).
+    // The default \c GetNamedOperand width comes back as i32, so request
+    // i16 explicitly to match the intrinsic's parameter type.
+    (LLVMIntrinsic si_llvm_void_ty, int_amdgcn_s_setprio,
+      [(GetNamedOperand $simm16, si_llvm_i16_ty)])
   ];
 }
 

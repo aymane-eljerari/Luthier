@@ -29,12 +29,18 @@ llvm::Expected<hsa_isa_t>
 isaFromLLVM(const ApiTableContainer<::CoreApiTable> &CoreApi,
             const llvm::Triple &TT, llvm::StringRef GPUName,
             const llvm::SubtargetFeatures &Features) {
-  auto ISAName = (TT.getTriple() + llvm::Twine("--") + GPUName).str();
+  std::string ISAName = (TT.getTriple() + llvm::Twine("--") + GPUName).str();
   auto FeatureStrings = Features.getFeatures();
   if (!FeatureStrings.empty()) {
     ISAName += ":";
     for (const auto &Feature : FeatureStrings) {
-      ISAName += (Feature.substr(1) + Feature[0]);
+      /// LLVM stores features as \c "<sign><name>"; HSA's grammar wants
+      /// \c "<name><sign>" (e.g. \c "xnack+"). The caller is responsible
+      /// for keeping the feature set restricted to qualifiers HSA
+      /// understands (\c xnack, \c sramecc); anything else here will
+      /// reach \c hsa_isa_from_name and fail there.
+      ISAName += Feature.substr(1);
+      ISAName += Feature.front();
     }
   }
   return isaFromName(CoreApi, ISAName);

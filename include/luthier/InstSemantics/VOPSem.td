@@ -803,8 +803,11 @@ def V_ASHRREV_I32_e32_sem : InstSISemantic<V_ASHRREV_I32_e32> {
 //   rdna4-instruction-set-architecture.pdf, page 299.
 def V_CNDMASK_B32_e32_sem : InstSISemantic<V_CNDMASK_B32_e32> {
   let Semantic = [
+    // VCC is a wave-sized SGPR lane mask (i32 / i64). LLVMSelect needs
+    // an i1 condition, so extract the current lane's bit from the mask
+    // before selecting between src0/src1.
     (SetNamedOperand $vdst,
-      (LLVMSelect (ImplicitUse VCC),
+      (LLVMSelect LaneBitFromWaveMask<(ImplicitUse VCC)>.ret,
                   (GetNamedOperand $src1), (GetNamedOperand $src0)))
   ];
 }
@@ -2958,14 +2961,14 @@ foreach inst = [
 def V_FRACT_F32_e32_sem : InstSISemantic<V_FRACT_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_fract, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_fract, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
 def V_FRACT_F64_e32_sem : InstSISemantic<V_FRACT_F64_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_fract, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_fract, [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 
@@ -2977,7 +2980,7 @@ foreach inst = [
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_fract, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_fract, [(GetNamedOperand $src0, si_llvm_half_ty)]))
     ];
   }
 }
@@ -2999,17 +3002,23 @@ foreach inst = [
 //   rdna2-shader-instruction-set-architecture.pdf, page 153.
 //   rdna3-shader-instruction-set-architecture-feb-2023_0.pdf, page 291.
 //   rdna4-instruction-set-architecture.pdf, page 332.
+// `llvm.amdgcn.frexp.exp` is overloaded on both its return (any int) and
+// argument (any float) types. Both must be supplied as ID overloads, and
+// the argument value must already carry the float type — supply the
+// matching float view of src0.
 def V_FREXP_EXP_I32_F32_e32_sem : InstSISemantic<V_FREXP_EXP_I32_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_frexp_exp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_frexp_exp,
+        [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
 def V_FREXP_EXP_I32_F64_e32_sem : InstSISemantic<V_FREXP_EXP_I32_F64_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_frexp_exp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_i32_ty, int_amdgcn_frexp_exp,
+        [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 
@@ -3020,7 +3029,8 @@ foreach inst = [
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_frexp_exp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_i16_ty, int_amdgcn_frexp_exp,
+        [(GetNamedOperand $src0, si_llvm_half_ty)]))
     ];
   }
 }
@@ -3041,14 +3051,14 @@ foreach inst = [
 def V_FREXP_MANT_F32_e32_sem : InstSISemantic<V_FREXP_MANT_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
 def V_FREXP_MANT_F64_e32_sem : InstSISemantic<V_FREXP_MANT_F64_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 
@@ -3060,7 +3070,7 @@ foreach inst = [
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_frexp_mant, [(GetNamedOperand $src0, si_llvm_half_ty)]))
     ];
   }
 }
@@ -3085,13 +3095,19 @@ foreach inst = [
 def V_RCP_F32_e32_sem : InstSISemantic<V_RCP_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_RCP_F64_e32_sem : InstSISemantic<V_RCP_F64_e32> {
   let Semantic = [
+    // `llvm.amdgcn.rcp` is overloaded on a single float type — its
+    // argument and return must share the same FP type. The default
+    // `GetNamedOperand` form returns an integer view of the register,
+    // which fails the intrinsic's signature check; ask for the f64
+    // view explicitly so the bitcast is materialized here.
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rcp,
+        [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 
@@ -3103,7 +3119,7 @@ foreach inst = [
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rcp, [(GetNamedOperand $src0, si_llvm_half_ty)]))
     ];
   }
 }
@@ -3113,13 +3129,13 @@ foreach inst = [
 def V_RCP_CLAMP_F32_e32_sem : InstSISemantic<V_RCP_CLAMP_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_RCP_CLAMP_F64_e32_sem : InstSISemantic<V_RCP_CLAMP_F64_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rcp, [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 
@@ -3139,7 +3155,7 @@ def V_RCP_CLAMP_F64_e32_sem : InstSISemantic<V_RCP_CLAMP_F64_e32> {
 def V_RCP_IFLAG_F32_e32_sem : InstSISemantic<V_RCP_IFLAG_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -3148,7 +3164,7 @@ def V_RCP_IFLAG_F32_e32_sem : InstSISemantic<V_RCP_IFLAG_F32_e32> {
 def V_RCP_LEGACY_F32_e32_sem : InstSISemantic<V_RCP_LEGACY_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp_legacy, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rcp_legacy, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -3168,13 +3184,13 @@ def V_RCP_LEGACY_F32_e32_sem : InstSISemantic<V_RCP_LEGACY_F32_e32> {
 def V_RSQ_F32_e32_sem : InstSISemantic<V_RSQ_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rsq, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rsq, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_RSQ_F64_e32_sem : InstSISemantic<V_RSQ_F64_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rsq, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rsq, [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 
@@ -3186,7 +3202,7 @@ foreach inst = [
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rsq, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_rsq, [(GetNamedOperand $src0, si_llvm_half_ty)]))
     ];
   }
 }
@@ -3195,19 +3211,19 @@ foreach inst = [
 def V_RSQ_CLAMP_F32_e32_sem : InstSISemantic<V_RSQ_CLAMP_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rsq_clamp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rsq_clamp, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_RSQ_CLAMP_F64_e32_sem : InstSISemantic<V_RSQ_CLAMP_F64_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rsq_clamp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_rsq_clamp, [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 def V_RSQ_LEGACY_F32_e32_sem : InstSISemantic<V_RSQ_LEGACY_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rsq_legacy, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_rsq_legacy, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -3227,13 +3243,13 @@ def V_RSQ_LEGACY_F32_e32_sem : InstSISemantic<V_RSQ_LEGACY_F32_e32> {
 def V_SQRT_F32_e32_sem : InstSISemantic<V_SQRT_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 def V_SQRT_F64_e32_sem : InstSISemantic<V_SQRT_F64_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_double_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0, si_llvm_double_ty)]))
   ];
 }
 
@@ -3245,7 +3261,7 @@ foreach inst = [
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sqrt, [(GetNamedOperand $src0, si_llvm_half_ty)]))
     ];
   }
 }
@@ -3266,7 +3282,7 @@ foreach inst = [
 def V_SIN_F32_e32_sem : InstSISemantic<V_SIN_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_sin, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_sin, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -3278,7 +3294,7 @@ foreach inst = [
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sin, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_sin, [(GetNamedOperand $src0, si_llvm_half_ty)]))
     ];
   }
 }
@@ -3299,7 +3315,7 @@ foreach inst = [
 def V_COS_F32_e32_sem : InstSISemantic<V_COS_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_cos, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_cos, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -3311,7 +3327,7 @@ foreach inst = [
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_cos, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_cos, [(GetNamedOperand $src0, si_llvm_half_ty)]))
     ];
   }
 }
@@ -3332,7 +3348,7 @@ foreach inst = [
 def V_EXP_F32_e32_sem : InstSISemantic<V_EXP_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_exp2, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_exp2, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -3344,7 +3360,7 @@ foreach inst = [
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_exp2, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_exp2, [(GetNamedOperand $src0, si_llvm_half_ty)]))
     ];
   }
 }
@@ -3359,7 +3375,7 @@ foreach inst = [
 def V_EXP_LEGACY_F32_e32_sem : InstSISemantic<V_EXP_LEGACY_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_exp2, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_exp2, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -3379,7 +3395,7 @@ def V_EXP_LEGACY_F32_e32_sem : InstSISemantic<V_EXP_LEGACY_F32_e32> {
 def V_LOG_F32_e32_sem : InstSISemantic<V_LOG_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_log, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_log, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -3391,7 +3407,7 @@ foreach inst = [
   def inst#_sem : InstSISemantic<inst> {
     let Semantic = [
       (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_log, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_half_ty, int_amdgcn_log, [(GetNamedOperand $src0, si_llvm_half_ty)]))
     ];
   }
 }
@@ -3400,7 +3416,7 @@ foreach inst = [
 def V_LOG_CLAMP_F32_e32_sem : InstSISemantic<V_LOG_CLAMP_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_log_clamp, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_log_clamp, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 
@@ -3414,7 +3430,7 @@ def V_LOG_CLAMP_F32_e32_sem : InstSISemantic<V_LOG_CLAMP_F32_e32> {
 def V_LOG_LEGACY_F32_e32_sem : InstSISemantic<V_LOG_LEGACY_F32_e32> {
   let Semantic = [
     (SetNamedOperand $vdst,
-      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_log, [(GetNamedOperand $src0)]))
+      (LLVMIntrinsic si_llvm_float_ty, int_amdgcn_log, [(GetNamedOperand $src0, si_llvm_float_ty)]))
   ];
 }
 

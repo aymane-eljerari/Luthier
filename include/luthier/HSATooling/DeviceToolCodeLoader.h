@@ -85,6 +85,13 @@ protected:
     llvm::Triple TT;
     std::string CPU;
     llvm::SubtargetFeatures Features;
+    // The HSA ISA handle is intentionally NOT cached here: the HSA
+    // ApiTable is not yet initialized at \c addSlice time (the loader
+    // is constructed before the snapshot is wired up). \c loadOntoAgents
+    // re-derives the ISA by re-parsing the slice's ELF, which gives a
+    // clean SubtargetFeatures (just xnack/sramecc from \c e_flags,
+    // without the wave/cumode markers we add to \c Features below for
+    // the in-process cache key).
     /// Decoded from the slice's \c __luthier_subtarget ELF symbol if the
     /// slice was built through the Luthier IR-compilation plugin. When
     /// present, \c Wave64 is true for a wave64 slice / false for wave32,

@@ -200,24 +200,18 @@ static llvm::Value *getOrCreateIntOrFloatTypeForReg(
 /// types, manifests a vector type that breaks down the register into
 /// scalar integer elements with \p ElemWidth as their width
 /// Useful for 'extractelement'/'insertelement' indexing
+///
+/// \p TotalWidth is the authoritative register-slot width in bits, as
+/// known by the caller (= NumHalves * RegGranule). Stored entries whose
+/// primitive size disagrees with \p TotalWidth (e.g. a stray bitcast left
+/// behind by a semantic that wrote a wider-than-the-slot value) are
+/// ignored when materializing the requested vector — we always synthesize
+/// from an entry that matches the slot width.
 static llvm::Value *breakdownToVecTyFromAvailableValues(
     llvm::DenseMap<llvm::Type *, llvm::Value *> &ValueEntries,
-    unsigned ElemWidth, llvm::IRBuilderBase &Builder) {
+    unsigned TotalWidth, unsigned ElemWidth, llvm::IRBuilderBase &Builder) {
   assert(!ValueEntries.empty() && "Empty value entry map");
-  // Pointer types report 0 from getPrimitiveSizeInBits without a DataLayout,
-  // so prefer a non-pointer entry to determine the register width. All
-  // entries map to the same register slot, so any non-zero primitive size
-  // is authoritative.
-  unsigned TotalWidth = 0;
-  for (auto &[T, V] : ValueEntries) {
-    unsigned Bits = T->getPrimitiveSizeInBits();
-    if (Bits != 0) {
-      TotalWidth = Bits;
-      break;
-    }
-  }
-  assert(TotalWidth != 0 &&
-         "ValueEntries has only pointer types; cannot determine width");
+  assert(TotalWidth != 0 && "TotalWidth must be provided by caller");
   assert(TotalWidth % ElemWidth == 0);
   unsigned NumElems = TotalWidth / ElemWidth;
   auto *VecTy =
@@ -225,13 +219,26 @@ static llvm::Value *breakdownToVecTyFromAvailableValues(
   if (auto ValueEntryIt = ValueEntries.find(VecTy);
       ValueEntryIt != ValueEntries.end()) {
     return ValueEntryIt->second;
-  } else {
-    llvm::Value *IntVal =
-        getOrCreateIntOrFloatTypeForReg(ValueEntries, Builder);
-    llvm::Value *Out = Builder.CreateBitOrPointerCast(IntVal, VecTy);
-    ValueEntries[VecTy] = Out;
-    return Out;
   }
+  // Find a width-matching entry to bitcast from. Pointer types report 0
+  // from getPrimitiveSizeInBits without a DataLayout, so they are
+  // skipped. If no entry matches TotalWidth, fall back to the
+  // int-or-float helper (which itself bitcasts the first entry to its
+  // own width and may produce a wrong-width pivot — preserved as a
+  // last-resort path).
+  llvm::Value *Pivot = nullptr;
+  for (auto &[T, V] : ValueEntries) {
+    if (T->getPrimitiveSizeInBits() == TotalWidth &&
+        (T->isIntOrIntVectorTy() || T->isFPOrFPVectorTy())) {
+      Pivot = V;
+      break;
+    }
+  }
+  if (!Pivot)
+    Pivot = getOrCreateIntOrFloatTypeForReg(ValueEntries, Builder);
+  llvm::Value *Out = Builder.CreateBitOrPointerCast(Pivot, VecTy);
+  ValueEntries[VecTy] = Out;
+  return Out;
 }
 
 void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
@@ -304,8 +311,9 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
       uint32_t OptHalves = std::gcd(std::gcd(LeftSize, RightSize), WNumHalves);
 
       const unsigned ElemWidth = OptHalves * RegGranule;
-      llvm::Value *Vec =
-          breakdownToVecTyFromAvailableValues(Entry, ElemWidth, Builder);
+      const unsigned StoredTotalWidth = SNumHalves * RegGranule;
+      llvm::Value *Vec = breakdownToVecTyFromAvailableValues(
+          Entry, StoredTotalWidth, ElemWidth, Builder);
 
       auto preserveRegion = [&](uint32_t RegionStart, uint32_t RegionEnd) {
         const uint32_t NumChunks = (RegionEnd - RegionStart) / OptHalves;
@@ -359,23 +367,57 @@ llvm::Value *MIRToIRTranslator::extractChunkFromSource(
                           << " NumChunks=" << NumChunks
                           << " chunkSize=" << VecChunkSize << "\n";);
   auto &RegValueMap = State[RegKey];
-  // Breakdown the value to the requested chunk size
-  llvm::Value *TheVec =
-      breakdownToVecTyFromAvailableValues(RegValueMap, VecChunkSize, Builder);
-
-  if (NumChunks == 1) {
-    llvm::Value *Val = Builder.CreateExtractElement(TheVec, Idx);
-    return Val;
-  }
-
-  // Build <NumChunks x ChunkSize> from the source
-  auto *ChunkTy =
-      llvm::FixedVectorType::get(Builder.getIntNTy(VecChunkSize), NumChunks);
-  llvm::Value *Chunk = llvm::PoisonValue::get(ChunkTy);
+  const unsigned KeyTotalWidth = std::get<2>(RegKey) * RegGranule;
   unsigned VecChunkRegGranMul = VecChunkSize / RegGranule;
   unsigned ChunkSizeInRegGran = NumChunks * VecChunkRegGranMul;
+  llvm::Type *ChunkIntTy = Builder.getIntNTy(VecChunkSize);
+
+  // Fast path: source width tiles cleanly into VecChunkSize lanes. Use
+  // vector extractelement.
+  if (KeyTotalWidth % VecChunkSize == 0) {
+    llvm::Value *TheVec = breakdownToVecTyFromAvailableValues(
+        RegValueMap, KeyTotalWidth, VecChunkSize, Builder);
+
+    if (NumChunks == 1)
+      return Builder.CreateExtractElement(TheVec, Idx);
+
+    auto *ChunkTy = llvm::FixedVectorType::get(ChunkIntTy, NumChunks);
+    llvm::Value *Chunk = llvm::PoisonValue::get(ChunkTy);
+    for (uint32_t I = 0; I < NumChunks; ++I) {
+      llvm::Value *E = Builder.CreateExtractElement(TheVec, Idx + I);
+      State[std::make_tuple(std::get<0>(RegKey), I * VecChunkRegGranMul,
+                            ChunkSizeInRegGran)][E->getType()] = E;
+      Chunk = Builder.CreateInsertElement(Chunk, E, I);
+    }
+    return Chunk;
+  }
+
+  // Slow path: source width is coprime with VecChunkSize (e.g. source
+  // has 3 halves, callers want 2-half lanes). The vector path can't
+  // represent that. Fall back to a flat integer view and lshr+trunc.
+  llvm::Type *FlatTy = Builder.getIntNTy(KeyTotalWidth);
+  llvm::Value *Flat = nullptr;
+  if (auto It = RegValueMap.find(FlatTy); It != RegValueMap.end()) {
+    Flat = It->second;
+  } else {
+    llvm::Value *Pivot = getOrCreateIntOrFloatTypeForReg(RegValueMap, Builder);
+    Flat = Builder.CreateBitOrPointerCast(Pivot, FlatTy);
+    RegValueMap[FlatTy] = Flat;
+  }
+
+  auto ExtractOne = [&](unsigned ElemIdx) -> llvm::Value * {
+    llvm::Value *Shifted = Builder.CreateLShr(
+        Flat, llvm::ConstantInt::get(FlatTy, ElemIdx * VecChunkSize));
+    return Builder.CreateTrunc(Shifted, ChunkIntTy);
+  };
+
+  if (NumChunks == 1)
+    return ExtractOne(Idx);
+
+  auto *ChunkTy = llvm::FixedVectorType::get(ChunkIntTy, NumChunks);
+  llvm::Value *Chunk = llvm::PoisonValue::get(ChunkTy);
   for (uint32_t I = 0; I < NumChunks; ++I) {
-    llvm::Value *E = Builder.CreateExtractElement(TheVec, Idx + I);
+    llvm::Value *E = ExtractOne(Idx + I);
     State[std::make_tuple(std::get<0>(RegKey), I * VecChunkRegGranMul,
                           ChunkSizeInRegGran)][E->getType()] = E;
     Chunk = Builder.CreateInsertElement(Chunk, E, I);
@@ -1432,9 +1474,43 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineOperand &Op,
       // defaults to the register's size (i32 for an SGPR), the resulting
       // ICmp/binop sees mismatched operand types.
       unsigned OpIdx = MI->getOperandNo(&Op);
-      // Use the opcode-based overload: the (MI, OpNo) overload routes
-      // immediate operands through getOpRegClass, which asserts on isReg.
-      unsigned SizeInBytes = TII.getOpSize(MI->getOpcode(), OpIdx);
+      const llvm::MCOperandInfo &OpInfo =
+          MI->getDesc().operands()[OpIdx];
+      unsigned SizeInBytes;
+      if (OpInfo.RegClass == -1) {
+        // Pure-immediate slot. \c SIInstrInfo::getOpSize asserts that
+        // \c OperandType is the generic \c MCOI::OPERAND_IMMEDIATE,
+        // which excludes AMDGPU's own immediate operand kinds (K
+        // immediates, encoded modifiers, split-barrier int32, …).
+        // Decode the size directly from the operand kind so callers
+        // that don't pass an explicit \c OutType still get a properly
+        // sized constant.
+        switch (OpInfo.OperandType) {
+        case llvm::AMDGPU::OPERAND_KIMM64:
+          SizeInBytes = 8;
+          break;
+        case llvm::AMDGPU::OPERAND_KIMM16:
+          SizeInBytes = 2;
+          break;
+        case llvm::AMDGPU::OPERAND_KIMM32:
+        case llvm::AMDGPU::OPERAND_INLINE_SPLIT_BARRIER_INT32:
+        case llvm::AMDGPU::OPERAND_INPUT_MODS:
+        case llvm::MCOI::OPERAND_IMMEDIATE:
+          SizeInBytes = 4;
+          break;
+        default:
+          // Fall back to a 32-bit literal — that's the canonical
+          // VALU literal slot, and a wrong size here would surface
+          // immediately as a type mismatch at the use site rather
+          // than corrupt silently.
+          SizeInBytes = 4;
+          break;
+        }
+      } else {
+        // Register-or-immediate slot: fall back to the register
+        // class's width.
+        SizeInBytes = TII.getOpSize(MI->getOpcode(), OpIdx);
+      }
       OutType = llvm::IntegerType::get(Ctx, SizeInBytes * 8);
     }
     return *llvm::ConstantInt::getSigned(OutType, Op.getImm());

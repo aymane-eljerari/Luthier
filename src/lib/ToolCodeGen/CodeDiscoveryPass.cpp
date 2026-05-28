@@ -288,22 +288,35 @@ parseKDRsrc2(const llvm::amdhsa::kernel_descriptor_t &KD,
                     : "0");
   }
 
-  /// Lift ENABLE_SGPR_WORKGROUP_ID_X, Y and Z
+  /// Lift ENABLE_SGPR_WORKGROUP_ID_X, Y and Z. Each dimension also gets
+  /// the matching \c amdgpu-no-cluster-id-* attribute because
+  /// SIMachineFunctionInfo's ctor enables \c WorkGroupID<dim> if EITHER
+  /// the workgroup-id OR the cluster-id attribute is absent (an OR, not
+  /// an AND — see SIMachineFunctionInfo.cpp:141-147). Without the
+  /// cluster-id companion, our \c amdgpu-no-workgroup-id-y/z attrs are
+  /// effectively a no-op and the relifted KD wrongly enables
+  /// system_sgpr_workgroup_id_y/z, shifting all downstream SGPR slots
+  /// and breaking kernarg loads. The cluster-id concept is gfx12.5-only;
+  /// for every other target there is no cluster, so disabling it
+  /// unconditionally when we'd disable workgroup-id is correct.
   if (AMDHSA_BITS_GET(
           KD.compute_pgm_rsrc2,
           llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_SGPR_WORKGROUP_ID_X) == 0) {
     F.addFnAttr("amdgpu-no-workgroup-id-x");
+    F.addFnAttr("amdgpu-no-cluster-id-x");
   }
 
   if (AMDHSA_BITS_GET(
           KD.compute_pgm_rsrc2,
           llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_SGPR_WORKGROUP_ID_Y) == 0) {
     F.addFnAttr("amdgpu-no-workgroup-id-y");
+    F.addFnAttr("amdgpu-no-cluster-id-y");
   }
   if (AMDHSA_BITS_GET(
           KD.compute_pgm_rsrc2,
           llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_SGPR_WORKGROUP_ID_Z) == 0) {
     F.addFnAttr("amdgpu-no-workgroup-id-z");
+    F.addFnAttr("amdgpu-no-cluster-id-z");
   }
   /// ENABLE_SGPR_WORKGROUP_INFO is represented in MFI, but it is always set
   /// to false and there is no way to set it. Capture the original bit for the
@@ -739,22 +752,34 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
     KernelName = llvm::formatv("kernel-{0:x}", KDLoadAddr);
   }
 
-  /// Kernel's return type is always void
-  /// We also do not attempt to recover the kernel's prototype from the metadata
-  /// because the raised LLVM IR version of the kernel has to translate
-  /// low-level argument buffer loading instructions not present in the
-  /// high-level prototype of the original kernel (assuming the kernel was
-  /// written in a high-level language); For example, if the kernarg buffer is
-  /// passed in s[4:5], the raised IR instruction of s_load_dword s[4:5], s[4:5]
-  /// 0x0 will be raised to a load, not "read from the first kernel function's
-  /// argument"
-  /// Also there is no guarantee if a kernel written in assembly tries
-  /// to conform with the LLVM IR convention of "explicit args first, implicit
-  /// arg after" i.e. it might mix implicit and explicit arguments together
+  /// Kernel's return type is always void.
+  ///
+  /// We do not attempt to recover the original high-level kernel
+  /// prototype from the metadata; the raised LLVM IR has to translate
+  /// low-level argument-buffer loads, not "read from the i-th IR arg"
+  /// (e.g. \c s_load_dword \c s[4:5], \c s[4:5], \c 0x0 raises to a
+  /// memory load, regardless of how the source language declared the
+  /// arg). A kernel hand-written in assembly may also interleave
+  /// explicit and implicit arguments in ways that don't fit the LLVM
+  /// "explicit first, then implicit" convention.
+  ///
+  /// We DO synthesize a single \c byref([KD.kernarg_size x i8])
+  /// parameter so the AsmPrinter emits the right \c kernarg_size in
+  /// the relifted KD. \c AMDGPUSubtarget::getKernArgSegmentSize is
+  /// driven by \c getExplicitKernArgSize, which walks \c F.args() and
+  /// only consults \c byref types / param-align; there is no
+  /// attribute-based override. An empty arg list would produce
+  /// \c kernarg_size=0 in the emitted KD, and the kernel would then
+  /// read garbage from \c s[0:1]+offset at dispatch time. A single
+  /// opaque byref-array arg has the right total byte count without
+  /// implying any layout on the kernel body, which still reads via
+  /// raw \c s_load instructions.
   llvm::Type *const ReturnType = llvm::Type::getVoidTy(LLVMContext);
 
+  llvm::PointerType *const KernArgPtrTy =
+      llvm::PointerType::get(LLVMContext, llvm::AMDGPUAS::CONSTANT_ADDRESS);
   llvm::FunctionType *FunctionType =
-      llvm::FunctionType::get(ReturnType, {}, false);
+      llvm::FunctionType::get(ReturnType, {KernArgPtrTy}, false);
 
   llvm::Function *F =
       llvm::Function::Create(FunctionType, llvm::GlobalValue::WeakAnyLinkage,
@@ -770,6 +795,20 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
 
   auto &KDOnHost = *reinterpret_cast<const llvm::amdhsa::kernel_descriptor_t *>(
       &SegmentOrErr->getHostAllocation()[KDLoadOffset]);
+
+  /// Tag the kernarg buffer param with \c byref([N x i8]) so
+  /// \c getExplicitKernArgSize totals \c KD.kernarg_size for the
+  /// AsmPrinter. Use 8-byte alignment to match the HSA kernarg buffer
+  /// alignment requirement (\c hsa_kernel_dispatch_packet_t's
+  /// \c kernarg_address is 8-byte-aligned by the runtime).
+  if (KDOnHost.kernarg_size != 0) {
+    llvm::ArrayType *KernArgBufTy = llvm::ArrayType::get(
+        llvm::Type::getInt8Ty(LLVMContext), KDOnHost.kernarg_size);
+    llvm::AttrBuilder AB(LLVMContext);
+    AB.addByRefAttr(KernArgBufTy);
+    AB.addAlignmentAttr(llvm::Align(8));
+    F->addParamAttrs(0, AB);
+  }
 
   F->addFnAttr("amdgpu-lds-size",
                llvm::to_string(KDOnHost.group_segment_fixed_size));
@@ -856,9 +895,11 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
   /// Kernel functions are 2^8 byte aligned
   MF.setAlignment(llvm::Align(256));
 
-  /// We do not define any implicit arguments to be present since at the binary
-  /// level we don't care whether an argument is implicit or explicit and we
-  /// treat them the same
+  /// We don't model implicit args separately: the kernarg buffer that
+  /// the AsmPrinter emits is sized off the single explicit byref param
+  /// we synthesized above (\c KD.kernarg_size bytes), which already
+  /// covers both the explicit and implicit halves of the original
+  /// kernarg layout.
   F->addFnAttr("amdgpu-implicitarg-num-bytes", "0");
 
   /// GRANULATED_WAVEFRONT_SGPR_COUNT is automatically calculated via the
