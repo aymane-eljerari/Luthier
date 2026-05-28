@@ -752,6 +752,9 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
     KernelName = llvm::formatv("kernel-{0:x}", KDLoadAddr);
   }
 
+  auto &KDOnHost = *reinterpret_cast<const llvm::amdhsa::kernel_descriptor_t *>(
+      &SegmentOrErr->getHostAllocation()[KDLoadOffset]);
+
   /// Kernel's return type is always void.
   ///
   /// We do not attempt to recover the original high-level kernel
@@ -763,23 +766,28 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
   /// explicit and implicit arguments in ways that don't fit the LLVM
   /// "explicit first, then implicit" convention.
   ///
-  /// We DO synthesize a single \c byref([KD.kernarg_size x i8])
-  /// parameter so the AsmPrinter emits the right \c kernarg_size in
-  /// the relifted KD. \c AMDGPUSubtarget::getKernArgSegmentSize is
-  /// driven by \c getExplicitKernArgSize, which walks \c F.args() and
-  /// only consults \c byref types / param-align; there is no
-  /// attribute-based override. An empty arg list would produce
-  /// \c kernarg_size=0 in the emitted KD, and the kernel would then
-  /// read garbage from \c s[0:1]+offset at dispatch time. A single
-  /// opaque byref-array arg has the right total byte count without
-  /// implying any layout on the kernel body, which still reads via
-  /// raw \c s_load instructions.
+  /// When \c KD.kernarg_size is non-zero, we synthesize a single
+  /// \c byref([KD.kernarg_size x i8]) parameter so the AsmPrinter
+  /// emits a matching \c kernarg_size in the relifted KD.
+  /// \c AMDGPUSubtarget::getKernArgSegmentSize is driven by
+  /// \c getExplicitKernArgSize, which walks \c F.args() and only
+  /// consults \c byref types / param-align; there is no attribute-based
+  /// override. An empty arg list would produce \c kernarg_size=0 in
+  /// the emitted KD, and a kernel that loads from \c s[0:1]+offset
+  /// would read garbage at dispatch. A single opaque byref-array arg
+  /// has the right total byte count without implying any layout on
+  /// the kernel body, which still reads via raw \c s_load instructions.
+  /// When \c KD.kernarg_size is zero we keep the arg list empty so
+  /// the lifted IR signature matches the source: no kernarg buffer
+  /// means no IR param.
   llvm::Type *const ReturnType = llvm::Type::getVoidTy(LLVMContext);
 
-  llvm::PointerType *const KernArgPtrTy =
-      llvm::PointerType::get(LLVMContext, llvm::AMDGPUAS::CONSTANT_ADDRESS);
+  llvm::SmallVector<llvm::Type *, 1> ParamTypes;
+  if (KDOnHost.kernarg_size != 0)
+    ParamTypes.push_back(
+        llvm::PointerType::get(LLVMContext, llvm::AMDGPUAS::CONSTANT_ADDRESS));
   llvm::FunctionType *FunctionType =
-      llvm::FunctionType::get(ReturnType, {KernArgPtrTy}, false);
+      llvm::FunctionType::get(ReturnType, ParamTypes, false);
 
   llvm::Function *F =
       llvm::Function::Create(FunctionType, llvm::GlobalValue::WeakAnyLinkage,
@@ -792,9 +800,6 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
 
   // Construct the attributes of the Function, which will result in the MF
   // attributes getting populated
-
-  auto &KDOnHost = *reinterpret_cast<const llvm::amdhsa::kernel_descriptor_t *>(
-      &SegmentOrErr->getHostAllocation()[KDLoadOffset]);
 
   /// Tag the kernarg buffer param with \c byref([N x i8]) so
   /// \c getExplicitKernArgSize totals \c KD.kernarg_size for the
