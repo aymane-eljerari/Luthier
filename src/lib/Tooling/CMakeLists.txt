@@ -22,7 +22,7 @@ target_include_directories(LuthierTooling
         "$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>"
         "$<BUILD_INTERFACE:${AMDGPU_INCLUDE_DIR}>"
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
-        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/luthier/amdgpu>"
+        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/luthier/AMDGPU>"
 )
 
 target_link_libraries(LuthierTooling

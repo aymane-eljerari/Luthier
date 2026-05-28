@@ -9,5 +9,4 @@ find_package(LLVM REQUIRED CONFIG)
 
 luthier_add_tool(LuthierInstrCount
         SOURCES InstrCount.hip
-        OFFLOAD_ARCHES gfx942
         LIBRARIES hip::device)

@@ -9,5 +9,4 @@ find_package(LLVM REQUIRED)
 
 luthier_add_tool(LuthierKernelArgumentIntrinsic
         SOURCES KernelArgumentIntrinsic.hip
-        OFFLOAD_ARCHES gfx908
         LIBRARIES LLVMDemangle hip::device hip::host)

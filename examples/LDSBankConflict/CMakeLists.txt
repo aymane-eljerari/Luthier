@@ -9,5 +9,4 @@ find_package(LLVM REQUIRED)
 
 luthier_add_tool(LuthierLDSBankConflict
         SOURCES LDSBankConflict.hip
-        OFFLOAD_ARCHES gfx908
         LIBRARIES LLVMDemangle hip::device hip::host)

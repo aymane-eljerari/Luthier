@@ -12,5 +12,4 @@ find_package(LLVM REQUIRED CONFIG)
 # .hip still goes through the IR compilation plugin — luthier_add_tool
 # wires that up automatically.
 luthier_add_tool(LiftLaunchedKernels
-        SOURCES LiftLaunchedKernels.hip
-        OFFLOAD_ARCHES gfx908)
+        SOURCES LiftLaunchedKernels.hip)
