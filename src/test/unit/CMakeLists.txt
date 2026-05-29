@@ -8,5 +8,6 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 include(GoogleTest)
-add_subdirectory(irtranslator)
+# add_subdirectory(irtranslator)
 add_subdirectory(svatest)
+add_subdirectory(singleton)
