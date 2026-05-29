@@ -108,12 +108,13 @@ llvm::Error emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
   // restore step must be skipped. \c InjectedPayloadPEIPass already
   // gates its FrameSpillSlots on this same predicate.
   const bool ArchitectedFS = ST.flatScratchIsArchitected();
-  LLVM_DEBUG(llvm::dbgs()
-             << "[TargetModulePatcherPass]   emitCodeToSetupScratch MF='"
-             << MF.getName() << "' SVSVGPR=" << llvm::printReg(SVSStorageVGPR, &TRI)
-             << " dynStack=" << UsesDynamicStack
-             << " privSegFixedSize=" << PrivateSegmentFixedSize
-             << " archFS=" << ArchitectedFS << "\n");
+  LLVM_DEBUG(
+      llvm::dbgs() << "[TargetModulePatcherPass]   emitCodeToSetupScratch MF='"
+                   << MF.getName()
+                   << "' SVSVGPR=" << llvm::printReg(SVSStorageVGPR, &TRI)
+                   << " dynStack=" << UsesDynamicStack
+                   << " privSegFixedSize=" << PrivateSegmentFixedSize
+                   << " archFS=" << ArchitectedFS << "\n");
   // Copy SGPR0, SGPR1 (and on non-architected-FS targets,
   // FLAT_SCR_LO / FLAT_SCR_HI) into the state-value register at the
   // lanes the StateValueArraySpecs layout reserves for them. Layout is
@@ -130,11 +131,11 @@ llvm::Error emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
     SGPRFlatScrHiSpillSlot =
         getKernelPrologFrameSpillLane(llvm::AMDGPU::FLAT_SCR_HI, Specs);
   }
-  assert(SGPR0SpillSlot && SGPR1SpillSlot &&
-         (ArchitectedFS ||
-          (SGPRFlatScrLoSpillSlot && SGPRFlatScrHiSpillSlot)) &&
-         "kernel-prolog SVA lanes must exist for SGPR0/1 (+ FS_LO/HI on "
-         "non-architected-FS targets)");
+  assert(
+      SGPR0SpillSlot && SGPR1SpillSlot &&
+      (ArchitectedFS || (SGPRFlatScrLoSpillSlot && SGPRFlatScrHiSpillSlot)) &&
+      "kernel-prolog SVA lanes must exist for SGPR0/1 (+ FS_LO/HI on "
+      "non-architected-FS targets)");
 
   // The spill/recompute/restore dance around \c PRIVATE_SEGMENT_BUFFER
   // (PSB) and \c FLAT_SCRATCH_INIT is only meaningful on non-
@@ -218,26 +219,30 @@ llvm::Error emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
   if (!ArchitectedFS) {
     llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
                   TII.get(llvm::AMDGPU::S_ADD_U32))
-        .addReg(TRI.getSubReg(MFI.getPreloadedReg(
-                                  llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-                              llvm::AMDGPU::sub0),
-                llvm::RegState::Define)
-        .addReg(TRI.getSubReg(MFI.getPreloadedReg(
-                                  llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-                              llvm::AMDGPU::sub0),
-                llvm::RegState::Kill)
+        .addReg(
+            TRI.getSubReg(MFI.getPreloadedReg(
+                              llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                          llvm::AMDGPU::sub0),
+            llvm::RegState::Define)
+        .addReg(
+            TRI.getSubReg(MFI.getPreloadedReg(
+                              llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                          llvm::AMDGPU::sub0),
+            llvm::RegState::Kill)
         .addReg(MFI.getPreloadedReg(
             llvm::AMDGPUFunctionArgInfo::PRIVATE_SEGMENT_WAVE_BYTE_OFFSET));
     llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
                   TII.get(llvm::AMDGPU::S_ADDC_U32))
-        .addReg(TRI.getSubReg(MFI.getPreloadedReg(
-                                  llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-                              llvm::AMDGPU::sub1),
-                llvm::RegState::Define)
-        .addReg(TRI.getSubReg(MFI.getPreloadedReg(
-                                  llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-                              llvm::AMDGPU::sub1),
-                llvm::RegState::Kill)
+        .addReg(
+            TRI.getSubReg(MFI.getPreloadedReg(
+                              llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                          llvm::AMDGPU::sub1),
+            llvm::RegState::Define)
+        .addReg(
+            TRI.getSubReg(MFI.getPreloadedReg(
+                              llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                          llvm::AMDGPU::sub1),
+            llvm::RegState::Kill)
         .addImm(0);
   }
 
@@ -248,8 +253,8 @@ llvm::Error emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
     InstrumentationStackStart = PrivateSegmentFixedSize;
   }
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]     "
-                            "InstrumentationStackStart="
-                         << InstrumentationStackStart << "\n");
+                             "InstrumentationStackStart="
+                          << InstrumentationStackStart << "\n");
   // Set s32 to be the maximum amount of stack requested by the hook
   llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
                 TII.get(llvm::AMDGPU::S_MOV_B32), llvm::AMDGPU::SGPR32)
@@ -263,8 +268,9 @@ llvm::Error emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
   for (const auto &[PhysReg, StoreSlot] :
        getKernelPrologFrameStoreSlots(Specs)) {
     LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]     "
-                              "frame-store " << llvm::printReg(PhysReg, &TRI)
-                           << " -> lane " << StoreSlot << "\n");
+                               "frame-store "
+                            << llvm::printReg(PhysReg, &TRI) << " -> lane "
+                            << StoreSlot << "\n");
     llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
                   TII.get(llvm::AMDGPU::V_WRITELANE_B32), SVSStorageVGPR)
         .addReg(PhysReg)
@@ -289,19 +295,21 @@ llvm::Error emitCodeToSetupScratch(llvm::MachineInstr &EntryInstr,
 
     llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
                   TII.get(llvm::AMDGPU::V_READLANE_B32))
-        .addReg(TRI.getSubReg(MFI.getPreloadedReg(
-                                  llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-                              llvm::AMDGPU::sub0),
-                llvm::RegState::Define)
+        .addReg(
+            TRI.getSubReg(MFI.getPreloadedReg(
+                              llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                          llvm::AMDGPU::sub0),
+            llvm::RegState::Define)
         .addReg(SVSStorageVGPR)
         .addImm(*SGPRFlatScrLoSpillSlot);
 
     llvm::BuildMI(MF.front(), EntryInstr, llvm::DebugLoc(),
                   TII.get(llvm::AMDGPU::V_READLANE_B32))
-        .addReg(TRI.getSubReg(MFI.getPreloadedReg(
-                                  llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
-                              llvm::AMDGPU::sub1),
-                llvm::RegState::Define)
+        .addReg(
+            TRI.getSubReg(MFI.getPreloadedReg(
+                              llvm::AMDGPUFunctionArgInfo::FLAT_SCRATCH_INIT),
+                          llvm::AMDGPU::sub1),
+            llvm::RegState::Define)
         .addReg(SVSStorageVGPR)
         .addImm(*SGPRFlatScrHiSpillSlot);
   }
@@ -320,10 +328,11 @@ llvm::Error emitCodeToStoreSGPRKernelArg(llvm::MachineInstr &InsertionPoint,
   auto &InsertionPointMBB = *InsertionPoint.getParent();
   LLVM_DEBUG(llvm::dbgs()
              << "[TargetModulePatcherPass]     emitCodeToStoreSGPRKernelArg "
-                "src=" << llvm::printReg(SrcSGPR, &TRI)
-             << " SVS=" << llvm::printReg(SVSVGPR, &TRI)
-             << " size=" << Size << "b slotStart=" << SpillSlotStart
-             << " numSlots=" << NumSlots << " kill=" << KillAfterUse << "\n");
+                "src="
+             << llvm::printReg(SrcSGPR, &TRI)
+             << " SVS=" << llvm::printReg(SVSVGPR, &TRI) << " size=" << Size
+             << "b slotStart=" << SpillSlotStart << " numSlots=" << NumSlots
+             << " kill=" << KillAfterUse << "\n");
   if (Size == 32) {
     LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         NumSlots == 1, "Mismatch between number of SGPRs in the argument and "
@@ -362,8 +371,9 @@ void emitSVSSwitchesForMF(llvm::MachineFunction &MF,
                           const SVStorageAndLoadLocations &SVLocations,
                           const llvm::SlotIndexes &SI) {
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   emitSVSSwitchesForMF "
-                            "MF='" << MF.getName() << "' (" << MF.size()
-                         << " MBB(s))\n");
+                             "MF='"
+                          << MF.getName() << "' (" << MF.size()
+                          << " MBB(s))\n");
   unsigned SwitchesEmitted = 0;
   for (llvm::MachineBasicBlock &MBB : MF) {
     llvm::ArrayRef<StateValueStorageSegment> Segments =
@@ -371,8 +381,8 @@ void emitSVSSwitchesForMF(llvm::MachineFunction &MF,
     if (Segments.size() < 2)
       continue;
     LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]     "
-                           << llvm::printMBBReference(MBB) << " has "
-                           << Segments.size() << " segments\n");
+                            << llvm::printMBBReference(MBB) << " has "
+                            << Segments.size() << " segments\n");
     for (unsigned I = 0, E = Segments.size() - 1; I < E; ++I) {
       const StateValueArrayStorage &Curr = Segments[I].getSVS();
       const StateValueArrayStorage &Next = Segments[I + 1].getSVS();
@@ -400,14 +410,14 @@ void emitSVSSwitchesForMF(llvm::MachineFunction &MF,
           InsertPt = MBB.end();
       }
       LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]       "
-                                "emit SVS switch at segment boundary "
-                             << I << " -> " << (I + 1) << "\n");
+                                 "emit SVS switch at segment boundary "
+                              << I << " -> " << (I + 1) << "\n");
       Curr.emitCodeToSwitchSVS(InsertPt, Next);
     }
   }
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   emitted "
-                         << SwitchesEmitted << " SVS switch(es) for MF '"
-                         << MF.getName() << "'\n");
+                          << SwitchesEmitted << " SVS switch(es) for MF '"
+                          << MF.getName() << "'\n");
 }
 
 /// Map a Luthier \c ScalarValueArgument to the AMDGPU
@@ -454,23 +464,23 @@ emitInitialEntryKernelSetup(llvm::MachineModuleInfo &TargetMMI,
                             const SVStorageAndLoadLocations &SVLocations,
                             const StateValueArraySpecs &Specs) {
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] "
-                            "emitInitialEntryKernelSetup over "
-                         << FPD.Kernels.size() << " kernel(s)\n");
+                             "emitInitialEntryKernelSetup over "
+                          << FPD.Kernels.size() << " kernel(s)\n");
   for (const auto &[KernelMF, KernelInfo] : FPD.Kernels) {
     if (!KernelInfo.usesSVA()) {
       LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   kernel '"
-                             << (KernelMF ? KernelMF->getName() : "<null>")
-                             << "' does not use SVA, skipping\n");
+                              << (KernelMF ? KernelMF->getName() : "<null>")
+                              << "' does not use SVA, skipping\n");
       continue;
     }
     llvm::MachineFunction *MF = const_cast<llvm::MachineFunction *>(KernelMF);
     if (!MF || MF->empty()) {
       LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   kernel MF null "
-                                "or empty, skipping\n");
+                                 "or empty, skipping\n");
       continue;
     }
     LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   kernel '"
-                           << MF->getName() << "' uses SVA; setup begin\n");
+                            << MF->getName() << "' uses SVA; setup begin\n");
     llvm::MachineBasicBlock &EntryMBB = MF->front();
     if (EntryMBB.empty())
       return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
@@ -500,7 +510,7 @@ emitInitialEntryKernelSetup(llvm::MachineModuleInfo &TargetMMI,
       unsigned PrivateSegmentFixedSize =
           static_cast<unsigned>(MFI.getStackSize());
       LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]     "
-                                "RequiresScratchAndStackSetup; emitting\n");
+                                 "RequiresScratchAndStackSetup; emitting\n");
       if (auto Err = emitCodeToSetupScratch(EntryInstr, SVSStorageReg,
                                             UsesDynamicStack,
                                             PrivateSegmentFixedSize, Specs))
@@ -508,13 +518,13 @@ emitInitialEntryKernelSetup(llvm::MachineModuleInfo &TargetMMI,
     }
 
     const auto &SIMFI = *MF->getInfo<llvm::SIMachineFunctionInfo>();
-    LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]     "
-                              "RequestedKernelArguments count="
-                           << KernelInfo.RequestedKernelArguments.size()
-                           << "\n");
+    LLVM_DEBUG(llvm::dbgs()
+               << "[TargetModulePatcherPass]     "
+                  "RequestedKernelArguments count="
+               << KernelInfo.RequestedKernelArguments.size() << "\n");
     for (ScalarValueArgument SA : KernelInfo.RequestedKernelArguments) {
       LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]       SVA arg="
-                             << static_cast<unsigned>(SA) << "\n");
+                              << static_cast<unsigned>(SA) << "\n");
       auto LaneIt = Specs.findArgumentLane(SA);
       if (LaneIt == Specs.argument_lane_end())
         return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
@@ -525,7 +535,7 @@ emitInitialEntryKernelSetup(llvm::MachineModuleInfo &TargetMMI,
           preloadedValueForSVA(SA);
       if (!PV) {
         LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]         "
-                                  "no preloaded value (filled elsewhere)\n");
+                                   "no preloaded value (filled elsewhere)\n");
         continue; // USER_ARG_PTR / IMPLICIT_ARG_OFFSET: filled in elsewhere.
       }
       llvm::MCRegister SrcSGPR = SIMFI.getPreloadedReg(*PV);
@@ -564,14 +574,14 @@ void patchFrameInfo(const llvm::MachineFunction &InjectedPayloadMF,
     return;
   }
   auto &DstMFI = ToBeInstrumentedMF.getFrameInfo();
-  LLVM_DEBUG(llvm::dbgs()
-             << "[TargetModulePatcherPass]   patchFrameInfo: payload '"
-             << InjectedPayloadMF.getName() << "' srcStack="
-             << SrcMFI.getStackSize() << " into host '"
-             << ToBeInstrumentedMF.getName() << "' dstStack(before)="
-             << DstMFI.getStackSize() << " srcObjs="
-             << SrcMFI.getNumObjects() << " srcFixed="
-             << SrcMFI.getNumFixedObjects() << "\n");
+  LLVM_DEBUG(
+      llvm::dbgs() << "[TargetModulePatcherPass]   patchFrameInfo: payload '"
+                   << InjectedPayloadMF.getName()
+                   << "' srcStack=" << SrcMFI.getStackSize() << " into host '"
+                   << ToBeInstrumentedMF.getName()
+                   << "' dstStack(before)=" << DstMFI.getStackSize()
+                   << " srcObjs=" << SrcMFI.getNumObjects()
+                   << " srcFixed=" << SrcMFI.getNumFixedObjects() << "\n");
   DstMFI.setStackSize(DstMFI.getStackSize() + SrcMFI.getStackSize());
 
   auto CopyObjectProperties = [](llvm::MachineFrameInfo &DstMFI,
@@ -643,7 +653,8 @@ void inlineInjectedPayload(const llvm::MachineFunction &InjectedPayloadMF,
     }
   }
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]     payload return "
-                            "block count=" << NumReturnBlocksInHook << "\n");
+                             "block count="
+                          << NumReturnBlocksInHook << "\n");
   if (!HookLastReturnMBB) {
     llvm::report_fatal_error(
         "TargetModulePatcherPass: payload MF has no return block");
@@ -839,17 +850,17 @@ llvm::Error cloneIModuleIntoTarget(llvm::Module &IModule,
                                    const llvm::MachineModuleInfo &IMMI,
                                    llvm::FunctionAnalysisManager &TargetFAM,
                                    llvm::ValueToValueMapTy &VMap) {
-  LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] cloneIModuleIntoTarget: "
-                          << "IModule has "
-                          << std::distance(IModule.global_begin(),
-                                           IModule.global_end())
-                          << " global(s), " << IModule.size()
-                          << " function(s)\n");
+  LLVM_DEBUG(
+      llvm::dbgs() << "[TargetModulePatcherPass] cloneIModuleIntoTarget: "
+                   << "IModule has "
+                   << std::distance(IModule.global_begin(),
+                                    IModule.global_end())
+                   << " global(s), " << IModule.size() << " function(s)\n");
   unsigned ClonedGVs = 0;
   for (auto &GV : IModule.globals()) {
     ++ClonedGVs;
     LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   clone GV '"
-                           << GV.getName() << "'\n");
+                            << GV.getName() << "'\n");
     auto *NewGV = new llvm::GlobalVariable(
         TargetModule, GV.getValueType(), GV.isConstant(), GV.getLinkage(),
         /*Initializer=*/nullptr, GV.getName(), /*InsertBefore=*/nullptr,
@@ -879,13 +890,13 @@ llvm::Error cloneIModuleIntoTarget(llvm::Module &IModule,
     if (F.hasFnAttribute(InjectedPayloadAttribute)) {
       ++SkippedPayloads;
       LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   skip payload '"
-                             << F.getName() << "'\n");
+                              << F.getName() << "'\n");
       continue;
     }
     ++ClonedFuncHandles;
-    LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   clone Fn handle '"
-                           << F.getName() << "' (decl="
-                           << F.isDeclaration() << ")\n");
+    LLVM_DEBUG(llvm::dbgs()
+               << "[TargetModulePatcherPass]   clone Fn handle '" << F.getName()
+               << "' (decl=" << F.isDeclaration() << ")\n");
 
     auto *NewF = llvm::Function::Create(
         llvm::cast<llvm::FunctionType>(F.getValueType()), F.getLinkage(),
@@ -911,13 +922,13 @@ llvm::Error cloneIModuleIntoTarget(llvm::Module &IModule,
     const auto *SrcMF = IMMI.getMachineFunction(F);
     if (SrcMF == nullptr) {
       LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   no MF for '"
-                             << F.getName() << "', skip MF clone\n");
+                              << F.getName() << "', skip MF clone\n");
       continue; // Definition without a lifted MF — rare; skip MF clone.
     }
 
-    LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   clone MF '"
-                           << F.getName() << "' (" << SrcMF->size()
-                           << " MBB(s))\n");
+    LLVM_DEBUG(llvm::dbgs()
+               << "[TargetModulePatcherPass]   clone MF '" << F.getName()
+               << "' (" << SrcMF->size() << " MBB(s))\n");
     // Ask the target FAM to construct an empty MF for the new
     // Function (MachineFunctionAnalysis::run does this lazily), then
     // populate it via cloneMFInto. The MF now lives in the target
@@ -931,10 +942,11 @@ llvm::Error cloneIModuleIntoTarget(llvm::Module &IModule,
   }
 
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] cloneIModuleIntoTarget "
-                            "done: " << ClonedGVs << " GV(s), "
-                         << ClonedFuncHandles << " Fn handle(s) ("
-                         << SkippedPayloads << " payload(s) skipped), "
-                         << ClonedMFs << " MF clone(s)\n");
+                             "done: "
+                          << ClonedGVs << " GV(s), " << ClonedFuncHandles
+                          << " Fn handle(s) (" << SkippedPayloads
+                          << " payload(s) skipped), " << ClonedMFs
+                          << " MF clone(s)\n");
   return llvm::Error::success();
 }
 
@@ -947,7 +959,8 @@ llvm::Error cloneIModuleIntoTarget(llvm::Module &IModule,
 /// pass over the target.
 void stripStaleNumRegsAttrs(llvm::Module &TargetModule) {
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] stripStaleNumRegsAttrs "
-                            "over " << TargetModule.size() << " function(s)\n");
+                             "over "
+                          << TargetModule.size() << " function(s)\n");
   for (llvm::Function &F : TargetModule.functions()) {
     F.removeFnAttr("amdgpu-num-vgpr");
     F.removeFnAttr("amdgpu-num-sgpr");
@@ -1011,8 +1024,8 @@ detectOutOfRangeBranches(const llvm::MachineFunction &MF,
                        << "[TargetModulePatcherPass]     out-of-range branch "
                           "at 0x"
                        << llvm::Twine::utohexstr(MIOffset) << " -> "
-                       << llvm::printMBBReference(*TargetMBB) << " delta="
-                       << Delta << "B\n");
+                       << llvm::printMBBReference(*TargetMBB)
+                       << " delta=" << Delta << "B\n");
             Out.push_back({&MF, &MI, TargetMBB, MIOffset, Delta});
           }
         }
@@ -1052,8 +1065,8 @@ detectOutOfRangeBranches(const llvm::MachineFunction &MF,
 bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   LLVM_DEBUG(llvm::dbgs() << "=== " << getPassName() << " ===\n");
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] IModule='"
-                          << IModule.getName() << "' ("
-                          << IModule.size() << " function(s))\n");
+                          << IModule.getName() << "' (" << IModule.size()
+                          << " function(s))\n");
 
   llvm::LLVMContext &Ctx = IModule.getContext();
   llvm::ModuleAnalysisManager &IMAM =
@@ -1094,11 +1107,10 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   std::unique_ptr<StateValueArraySpecs> SVASpecs =
       StateValueArraySpecs::getSVASpecs(IModule, TM);
   if (!SVASpecs) {
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, LUTHIER_MAKE_GENERIC_ERROR(
-                 "TargetModulePatcherPass: StateValueArraySpecs::getSVASpecs "
-                 "returned null; expected the IModule to carry SVA-spec "
-                 "metadata by this stage"));
+    Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+        "TargetModulePatcherPass: StateValueArraySpecs::getSVASpecs "
+        "returned null; expected the IModule to carry SVA-spec "
+        "metadata by this stage")));
     return false;
   }
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] SVASpecs resolved\n");
@@ -1122,7 +1134,7 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // emit only the per-MBB switches — which is the part that exercises
   // the cross-MBB storage relocation logic.
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] === Phase A.1: "
-                            "emitSVSSwitchesForMF ===\n");
+                             "emitSVSSwitchesForMF ===\n");
   bool Changed = false;
   for (llvm::Function &F : TargetModule) {
     if (F.isDeclaration())
@@ -1141,10 +1153,10 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // it where target lookups are needed (a follow-on cleanup will switch
   // it to FAM too once we audit the helper).
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] === Phase A.2: "
-                            "emitInitialEntryKernelSetup ===\n");
+                             "emitInitialEntryKernelSetup ===\n");
   if (auto Err = emitInitialEntryKernelSetup(IMMI, TargetModule, FPD,
                                              SVLocations, *SVASpecs)) {
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
+    Ctx.emitError(llvm::toString(std::move(Err)));
     return Changed;
   }
 
@@ -1157,11 +1169,11 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // cloneMFInto, so they're visible to subsequent target-side loops
   // and to NewPMAsmPrinter's per-Function MF lookup.
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] === Phase B.1: "
-                            "cloneIModuleIntoTarget ===\n");
+                             "cloneIModuleIntoTarget ===\n");
   llvm::ValueToValueMapTy VMap;
   if (auto Err = cloneIModuleIntoTarget(IModule, TargetModule, IMMI, TargetFAM,
                                         VMap)) {
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
+    Ctx.emitError(llvm::toString(std::move(Err)));
     return Changed;
   }
 
@@ -1169,7 +1181,7 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // these from the original code object, and they're wrong now that
   // we've inlined payloads + cloned helpers.
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] === Phase B.2: "
-                            "stripStaleNumRegsAttrs ===\n");
+                             "stripStaleNumRegsAttrs ===\n");
   stripStaleNumRegsAttrs(TargetModule);
 
   // Step 3: Inline every injected payload at its corresponding target
@@ -1179,7 +1191,7 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // replaced by fall-through / branch into the host continuation MBB,
   // matching the prior PatchLiftedRepresentationPass inline path.
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] === Phase B.3: inline "
-                            "injected payloads ===\n");
+                             "injected payloads ===\n");
   const InjectedPayloadAndInstPoint &IPIP =
       IMAM.getResult<InjectedPayloadAndInstPointAnalysis>(IModule);
 
@@ -1213,11 +1225,10 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
     const auto *InjectedPayloadMF =
         IMMI.getMachineFunction(*InjectedPayloadFunc);
     if (!InjectedPayloadMF) {
-      LUTHIER_CTX_EMIT_ON_ERROR(
-          Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                   "TargetModulePatcherPass: payload function '{0}' has no "
-                   "MachineFunction in the IModule MMI",
-                   InjectedPayloadFunc->getName())));
+      Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+          "TargetModulePatcherPass: payload function '{0}' has no "
+          "MachineFunction in the IModule MMI",
+          InjectedPayloadFunc->getName()))));
       return Changed;
     }
     patchFrameInfo(*InjectedPayloadMF,
@@ -1225,7 +1236,7 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
     inlineInjectedPayload(*InjectedPayloadMF, *InsertionPointMI, MBBMap, VMap);
   }
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   Phase B.3 inlined "
-                         << PayloadCount << " payload(s)\n");
+                          << PayloadCount << " payload(s)\n");
 
   // Post-inline branch displacement check. CodeGenerator::printAssemblyFile
   // invokes AsmPrinter directly with no intermediate machine-pass chain, so
@@ -1248,7 +1259,7 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // storage segment for this MF — that's the set the scavenger must
   // not pick when allocating the long-branch PC pair.
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] === Phase B.4: "
-                            "branch relaxation per kernel ===\n");
+                             "branch relaxation per kernel ===\n");
   for (llvm::Function &F : TargetModule) {
     if (F.isDeclaration())
       continue;
@@ -1266,13 +1277,13 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
     // enough to need relaxing.
     if (F.getCallingConv() != llvm::CallingConv::AMDGPU_KERNEL) {
       LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   skip non-kernel '"
-                             << F.getName() << "' for relaxer\n");
+                              << F.getName() << "' for relaxer\n");
       continue;
     }
     llvm::MachineFunction *MF = &getTargetMF(F);
-    LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   relaxer for kernel '"
-                           << F.getName() << "' (" << MF->size()
-                           << " MBB(s))\n");
+    LLVM_DEBUG(llvm::dbgs()
+               << "[TargetModulePatcherPass]   relaxer for kernel '"
+               << F.getName() << "' (" << MF->size() << " MBB(s))\n");
     llvm::DenseSet<llvm::MCPhysReg> ReservedForSVA;
     for (const auto &MBB : *MF) {
       for (const auto &Seg : SVLocations.getStorageIntervals(MBB)) {
@@ -1283,8 +1294,8 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
       }
     }
     LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]     "
-                              "ReservedForSVA size="
-                           << ReservedForSVA.size() << "\n");
+                               "ReservedForSVA size="
+                            << ReservedForSVA.size() << "\n");
 
     // Pre-pin a `LongBranchReservedReg` on this MF if any globally
     // dead SReg_64 exists. `SIInstrInfo::insertIndirectBranch` (and
@@ -1353,13 +1364,13 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
       }
       if (Picked) {
         LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]     "
-                                  "LongBranchReservedReg picked="
-                               << llvm::printReg(Picked, TRI) << "\n");
+                                   "LongBranchReservedReg picked="
+                                << llvm::printReg(Picked, TRI) << "\n");
         MFI->setLongBranchReservedReg(Picked);
       } else {
         LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]     "
-                                  "no globally-dead SReg_64; relaxer must "
-                                  "scavenge via SVA-lane spill\n");
+                                   "no globally-dead SReg_64; relaxer must "
+                                   "scavenge via SVA-lane spill\n");
       }
     }
 
@@ -1461,12 +1472,12 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
 
     LuthierBranchRelaxation BR(std::move(ReservedForSVA), std::move(SpillSink));
     LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]     running "
-                              "LuthierBranchRelaxation on '" << F.getName()
-                           << "'\n");
+                               "LuthierBranchRelaxation on '"
+                            << F.getName() << "'\n");
     BR.run(*MF);
     LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]     "
-                              "LuthierBranchRelaxation done for '"
-                           << F.getName() << "'\n");
+                               "LuthierBranchRelaxation done for '"
+                            << F.getName() << "'\n");
   }
 
   // Sanity-check: re-run the detector and hard-error if anything
@@ -1474,7 +1485,7 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
   // AMDGPU-specific corner case) or our offset accounting disagrees
   // with the asm printer's.
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] === Phase B.5: "
-                            "post-relax out-of-range sanity check ===\n");
+                             "post-relax out-of-range sanity check ===\n");
   llvm::SmallVector<OutOfRangeBranchRecord, 4> OutOfRange;
   for (llvm::Function &F : TargetModule) {
     if (F.isDeclaration())
@@ -1486,9 +1497,9 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
     detectOutOfRangeBranches(getTargetMF(F), OutOfRange);
   }
   if (!OutOfRange.empty()) {
-    LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass]   "
-                           << OutOfRange.size()
-                           << " branch(es) still over-range; failing\n");
+    LLVM_DEBUG(llvm::dbgs()
+               << "[TargetModulePatcherPass]   " << OutOfRange.size()
+               << " branch(es) still over-range; failing\n");
     std::string Detail;
     llvm::raw_string_ostream OS(Detail);
     OS << "TargetModulePatcherPass: " << OutOfRange.size()
@@ -1499,11 +1510,11 @@ bool TargetModulePatcherPass::runOnModule(llvm::Module &IModule) {
       OS.write_hex(static_cast<uint64_t>(R.BranchOffset));
       OS << " → " << R.Target->getName() << " (delta " << R.Delta << " bytes)";
     }
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, LUTHIER_MAKE_GENERIC_ERROR(Detail));
+    Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(Detail)));
     return Changed;
   }
   LLVM_DEBUG(llvm::dbgs() << "[TargetModulePatcherPass] runOnModule complete; "
-                            "target module is patched and verified\n");
+                             "target module is patched and verified\n");
   return true;
 }
 

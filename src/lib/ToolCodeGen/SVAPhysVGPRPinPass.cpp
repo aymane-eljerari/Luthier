@@ -89,10 +89,8 @@ bool SVAPhysVGPRPinPass::runOnMachineFunction(llvm::MachineFunction &MF) {
   const auto *LoadPlan =
       SVLocations.getStateValueArrayLoadPlanForInstPoint(*AppMI);
   if (!LoadPlan) {
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                 "SVAPhysVGPRPinPass: no SVA load plan for IP in {0}",
-                 F.getName())));
+    Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+        "SVAPhysVGPRPinPass: no SVA load plan for IP in {0}", F.getName()))));
     return false;
   }
   llvm::MCRegister TargetPhys = LoadPlan->StateValueArrayLoadVGPR;

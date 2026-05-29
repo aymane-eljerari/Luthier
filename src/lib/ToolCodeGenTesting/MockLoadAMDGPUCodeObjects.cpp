@@ -67,10 +67,16 @@ MockLoadAMDGPUCodeObjects::run(llvm::Module &M,
                << Path << "\n");
     llvm::Expected<llvm::MemoryBuffer &> CodeObjectBufferOrErr =
         CodeObjectManager.readCodeObjectFromFile(Path);
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, CodeObjectBufferOrErr.takeError());
+    if (auto Err = CodeObjectBufferOrErr.takeError()) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return llvm::PreservedAnalyses::all();
+    }
 
     auto LoadedCodeObjectOrErr = Loader.loadCodeObject(*CodeObjectBufferOrErr);
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, LoadedCodeObjectOrErr.takeError());
+    if (auto Err = LoadedCodeObjectOrErr.takeError()) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return llvm::PreservedAnalyses::all();
+    }
     LLVM_DEBUG(llvm::dbgs()
                << "[MockLoadAMDGPUCodeObjects] Loaded " << Path
                << " (load base "
@@ -88,9 +94,11 @@ MockLoadAMDGPUCodeObjects::run(llvm::Module &M,
                                "symbol "
                             << SymName << " at "
                             << llvm::format_hex(SymAddr, 18) << "\n");
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, Loader.defineExternalSymbol(SymName,
-                                         reinterpret_cast<void *>(SymAddr)));
+    if (auto Err = Loader.defineExternalSymbol(
+            SymName, reinterpret_cast<void *>(SymAddr))) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return llvm::PreservedAnalyses::all();
+    }
   }
 
   /// Finalize the loader
@@ -98,7 +106,10 @@ MockLoadAMDGPUCodeObjects::run(llvm::Module &M,
              << "[MockLoadAMDGPUCodeObjects] Finalizing loader ("
              << Loader.loaded_code_objects_size() << " LCO(s), "
              << Loader.external_symbol_size() << " external symbol(s))\n");
-  LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Loader.finalize());
+  if (auto Err = Loader.finalize()) {
+    Ctx.emitError(llvm::toString(std::move(Err)));
+    return llvm::PreservedAnalyses::all();
+  }
 
   return llvm::PreservedAnalyses::all();
 };

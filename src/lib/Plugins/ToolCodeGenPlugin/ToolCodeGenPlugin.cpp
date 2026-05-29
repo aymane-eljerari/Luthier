@@ -197,11 +197,11 @@ llvmGetPassPluginInfo() {
                     uint64_t LoadOffset =
                         std::get<uint64_t>(luthier::InitialEntryPoint.second);
                     if (LoadOffset > LCO.getLoadedRegion().size()) {
-                      LUTHIER_CTX_EMIT_ON_ERROR(
-                          Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                                   "Offset {0:x} is outside the "
-                                   "range of code object index {1}",
-                                   LoadOffset, CodeObjectIdx)));
+                      Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+                          llvm::formatv("Offset {0:x} is outside the "
+                                        "range of code object index {1}",
+                                        LoadOffset, CodeObjectIdx))));
+                      return luthier::EntryPoint{};
                     }
                     return luthier::EntryPoint{
                         reinterpret_cast<uint64_t>(
@@ -215,23 +215,29 @@ llvmGetPassPluginInfo() {
                     llvm::Error Err = LCO.getCodeObject()
                                           .lookupSymbol(SymbolName)
                                           .moveInto(Symbol);
-                    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
+                    if (Err) {
+                      Ctx.emitError(llvm::toString(std::move(Err)));
+                      return luthier::EntryPoint{};
+                    }
 
                     if (!Symbol.has_value()) {
-                      LUTHIER_CTX_EMIT_ON_ERROR(
-                          Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                                   "Failed to find the symbol {0} in "
-                                   "code object index {1}",
-                                   SymbolName, CodeObjectIdx)));
+                      Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+                          llvm::formatv("Failed to find the symbol {0} in "
+                                        "code object index {1}",
+                                        SymbolName, CodeObjectIdx))));
+                      return luthier::EntryPoint{};
                     }
                     uint64_t LoadOffset;
                     Err = Symbol->getAddress().moveInto(LoadOffset);
+                    if (Err) {
+                      Ctx.emitError(llvm::toString(std::move(Err)));
+                      return luthier::EntryPoint{};
+                    }
                     assert(LoadOffset < LCO.getLoadedRegion().size() &&
                            "Load offset falls outside of the code object");
                     uint64_t LoadAddr = reinterpret_cast<uint64_t>(
                                             LCO.getLoadedRegion().data()) +
                                         LoadOffset;
-                    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
                     if (Symbol->isKernelDescriptor()) {
                       auto &KD = *reinterpret_cast<
                           const llvm::amdhsa::kernel_descriptor_t *>(LoadAddr);
@@ -243,10 +249,10 @@ llvmGetPassPluginInfo() {
                 }
                 CodeObjectIdx++;
               };
-              LUTHIER_CTX_EMIT_ON_ERROR(
-                  Ctx, LUTHIER_MAKE_GENERIC_ERROR(
-                           "Failed to get the entry point; Code "
-                           "object index is out of range"));
+              Ctx.emitError(llvm::toString(
+                  LUTHIER_MAKE_GENERIC_ERROR("Failed to get the entry point; "
+                                             "Code object index is out of "
+                                             "range")));
               llvm_unreachable("Should have thrown an error by now");
             });
       });
@@ -267,39 +273,45 @@ llvmGetPassPluginInfo() {
                       LCO.getCodeObject()
                           .lookupSymbol(luthier::InitialExecutionPoint.second)
                           .moveInto(Symbol);
-                  LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
+                  if (Err) {
+                    Ctx.emitError(llvm::toString(std::move(Err)));
+                    llvm_unreachable("Should have thrown an error by now");
+                  }
 
                   if (!Symbol.has_value()) {
-                    LUTHIER_CTX_EMIT_ON_ERROR(
-                        Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                                 "Failed to find the symbol {0} in "
-                                 "code object index {1}",
-                                 luthier::InitialExecutionPoint.second,
-                                 CodeObjectIdx)));
+                    Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+                        llvm::formatv("Failed to find the symbol {0} in "
+                                      "code object index {1}",
+                                      luthier::InitialExecutionPoint.second,
+                                      CodeObjectIdx))));
+                    llvm_unreachable("Should have thrown an error by now");
                   }
                   uint64_t LoadOffset;
                   Err = Symbol->getAddress().moveInto(LoadOffset);
+                  if (Err) {
+                    Ctx.emitError(llvm::toString(std::move(Err)));
+                    llvm_unreachable("Should have thrown an error by now");
+                  }
                   assert(LoadOffset < LCO.getLoadedRegion().size() &&
                          "Load offset falls outside of the code object");
                   uint64_t LoadAddr =
                       reinterpret_cast<uint64_t>(LCO.getLoadedRegion().data()) +
                       LoadOffset;
-                  LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
-                  if (!Symbol->isKernelDescriptor())
-                    LUTHIER_CTX_EMIT_ON_ERROR(
-                        Ctx,
-                        LUTHIER_MAKE_GENERIC_ERROR(
-                            "Initial execution point is not a kernel symbol"));
+                  if (!Symbol->isKernelDescriptor()) {
+                    Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+                        "Initial execution point is not a kernel symbol")));
+                    llvm_unreachable("Should have thrown an error by now");
+                  }
                   auto &KD = *reinterpret_cast<
                       const llvm::amdhsa::kernel_descriptor_t *>(LoadAddr);
                   return KD;
                 }
                 CodeObjectIdx++;
               };
-              LUTHIER_CTX_EMIT_ON_ERROR(
-                  Ctx, LUTHIER_MAKE_GENERIC_ERROR(
-                           "Failed to get the entry point; Code "
-                           "object index is out of range"));
+              Ctx.emitError(llvm::toString(
+                  LUTHIER_MAKE_GENERIC_ERROR("Failed to get the entry point; "
+                                             "Code object index is out of "
+                                             "range")));
               llvm_unreachable("Should have thrown an error by now");
             });
       });

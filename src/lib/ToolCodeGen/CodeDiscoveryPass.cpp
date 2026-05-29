@@ -1474,8 +1474,10 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
   auto InitialExecPointMFAndSymbol = initKernelEntryPointFunction(
       InitialExecutionPoint, SegAccessor, TargetModule, TM, FAM);
   if (llvm::Error Err = InitialExecPointMFAndSymbol.takeError()) {
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
-    return llvm::PreservedAnalyses::all();
+    Ctx.emitError(llvm::toString(std::move(Err)));
+    /// initKernelEntryPointFunction may have created a partial entry-point
+    /// Function/MF in the module before failing, so nothing is preserved.
+    return llvm::PreservedAnalyses::none();
   }
 
   InitialExecPointMFAndSymbol->first.getFunction().addFnAttr(
@@ -1499,8 +1501,10 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
           InitialExecPointFn.getFnAttributeAsParsedInteger("amdgpu-num-sgpr"),
           InitialExecPointFn.getFnAttributeAsParsedInteger("amdgpu-num-vgpr"));
   if (llvm::Error Err = DeviceFuncPrototypeOrErr.takeError()) {
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
-    return llvm::PreservedAnalyses::all();
+    Ctx.emitError(llvm::toString(std::move(Err)));
+    /// The initial entry-point Function was already attributed above
+    /// (InitialExecutionPointAttr), so the module is already mutated.
+    return llvm::PreservedAnalyses::none();
   }
 
   /// Collected across iterations. For each S_CALL_B64 encountered, the MI
@@ -1544,8 +1548,10 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     }();
 
     if (!MFAndFuncSymRefOrErr) {
-      LUTHIER_CTX_EMIT_ON_ERROR(Ctx, MFAndFuncSymRefOrErr.takeError());
-      return llvm::PreservedAnalyses::all();
+      Ctx.emitError(llvm::toString(MFAndFuncSymRefOrErr.takeError()));
+      /// Prior iterations and initLiftedDeviceFunctionEntry may have already
+      /// created Functions/MFs in the module, so nothing is preserved.
+      return llvm::PreservedAnalyses::none();
     }
     auto [MF, FuncSymRef] = *MFAndFuncSymRefOrErr;
 
@@ -1559,19 +1565,21 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     /// Ask for the trace of the instructions for this machine function
     auto &TraceResults = MFAM.getResult<InstructionTracesAnalysis>(MF);
     if (!TraceResults.getTraces()) {
-      LUTHIER_CTX_EMIT_ON_ERROR(
-          Ctx,
-          LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-              "Failed to get trace results for function {0}", MF.getName())));
-      return llvm::PreservedAnalyses::all();
+      Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+          "Failed to get trace results for function {0}", MF.getName()))));
+      /// The MF for this entry point was already created and attributed
+      /// (setFunctionEntryPoint), so the module is already mutated.
+      return llvm::PreservedAnalyses::none();
     }
     llvm::SmallVector<llvm::MachineInstr *> TraceTermInstructions{};
     /// Populate the current machine function using the trace info we just
     /// obtained
     if (llvm::Error Err =
             populateMF(*TraceResults.getTraces(), MF, TraceTermInstructions)) {
-      LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
-      return llvm::PreservedAnalyses::all();
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      /// populateMF builds MIR into MF and may have partially populated it
+      /// before failing, so nothing is preserved.
+      return llvm::PreservedAnalyses::none();
     }
 
     /// Invalidate all module-level analysis not related to Functions and
@@ -1588,8 +1596,10 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
     MIRToIRTranslator Translator{MF, Err};
 
     if (Err) {
-      LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
-      return llvm::PreservedAnalyses::all();
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      /// MF is fully populated with MIR and the translator ctor may have
+      /// started emitting IR, so nothing is preserved.
+      return llvm::PreservedAnalyses::none();
     }
 
     Translator.translate();
@@ -1654,12 +1664,13 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
   for (auto [MI, TargetAddr] : UnresolvedShortCallInsts) {
     auto It = AddrToFunction.find(TargetAddr);
     if (It == AddrToFunction.end()) {
-      LUTHIER_CTX_EMIT_ON_ERROR(
-          Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                   "[CodeDiscoveryPass] S_CALL_B64 target {0:x} did not "
-                   "resolve to a Function",
-                   TargetAddr)));
-      return llvm::PreservedAnalyses::all();
+      Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+          "[CodeDiscoveryPass] S_CALL_B64 target {0:x} did not "
+          "resolve to a Function",
+          TargetAddr))));
+      /// All Functions/MFs and their IR have already been built at this
+      /// point, so nothing is preserved.
+      return llvm::PreservedAnalyses::none();
     }
     // Replace call target with MO_GlobalAddress(F, 0).
     assert(MI->getNumOperands() >= 2 &&

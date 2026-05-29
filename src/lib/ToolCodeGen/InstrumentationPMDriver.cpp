@@ -308,12 +308,12 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
     if (IModPath.ends_with(".luthier")) {
       auto ParserOrErr = LuthierFileParser::create(IModPath);
       if (!ParserOrErr) {
-        LUTHIER_CTX_EMIT_ON_ERROR(Context, ParserOrErr.takeError());
+        Context.emitError(llvm::toString(ParserOrErr.takeError()));
         return llvm::PreservedAnalyses::all();
       }
       auto IModOrErr = ParserOrErr->loadIModule(Context, TargetAppM);
       if (!IModOrErr) {
-        LUTHIER_CTX_EMIT_ON_ERROR(Context, IModOrErr.takeError());
+        Context.emitError(llvm::toString(IModOrErr.takeError()));
         return llvm::PreservedAnalyses::all();
       }
       IModule = std::move(IModOrErr->first);
@@ -321,7 +321,7 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
     } else {
       auto LoadedOrErr = loadIModuleFromFile(IModPath, Context);
       if (!LoadedOrErr) {
-        LUTHIER_CTX_EMIT_ON_ERROR(Context, LoadedOrErr.takeError());
+        Context.emitError(llvm::toString(LoadedOrErr.takeError()));
         return llvm::PreservedAnalyses::all();
       }
       IModule = std::move(LoadedOrErr->Module);
@@ -341,9 +341,9 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
     if (PluginIModule != nullptr) {
       /// TODO: Add CL parameter to control the linking flag here
       if (llvm::Linker::linkModules(*IModule, std::move(PluginIModule))) {
-        LUTHIER_CTX_EMIT_ON_ERROR(
-            Context,
-            LUTHIER_MAKE_GENERIC_ERROR("Failed to link modules together"));
+        Context.emitError(llvm::toString(
+            LUTHIER_MAKE_GENERIC_ERROR("Failed to link modules together")));
+        return llvm::PreservedAnalyses::all();
       }
     }
   }
@@ -434,7 +434,7 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
       // Run caller-supplied IR pipeline.
       if (auto Err =
               PB.parsePassPipeline(IMPM, Options.IModuleIRPasses.getValue())) {
-        LUTHIER_CTX_EMIT_ON_ERROR(Context, std::move(Err));
+        Context.emitError(llvm::toString(std::move(Err)));
         return llvm::PreservedAnalyses::all();
       }
     }
@@ -454,10 +454,9 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
   /// Parse the MIR file in case it was specified in the opts
   if (IModuleMIRParser &&
       IModuleMIRParser->parseMachineFunctions(*IModule, MMI)) {
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Context, LUTHIER_MAKE_GENERIC_ERROR(
-                     "Failed to parse machine functions from imodule file '" +
-                     Options.IModulePath + "'"));
+    Context.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+        "Failed to parse machine functions from imodule file '" +
+        Options.IModulePath + "'")));
     return IRStagePA.areAllPreserved() ? llvm::PreservedAnalyses::all()
                                        : llvm::PreservedAnalyses::none();
   }
@@ -490,10 +489,9 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
       OutFile = std::make_unique<llvm::ToolOutputFile>(
           OutPath, EC, llvm::sys::fs::OF_Text);
       if (EC) {
-        LUTHIER_CTX_EMIT_ON_ERROR(
-            Context, LUTHIER_MAKE_GENERIC_ERROR(
-                         "Failed to open imodule output file '" +
-                         Options.IModuleOutput + "': " + EC.message()));
+        Context.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+            "Failed to open imodule output file '" + Options.IModuleOutput +
+            "': " + EC.message())));
         return IRStagePA.areAllPreserved() ? llvm::PreservedAnalyses::all()
                                            : llvm::PreservedAnalyses::none();
       }
@@ -573,7 +571,7 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
           Options.IModuleMIRPasses.getValue(), *MIRLegacyPM, *TPC, PrintStream,
           UserInsertedMIRPrint);
       if (ModifiedOrErr) {
-        LUTHIER_CTX_EMIT_ON_ERROR(Context, std::move(ModifiedOrErr));
+        Context.emitError(llvm::toString(std::move(ModifiedOrErr)));
         return IRStagePA;
       }
     }
@@ -599,11 +597,9 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
         std::error_code TgtEC;
         llvm::ToolOutputFile TgtFile(TgtOutPath, TgtEC, llvm::sys::fs::OF_Text);
         if (TgtEC) {
-          LUTHIER_CTX_EMIT_ON_ERROR(
-              Context,
-              LUTHIER_MAKE_GENERIC_ERROR(
-                  "Failed to open target-module-output file '" +
-                  Options.TargetModuleOutput + "': " + TgtEC.message()));
+          Context.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+              "Failed to open target-module-output file '" +
+              Options.TargetModuleOutput + "': " + TgtEC.message())));
           return IRStagePA.areAllPreserved() ? llvm::PreservedAnalyses::all()
                                              : llvm::PreservedAnalyses::none();
         }
@@ -634,7 +630,7 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
 
       if (IsLuthierOutput) {
         if (auto Err = writeLuthierFile(OutPath, TargetAppM, *IModule)) {
-          LUTHIER_CTX_EMIT_ON_ERROR(Context, std::move(Err));
+          Context.emitError(llvm::toString(std::move(Err)));
           return IRStagePA.areAllPreserved() ? llvm::PreservedAnalyses::all()
                                              : llvm::PreservedAnalyses::none();
         }
@@ -663,7 +659,7 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
         // still need to emit the bundled IModule+target+slot-map dump
         // tests FileCheck against.
         if (auto Err = writeLuthierFile(OutPath, TargetAppM, *IModule)) {
-          LUTHIER_CTX_EMIT_ON_ERROR(Context, std::move(Err));
+          Context.emitError(llvm::toString(std::move(Err)));
         }
       } else {
         std::error_code EC;

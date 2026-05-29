@@ -119,79 +119,96 @@ AMDGPUMockLoaderPrinter::run(llvm::Module &M,
     auto TargetTripleOrErr =
         object::getObjectFileTargetTuple(LCO.getCodeObject());
 
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, TargetTripleOrErr.takeError());
+    if (auto Err = TargetTripleOrErr.takeError()) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return llvm::PreservedAnalyses::all();
+    }
 
     auto [TT, CPU, FS] = *TargetTripleOrErr;
 
     std::string Error;
     const llvm::Target *Target = llvm::TargetRegistry::lookupTarget(TT, Error);
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx,
-        LUTHIER_GENERIC_ERROR_CHECK(
-            Target, llvm::formatv("Failed to lookup target {0} in LLVM. Reason "
-                                  "according to LLVM: {1}.",
-                                  TT.normalize(), Error)));
+    if (auto Err = LUTHIER_GENERIC_ERROR_CHECK(
+            Target,
+            llvm::formatv("Failed to lookup target {0} in LLVM. Reason "
+                          "according to LLVM: {1}.",
+                          TT.normalize(), Error))) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return llvm::PreservedAnalyses::all();
+    }
 
     auto MRI =
         std::unique_ptr<llvm::MCRegisterInfo>(Target->createMCRegInfo(TT));
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx,
-        LUTHIER_GENERIC_ERROR_CHECK(
+    if (auto Err = LUTHIER_GENERIC_ERROR_CHECK(
             MRI.get(),
             llvm::formatv("Failed to create machine register info for {0}.",
-                          TT.getTriple())));
+                          TT.getTriple()))) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return llvm::PreservedAnalyses::all();
+    }
 
     llvm::MCTargetOptions Options{};
 
     auto MAI = std::unique_ptr<llvm::MCAsmInfo>(
         Target->createMCAsmInfo(*MRI, TT, Options));
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, LUTHIER_GENERIC_ERROR_CHECK(
-                 MAI, llvm::formatv("Failed to create MCAsmInfo from target "
-                                    "{0} for Target Triple {1}.",
-                                    Target, TT.getTriple())));
+    if (auto Err = LUTHIER_GENERIC_ERROR_CHECK(
+            MAI, llvm::formatv("Failed to create MCAsmInfo from target "
+                               "{0} for Target Triple {1}.",
+                               Target, TT.getTriple()))) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return llvm::PreservedAnalyses::all();
+    }
 
     auto MII = std::unique_ptr<llvm::MCInstrInfo>(Target->createMCInstrInfo());
 
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx,
-        LUTHIER_GENERIC_ERROR_CHECK(
+    if (auto Err = LUTHIER_GENERIC_ERROR_CHECK(
             MII, llvm::formatv("Failed to create MCInstrInfo from target {0}",
-                               Target)));
+                               Target))) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return llvm::PreservedAnalyses::all();
+    }
 
     auto MIA = std::unique_ptr<llvm::MCInstrAnalysis>(
         Target->createMCInstrAnalysis(MII.get()));
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, LUTHIER_GENERIC_ERROR_CHECK(
-                 MIA, llvm::formatv(
-                          "Failed to create MCInstrAnalysis for target {0}.",
-                          Target)));
+    if (auto Err = LUTHIER_GENERIC_ERROR_CHECK(
+            MIA,
+            llvm::formatv("Failed to create MCInstrAnalysis for target {0}.",
+                          Target))) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return llvm::PreservedAnalyses::all();
+    }
 
     auto STI = std::unique_ptr<llvm::MCSubtargetInfo>(
         Target->createMCSubtargetInfo(TT, CPU, FS.getString()));
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, LUTHIER_GENERIC_ERROR_CHECK(
-                 STI, llvm::formatv(
-                          "Failed to create MCSubTargetInfo from target {0} "
+    if (auto Err = LUTHIER_GENERIC_ERROR_CHECK(
+            STI,
+            llvm::formatv("Failed to create MCSubTargetInfo from target {0} "
                           "for triple {1}, CPU {2}, with feature string {3}",
-                          Target, TT.getTriple(), CPU, FS.getString())));
+                          Target, TT.getTriple(), CPU, FS.getString()))) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return llvm::PreservedAnalyses::all();
+    }
 
     auto IP = std::unique_ptr<llvm::MCInstPrinter>(Target->createMCInstPrinter(
         TT, MAI->getAssemblerDialect(), *MAI, *MII, *MRI));
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, LUTHIER_GENERIC_ERROR_CHECK(
-                 IP, llvm::formatv("Failed to create MCInstPrinter from Target "
-                                   "{0} for Triple {1}.",
-                                   Target, TT.normalize())));
+    if (auto Err = LUTHIER_GENERIC_ERROR_CHECK(
+            IP, llvm::formatv("Failed to create MCInstPrinter from Target "
+                              "{0} for Triple {1}.",
+                              Target, TT.normalize()))) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return llvm::PreservedAnalyses::all();
+    }
 
     llvm::MCContext MCCtx(TT, MAI.get(), MRI.get(), STI.get());
 
     auto DisAsm = std::unique_ptr<llvm::MCDisassembler>(
         Target->createMCDisassembler(*STI, MCCtx));
 
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, LUTHIER_GENERIC_ERROR_CHECK(DisAsm.get(),
-                                         "Failed to create a disassembler"));
+    if (auto Err = LUTHIER_GENERIC_ERROR_CHECK(
+            DisAsm.get(), "Failed to create a disassembler")) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return llvm::PreservedAnalyses::all();
+    }
 
     uint64_t LoadBase =
         reinterpret_cast<uint64_t>(LCO.getLoadedRegion().data());
@@ -230,15 +247,23 @@ AMDGPUMockLoaderPrinter::run(llvm::Module &M,
     llvm::Error Err = llvm::Error::success();
     for (object::AMDGCNKernelDescSymbolRef KDSymbol :
          LCO.getCodeObject().kernel_descriptors(Err)) {
-      LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
       llvm::Expected<llvm::StringRef> KernelNameOrErr = KDSymbol.getName();
-      LUTHIER_CTX_EMIT_ON_ERROR(Ctx, KernelNameOrErr.takeError());
+      if (auto NameErr = KernelNameOrErr.takeError()) {
+        Ctx.emitError(llvm::toString(std::move(NameErr)));
+        return llvm::PreservedAnalyses::all();
+      }
       llvm::Expected<uint64_t> AddrOrErr = KDSymbol.getAddress();
-      LUTHIER_CTX_EMIT_ON_ERROR(Ctx, AddrOrErr.takeError());
+      if (auto AddrErr = AddrOrErr.takeError()) {
+        Ctx.emitError(llvm::toString(std::move(AddrErr)));
+        return llvm::PreservedAnalyses::all();
+      }
       OS.indent(2) << llvm::formatv("- {0}, {1:x}\n", *KernelNameOrErr,
                                     *AddrOrErr);
     }
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, Err);
+    if (Err) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return llvm::PreservedAnalyses::all();
+    }
     OS << "----------\n";
     OS << "- Loaded Contents:\n";
     for (const auto &[PHIdx, PH] : llvm::enumerate(LCO.getLoadSegments())) {
@@ -262,14 +287,13 @@ AMDGPUMockLoaderPrinter::run(llvm::Module &M,
 
           auto DecodeResult = DisAsm->getInstruction(
               Inst, InstSize, ReadBytes, SegmentCurrAddr, llvm::nulls());
-          LUTHIER_CTX_EMIT_ON_ERROR(
-              Ctx, LUTHIER_GENERIC_ERROR_CHECK(
-                       DecodeResult == llvm::MCDisassembler::Success,
-                       llvm::formatv(
-                           "Failed to disassemble instruction at address {0:x}",
-                           SegmentCurrAddr)));
-          if (DecodeResult != llvm::MCDisassembler::Success)
+          if (DecodeResult != llvm::MCDisassembler::Success) {
+            Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+                llvm::formatv(
+                    "Failed to disassemble instruction at address {0:x}",
+                    SegmentCurrAddr))));
             break;
+          }
           printBytes(llvm::ArrayRef(ReadBytes.data(), InstSize), OS);
           OS << "\n  |->";
           IP->printInst(&Inst, SegmentCurrAddr, "", *STI, OS);

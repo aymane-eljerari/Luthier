@@ -163,10 +163,10 @@ llvm::PreservedAnalyses luthier::ProcessIntrinsicsAtIRLevelPass::run(
       std::optional<IntrinsicProcessor> Processor =
           IntrinsicsProcessors.getProcessorIfRegistered(IntrinsicName);
       if (!Processor.has_value()) {
-        LUTHIER_CTX_EMIT_ON_ERROR(
-            IModule.getContext(),
+        IModule.getContext().emitError(llvm::toString(
             LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                "Intrinsic {0} is not registered", IntrinsicName)));
+                "Intrinsic {0} is not registered", IntrinsicName))));
+        return llvm::PreservedAnalyses::all();
       }
 
       LLVM_DEBUG({

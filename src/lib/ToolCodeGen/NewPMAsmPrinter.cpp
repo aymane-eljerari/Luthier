@@ -135,10 +135,12 @@ llvm::PreservedAnalyses NewPMAsmPrinter::run(llvm::Module &M,
   auto *MMIWP =
       new DummyMachineModuleInfoWrapperPass(&TM, &OriginalMMI.getContext());
 
-  LUTHIER_CTX_EMIT_ON_ERROR(
-      Ctx, LUTHIER_GENERIC_ERROR_CHECK(
-               MMIWP != nullptr,
-               "Failed to create a MMIWP for the assembly printer"));
+  if (auto Err = LUTHIER_GENERIC_ERROR_CHECK(
+          MMIWP != nullptr,
+          "Failed to create a MMIWP for the assembly printer")) {
+    Ctx.emitError(llvm::toString(std::move(Err)));
+    return llvm::PreservedAnalyses::all();
+  }
 
   MMIWP->borrowMachineModuleAndMachineFunctions(M, MAM);
 
@@ -163,11 +165,13 @@ llvm::PreservedAnalyses NewPMAsmPrinter::run(llvm::Module &M,
   PM.add(new llvm::AMDGPUResourceUsageAnalysisWrapperPass());
 
   // Finally, add the Assembly printer pass
-  LUTHIER_CTX_EMIT_ON_ERROR(
-      Ctx, LUTHIER_GENERIC_ERROR_CHECK(
-               !TM.addAsmPrinter(PM, OS, nullptr, FileType,
-                                 MMIWP->getMMI().getContext()),
-               "Failed to add the assembly printer pass to the pass manager."));
+  if (auto Err = LUTHIER_GENERIC_ERROR_CHECK(
+          !TM.addAsmPrinter(PM, OS, nullptr, FileType,
+                            MMIWP->getMMI().getContext()),
+          "Failed to add the assembly printer pass to the pass manager.")) {
+    Ctx.emitError(llvm::toString(std::move(Err)));
+    return llvm::PreservedAnalyses::all();
+  }
 
   // Run the passes on the module to print the assembly
   PM.run(M);

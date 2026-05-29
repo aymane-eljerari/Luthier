@@ -169,7 +169,10 @@ IPPredCFGAnalysis::run(llvm::Module &M, llvm::ModuleAnalysisManager &MAM) {
   llvm::LLVMContext &Ctx = M.getContext();
   llvm::Expected<std::unique_ptr<IPPredicatedCFG>> ResOrErr =
       IPPredicatedCFG::getIPPredCFG(M, MAM);
-  LUTHIER_CTX_EMIT_ON_ERROR(Ctx, ResOrErr.takeError());
+  if (auto Err = ResOrErr.takeError()) {
+    Ctx.emitError(llvm::toString(std::move(Err)));
+    return Result{nullptr};
+  }
   return Result{std::move(*ResOrErr)};
 }
 

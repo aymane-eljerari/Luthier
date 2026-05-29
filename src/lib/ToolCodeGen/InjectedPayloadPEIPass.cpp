@@ -131,10 +131,8 @@ bool InjectedPayloadPEIPass::runOnMachineFunction(llvm::MachineFunction &MF) {
   const auto *IPIP =
       IMAM.getCachedResult<InjectedPayloadAndInstPointAnalysis>(IModule);
   if (!IPIP) {
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx,
-        LUTHIER_MAKE_GENERIC_ERROR(
-            "InjectedPayloadAndInstPointAnalysis is required but not cached."));
+    Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+        "InjectedPayloadAndInstPointAnalysis is required but not cached.")));
     return false;
   }
   if (!IPIP->contains(F)) {
@@ -147,9 +145,8 @@ bool InjectedPayloadPEIPass::runOnMachineFunction(llvm::MachineFunction &MF) {
   auto *TargetMAMRes =
       IMAM.getCachedResult<TargetAppModuleAndMAMAnalysis>(IModule);
   if (!TargetMAMRes) {
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, LUTHIER_MAKE_GENERIC_ERROR(
-                 "TargetAppModuleAndMAMAnalysis is required but not cached."));
+    Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+        "TargetAppModuleAndMAMAnalysis is required but not cached.")));
     return false;
   }
   auto &TargetModule = TargetMAMRes->getTargetAppModule();
@@ -163,10 +160,9 @@ bool InjectedPayloadPEIPass::runOnMachineFunction(llvm::MachineFunction &MF) {
   const auto *LoadPlan =
       StateValueLocations.getStateValueArrayLoadPlanForInstPoint(*TargetMI);
   if (!LoadPlan) {
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                 "No SVA load plan recorded for instrumentation point in {0}",
-                 F.getName())));
+    Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+        "No SVA load plan recorded for instrumentation point in {0}",
+        F.getName()))));
     return false;
   }
   auto &StateValueStorage = LoadPlan->StateValueStorageLocation;
@@ -174,9 +170,8 @@ bool InjectedPayloadPEIPass::runOnMachineFunction(llvm::MachineFunction &MF) {
   // Pull the finalized SVA specs (set in IntrinsicMIRLoweringPass).
   auto SpecsPtr = StateValueArraySpecs::getSVASpecs(IModule, MF.getTarget());
   if (!SpecsPtr) {
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, LUTHIER_MAKE_GENERIC_ERROR(
-                 "Failed to read StateValueArraySpecs from IModule metadata"));
+    Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+        "Failed to read StateValueArraySpecs from IModule metadata")));
     return false;
   }
   const StateValueArraySpecs &Specs = *SpecsPtr;
@@ -240,14 +235,13 @@ bool InjectedPayloadPEIPass::runOnMachineFunction(llvm::MachineFunction &MF) {
   // out — the design path for "frame-only" usage (calls/spills but no SAs)
   // needs additional plumbing the user has not yet specified.
   if (!SVAVGPR) {
-    LUTHIER_CTX_EMIT_ON_ERROR(
-        Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                 "{0} uses stack/frame regs but requests no SAs; the SVA VGPR "
-                 "is therefore unallocated by IntrinsicMIRLoweringPass. This "
-                 "case requires the payload to consume at least one SA so the "
-                 "SVA VGPR exists, OR explicit no-SA SVA allocation support "
-                 "(not yet implemented).",
-                 F.getName())));
+    Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+        "{0} uses stack/frame regs but requests no SAs; the SVA VGPR "
+        "is therefore unallocated by IntrinsicMIRLoweringPass. This "
+        "case requires the payload to consume at least one SA so the "
+        "SVA VGPR exists, OR explicit no-SA SVA allocation support "
+        "(not yet implemented).",
+        F.getName()))));
     return false;
   }
 

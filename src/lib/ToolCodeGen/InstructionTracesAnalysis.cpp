@@ -315,9 +315,9 @@ InstructionTracesAnalysis::Result InstructionTracesAnalysis::run(
         MAMProxy.getCachedResult<MemoryAllocationAnalysis>(TargetM);
 
     if (!MAMRes) {
-      LUTHIER_CTX_EMIT_ON_ERROR(
-          Ctx, LUTHIER_MAKE_GENERIC_ERROR(
-                   "Memory Allocation Analysis result is not available"));
+      Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+          "Memory Allocation Analysis result is not available")));
+      return Result{nullptr};
     }
 
     const MemoryAllocationAccessor &SegAccessor = MAMRes->getAccessor();
@@ -325,7 +325,10 @@ InstructionTracesAnalysis::Result InstructionTracesAnalysis::run(
     llvm::Expected<std::unique_ptr<InstructionTraces>> OutOrErr =
         InstructionTraces::discoverTraces(*EP, SegAccessor, TM, MCCtx);
 
-    LUTHIER_CTX_EMIT_ON_ERROR(Ctx, OutOrErr.takeError());
+    if (auto Err = OutOrErr.takeError()) {
+      Ctx.emitError(llvm::toString(std::move(Err)));
+      return Result{nullptr};
+    }
 
     LLVM_DEBUG(llvm::dbgs()
                    << "[InstructionTraces] Analysis complete for "

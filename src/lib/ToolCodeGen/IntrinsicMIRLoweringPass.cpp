@@ -271,10 +271,9 @@ bool IntrinsicMIRLoweringPass::processMachineFunction(
     const llvm::TargetRegisterClass *MergedRC =
         getSGPRRegClassForLanes(NumLanes);
     if (!MergedRC) {
-      LUTHIER_CTX_EMIT_ON_ERROR(
-          Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                   "Unsupported scalar-arg lane count {0} for SA {1}", NumLanes,
-                   static_cast<int>(SA))));
+      Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+          "Unsupported scalar-arg lane count {0} for SA {1}", NumLanes,
+          static_cast<int>(SA)))));
       SAResultCache[SA] = LaneRegs[0];
       return LaneRegs[0];
     }
@@ -305,19 +304,17 @@ bool IntrinsicMIRLoweringPass::processMachineFunction(
     const llvm::TargetRegisterClass *RootRegClass =
         TRI->getPhysRegBaseClass(Root);
     if (!RootRegClass) {
-      LUTHIER_CTX_EMIT_ON_ERROR(
-          Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                   "Physical register {0} doesn't have a reg class",
-                   llvm::printReg(Root, TRI))));
+      Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+          llvm::formatv("Physical register {0} doesn't have a reg class",
+                        llvm::printReg(Root, TRI)))));
       return {llvm::Register(), nullptr};
     }
     const llvm::TargetRegisterClass *RootCrossCopyRegClass =
         TRI->getCrossCopyRegClass(RootRegClass);
     if (!RootCrossCopyRegClass) {
-      LUTHIER_CTX_EMIT_ON_ERROR(
-          Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                   "Physical register {0} doesn't have a copy reg class",
-                   llvm::printReg(Root, TRI))));
+      Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+          llvm::formatv("Physical register {0} doesn't have a copy reg class",
+                        llvm::printReg(Root, TRI)))));
       return {llvm::Register(), nullptr};
     }
     llvm::Register RootVirtReg =
@@ -353,11 +350,10 @@ bool IntrinsicMIRLoweringPass::processMachineFunction(
           const std::function<llvm::MachineInstrBuilder(int)> &MIBuilder)
       -> llvm::Register {
     if (!IsInjectedPayload) {
-      LUTHIER_CTX_EMIT_ON_ERROR(
-          Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                   "Function {0} is not an injected payload. Physical "
-                   "registers can only be accessed inside injected payloads",
-                   MF.getName())));
+      Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+          "Function {0} is not an injected payload. Physical "
+          "registers can only be accessed inside injected payloads",
+          MF.getName()))));
       return llvm::Register();
     }
 
@@ -397,9 +393,9 @@ bool IntrinsicMIRLoweringPass::processMachineFunction(
     const llvm::TargetRegisterClass *RC =
         TRI->getCrossCopyRegClass(TRI->getPhysRegBaseClass(Channel));
     if (!RC) {
-      LUTHIER_CTX_EMIT_ON_ERROR(Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                                         "Channel {0} has no copy reg class",
-                                         llvm::printReg(Channel, TRI))));
+      Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+          llvm::formatv("Channel {0} has no copy reg class",
+                        llvm::printReg(Channel, TRI)))));
       return llvm::Register();
     }
     llvm::Register VReg = MRI.createVirtualRegister(RC);
@@ -439,20 +435,18 @@ bool IntrinsicMIRLoweringPass::processMachineFunction(
             const llvm::TargetRegisterClass *ChannelRegClass =
                 TRI->getPhysRegBaseClass(Channel);
             if (!ChannelRegClass) {
-              LUTHIER_CTX_EMIT_ON_ERROR(
-                  Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                           "Physical register {0} doesn't have a reg class",
-                           llvm::printReg(Channel, TRI))));
+              Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+                  llvm::formatv("Physical register {0} doesn't have a reg class",
+                                llvm::printReg(Channel, TRI)))));
               continue;
             }
             const llvm::TargetRegisterClass *ChannelCrossCopyRegClass =
                 TRI->getCrossCopyRegClass(ChannelRegClass);
             if (!ChannelCrossCopyRegClass) {
-              LUTHIER_CTX_EMIT_ON_ERROR(
-                  Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                           "Physical register {0} doesn't have a copy "
-                           "reg class",
-                           llvm::printReg(Channel, TRI))));
+              Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+                  llvm::formatv("Physical register {0} doesn't have a copy "
+                                "reg class",
+                                llvm::printReg(Channel, TRI)))));
               continue;
             }
             llvm::Register SubVirtReg =
@@ -512,11 +506,10 @@ bool IntrinsicMIRLoweringPass::processMachineFunction(
       std::optional<IntrinsicProcessor> Processor =
           IntrinsicsProcessors.getProcessorIfRegistered(IntrinsicName);
       if (!Processor.has_value()) {
-        LUTHIER_CTX_EMIT_ON_ERROR(
-            Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                     "Intrinsic processor for {0} was not found in the "
-                     "intrinsic processors.",
-                     IntrinsicName)));
+        Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+            "Intrinsic processor for {0} was not found in the "
+            "intrinsic processors.",
+            IntrinsicName))));
         return Changed;
       }
 
@@ -559,7 +552,7 @@ bool IntrinsicMIRLoweringPass::processMachineFunction(
       if (auto Err = Processor->MIRProcessor(
               MF, ArgVec, IntrinsicPayload, MIBuilder, VirtRegBuilder, SVAVRegs,
               ReadPhysRegVRegs, WritePhysRegSlots)) {
-        LUTHIER_CTX_EMIT_ON_ERROR(Ctx, std::move(Err));
+        Ctx.emitError(llvm::toString(std::move(Err)));
         return Changed;
       }
 
@@ -587,10 +580,9 @@ bool IntrinsicMIRLoweringPass::processMachineFunction(
         const llvm::TargetRegisterClass *RC =
             TRI->getCrossCopyRegClass(TRI->getPhysRegBaseClass(PhysReg));
         if (!RC) {
-          LUTHIER_CTX_EMIT_ON_ERROR(
-              Ctx, LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                       "Return-block channel {0} has no copy reg class",
-                       llvm::printReg(PhysReg, TRI))));
+          Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(
+              llvm::formatv("Return-block channel {0} has no copy reg class",
+                            llvm::printReg(PhysReg, TRI)))));
           continue;
         }
         llvm::Register Placeholder = MRI.createVirtualRegister(RC);
@@ -771,13 +763,11 @@ void IntrinsicMIRLoweringPass::materializeReadlanes(
         MFI.setStackID(FI, llvm::TargetStackID::SGPRSpill);
         if (!MFInfo->allocateSGPRSpillToVGPRLane(
                 *MF, FI, /*SpillToPhysVGPRLane=*/false)) {
-          LUTHIER_CTX_EMIT_ON_ERROR(
-              Ctx,
-              LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
-                  "Failed to allocate SGPR-to-VGPR-lane spill for SVA SA "
-                  "{0} lane {1} in MF {2} (target may not support "
-                  "SGPR-to-VGPR spilling, or the SVA exceeds wave width)",
-                  static_cast<int>(SA), Lane, MF->getName())));
+          Ctx.emitError(llvm::toString(LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+              "Failed to allocate SGPR-to-VGPR-lane spill for SVA SA "
+              "{0} lane {1} in MF {2} (target may not support "
+              "SGPR-to-VGPR spilling, or the SVA exceeds wave width)",
+              static_cast<int>(SA), Lane, MF->getName()))));
           AllocFailed = true;
           break;
         }
