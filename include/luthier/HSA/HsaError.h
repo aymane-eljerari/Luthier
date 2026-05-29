@@ -27,7 +27,7 @@
 #include <string>
 
 namespace luthier::hsa {
-class HsaError final : public RocmLibraryError {
+class HsaError final : public llvm::ErrorInfo<HsaError, RocmLibraryError> {
   const std::optional<hsa_status_t> Error;
 
 public:
@@ -36,8 +36,7 @@ public:
                     const std::source_location ErrorLocation =
                         std::source_location::current(),
                     StackTraceType StackTrace = StackTraceInitializer())
-      : RocmLibraryError(std::move(ErrorMsg), ErrorLocation,
-                         std::move(StackTrace)),
+      : ErrorInfo(std::move(ErrorMsg), ErrorLocation, std::move(StackTrace)),
         Error(Error) {};
 
   explicit HsaError(const llvm::formatv_object_base &ErrorMsg,
@@ -45,7 +44,7 @@ public:
                     const std::source_location ErrorLocation =
                         std::source_location::current(),
                     StackTraceType StackTrace = StackTraceInitializer())
-      : RocmLibraryError(ErrorMsg.str(), ErrorLocation, std::move(StackTrace)),
+      : ErrorInfo(ErrorMsg.str(), ErrorLocation, std::move(StackTrace)),
         Error(Error) {};
 
   static char ID;

@@ -25,21 +25,20 @@
 
 namespace luthier {
 
-class RocmLibraryError : public LuthierError {
+class RocmLibraryError : public llvm::ErrorInfo<RocmLibraryError, LuthierError> {
 protected:
   explicit RocmLibraryError(std::string ErrorMsg,
                             const std::source_location ErrorLocation =
                                 std::source_location::current(),
                             StackTraceType StackTrace = StackTraceInitializer())
-      : LuthierError(std::move(ErrorMsg), ErrorLocation,
-                     std::move(StackTrace)) {};
+      : ErrorInfo(std::move(ErrorMsg), ErrorLocation, std::move(StackTrace)) {};
 
   explicit RocmLibraryError(const llvm::formatv_object_base &FormatObject,
                             const std::source_location ErrorLocation =
                                 std::source_location::current(),
                             StackTraceType StackTrace = StackTraceInitializer())
-      : LuthierError(std::move(FormatObject.str()), ErrorLocation,
-                     std::move(StackTrace)) {};
+      : ErrorInfo(std::move(FormatObject.str()), ErrorLocation,
+                  std::move(StackTrace)) {};
 
 public:
   static char ID;

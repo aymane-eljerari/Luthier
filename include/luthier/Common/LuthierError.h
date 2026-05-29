@@ -91,7 +91,7 @@ public:
   [[nodiscard]] llvm::StringRef getErrorMsg() const { return ErrorMsg; }
 
   [[nodiscard]] std::error_code convertToErrorCode() const override {
-    llvm_unreachable("Not implemented");
+    return llvm::inconvertibleErrorCode();
   }
 };
 

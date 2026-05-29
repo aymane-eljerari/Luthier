@@ -25,7 +25,8 @@
 #include <rocprofiler-sdk/fwd.h>
 
 namespace luthier::rocprofiler {
-class RocprofilerError final : public RocmLibraryError {
+class RocprofilerError final
+    : public llvm::ErrorInfo<RocprofilerError, RocmLibraryError> {
   const std::optional<rocprofiler_status_t> Error;
 
 public:
@@ -35,8 +36,7 @@ public:
       const std::source_location ErrorLocation =
           std::source_location::current(),
       StackTraceType StackTrace = StackTraceInitializer())
-      : RocmLibraryError(std::move(ErrorMsg), ErrorLocation,
-                         std::move(StackTrace)),
+      : ErrorInfo(std::move(ErrorMsg), ErrorLocation, std::move(StackTrace)),
         Error(Error) {};
 
   explicit RocprofilerError(
@@ -45,7 +45,7 @@ public:
       const std::source_location ErrorLocation =
           std::source_location::current(),
       StackTraceType StackTrace = StackTraceInitializer())
-      : RocmLibraryError(ErrorMsg.str(), ErrorLocation, std::move(StackTrace)),
+      : ErrorInfo(ErrorMsg.str(), ErrorLocation, std::move(StackTrace)),
         Error(Error) {};
 
   static char ID;

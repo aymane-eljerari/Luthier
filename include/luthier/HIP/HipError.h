@@ -23,7 +23,7 @@
 #include <hip/hip_runtime.h>
 
 namespace luthier::hip {
-class HipError final : public RocmLibraryError {
+class HipError final : public llvm::ErrorInfo<HipError, RocmLibraryError> {
   const std::optional<hipError_t> Error;
 
 public:
@@ -32,8 +32,7 @@ public:
                     const std::source_location ErrorLocation =
                         std::source_location::current(),
                     StackTraceType StackTrace = StackTraceInitializer())
-      : RocmLibraryError(std::move(ErrorMsg), ErrorLocation,
-                         std::move(StackTrace)),
+      : ErrorInfo(std::move(ErrorMsg), ErrorLocation, std::move(StackTrace)),
         Error(Error){};
 
   explicit HipError(const llvm::formatv_object_base &ErrorMsg,
@@ -41,7 +40,7 @@ public:
                     const std::source_location ErrorLocation =
                         std::source_location::current(),
                     StackTraceType StackTrace = StackTraceInitializer())
-      : RocmLibraryError(ErrorMsg.str(), ErrorLocation, std::move(StackTrace)),
+      : ErrorInfo(ErrorMsg.str(), ErrorLocation, std::move(StackTrace)),
         Error(Error){};
 
   static char ID;

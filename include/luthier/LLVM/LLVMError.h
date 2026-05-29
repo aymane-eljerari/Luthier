@@ -27,38 +27,44 @@ namespace luthier {
 /// \brief ErrorInfo used to consume \c llvm::Error encountered in calls to the
 /// LLVM library and return a new \c llvm::Error with the original error message
 /// and line info/stack trace of where it was encountered for easier debugging
-class LLVMError final : public LuthierError {
+class LLVMError final : public llvm::ErrorInfo<LLVMError, LuthierError> {
 public:
   static char ID; ///< ID of the Error
   explicit LLVMError(std::string ErrorMsg,
                      const std::source_location ErrorLocation =
                          std::source_location::current(),
                      StackTraceType StackTrace = StackTraceInitializer())
-      : LuthierError(std::move(ErrorMsg), ErrorLocation,
-                     std::move(StackTrace)) {};
+      : ErrorInfo(std::move(ErrorMsg), ErrorLocation, std::move(StackTrace)) {};
 
   explicit LLVMError(const llvm::formatv_object_base &FormatObject,
                      const std::source_location ErrorLocation =
                          std::source_location::current(),
                      StackTraceType StackTrace = StackTraceInitializer())
-      : LuthierError(std::move(FormatObject.str()), ErrorLocation,
-                     std::move(StackTrace)) {};
+      : ErrorInfo(std::move(FormatObject.str()), ErrorLocation,
+                  std::move(StackTrace)) {};
 
   void log(llvm::raw_ostream &OS) const override;
-
-  [[nodiscard]] std::error_code convertToErrorCode() const override {
-    llvm_unreachable("Not implemented");
-  }
 };
 
-/// \brief Macro used to check an \c llvm::Error and on error, wraps its
-/// original error message inside a \c luthier::LLVMError to provide a more
-/// helpful error message
-#define LUTHIER_LLVM_ERROR_CHECK(Expr, ErrorMsg)                               \
-  (Expr) ? llvm::make_error<luthier::LLVMError>(                               \
-               ErrorMsg, std::source_location::current(),                      \
-               luthier::LLVMError::StackTraceInitializer())                    \
-         : llvm::Error::success()
+/// \brief Checks an \c llvm::Error originating from an LLVM library call and,
+/// if it is a failure, consumes it and returns a \c luthier::LLVMError that
+/// prepends \p ErrorMsg as context to the original error's message (along with
+/// the source location and stack trace of where it was encountered); otherwise
+/// returns \c llvm::Error::success().
+///
+/// Unlike \c LUTHIER_GENERIC_ERROR_CHECK (whose argument is a condition that
+/// must hold for success), the argument here is the \c llvm::Error to inspect:
+/// a non-success \p Error is the failure case.
+#define LUTHIER_LLVM_ERROR_CHECK(ErrorExpr, ErrorMsg)                         \
+  [&]() -> ::llvm::Error {                                                     \
+    if (auto LuthierLLVMErr = (ErrorExpr))                                     \
+      return ::llvm::make_error<::luthier::LLVMError>(                         \
+          ::llvm::formatv("{0}: {1}", ErrorMsg,                               \
+                          ::llvm::toString(std::move(LuthierLLVMErr))),       \
+          ::std::source_location::current(),                                   \
+          ::luthier::LLVMError::StackTraceInitializer());                      \
+    return ::llvm::Error::success();                                          \
+  }()
 
 } // namespace luthier
 #endif

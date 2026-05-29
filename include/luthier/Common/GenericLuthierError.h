@@ -27,7 +27,8 @@ namespace luthier {
 
 /// \brief Error used to indicate generic issues encountered in Luthier code not
 /// related to any other library
-class GenericLuthierError final : public LuthierError {
+class GenericLuthierError final
+    : public llvm::ErrorInfo<GenericLuthierError, LuthierError> {
 
 public:
   static char ID;
@@ -37,16 +38,15 @@ public:
       const std::source_location ErrorLocation =
           std::source_location::current(),
       StackTraceType StackTrace = StackTraceInitializer())
-      : LuthierError(std::move(ErrorMsg), ErrorLocation,
-                     std::move(StackTrace)) {};
+      : ErrorInfo(std::move(ErrorMsg), ErrorLocation, std::move(StackTrace)) {};
 
   explicit GenericLuthierError(
       const llvm::formatv_object_base &FormatObject,
       const std::source_location ErrorLocation =
           std::source_location::current(),
       StackTraceType StackTrace = StackTraceInitializer())
-      : LuthierError(std::move(FormatObject.str()), ErrorLocation,
-                     std::move(StackTrace)) {};
+      : ErrorInfo(std::move(FormatObject.str()), ErrorLocation,
+                  std::move(StackTrace)) {};
 
   void log(llvm::raw_ostream &OS) const override;
 };
