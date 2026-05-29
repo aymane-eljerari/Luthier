@@ -232,7 +232,6 @@ static luthier::rocprofiler::HsaApiTableSnapshot<::AmdExtTable>
     *AmdExtSnapshot{nullptr};
 static luthier::rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
     *LoaderSnapshot{nullptr};
-static InstrCountTool *Tool{nullptr};
 
 //===----------------------------------------------------------------------===//
 // Helpers
@@ -618,12 +617,11 @@ namespace luthier {
 static void atToolFini(void *) {
   static std::once_flag Once{};
   std::call_once(Once, []() {
-    if (Tool != nullptr) {
+    InstrCountTool::withInstance([](InstrCountTool &T) {
       luthier::errs() << "Total instructions executed: "
-                      << Tool->TotalNumInstructions << "\n";
-    }
+                      << T.TotalNumInstructions << "\n";
+    });
     InstrCountTool::destroyInstance();
-    Tool = nullptr;
     delete LoaderSnapshot;
     LoaderSnapshot = nullptr;
     delete AmdExtSnapshot;
@@ -655,8 +653,8 @@ static void atToolInit(void *) {
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 
-    Tool = &InstrCountTool::createInstance(*CoreApiSnapshot, *AmdExtSnapshot,
-                                           *LoaderSnapshot, Err);
+    InstrCountTool::createInstance(*CoreApiSnapshot, *AmdExtSnapshot,
+                                   *LoaderSnapshot, Err);
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 

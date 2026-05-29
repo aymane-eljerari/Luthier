@@ -153,7 +153,6 @@ static luthier::rocprofiler::HsaApiTableSnapshot<::AmdExtTable>
     *AmdExtSnapshot{nullptr};
 static luthier::rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
     *LoaderSnapshot{nullptr};
-static OpcodeHistogramTool *Tool{nullptr};
 
 static llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>>
 runInstrumentationPipelineForDispatch(
@@ -332,15 +331,14 @@ namespace luthier {
 static void atToolFini(void *) {
   static std::once_flag Once{};
   std::call_once(Once, []() {
-    if (Tool) {
+    OpcodeHistogramTool::withInstance([](OpcodeHistogramTool &T) {
       luthier::errs() << "Instruction Opcode Results: \n";
-      for (const auto &[OpcodeName, Count] : Tool->GlobalHistogram)
+      for (const auto &[OpcodeName, Count] : T.GlobalHistogram)
         luthier::errs() << llvm::formatv("  {0} = {1}\n", OpcodeName, Count);
       luthier::errs() << "Total number of instructions counted: "
-                      << Tool->TotalNumInstructions << "\n";
-    }
+                      << T.TotalNumInstructions << "\n";
+    });
     OpcodeHistogramTool::destroyInstance();
-    Tool = nullptr;
     delete LoaderSnapshot;
     LoaderSnapshot = nullptr;
     delete AmdExtSnapshot;
@@ -372,9 +370,8 @@ static void atToolInit(void *) {
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 
-    Tool = &OpcodeHistogramTool::createInstance(*CoreApiSnapshot,
-                                                *AmdExtSnapshot,
-                                                *LoaderSnapshot, Err);
+    OpcodeHistogramTool::createInstance(*CoreApiSnapshot, *AmdExtSnapshot,
+                                        *LoaderSnapshot, Err);
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 

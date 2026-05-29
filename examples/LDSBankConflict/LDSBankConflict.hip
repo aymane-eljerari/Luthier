@@ -254,7 +254,6 @@ static luthier::rocprofiler::HsaApiTableSnapshot<::AmdExtTable>
     *AmdExtSnapshot{nullptr};
 static luthier::rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
     *LoaderSnapshot{nullptr};
-static LDSBankConflictTool *Tool{nullptr};
 
 static llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>>
 runInstrumentationPipelineForDispatch(
@@ -492,14 +491,13 @@ namespace luthier {
 static void atToolFini(void *) {
   static std::once_flag Once{};
   std::call_once(Once, []() {
-    if (Tool) {
+    LDSBankConflictTool::withInstance([](LDSBankConflictTool &T) {
       luthier::errs() << "Total number of LDS instructions: "
-                      << Tool->TotalNumSingleAddressLDSInstructions << "\n";
+                      << T.TotalNumSingleAddressLDSInstructions << "\n";
       luthier::errs() << "Total number of bank conflicts detected: "
-                      << Tool->TotalNumBankConflicts << "\n";
-    }
+                      << T.TotalNumBankConflicts << "\n";
+    });
     LDSBankConflictTool::destroyInstance();
-    Tool = nullptr;
     delete LoaderSnapshot;
     LoaderSnapshot = nullptr;
     delete AmdExtSnapshot;
@@ -531,9 +529,8 @@ static void atToolInit(void *) {
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 
-    Tool = &LDSBankConflictTool::createInstance(*CoreApiSnapshot,
-                                                *AmdExtSnapshot,
-                                                *LoaderSnapshot, Err);
+    LDSBankConflictTool::createInstance(*CoreApiSnapshot, *AmdExtSnapshot,
+                                        *LoaderSnapshot, Err);
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 

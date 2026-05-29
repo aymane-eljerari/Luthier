@@ -82,6 +82,13 @@ public:
 /// \c Singleton<Derived>::withInstance(), which keeps the tool alive via a
 /// reference count for the duration of the call. It becomes a forwarding
 /// function once the tool has been destroyed.
+///
+/// \warning Inside a \c withInstance() callback, call HSA only through the
+/// captured \e snapshot tables (the underlying, pre-interception function
+/// pointers held by each trait, e.g. \c CoreApiSnapshot / \c AmdExtSnapshot),
+/// \b never through the live (wrapped) API table. Call each snapshot's
+/// \c forceTriggerApiTableCallback method to force initialize the snapshot
+/// tables before using them if needed.
 template <typename Derived, typename TargetUnitT = llvm::MachineFunction>
 class HSATool : public Singleton<Derived>,
                 public LLVMUserTrait<Derived>,

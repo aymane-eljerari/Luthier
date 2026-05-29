@@ -84,7 +84,6 @@ static luthier::rocprofiler::HsaApiTableSnapshot<::AmdExtTable>
     *AmdExtSnapshot{nullptr};
 static luthier::rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
     *LoaderSnapshot{nullptr};
-static LiftLaunchedKernelsTool *Tool{nullptr};
 
 void LiftLaunchedKernelsTool::onPackets(
     const hsa_queue_t &, uint64_t,
@@ -168,7 +167,6 @@ static void atToolFini(void *) {
   std::call_once(Once, []() {
     luthier::errs() << "Luthier lift launched kernels tool is terminating!\n";
     LiftLaunchedKernelsTool::destroyInstance();
-    Tool = nullptr;
     delete LoaderSnapshot;
     LoaderSnapshot = nullptr;
     delete AmdExtSnapshot;
@@ -200,8 +198,8 @@ static void atToolInit(void *) {
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 
-    Tool = &LiftLaunchedKernelsTool::createInstance(
-        *CoreApiSnapshot, *AmdExtSnapshot, *LoaderSnapshot, Err);
+    LiftLaunchedKernelsTool::createInstance(*CoreApiSnapshot, *AmdExtSnapshot,
+                                            *LoaderSnapshot, Err);
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 

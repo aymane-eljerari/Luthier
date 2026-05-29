@@ -130,7 +130,6 @@ static luthier::rocprofiler::HsaApiTableSnapshot<::AmdExtTable>
     *AmdExtSnapshot{nullptr};
 static luthier::rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
     *LoaderSnapshot{nullptr};
-static KernelArgumentIntrinsicTool *Tool{nullptr};
 
 static llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>>
 runInstrumentationPipelineForDispatch(
@@ -296,7 +295,6 @@ static void atToolFini(void *) {
   static std::once_flag Once{};
   std::call_once(Once, []() {
     KernelArgumentIntrinsicTool::destroyInstance();
-    Tool = nullptr;
     delete LoaderSnapshot;
     LoaderSnapshot = nullptr;
     delete AmdExtSnapshot;
@@ -328,8 +326,9 @@ static void atToolInit(void *) {
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 
-    Tool = &KernelArgumentIntrinsicTool::createInstance(
-        *CoreApiSnapshot, *AmdExtSnapshot, *LoaderSnapshot, Err);
+    KernelArgumentIntrinsicTool::createInstance(*CoreApiSnapshot,
+                                                *AmdExtSnapshot, *LoaderSnapshot,
+                                                Err);
     if (Err)
       llvm::report_fatal_error(std::move(Err));
 
