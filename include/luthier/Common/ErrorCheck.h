@@ -22,22 +22,31 @@
 
 /// TODO: Rework these macros, and unify their uses across the project
 
-/// \brief Reports a fatal error if the passed \p llvm::Error argument is not
-/// equal to \c llvm::ErrorSuccess
-#define LUTHIER_REPORT_FATAL_ON_ERROR(Error)                                   \
+/// \brief Reports a fatal usage error if the passed \p llvm::Error argument is
+/// not in a success state
+///
+/// The argument is bound by forwarding reference (no move on capture) and the
+/// error is consumed with a single move into \c llvm::toString, which is the
+/// minimum possible for the move-only \c llvm::Error. The \c std::move is
+/// required so the macro also accepts lvalue \c llvm::Error arguments.
+#define LUTHIER_REPORT_FATAL_ON_ERROR(...)                                     \
   do {                                                                         \
-    if (auto ___E = std::move(Error)) {                                        \
-      llvm::report_fatal_error(std::move(___E), true);                         \
-    }                                                                          \
+    if (auto &&LuthierReportFatalOnErr = (__VA_ARGS__))                        \
+      llvm::reportFatalUsageError(                                             \
+          llvm::Twine(llvm::toString(std::move(LuthierReportFatalOnErr))));    \
   } while (false)
 
-/// \brief returns from the function if the passed \p llvm::Error argument is
-/// not equal to \c llvm::ErrorSuccess
-#define LUTHIER_RETURN_ON_ERROR(Error)                                         \
+/// \brief returns from the current function if the passed \p llvm::Error
+/// argument is not in a success state
+///
+/// The argument is bound by forwarding reference (no move on capture) and the
+/// error is transferred out with a single move on the \c return path, which is
+/// the minimum possible for the move-only \c llvm::Error. The \c std::move is
+/// required so the macro also accepts lvalue \c llvm::Error arguments.
+#define LUTHIER_RETURN_ON_ERROR(...)                                           \
   do {                                                                         \
-    if (auto ___E = std::move(Error)) {                                        \
-      return std::move(___E);                                                  \
-    }                                                                          \
+    if (auto &&LuthierReturnOnErr = (__VA_ARGS__))                             \
+      return std::move(LuthierReturnOnErr);                                    \
   } while (false)
 
 /// \brief Emits an error into the LLVM Context if \p Error is not equal to
