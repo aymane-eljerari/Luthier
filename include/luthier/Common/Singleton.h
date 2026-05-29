@@ -206,6 +206,14 @@ public:
   /// \warning Never call \c destroyInstance() from inside \c withInstance():
   /// the caller's own reference would never drop and would cause the
   /// destruction logic to spin forever.
+  /// \warning Any reference or pointer to the instance's internal state that
+  /// \p Fn hands back — whether returned as a reference (yielded via the
+  /// \c std::reference_wrapper result) or as a returned pointer/reference value
+  /// — is valid only for the duration of this call. The counted reference that
+  /// keeps the instance alive is released when \c withInstance() returns, so a
+  /// concurrent \c destroyInstance() may then destroy it. Do \b not retain such
+  /// a reference/pointer past the call; copy out a value instead, or do the
+  /// work inside \p Fn.
   /// \return Depends on \p Fn's return type \c R:
   ///   - \c void: \c true if an instance existed and \p Fn was invoked,
   ///     \c false otherwise.
