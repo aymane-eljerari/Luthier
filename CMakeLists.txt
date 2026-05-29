@@ -24,6 +24,10 @@ option(LUTHIER_GEN_INTERCEPTOR_IMPL_DURING_CONFIG "Generates the interceptor imp
 # Append the modules
 list(INSERT CMAKE_MODULE_PATH 0 "${PROJECT_SOURCE_DIR}/cmake/modules")
 
+# Enable CTest from the build root so `ctest` aggregates tests registered in
+# all subdirectories
+enable_testing()
+
 # Add the src sub projects
 add_subdirectory(src)
 
