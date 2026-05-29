@@ -15,99 +15,152 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// Defines the CRTP trait inherited by all Singleton objects in Luthier.
-/// It was inspired by OGRE's Singleton implementation:
-/// https://github.com/OGRECave/ogre/blob/master/OgreMain/include/OgreSingleton.h
+/// An atomic reference-counted Singleton CRTP trait.
+///
+/// The \c Singleton instance's lifetime is managed explicitly via
+/// \c createInstance() and  \c destroyInstance(). \c withInstance ensures the
+/// \c Singleton instance remains alive while it is being operated on, making
+/// it safe to use in static API table wrapper functions in multithreaded
+/// environments. Internally, the singleton's lifetime is held by an atomic
+/// reference count:
+///   - \c createInstance() builds \c Derived with no lock held, then publishes
+///   the instance to the outside world (fatal if one already exists).
+///   - \c destroyInstance() unpublishes the instance, then drains any in-flight
+///   references before running \c Derived::~Derived.
+///   - \c withInstance() takes a counted reference and runs \p Fn with \b no
+///   lock held, so it is reentrant and harmless to call during \c Singleton
+///   construction (in which it observes "no instance" and returns \c false).
+///
+/// Internally, the \c Singleton's atomic reference counting capabilities is
+/// implemented either via:
+/// - An \c std::atomic<std::shared_ptr> if \c __cpp_lib_atomic_shared_ptr is
+/// available (libstdc++ >= GCC 12, MSVC STL >= VS2019 16.9; \b not available
+/// currently in libc++) or by defining the \c LUTHIER_SINGLETON_FORCE_INTRUSIVE
+/// macro;
+/// - Otherwise, an intrusive \c llvm::IntrusiveRefCntPtr held in a slot guarded
+/// by a briefly held \c std::shared_mutex. The refcount hooks are \e private
+/// and reached only through a friended, constrained
+/// \c llvm::IntrusiveRefCntPtrInfo specialization, so \c Retain / \c Release
+/// never appear on \c Derived's API.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_COMMON_SINGLETON_H
 #define LUTHIER_COMMON_SINGLETON_H
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include <cstddef>
-#include <mutex>
 #include <new>
-#include <shared_mutex>
+#include <thread>
 #include <utility>
+#include <version>
+
+#if defined(__cpp_lib_atomic_shared_ptr) &&                                    \
+    !defined(LUTHIER_SINGLETON_FORCE_INTRUSIVE)
+#define LUTHIER_SINGLETON_USE_SHARED_PTR 1
+#include <atomic>
+#include <memory>
+#else
+#define LUTHIER_SINGLETON_USE_SHARED_PTR 0
+#include "llvm/ADT/IntrusiveRefCntPtr.h"
+#include <atomic>
+#include <cassert>
+#include <mutex>
+#include <shared_mutex>
+#include <type_traits>
+#endif
 
 namespace luthier {
 
-/// \brief CRTP trait inherited by all Singleton objects in Luthier
+/// \brief An atomic reference-counted Singleton CRTP trait
 /// \tparam Derived The concrete Singleton object itself
-///
-/// \par Lifetime and threading contract
-/// The object is meant to be managed explicitly with \c createInstance() and
-/// torn down via \c destroyInstance() (no static-storage instance) for precise
-/// control over its lifetime. Every access to the instance is mediated by a
-/// process-lifetime reader/writer lock so that accessors may run on threads
-/// other than the one performing construction/destruction.
-///
-/// - \b Construction goes through \c createInstance(), which acquires the
-///   exclusive lock around the whole \c new. Holding it across the entire
-///   construction (base, traits, and \c Derived members) means no
-///   \c withInstance() reader can observe the instance until it is fully
-///   built./// - \b Access goes through \c withInstance(), which runs the
-///   supplied callable under a \e shared lock and thereby holds the instance
-///   alive for the whole call.
-/// - \b Teardown goes through \c destroyInstance(), which acquires the matching
-///   \e exclusive lock around the whole \c delete. This blocks until every
-///   in-flight \c withInstance() call has finished and prevents new ones from
-///   starting; Therefore, no callback can observe a half-destroyed object.
-///
-///
-/// \note Lock-ordering invariant: \c liveMutex is the outermost lock. Code
-/// running inside a \c withInstance() callable may acquire other (e.g.
-/// per-trait) locks, but nothing that already holds such a lock may call
-/// \c withInstance() / \c destroyInstance(); doing so would invert the order
-/// and risk deadlock.
-/// \note A bare \c new or \delete bypasses the locking access mechanism of the
-/// singleton; Make sure to construct the singleton only via
-/// \c createInstance().
 template <typename Derived> class Singleton {
 private:
-  /// The single live instance, or \c nullptr. Guarded by \c liveMutex():
-  /// read under a shared lock, written under the exclusive lock.
-  inline static Derived *Instance{nullptr};
+  //==========================================================================//
+  // Implementation-specific storage primitives. The public API below is
+  // written once against this private interface.
+  //==========================================================================//
+#if LUTHIER_SINGLETON_USE_SHARED_PTR
+  using Ref = std::shared_ptr<Derived>;
 
-  /// Process-lifetime reader/writer lock guarding the instance against
-  /// destruction while \c withInstance() callables run. It must outlive every
-  /// possible use (e.g. a late HSA wrapper callback firing during process
-  /// teardown), so it is \b never destroyed to avoid the static initialization
-  /// ordering fiasco
-  ///
-  /// Rather than \c new (a heap leak that trips leak sanitizers), the lock is
-  /// placement-new'd once into a buffer with static storage duration — the
-  /// idiom \c rocprofiler-sdk uses for its \c static_object. The object lives
-  /// in the binary image (no allocation), and because placement \c new
-  /// schedules no destruction, \c ~shared_mutex() is simply never called. This
-  /// is well-defined (skipping a destructor is legal; the storage is reclaimed
-  /// at process exit). It also works regardless of \c std::shared_mutex being
-  /// trivially destructible
+  /// Process-lifetime owning slot, placement-new'd once and never destroyed so
+  /// a late interceptor at process teardown can't touch a destroyed atomic.
+  static std::atomic<Ref> &instance() {
+    alignas(std::atomic<Ref>) static std::byte Buf[sizeof(std::atomic<Ref>)];
+    static auto *const Slot = ::new (Buf) std::atomic<Ref>();
+    return *Slot;
+  }
+
+  static Ref loadInstance() { return instance().load(); }
+
+  static bool publish(Derived *Obj) {
+    Ref New(Obj), Expected{nullptr};
+    return instance().compare_exchange_strong(Expected, New);
+  }
+
+  static Ref unpublish() { return instance().exchange(nullptr); }
+
+  static long instanceUseCount(const Ref &R) { return R.use_count(); }
+#else
+  /// Reference count for the live instance. Manipulated only through the
+  /// friended \c IntrusiveRefCntPtrInfo specialization
+  mutable std::atomic<int> RefCount{0};
+  friend struct llvm::IntrusiveRefCntPtrInfo<Derived>;
+
+  void retain() const { RefCount.fetch_add(1, std::memory_order_relaxed); }
+
+  void release() const {
+    int New = RefCount.fetch_sub(1, std::memory_order_acq_rel) - 1;
+    assert(New >= 0 && "Singleton reference count went negative.");
+    if (New == 0)
+      delete static_cast<const Derived *>(this); // legal: public CRTP base
+  }
+
+  unsigned useCount() const { return RefCount.load(std::memory_order_relaxed); }
+
+  using Ref = llvm::IntrusiveRefCntPtr<Derived>;
+
+  /// Reader/writer lock guarding the brief load-and-retain of \c instance()
+  /// (there is no atomic \c IntrusiveRefCntPtr). Never destroyed.
   static std::shared_mutex &liveMutex() {
     alignas(std::shared_mutex) static std::byte Buf[sizeof(std::shared_mutex)];
     static auto *const Mutex = ::new (Buf) std::shared_mutex();
     return *Mutex;
   }
 
-protected:
-  /// Publishes \c this as the singleton instance. Fatal if an instance already
-  /// exists.
-  ///
-  /// Does \b not lock: it is meant to run inside \c createInstance(), which
-  /// holds the exclusive lock across the entire \c new (mirroring how
-  /// \c ~Singleton() runs inside \c destroyInstance()'s \c delete). It must
-  /// not re-acquire the lock — that would self-deadlock. Constructing a
-  /// singleton with a bare \c new (outside \c createInstance()) bypasses the
-  /// lock and is not recommended in threaded scenarios
-  Singleton() {
-    LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-        Instance == nullptr, "Called the Singleton constructor twice."));
-    Instance = static_cast<Derived *>(this);
+  /// Process-lifetime owning slot, placement-new'd once and never destroyed.
+  static Ref &instance() {
+    alignas(Ref) static std::byte Buf[sizeof(Ref)];
+    static auto *const Slot = ::new (Buf) Ref();
+    return *Slot;
   }
 
-  /// Clears the published instance pointer. Runs during the \c delete issued
-  /// by \c destroyInstance(), i.e. while the caller already holds the
-  /// exclusive lock; Which is why it must \b not re-acquire it.
-  ~Singleton() { Instance = nullptr; }
+  static Ref loadInstance() {
+    std::shared_lock<std::shared_mutex> Lock(liveMutex());
+    return instance(); // atomic retain under the briefly held shared lock
+  }
+
+  static bool publish(Derived *Obj) {
+    Ref New(Obj); // adopt, so Obj is freed if publication loses the race
+    std::unique_lock<std::shared_mutex> Lock(liveMutex());
+    if (instance().get() != nullptr)
+      return false;
+    instance() = New;
+    return true;
+  }
+
+  static Ref unpublish() {
+    std::unique_lock<std::shared_mutex> Lock(liveMutex());
+    Ref Old;
+    Old.swap(instance());
+    return Old;
+  }
+
+  static long instanceUseCount(const Ref &R) { return R.useCount(); }
+#endif
+
+protected:
+  Singleton() = default;
+
+  ~Singleton() = default;
 
 public:
   /// Disallowed copy construction
@@ -116,59 +169,71 @@ public:
   /// Disallowed assignment operation
   Singleton &operator=(const Singleton &) = delete;
 
-  /// Run \p Fn against the live instance while keeping it alive for the whole
-  /// call. \p Fn is invoked as <tt>Fn(T &)</tt> under a shared lock; the
-  /// matching exclusive lock taken by \c destroyInstance() guarantees the
-  /// instance (and its trait subobjects) are not destroyed for the duration
-  /// of \p Fn, and that \p Fn does not begin once teardown has started.
-  ///
-  /// \return \c true if the instance existed and \p Fn was invoked, \c false
-  /// if there was no live instance (in which case \p Fn is not called).
-  ///
-  /// \warning \p Fn must not call \c destroyInstance() (it would deadlock
-  /// against its own shared lock) nor call \c withInstance() reentrantly on
-  /// the same thread (recursive shared locking is undefined).
+  //==========================================================================//
+  // Public-facing APIs: identical for both implementations.
+  //==========================================================================//
+
+  /// Run \p Fn against the live instance, holding it alive for the whole call
+  /// via a counted reference rather than a held lock. \p Fn is invoked as
+  /// <tt>Fn(Derived &)</tt>.
+  /// \note This is safe to call recursively and during construction
+  /// \warning Never call \c destroyInstance() from inside \c withInstance():
+  /// the caller's own reference would never drop and would cause the
+  /// destruction logic to spin forever.
+  /// \return \c true if an instance existed and \p Fn was invoked, \c false
+  /// otherwise
   template <typename FnT> static bool withInstance(FnT &&Fn) {
-    std::shared_lock<std::shared_mutex> Lock(liveMutex());
-    if (Instance == nullptr)
+    Ref Held = loadInstance();
+    if (!Held)
       return false;
-    std::forward<FnT>(Fn)(*Instance);
+    std::forward<FnT>(Fn)(*Held);
     return true;
   }
 
-  /// Construct the singleton instance under the exclusive lock, forwarding
-  /// \p Args to \c Derived's constructor. Holding the lock across the whole
-  /// \c new means the \e entire object — the \c Singleton base, every trait
-  /// subobject, and \c Derived's own members — is built before any
-  /// \c withInstance() reader can acquire the shared lock and observe it. This
-  /// mirrors \c destroyInstance(): together they make the lock (not just the
-  /// single-threaded construction convention) carry the "no reader ever sees
-  /// /// a partially-(de)constructed instance" guarantee.
-  ///
-  /// If \c Derived's constructor throws, the partially built subobjects
-  /// (including the \c Singleton base) are destroyed during unwinding —
-  /// \c ~Singleton() clears \c Instance — all still under the exclusive lock,
-  /// so the failure leaves no instance published. Fatal if an instance
-  /// already exists. Construct only via this function, never a bare \c new.
+  /// Construct the instance and publish it atomically; Fatal if an instance is
+  /// already published.
   template <typename... Args>
   static Derived &createInstance(Args &&...Arguments) {
-    std::unique_lock<std::shared_mutex> Lock(liveMutex());
-    return *::new Derived(std::forward<Args>(Arguments)...);
+    auto *Obj = ::new Derived(std::forward<Args>(Arguments)...);
+    LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+        publish(Obj), "Called createInstance() twice."));
+    return *Obj;
   }
 
-  /// Destroy the singleton instance (created via \c createInstance()) under the
-  /// exclusive lock, blocking until all in-flight \c withInstance() calls
-  /// complete and preventing new ones from starting. This is the only teardown
-  /// path that preserves the \c withInstance() liveness guarantee; a bare
-  /// \c delete on the instance pointer does not. Safe to call when no instance
-  /// exists (no-op). The owner does not need to also \c delete the pointer.
+  /// Unpublishes the instance, then blocks until all in-flight
+  /// \c withInstance() references drop before releasing the final one,
+  /// effectively destroying it.
+  /// \note This is safe to call when no instances of the singleton have been
+  /// created previously
   static void destroyInstance() {
-    std::unique_lock<std::shared_mutex> Lock(liveMutex());
-    /// \c ~Singleton() clears \c Instance during this \c delete.
-    delete Instance;
+    Ref Doomed = unpublish();
+    if (!Doomed)
+      return;
+    while (instanceUseCount(Doomed) > 1)
+      std::this_thread::yield();
+    Doomed.reset();
   }
 };
 
 } // namespace luthier
+
+#if !LUTHIER_SINGLETON_USE_SHARED_PTR
+namespace llvm {
+
+/// Routes \c IntrusiveRefCntPtr's retain/release/useCount to the \e private
+/// hooks on \c luthier::Singleton (friended above), keeping them off
+/// \c Derived's public API. Constrained so it applies only to Singleton-derived
+/// types; all others use the primary template.
+template <typename Derived>
+  requires std::is_base_of_v<luthier::Singleton<Derived>, Derived>
+struct IntrusiveRefCntPtrInfo<Derived> {
+  static void retain(Derived *Obj) { Obj->retain(); }
+
+  static void release(Derived *Obj) { Obj->release(); }
+
+  static unsigned useCount(const Derived *Obj) { return Obj->useCount(); }
+};
+} // namespace llvm
+#endif
 
 #endif
