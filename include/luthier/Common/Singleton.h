@@ -47,6 +47,7 @@
 #define LUTHIER_COMMON_SINGLETON_H
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
+#include <cassert>
 #include <cstddef>
 #include <new>
 #include <thread>
@@ -62,7 +63,6 @@
 #define LUTHIER_SINGLETON_USE_SHARED_PTR 0
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include <atomic>
-#include <cassert>
 #include <mutex>
 #include <shared_mutex>
 #include <type_traits>
@@ -157,6 +157,14 @@ private:
   static long instanceUseCount(const Ref &R) { return R.useCount(); }
 #endif
 
+#ifndef NDEBUG
+  /// Per-thread recursion depth of \c withInstance() for this singleton. Used
+  /// in debug builds to catch \c destroyInstance() calls from inside
+  /// \c withInstance() on the same thread, which would leave the caller's own
+  /// reference undropped and cause a forever spin
+  inline static thread_local int WithInstanceDepth = 0;
+#endif
+
 protected:
   Singleton() = default;
 
@@ -186,6 +194,12 @@ public:
     Ref Held = loadInstance();
     if (!Held)
       return false;
+#ifndef NDEBUG
+    struct DepthGuard {
+      DepthGuard() { ++WithInstanceDepth; }
+      ~DepthGuard() { --WithInstanceDepth; }
+    } Guard;
+#endif
     std::forward<FnT>(Fn)(*Held);
     return true;
   }
@@ -206,6 +220,11 @@ public:
   /// \note This is safe to call when no instances of the singleton have been
   /// created previously
   static void destroyInstance() {
+#ifndef NDEBUG
+    assert(WithInstanceDepth == 0 &&
+           "destroyInstance() called from inside withInstance() on the same "
+           "thread.");
+#endif
     Ref Doomed = unpublish();
     if (!Doomed)
       return;

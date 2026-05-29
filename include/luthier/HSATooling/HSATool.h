@@ -62,24 +62,26 @@ public:
 /// \c DeviceToolCodeFatBinaryLoader, and the per-process singleton identity
 /// from \c Singleton<Derived>; composes the per-subsystem traits.
 ///
-/// \c Singleton<Derived> is listed first so its constructor runs before any
-/// trait's constructor. The traits' destructors run in reverse-inheritance
-/// order, i.e. before \c Singleton<Derived>'s destructor clears the published
-/// instance pointer. This invariant matters once the traits install HSA
-/// API-table interceptors that look the tool up via
-/// \c Singleton<Derived>::withInstance().
+/// \c Singleton<Derived> is listed first so its subobject is constructed before
+/// any trait and destroyed after all of them. Teardown safety itself does not
+/// rely on this ordering: it comes from
+/// \c Singleton<Derived>::destroyInstance(), which unpublishes the tool and
+/// then waits for every in-flight \c withInstance() call to finish before
+/// any/// destructor runs. A trait's HSA API-table interceptor therefore never
+/// observes a half-destroyed tool.
 ///
 /// \par Construction/teardown (see \c Singleton)
 /// Because the trait constructors install HSA API-table interceptors that may
 /// fire on runtime threads, an \c HSATool must be constructed and destroyed via
-/// \c createInstance and \c destroyInstance from inside \c rocprofiler's/// configure callback.
+/// \c createInstance and \c destroyInstance from inside \c rocprofiler's
+/// configure callback.
 ///
 /// Installed HSA API-table wrappers are NOT uninstalled at tool teardown;
 /// uninstalling a wrapper the runtime may still call would cause a race
 /// condition. Instead, every trait wrapper does its tool-specific work inside
-/// \c Singleton<Derived>::withInstance(), which runs the work under a shared
-/// lock and forwards to the underlying HSA function untouched if the tool is
-/// not destroyed.
+/// \c Singleton<Derived>::withInstance(), which keeps the tool alive via a
+/// reference count for the duration of the call. It becomes a forwarding
+/// function once the tool has been destroyed.
 template <typename Derived, typename TargetUnitT = llvm::MachineFunction>
 class HSATool : public Singleton<Derived>,
                 public LLVMUserTrait<Derived>,
