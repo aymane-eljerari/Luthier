@@ -102,7 +102,8 @@ private:
   static inline __attribute__((managed, used)) char LuthierMarker = 0;
 
 public:
-  HSATool(const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
+  HSATool(typename Singleton<Derived>::CreationKey,
+          const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &CoreApi,
           const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &AmdExt,
           const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
               &VenLoader,

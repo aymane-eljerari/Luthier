@@ -50,7 +50,9 @@
 #include <cassert>
 #include <cstddef>
 #include <new>
+#include <optional>
 #include <thread>
+#include <type_traits>
 #include <utility>
 #include <version>
 
@@ -65,7 +67,6 @@
 #include <atomic>
 #include <mutex>
 #include <shared_mutex>
-#include <type_traits>
 #endif
 
 namespace luthier {
@@ -163,6 +164,12 @@ private:
   /// \c withInstance() on the same thread, which would leave the caller's own
   /// reference undropped and cause a forever spin
   inline static thread_local int WithInstanceDepth = 0;
+
+  /// RAII bump of \c WithInstanceDepth around a \c withInstance() callback.
+  struct DepthGuard {
+    DepthGuard() { ++WithInstanceDepth; }
+    ~DepthGuard() { --WithInstanceDepth; }
+  };
 #endif
 
 protected:
@@ -177,6 +184,16 @@ public:
   /// Disallowed assignment operation
   Singleton &operator=(const Singleton &) = delete;
 
+  /// Passkey that gates construction of the singleton. Only \c createInstance()
+  /// can mint one (its default constructor is private, only accessible by the
+  /// \c Singleton), so a \c Derived constructor that takes a \c CreationKey is
+  /// reachable only through \c createInstance() — a bare \c new \c Derived(...)
+  /// will not compile
+  class CreationKey {
+    CreationKey() = default;
+    friend class Singleton;
+  };
+
   //==========================================================================//
   // Public-facing APIs: identical for both implementations.
   //==========================================================================//
@@ -188,27 +205,38 @@ public:
   /// \warning Never call \c destroyInstance() from inside \c withInstance():
   /// the caller's own reference would never drop and would cause the
   /// destruction logic to spin forever.
-  /// \return \c true if an instance existed and \p Fn was invoked, \c false
-  /// otherwise
-  template <typename FnT> static bool withInstance(FnT &&Fn) {
+  /// \return If \p Fn returns \c void: \c true if an instance existed and \p Fn
+  /// was invoked, \c false otherwise. If \p Fn returns a value of type \c R:
+  /// an \c std::optional<R> holding \p Fn's result, or \c std::nullopt if there
+  /// was no live instance.
+  template <typename FnT> static auto withInstance(FnT &&Fn) {
+    using R = std::invoke_result_t<FnT, Derived &>;
     Ref Held = loadInstance();
-    if (!Held)
-      return false;
+    if constexpr (std::is_void_v<R>) {
+      if (!Held)
+        return false;
 #ifndef NDEBUG
-    struct DepthGuard {
-      DepthGuard() { ++WithInstanceDepth; }
-      ~DepthGuard() { --WithInstanceDepth; }
-    } Guard;
+      DepthGuard Guard;
 #endif
-    std::forward<FnT>(Fn)(*Held);
-    return true;
+      std::forward<FnT>(Fn)(*Held);
+      return true;
+    } else {
+      if (!Held)
+        return std::optional<R>{};
+#ifndef NDEBUG
+      DepthGuard Guard;
+#endif
+      return std::optional<R>(std::forward<FnT>(Fn)(*Held));
+    }
   }
 
   /// Construct the instance and publish it atomically; Fatal if an instance is
   /// already published.
+  /// \note \c Derived's constructor must accept a \c CreationKey as its first
+  /// parameter (see \c CreationKey).
   template <typename... Args>
   static Derived &createInstance(Args &&...Arguments) {
-    auto *Obj = ::new Derived(std::forward<Args>(Arguments)...);
+    auto *Obj = ::new Derived(CreationKey{}, std::forward<Args>(Arguments)...);
     LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         publish(Obj), "Called createInstance() twice."));
     return *Obj;

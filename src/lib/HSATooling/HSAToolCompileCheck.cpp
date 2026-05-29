@@ -37,7 +37,7 @@ struct CompileCheckTool : public luthier::HSATool<CompileCheckTool> {
 /// and which \c CompileCheckTool cannot exercise here (its constructor needs a
 /// live HSA API table).
 struct CreateCheckSingleton : luthier::Singleton<CreateCheckSingleton> {
-  explicit CreateCheckSingleton(int) {}
+  explicit CreateCheckSingleton(CreationKey, int) {}
 };
 
 /// Force instantiation of the \c Singleton lifetime/access helpers that no
