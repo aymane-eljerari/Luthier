@@ -31,7 +31,7 @@
 ///   lock held, so it is reentrant and harmless to call during \c Singleton
 ///   construction (in which it observes "no instance" and returns \c false).
 ///
-/// Internally, the \c Singleton's atomic reference counting capabilities is
+/// Internally, the \c Singleton's atomic reference counting capability is
 /// implemented either via:
 /// - An \c std::atomic<std::shared_ptr> if \c __cpp_lib_atomic_shared_ptr is
 /// available (libstdc++ >= GCC 12, MSVC STL >= VS2019 16.9; \b not available
@@ -49,6 +49,7 @@
 #include "luthier/Common/GenericLuthierError.h"
 #include <cassert>
 #include <cstddef>
+#include <functional>
 #include <new>
 #include <optional>
 #include <thread>
@@ -205,10 +206,13 @@ public:
   /// \warning Never call \c destroyInstance() from inside \c withInstance():
   /// the caller's own reference would never drop and would cause the
   /// destruction logic to spin forever.
-  /// \return If \p Fn returns \c void: \c true if an instance existed and \p Fn
-  /// was invoked, \c false otherwise. If \p Fn returns a value of type \c R:
-  /// an \c std::optional<R> holding \p Fn's result, or \c std::nullopt if there
-  /// was no live instance.
+  /// \return Depends on \p Fn's return type \c R:
+  ///   - \c void: \c true if an instance existed and \p Fn was invoked,
+  ///     \c false otherwise.
+  ///   - a reference type \c T&: \c std::optional<std::reference_wrapper<T>>
+  ///     holding \p Fn's result, or \c std::nullopt if there was no instance.
+  ///   - any other value type \c R: \c std::optional<R> holding \p Fn's result,
+  ///     or \c std::nullopt if there was no instance.
   template <typename FnT> static auto withInstance(FnT &&Fn) {
     using R = std::invoke_result_t<FnT, Derived &>;
     Ref Held = loadInstance();
@@ -220,6 +224,16 @@ public:
 #endif
       std::forward<FnT>(Fn)(*Held);
       return true;
+    } else if constexpr (std::is_reference_v<R>) {
+      // std::optional cannot hold a reference; wrap it so a reference-returning
+      // callback still composes.
+      using Result = std::optional<std::reference_wrapper<std::remove_reference_t<R>>>;
+      if (!Held)
+        return Result{};
+#ifndef NDEBUG
+      DepthGuard Guard;
+#endif
+      return Result(std::forward<FnT>(Fn)(*Held));
     } else {
       if (!Held)
         return std::optional<R>{};
@@ -230,16 +244,16 @@ public:
     }
   }
 
-  /// Construct the instance and publish it atomically; Fatal if an instance is
-  /// already published.
+  /// Construct the instance and publish it; Fatal if an instance is
+  /// already published. The published instance can be accessed via
+  /// \c withInstance()
   /// \note \c Derived's constructor must accept a \c CreationKey as its first
   /// parameter (see \c CreationKey).
   template <typename... Args>
-  static Derived &createInstance(Args &&...Arguments) {
+  static void createInstance(Args &&...Arguments) {
     auto *Obj = ::new Derived(CreationKey{}, std::forward<Args>(Arguments)...);
     LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         publish(Obj), "Called createInstance() twice."));
-    return *Obj;
   }
 
   /// Unpublishes the instance, then blocks until all in-flight

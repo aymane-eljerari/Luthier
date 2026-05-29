@@ -23,6 +23,7 @@
 #include "luthier/Common/Singleton.h"
 #include <atomic>
 #include <chrono>
+#include <functional>
 #include <gtest/gtest.h>
 #include <optional>
 #include <thread>
@@ -102,13 +103,6 @@ TEST_F(SingletonTest, CreateThenWithInstance) {
   EXPECT_EQ(Counter::Live.load(), 1);
 }
 
-TEST_F(SingletonTest, CreateReturnsLiveRef) {
-  Counter &Ref = Counter::createInstance(3);
-  Counter *Seen = nullptr;
-  Counter::withInstance([&](Counter &C) { Seen = &C; });
-  EXPECT_EQ(&Ref, Seen);
-}
-
 TEST_F(SingletonTest, ArgForwarding) {
   Counter::createInstance(123);
   auto V = Counter::withInstance([](Counter &C) { return C.Value; });
@@ -164,6 +158,30 @@ TEST_F(SingletonTest, ReturnValueTypesAndValues) {
   auto V = Counter::withInstance([](Counter &C) { return C.Value * 2; });
   ASSERT_TRUE(V.has_value());
   EXPECT_EQ(*V, 42);
+}
+
+// A reference-returning callback yields std::optional<reference_wrapper<T>>,
+// and the wrapper refers to the live instance's member.
+TEST_F(SingletonTest, ReturnReferenceWrapper) {
+  static_assert(
+      std::is_same_v<decltype(Counter::withInstance(
+                         [](Counter &C) -> int & { return C.Value; })),
+                     std::optional<std::reference_wrapper<int>>>);
+
+  // Without an instance.
+  EXPECT_FALSE(
+      Counter::withInstance([](Counter &C) -> int & { return C.Value; })
+          .has_value());
+
+  // With an instance: mutating through the wrapper is observable on the
+  // instance.
+  Counter::createInstance(8);
+  auto R = Counter::withInstance([](Counter &C) -> int & { return C.Value; });
+  ASSERT_TRUE(R.has_value());
+  EXPECT_EQ(R->get(), 8);
+  R->get() = 99;
+  EXPECT_EQ(Counter::withInstance([](Counter &C) { return C.Value; }).value(),
+            99);
 }
 
 // withInstance is reentrant: calling it from inside its own callback works and
