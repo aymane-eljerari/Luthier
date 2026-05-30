@@ -55,8 +55,15 @@ public:
 #define LUTHIER_MAKE_GENERIC_ERROR(ErrorMsg)                                   \
   LUTHIER_MAKE_ERROR(luthier::GenericLuthierError, ErrorMsg)
 
+/// \brief Returns a \c luthier::GenericLuthierError if the condition \p Expr
+/// does not hold, otherwise \c llvm::Error::success(). \p Expr is
+/// evaluated exactly once.
 #define LUTHIER_GENERIC_ERROR_CHECK(Expr, ErrorMsg)                            \
-  (Expr) ? llvm::Error::success() : LUTHIER_MAKE_GENERIC_ERROR(ErrorMsg)
+  [&]() -> ::llvm::Error {                                                     \
+    if (!(Expr))                                                               \
+      return LUTHIER_MAKE_GENERIC_ERROR(ErrorMsg);                             \
+    return ::llvm::Error::success();                                           \
+  }()
 
 } // namespace luthier
 

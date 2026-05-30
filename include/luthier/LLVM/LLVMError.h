@@ -20,6 +20,7 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_LLVM_LLVM_ERROR_H
 #define LUTHIER_LLVM_LLVM_ERROR_H
+#include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/LuthierError.h"
 
 namespace luthier {
@@ -58,11 +59,10 @@ public:
 #define LUTHIER_LLVM_ERROR_CHECK(ErrorExpr, ErrorMsg)                         \
   [&]() -> ::llvm::Error {                                                     \
     if (auto LuthierLLVMErr = (ErrorExpr))                                     \
-      return ::llvm::make_error<::luthier::LLVMError>(                         \
+      return LUTHIER_MAKE_ERROR(                                              \
+          ::luthier::LLVMError,                                               \
           ::llvm::formatv("{0}: {1}", ErrorMsg,                               \
-                          ::llvm::toString(std::move(LuthierLLVMErr))),       \
-          ::std::source_location::current(),                                   \
-          ::luthier::LLVMError::StackTraceInitializer());                      \
+                          ::llvm::toString(std::move(LuthierLLVMErr))));       \
     return ::llvm::Error::success();                                          \
   }()
 

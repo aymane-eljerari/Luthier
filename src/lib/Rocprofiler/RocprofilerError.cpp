@@ -27,7 +27,7 @@ char RocprofilerError::ID;
 void RocprofilerError::log(llvm::raw_ostream &OS) const {
   OS << "Rocprofiler SDK ";
   if (Error.has_value())
-    OS << "error code" << *Error;
+    OS << "error code " << static_cast<int>(*Error);
   else
     OS << "error";
   OS << " encountered";

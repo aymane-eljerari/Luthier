@@ -41,11 +41,11 @@ public:
 
 protected:
   /// Source location where the error occurred
-  const std::source_location ErrorLocation;
+  std::source_location ErrorLocation;
   /// Stack trace of where the error occurred
-  const StackTraceType StackTrace;
+  StackTraceType StackTrace;
   /// Message of the error
-  const std::string ErrorMsg;
+  std::string ErrorMsg;
 
   explicit LuthierError(std::string ErrorMsg,
                         const std::source_location ErrorLocation =

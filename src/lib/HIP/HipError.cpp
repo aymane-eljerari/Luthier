@@ -26,7 +26,7 @@ char HipError::ID = 0;
 void HipError::log(llvm::raw_ostream &OS) const {
   OS << "HIP ";
   if (Error.has_value())
-    OS << "error code" << *Error;
+    OS << "error code " << static_cast<int>(*Error);
   else
     OS << "error";
   OS << " encountered";

@@ -26,7 +26,7 @@ char HsaError::ID = 0;
 void HsaError::log(llvm::raw_ostream &OS) const {
   OS << "HSA ";
   if (Error.has_value())
-    OS << "error code" << *Error;
+    OS << "error code " << static_cast<int>(*Error);
   else
     OS << "error";
   OS << " encountered";
