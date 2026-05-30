@@ -58,6 +58,12 @@ public:
     return ::llvm::Error::success();                                           \
   }()
 
+#define LUTHIER_MAKE_HIP_ERROR(ErrorMsg)                                       \
+  LUTHIER_MAKE_ERROR(::luthier::hip::HipError, ErrorMsg, ::std::nullopt)
+
+#define LUTHIER_MAKE_HIP_ERROR_WITH_STATUS(ErrorMsg, Status)                   \
+  LUTHIER_MAKE_ERROR(::luthier::hip::HipError, ErrorMsg, Status)
+
 } // namespace luthier::hip
 
 #endif

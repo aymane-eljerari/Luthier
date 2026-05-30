@@ -19,8 +19,10 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_ROCPROFILER_API_TABLE_SNAPSHOT_H
 #define LUTHIER_ROCPROFILER_API_TABLE_SNAPSHOT_H
-#include "luthier/Rocprofiler/ApiTableRegistrationCallbackProvider.h"
 #include "luthier/HIP/ApiTable.h"
+#include "luthier/Rocprofiler/ApiTableRegistrationCallbackProvider.h"
+#include <algorithm>
+#include <cstring>
 
 namespace luthier::rocprofiler {
 
@@ -59,18 +61,19 @@ public:
             [&](llvm::ArrayRef<::HsaApiTable *> Tables, uint64_t, uint64_t) {
               auto &Table = *Tables[0];
               if (Table.version.major_id != HSA_API_TABLE_MAJOR_VERSION) {
-                LUTHIER_REPORT_FATAL_ON_ERROR(llvm::make_error<
-                                              hsa::HsaError>(llvm::formatv(
-                    "Expected HSA API table major version to be {0}, got {1} "
-                    "instead.",
-                    HSA_API_TABLE_MAJOR_VERSION, Table.version.major_id)));
+                LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_HSA_ERROR(
+                    llvm::formatv("Expected HSA API table major version to be "
+                                  "{0}, got {1} "
+                                  "instead.",
+                                  HSA_API_TABLE_MAJOR_VERSION,
+                                  Table.version.major_id)));
               }
 
               constexpr auto RootAccessor = hsa::ApiTableInfo<
                   HsaApiTableType>::PointerToMemberRootAccessor;
               if (!hsa::apiTableHasEntry<HsaApiTableType>(Table)) {
                 LUTHIER_REPORT_FATAL_ON_ERROR(
-                    llvm::make_error<hsa::HsaError>(llvm::formatv(
+                    LUTHIER_MAKE_HSA_ERROR(llvm::formatv(
                         "Captured HSA table doesn't support extension {0}",
                         hsa::ApiTableInfo<HsaApiTableType>::Name)));
               }
@@ -83,7 +86,7 @@ public:
               if (DestApiTableVersion.major_id == 0 ||
                   DestApiTableVersion.minor_id == 0) {
                 LUTHIER_REPORT_FATAL_ON_ERROR(
-                    llvm::make_error<hsa::HsaError>(llvm::formatv(
+                    LUTHIER_MAKE_HSA_ERROR(llvm::formatv(
                         "Failed to correctly copy the HSA {0} extension",
                         hsa::ApiTableInfo<HsaApiTableType>::Name)));
               }
@@ -135,24 +138,25 @@ public:
       : ApiTableRegistrationCallbackProvider(
             [&](llvm::ArrayRef<::HsaApiTable *> Tables, uint64_t,
                 uint64_t Instance) {
-              LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-                  Instance == 0, "Multiple instances of the HSA library"));
+              if (Instance != 0)
+                LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_ROCPROFILER_ERROR(
+                    "Multiple instances of the HSA library registered"));
               auto &Table = *Tables[0];
               if (Table.version.major_id != HSA_API_TABLE_MAJOR_VERSION) {
-                LUTHIER_REPORT_FATAL_ON_ERROR(llvm::make_error<
-                                              hsa::HsaError>(llvm::formatv(
-                    "Expected HSA API table major version to be {0}, got {1} "
-                    "instead.",
-                    HSA_API_TABLE_MAJOR_VERSION, Table.version.major_id)));
+                LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_HSA_ERROR(
+                    llvm::formatv("Expected HSA API table major version to be "
+                                  "{0}, got {1} "
+                                  "instead.",
+                                  HSA_API_TABLE_MAJOR_VERSION, Table.version.major_id)));
               }
               if (!hsa::apiTableHasEntry<::CoreApiTable>(Table)) {
-                LUTHIER_REPORT_FATAL_ON_ERROR(llvm::make_error<hsa::HsaError>(
+                LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_HSA_ERROR(
                     "Captured HSA table doesn't support the core extension"));
               }
               if (!hsa::apiTableHasEntry<
                       &::CoreApiTable::hsa_system_get_extension_table_fn>(
                       *Table.core_)) {
-                LUTHIER_REPORT_FATAL_ON_ERROR(llvm::make_error<hsa::HsaError>(
+                LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_HSA_ERROR(
                     "Captured HSA API table doesn't have "
                     "hsa_system_get_extension_table function"));
               }
@@ -193,16 +197,26 @@ public:
                     typename hip::ApiTableEnumInfo<TableType>::ApiTableType *>
                     Tables,
                 uint64_t LibVersion, uint64_t LibInstance) {
-              LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-                  LibInstance == 0,
-                  "Multiple instances of the HIP library registered"));
-              std::memcpy(&ApiTable, Tables[0], Tables[0]->size);
+              if (LibInstance != 0)
+                LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_ROCPROFILER_ERROR(
+                    "Multiple instances of the HIP library was registered"));
+              /// Bound the copy by the destination struct size: \c
+              /// Tables[0]->size is the runtime table's size, which can exceed
+              /// \c sizeof(ApiTable) when the application runs against a newer
+              /// ROCm than Luthier was compiled against. Copying the full
+              /// runtime size would overflow \c ApiTable. \c ApiTable is
+              /// zero-initialized, so a smaller source leaves the tail zeroed.
+              std::memcpy(&ApiTable, Tables[0],
+                          std::min(sizeof(ApiTable),
+                                   static_cast<size_t>(Tables[0]->size)));
             },
             Err) {};
 
   ~HipApiTableSnapshot() override = default;
 
   hip::ApiTableContainer<TableType> getTable() const {
+    LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
+        this->wasRegistrationCallbackInvoked(), "Snapshot is not initialized"));
     return hip::ApiTableContainer<TableType>(ApiTable);
   }
 };

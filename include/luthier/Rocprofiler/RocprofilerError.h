@@ -62,6 +62,13 @@ public:
                                 ErrorMsg, LuthierStatusCode);                  \
     return ::llvm::Error::success();                                           \
   }()
+
+#define LUTHIER_MAKE_ROCPROFILER_ERROR(ErrorMsg)                               \
+  LUTHIER_MAKE_ERROR(::luthier::rocprofiler::RocprofilerError, ErrorMsg,       \
+                     ::std::nullopt)
+
+#define LUTHIER_MAKE_ROCPROFILER_ERROR_WITH_STATUS(ErrorMsg, Status)           \
+  LUTHIER_MAKE_ERROR(::luthier::rocprofiler::RocprofilerError, ErrorMsg, Status)
 } // namespace luthier::rocprofiler
 
 #endif

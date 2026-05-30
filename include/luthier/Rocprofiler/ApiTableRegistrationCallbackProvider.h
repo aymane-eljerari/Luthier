@@ -35,6 +35,7 @@
 #include <hip/hip_runtime.h>
 #include <hip/hip_deprecated.h>
 #include <hip/hip_gl_interop.h>
+
 #include <hip/amd_detail/hip_api_trace.hpp>
 #include <rocprofiler-sdk/intercept_table.h>
 #include <rocprofiler-sdk/registration.h>
@@ -288,8 +289,9 @@ public:
   /// "harmless" library function directly
   /// \note Only use when absolutely sure the underlying library is not going to
   /// be initialized otherwise
-  template <std::enable_if<TableType == ROCPROFILER_HSA_TABLE ||
-                           TableType == ROCPROFILER_HIP_RUNTIME_TABLE>>
+  template <rocprofiler_intercept_table_t T = TableType,
+            typename = std::enable_if_t<T == ROCPROFILER_HSA_TABLE ||
+                                        T == ROCPROFILER_HIP_RUNTIME_TABLE>>
   void forceTriggerApiTableCallback() {
     if (!WasRegistrationInvoked.load()) {
       if constexpr (TableType == ROCPROFILER_HSA_TABLE)
