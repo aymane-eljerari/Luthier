@@ -52,7 +52,7 @@
 ///
 /// \c __VA_ARGS__ are the \em leading constructor arguments. The call-site
 /// source location and stack trace — which are always the trailing two
-/// constructor parameters of every Luthier error= type — are appended
+/// constructor parameters of every Luthier error type — are appended
 /// automatically, so this one macro works for every \c LuthierError subclass
 /// regardless of its leading arguments.
 #define LUTHIER_MAKE_ERROR(ErrorType, ...)                                     \
