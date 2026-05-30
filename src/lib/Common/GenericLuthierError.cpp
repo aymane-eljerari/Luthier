@@ -24,16 +24,8 @@ namespace luthier {
 char GenericLuthierError::ID = 0;
 
 void GenericLuthierError::log(llvm::raw_ostream &OS) const {
-  OS << "Error encountered in file " << ErrorLocation.file_name()
-     << ", function " << ErrorLocation.function_name() << ", at "
-     << ErrorLocation.line() << ": " << ErrorMsg << ".\n";
-  OS << "Stack trace: \n";
-#ifdef __cpp_lib_stacktrace
-  OS << std::to_string(StackTrace);
-#else
-  OS << StackTrace;
-#endif
-  OS << "\n";
+  OS << "Error encountered";
+  logErrorContext(OS);
 }
 
 } // namespace luthier

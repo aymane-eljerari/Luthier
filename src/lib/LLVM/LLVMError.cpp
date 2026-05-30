@@ -18,23 +18,14 @@
 /// This file implements the \c luthier::LLVMError class.
 //===----------------------------------------------------------------------===//
 #include "luthier/LLVM/LLVMError.h"
-#include <llvm/Support/Signals.h>
 
 namespace luthier {
 
 char LLVMError::ID = 0;
 
 void LLVMError::log(llvm::raw_ostream &OS) const {
-  OS << "Call to LLVM library in file " << ErrorLocation.file_name()
-     << ", function " << ErrorLocation.function_name() << ", at "
-     << ErrorLocation.line() << ": " << ErrorMsg << ".\n";
-  OS << "Stack trace: \n";
-#ifdef __cpp_lib_stacktrace
-  OS << std::to_string(StackTrace);
-#else
-  OS << StackTrace;
-#endif
-  OS << "\n";
+  OS << "Call to LLVM library";
+  logErrorContext(OS);
 }
 
 } // namespace luthier

@@ -18,7 +18,6 @@
 /// Implements the rocprofiler \c llvm::ErrorInfo class.
 //===----------------------------------------------------------------------===//
 #include "luthier/Rocprofiler/RocprofilerError.h"
-#include <llvm/Support/Signals.h>
 #include <rocprofiler-sdk/rocprofiler.h>
 
 namespace luthier::rocprofiler {
@@ -31,16 +30,8 @@ void RocprofilerError::log(llvm::raw_ostream &OS) const {
     OS << "error code" << *Error;
   else
     OS << "error";
-  OS << " encountered in file " << ErrorLocation.file_name() << ", function "
-     << ErrorLocation.function_name() << ", at " << ErrorLocation.line() << ": "
-     << ErrorMsg << ".\n";
-  OS << "Stack trace: \n";
-#ifdef __cpp_lib_stacktrace
-  OS << std::to_string(StackTrace);
-#else
-  OS << StackTrace;
-#endif
-  OS << "\n";
+  OS << " encountered";
+  logErrorContext(OS);
 }
 
 } // namespace luthier::rocprofiler

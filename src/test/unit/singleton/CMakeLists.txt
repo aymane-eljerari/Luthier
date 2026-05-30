@@ -1,4 +1,4 @@
-set(LLVM_LINK_COMPONENTS Support)
+set(LLVM_LINK_COMPONENTS Support Symbolize DebugInfoDWARF Object)
 
 # The Singleton backend is a compile-time switch, so the same source is built
 # twice: once against the default backend (std::atomic<std::shared_ptr> where

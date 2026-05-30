@@ -15,45 +15,29 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// Defines <tt>LuthierError</tt>, containing the common part among all
+/// Defines \c LuthierError, containing the common part among all
 /// \c llvm::ErrorInfo classes defined by Luthier, as well as RTTI mechanism
 /// for checking whether a given \c llvm::Error originated from Luthier.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_COMMON_LUTHIER_ERROR_H
 #define LUTHIER_COMMON_LUTHIER_ERROR_H
+#include "luthier/Common/Stacktrace.h"
 #include <llvm/Support/Error.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <source_location>
-/// Use the C++ stacktrace if it's supported by the compiler/standard;
-/// Otherwise, use LLVM's stack trace printer
-#include <stacktrace>
-#ifndef __cpp_lib_stacktrace
-#include <llvm/Support/Signals.h>
-#endif
 
 namespace luthier {
 
 class LuthierError : public llvm::ErrorInfo<LuthierError> {
 public:
-#ifdef __cpp_lib_stacktrace
-  using StackTraceType = std::stacktrace;
-#else
-  using StackTraceType = std::string;
-#endif
+  using StackTraceType = luthier::Stacktrace;
 
-
-#ifdef __cpp_lib_stacktrace
+  /// Captures the call stack at the point of error construction. Symbolization
+  /// is deferred until the trace is printed (see \c luthier::Stacktrace), so
+  /// errors that are created and then handled never pay for it.
   static auto constexpr StackTraceInitializer = []() {
-    return std::stacktrace::current();
+    return Stacktrace::current();
   };
-#else
-  static auto constexpr StackTraceInitializer = []() {
-    std::string Out;
-    llvm::raw_string_ostream OutStream(Out);
-    llvm::sys::PrintStackTrace(OutStream);
-    return Out;
-  };
-#endif
 
 protected:
   /// Source location where the error occurred
@@ -76,6 +60,20 @@ protected:
                         StackTraceType StackTrace = StackTraceInitializer())
       : ErrorLocation(ErrorLocation), StackTrace(std::move(StackTrace)),
         ErrorMsg(ErrorMsg.str()) {};
+
+  /// \brief Writes the common error context among all subclasses (source
+  /// location, message, and the stack trace) to \p OS.
+  ///
+  /// Subclasses call this from \c log() right after writing their type-specific
+  /// lead phrase
+  void logErrorContext(llvm::raw_ostream &OS) const {
+    OS << " in file " << ErrorLocation.file_name() << ", function "
+       << ErrorLocation.function_name() << ", at " << ErrorLocation.line()
+       << ": " << ErrorMsg << ".\n";
+    OS << "Stack trace: \n";
+    StackTrace.print(OS);
+    OS << "\n";
+  }
 
 public:
   static char ID;

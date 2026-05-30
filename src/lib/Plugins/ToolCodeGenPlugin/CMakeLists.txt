@@ -16,6 +16,6 @@ target_include_directories(LuthierToolCodeGenPlugin PRIVATE
         "$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>")
 
 target_link_libraries(LuthierToolCodeGenPlugin PRIVATE LuthierAMDGPU LLVMCodeGenTypes LLVMMC LLVMMCA LLVMMCDisassembler
-        LLVMObject LLVMSupport LLVMTarget LLVMTargetParser LLVMTransformUtils LLVMBitReader LLVMAnalysis LLVMAsmPrinter
-        LLVMAMDGPUAsmParser LLVMAMDGPUDesc LLVMAMDGPUDisassembler LLVMAMDGPUInfo LLVMAMDGPUTargetMCA
-        LLVMAMDGPUUtils LLVMCore LLVMPasses LLVMCodeGen LLVMAMDGPUCodeGen)
+        LLVMSymbolize LLVMDebugInfoDWARF LLVMObject LLVMSupport LLVMTarget LLVMTargetParser LLVMTransformUtils
+        LLVMBitReader LLVMAnalysis LLVMAsmPrinter LLVMAMDGPUAsmParser LLVMAMDGPUDesc LLVMAMDGPUDisassembler
+        LLVMAMDGPUInfo LLVMAMDGPUTargetMCA LLVMAMDGPUUtils LLVMCore LLVMPasses LLVMCodeGen LLVMAMDGPUCodeGen)

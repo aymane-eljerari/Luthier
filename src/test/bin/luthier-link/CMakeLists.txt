@@ -8,6 +8,8 @@ target_link_libraries(luthier-link
         LuthierLinker
         LuthierCommon
         LuthierObject
+        LLVMSymbolize
+        LLVMDebugInfoDWARF
         LLVMObject
         LLVMBinaryFormat
         LLVMTargetParser

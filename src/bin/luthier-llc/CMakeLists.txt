@@ -21,6 +21,8 @@ set(LLVM_LINK_COMPONENTS
         MCDisassembler
         MIRParser
         Object
+        Symbolize
+        DebugInfoDWARF
         Passes
         Plugins
         Remarks
