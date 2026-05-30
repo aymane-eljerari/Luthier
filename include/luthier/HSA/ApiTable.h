@@ -278,6 +278,19 @@ DEFINE_HSA_API_INFO(::AmdExtTable, hsa_amd_vmem_address_reserve_align)
 #if HSA_AMD_EXT_API_TABLE_STEP_VERSION >= 0x04
 DEFINE_HSA_API_INFO(::AmdExtTable, hsa_amd_enable_logging)
 #endif
+#if HSA_AMD_EXT_API_TABLE_STEP_VERSION >= 0x05
+DEFINE_HSA_API_INFO(::AmdExtTable, hsa_amd_signal_wait_all)
+#endif
+#if HSA_AMD_EXT_API_TABLE_STEP_VERSION >= 0x06
+DEFINE_HSA_API_INFO(::AmdExtTable, hsa_amd_memory_get_preferred_copy_engine)
+#endif
+#if HSA_AMD_EXT_API_TABLE_STEP_VERSION >= 0x07
+DEFINE_HSA_API_INFO(::AmdExtTable, hsa_amd_portable_export_dmabuf_v2)
+#endif
+#if HSA_AMD_EXT_API_TABLE_STEP_VERSION >= 0x08
+DEFINE_HSA_API_INFO(::AmdExtTable, hsa_amd_ais_file_write)
+DEFINE_HSA_API_INFO(::AmdExtTable, hsa_amd_ais_file_read)
+#endif
 #endif
 
 /// \brief Struct containing \c constexpr compile-time info regarding individual

@@ -24,10 +24,10 @@
 /// API surface — including the R0000-suffixed deprecated entries and the GL
 /// interop entries — but doesn't include the headers that define those
 /// types. Pull them in here so this header is self-sufficient
-#include <hip/hip_runtime.h>
+#include <hip/amd_detail/hip_api_trace.hpp>
 #include <hip/hip_deprecated.h>
 #include <hip/hip_gl_interop.h>
-#include <hip/amd_detail/hip_api_trace.hpp>
+#include <hip/hip_runtime.h>
 #include <rocprofiler-sdk/intercept_table.h>
 
 namespace luthier::hip {
@@ -965,6 +965,76 @@ DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
                                              hipLinkComplete)
 DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable, hipLinkCreate)
 DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable, hipLinkDestroy)
+#endif
+
+#if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 10
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipEventRecordWithFlags)
+#endif
+
+#if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 11
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipLaunchKernelExC)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipDrvLaunchKernelEx)
+#endif
+
+#if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 12
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipMemGetHandleForAddressRange)
+#endif
+
+/// HIP_RUNTIME_API_TABLE_STEP_VERSION == 13 added no new API table entries
+/// (the removed HIP_MEMSET_NODE_PARAMS was replaced by hipMemsetParams).
+
+#if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 14
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipModuleGetFunctionCount)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable, hipMemsetD2D8)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipMemsetD2D8Async)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable, hipMemsetD2D16)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipMemsetD2D16Async)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable, hipMemsetD2D32)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipMemsetD2D32Async)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipStreamGetAttribute)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipStreamSetAttribute)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipModuleLoadFatBinary)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipMemcpyBatchAsync)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipMemcpy3DBatchAsync)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipMemcpy3DPeer)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipMemcpy3DPeerAsync)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipGetDriverEntryPoint)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipGetDriverEntryPoint_spt)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipMemPrefetchAsync_v2)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipMemAdvise_v2)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable, hipStreamGetId)
+#endif
+
+#if HIP_RUNTIME_API_TABLE_STEP_VERSION >= 15
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipLibraryLoadData)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipLibraryLoadFromFile)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipLibraryUnload)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipLibraryGetKernel)
+DEFINE_HIP_AP_INFO_ENTRY_WITH_MEMBER_POINTER(::HipDispatchTable,
+                                             hipLibraryGetKernelCount)
 #endif
 
 template <auto Entry, typename HipApiTableType,
