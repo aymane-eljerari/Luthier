@@ -72,6 +72,23 @@ inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
   return OS;
 }
 
+/// \brief Registers (via \c llvm::sys::AddSignalHandler) a fatal-signal handler
+/// that writes the raw call stack to \p OS's file descriptor, then lets LLVM
+/// re-raise so the process still crashes.
+///
+/// The handler is strictly async-signal-safe: it does NOT symbolize (no
+/// \c malloc, no \c dladdr, no \c LLVMSymbolizer), and it only writes
+/// \c module(+offset) frames via \c backtrace_symbols_fd straight to the
+/// descriptor. Symbolization must be done offline via \c llvm-symbolizer, e.g.
+/// using \c llvm-symbolizer \c --obj=<module> \c <offset>. Because it writes/// directly to the descriptor (bypassing \p OS's own buffer and its object
+/// lifetime), prefer an unbuffered stream such as the default \c llvm::errs().
+///
+/// \note Use this in place of \c llvm::sys::PrintStackTraceOnErrorSignal, which
+/// \c fork+exec s \c llvm-symbolizer, causing a fork bomb under \c LD_PRELOAD
+/// (the child re-inherits \c LD_PRELOAD and re-loads Luthier), and \c fork from
+/// a crashing multithreaded process is unsafe.
+void printStackTraceOnFatalSignal(llvm::raw_fd_ostream &OS = llvm::errs());
+
 } // namespace luthier
 
 namespace llvm {

@@ -27,11 +27,18 @@
 ///   - StacktraceTestStripped    (-g0, --strip-all)  : neither (module+offset)
 //===----------------------------------------------------------------------===//
 #include "luthier/Common/Stacktrace.h"
+#include <csignal>
 #include <gtest/gtest.h>
 #include <llvm/Support/Compiler.h>
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/raw_ostream.h>
 #include <string>
+
+#if __has_include(<sys/wait.h>) && __has_include(<unistd.h>)
+#include <sys/wait.h>
+#include <unistd.h>
+#define LUTHIER_TEST_HAVE_FORK 1
+#endif
 
 // What the running binary's symbolization can resolve depends on how it was
 // built. These default to a full debug build; the no-debug-info and stripped
@@ -127,5 +134,52 @@ TEST(StacktraceTest, SkippingAllFramesYieldsEmptyTrace) {
   luthier::Stacktrace ST = luthier::Stacktrace::current(/*SkipFrames=*/100000);
   EXPECT_TRUE(ST.empty());
 }
+
+#ifdef LUTHIER_TEST_HAVE_FORK
+// Fork-based test: the child installs the fatal-signal handler, raises SIGSEGV,
+// and must (a) write the header and at least one raw frame to its stderr, then
+// (b) die from the signal — proving the re-raise (a swallowed signal would exit
+// 0; a missing re-raise would loop forever). Capturing the output once lets us
+// assert the header AND a frame line together (a single regex can't reliably
+// span lines across regex engines). The header and the "0x" address that
+// backtrace_symbols_fd prints for every frame are emitted independent of build
+// flags, so this holds for all three variants. Suite named *DeathTest so gtest
+// schedules it before any threads exist.
+TEST(StacktraceDeathTest, WritesRawFramesAndReRaisesOnFatalSignal) {
+  int Pipe[2];
+  ASSERT_EQ(::pipe(Pipe), 0);
+  const pid_t Pid = ::fork();
+  ASSERT_NE(Pid, -1);
+  if (Pid == 0) {
+    // Child: send stderr to the pipe, install the handler, and crash.
+    ::dup2(Pipe[1], STDERR_FILENO);
+    ::close(Pipe[0]);
+    ::close(Pipe[1]);
+    // Default OS is llvm::errs() (fd 2), now the dup'd pipe write end.
+    luthier::printStackTraceOnFatalSignal();
+    std::raise(SIGSEGV);
+    ::_exit(0); // only reached if the re-raise failed to terminate us
+  }
+  // Parent: drain the child's output, then reap it.
+  ::close(Pipe[1]);
+  std::string Output;
+  char Buf[4096];
+  for (ssize_t N; (N = ::read(Pipe[0], Buf, sizeof(Buf))) > 0;)
+    Output.append(Buf, static_cast<size_t>(N));
+  ::close(Pipe[0]);
+  int Status = 0;
+  ASSERT_EQ(::waitpid(Pid, &Status, 0), Pid);
+
+  EXPECT_TRUE(WIFSIGNALED(Status))
+      << "child exited instead of dying from the re-raised signal";
+  if (WIFSIGNALED(Status))
+    EXPECT_EQ(WTERMSIG(Status), SIGSEGV);
+  EXPECT_NE(Output.find("Luthier caught a fatal signal"), std::string::npos)
+      << Output;
+  // backtrace_symbols_fd prints "0x<addr>" for every frame; the header has no
+  // "0x", so finding it confirms at least one captured frame line.
+  EXPECT_NE(Output.find("0x"), std::string::npos) << Output;
+}
+#endif
 
 } // namespace

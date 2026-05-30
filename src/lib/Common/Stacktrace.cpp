@@ -28,6 +28,7 @@
 #include <llvm/Support/Error.h>
 #include <llvm/Support/Format.h>
 #include <llvm/Support/Path.h>
+#include <llvm/Support/Signals.h>
 #include <llvm/Support/raw_ostream.h>
 
 #include <cstdint>
@@ -40,6 +41,11 @@
 #if __has_include(<dlfcn.h>)
 #include <dlfcn.h>
 #define LUTHIER_STACKTRACE_HAVE_DLADDR 1
+#endif
+
+#if __has_include(<unistd.h>)
+#include <unistd.h>
+#define LUTHIER_STACKTRACE_HAVE_UNISTD 1
 #endif
 
 namespace luthier {
@@ -173,6 +179,59 @@ std::string Stacktrace::toString() const {
   llvm::raw_string_ostream OS(Out);
   print(OS);
   return Out;
+}
+
+namespace {
+
+/// \c raw_fd_ostream::get_fd() is protected. Reach it via the pointer-to-member
+/// idiom (The struct is never instantiated — it only serves as the access
+/// scope.)
+struct RawFdOstreamFdAccessor : llvm::raw_fd_ostream {
+  static int getFd(const llvm::raw_fd_ostream &OS) {
+    return (OS.*&RawFdOstreamFdAccessor::get_fd)();
+  }
+};
+
+/// File descriptor the fatal-signal handler writes to; set on install.
+int FatalSignalFd = STDERR_FILENO;
+
+/// Runs from LLVM's fatal-signal handler, so it must be strictly
+/// async-signal-safe: only write() + backtrace()/backtrace_symbols_fd(), which
+/// glibc documents as usable from a signal handler (no malloc). It deliberately
+/// does NOT symbolize — module(+offset) frames are meant to be resolved offline
+void luthierFatalSignalCaptureHandler(void *) {
+#if defined(LUTHIER_STACKTRACE_HAVE_BACKTRACE) &&                              \
+    defined(LUTHIER_STACKTRACE_HAVE_UNISTD)
+  static const char Header[] =
+      "\nLuthier caught a fatal signal; raw stack frames "
+      "(symbolize offline with llvm-symbolizer):\n";
+  // Short writes are ignored — best effort on an already-crashing process.
+  (void)::write(FatalSignalFd, Header, sizeof(Header) - 1);
+  void *Frames[MaxCapturedFrames];
+  int NumCaptured = ::backtrace(Frames, static_cast<int>(MaxCapturedFrames));
+  ::backtrace_symbols_fd(Frames, NumCaptured, FatalSignalFd);
+#elif defined(LUTHIER_STACKTRACE_HAVE_UNISTD)
+  static const char Msg[] = "\nLuthier caught a fatal signal (no backtrace "
+                            "support on this platform).\n";
+  (void)::write(FatalSignalFd, Msg, sizeof(Msg) - 1);
+#endif
+}
+
+} // namespace
+
+void printStackTraceOnFatalSignal(llvm::raw_fd_ostream &OS) {
+  static const bool Installed = [&OS] {
+    FatalSignalFd = RawFdOstreamFdAccessor::getFd(OS);
+#ifdef LUTHIER_STACKTRACE_HAVE_BACKTRACE
+    // Prime libgcc's unwinder now so the first backtrace() inside the handler
+    // need not dlopen it (dlopen is not async-signal-safe).
+    void *Prime[1];
+    (void)::backtrace(Prime, 1);
+#endif
+    llvm::sys::AddSignalHandler(luthierFatalSignalCaptureHandler, nullptr);
+    return true;
+  }();
+  (void)Installed;
 }
 
 } // namespace luthier
