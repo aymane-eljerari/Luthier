@@ -44,6 +44,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 #include <luthier/Common/ErrorCheck.h>
+#include <luthier/Common/Stacktrace.h>
 #include <luthier/HSA/Agent.h>
 #include <luthier/HSA/AqlPacket.h>
 #include <luthier/HSA/HsaError.h>
@@ -665,7 +666,7 @@ static void atToolInit(void *) {
             &luthier::errs(), nullptr, "LUTHIER_ARGS"),
         "Failed to parse the command line arguments."));
     llvm::EnablePrettyStackTrace();
-    llvm::sys::PrintStackTraceOnErrorSignal(llvm::StringRef());
+    luthier::printStackTraceOnFatalSignal();
     llvm::setBugReportMsg("PLEASE submit a bug report to "
                           "https://github.com/matinraayai/Luthier/issues/ and "
                           "include the crash error message and backtrace.\n");

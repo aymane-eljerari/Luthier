@@ -80,7 +80,8 @@ inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
 /// \c malloc, no \c dladdr, no \c LLVMSymbolizer), and it only writes
 /// \c module(+offset) frames via \c backtrace_symbols_fd straight to the
 /// descriptor. Symbolization must be done offline via \c llvm-symbolizer, e.g.
-/// using \c llvm-symbolizer \c --obj=<module> \c <offset>. Because it writes/// directly to the descriptor (bypassing \p OS's own buffer and its object
+/// using \c llvm-symbolizer \c --obj=<module> \c <offset>. Because it writes
+/// directly to the descriptor (bypassing \p OS's own buffer and its object
 /// lifetime), prefer an unbuffered stream such as the default \c llvm::errs().
 ///
 /// \note Use this in place of \c llvm::sys::PrintStackTraceOnErrorSignal, which
