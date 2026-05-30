@@ -77,6 +77,15 @@ public:
                         "Captured HSA table doesn't support extension {0}",
                         hsa::ApiTableInfo<HsaApiTableType>::Name)));
               }
+              /// The entry being within the table's size does not guarantee
+              /// the runtime populated the sub-table pointer; an optional
+              /// extension the runtime doesn't provide leaves it null.
+              if ((Table.*RootAccessor) == nullptr) {
+                LUTHIER_REPORT_FATAL_ON_ERROR(
+                    LUTHIER_MAKE_HSA_ERROR(llvm::formatv(
+                        "Captured HSA table's {0} extension pointer is null",
+                        hsa::ApiTableInfo<HsaApiTableType>::Name)));
+              }
               ::copyElement(&ApiTable.version,
                             &((Table.*RootAccessor)->version));
 
@@ -152,6 +161,12 @@ public:
               if (!hsa::apiTableHasEntry<::CoreApiTable>(Table)) {
                 LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_HSA_ERROR(
                     "Captured HSA table doesn't support the core extension"));
+              }
+              /// The entry being within the table's size does not guarantee
+              /// the runtime populated the core pointer.
+              if (Table.core_ == nullptr) {
+                LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_HSA_ERROR(
+                    "Captured HSA table's core extension pointer is null"));
               }
               if (!hsa::apiTableHasEntry<
                       &::CoreApiTable::hsa_system_get_extension_table_fn>(

@@ -48,7 +48,7 @@ class HsaApiTableWrapperInstaller final
                                   FuncType &UnderlyingStoreLocation,
                                   FuncType WrapperFunc) {
     if (!hsa::apiTableHasEntry(Table, FuncEntry)) {
-      LUTHIER_REPORT_FATAL_ON_ERROR(llvm::make_error<hsa::HsaError>(
+      LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_HSA_ERROR(
           llvm::formatv("Failed to find function entry inside the HSA "
                         "extension table.")));
     }
@@ -76,15 +76,24 @@ public:
             [=, this](llvm::ArrayRef<::HsaApiTable *> Tables,
                       uint64_t LibVersion, uint64_t LibInstance) -> void {
               if (LibInstance != 0) {
-                LUTHIER_REPORT_FATAL_ON_ERROR(llvm::make_error<hsa::HsaError>(
+                LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_HSA_ERROR(
                     "Multiple instances of the HSA library"));
               }
               constexpr auto RootAccessor = hsa::ApiTableInfo<
                   HsaApiTableType>::PointerToMemberRootAccessor;
               if (!hsa::apiTableHasEntry<HsaApiTableType>(*Tables[0])) {
                 LUTHIER_REPORT_FATAL_ON_ERROR(
-                    llvm::make_error<hsa::HsaError>(llvm::formatv(
+                    LUTHIER_MAKE_HSA_ERROR(llvm::formatv(
                         "Captured HSA table doesn't support extension {0}",
+                        hsa::ApiTableInfo<HsaApiTableType>::Name)));
+              }
+              /// The entry being within the table's size does not guarantee
+              /// the runtime populated the sub-table pointer; an optional
+              /// extension the runtime doesn't provide leaves it null.
+              if ((Tables[0]->*RootAccessor) == nullptr) {
+                LUTHIER_REPORT_FATAL_ON_ERROR(
+                    LUTHIER_MAKE_HSA_ERROR(llvm::formatv(
+                        "Captured HSA table's {0} extension pointer is null",
                         hsa::ApiTableInfo<HsaApiTableType>::Name)));
               }
               (installWrapperEntry(
@@ -116,9 +125,8 @@ private:
       FuncType hip::ApiTableEnumInfo<TableType>::ApiTableType::*ExtEntry,
       FuncType &UnderlyingStoreLocation, FuncType WrapperFunc) {
     if (!hip::apiTableHasEntry(Table, ExtEntry)) {
-      LUTHIER_REPORT_FATAL_ON_ERROR(
-          llvm::make_error<hip::HipError>(llvm::formatv(
-              "Failed to find entry inside the HIP API table at offset {0:x}.",
+      LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_HIP_ERROR(llvm::formatv(
+          "Failed to find entry inside the HIP API table at offset {0:x}.",
               reinterpret_cast<size_t>(&(Table.*ExtEntry)) -
                   reinterpret_cast<size_t>(&Table))));
     }
@@ -135,9 +143,10 @@ public:
                     typename hip::ApiTableEnumInfo<TableType>::ApiTableType *>
                     Tables,
                 uint64_t LibVersion, uint64_t LibInstance) {
-              LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-                  LibInstance == 0,
-                  "Multiple instances of the HIP library registered"));
+              if (LibInstance != 0) {
+                LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_ROCPROFILER_ERROR(
+                    "Multiple instances of the HIP library registered"));
+              }
               (installWrapperEntry(*Tables[0], std::get<0>(WrapperSpecs),
                                    std::get<1>(WrapperSpecs),
                                    std::get<2>(WrapperSpecs)),
