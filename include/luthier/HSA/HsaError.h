@@ -55,8 +55,10 @@ public:
 
 #define LUTHIER_HSA_CALL_ERROR_CHECK(Expr, ErrorMsg)                           \
   [&]() -> ::llvm::Error {                                                     \
-    if (const hsa_status_t Status = Expr; Status != HSA_STATUS_SUCCESS)        \
-      return LUTHIER_MAKE_ERROR(::luthier::hsa::HsaError, ErrorMsg, Status);   \
+    if (const hsa_status_t LuthierStatusCode = Expr;                           \
+        LuthierStatusCode != HSA_STATUS_SUCCESS)                               \
+      return LUTHIER_MAKE_ERROR(::luthier::hsa::HsaError, ErrorMsg,            \
+                                LuthierStatusCode);                            \
     return ::llvm::Error::success();                                           \
   }()
 

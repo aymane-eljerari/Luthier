@@ -34,7 +34,7 @@ public:
                         std::source_location::current(),
                     StackTraceType StackTrace = StackTraceInitializer())
       : ErrorInfo(std::move(ErrorMsg), ErrorLocation, std::move(StackTrace)),
-        Error(Error){};
+        Error(Error) {};
 
   explicit HipError(const llvm::formatv_object_base &ErrorMsg,
                     const std::optional<hipError_t> Error = std::nullopt,
@@ -42,7 +42,7 @@ public:
                         std::source_location::current(),
                     StackTraceType StackTrace = StackTraceInitializer())
       : ErrorInfo(ErrorMsg.str(), ErrorLocation, std::move(StackTrace)),
-        Error(Error){};
+        Error(Error) {};
 
   static char ID;
 
@@ -51,8 +51,10 @@ public:
 
 #define LUTHIER_HIP_CALL_ERROR_CHECK(Expr, ErrorMsg)                           \
   [&]() -> ::llvm::Error {                                                     \
-    if (const hipError_t Status = Expr; Status != hipSuccess)                  \
-      return LUTHIER_MAKE_ERROR(::luthier::hip::HipError, ErrorMsg, Status);   \
+    if (const hipError_t LuthierStatusCode = Expr;                             \
+        LuthierStatusCode != hipSuccess)                                       \
+      return LUTHIER_MAKE_ERROR(::luthier::hip::HipError, ErrorMsg,            \
+                                LuthierStatusCode);                            \
     return ::llvm::Error::success();                                           \
   }()
 
