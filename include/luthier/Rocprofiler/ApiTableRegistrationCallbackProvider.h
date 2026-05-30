@@ -135,14 +135,14 @@ protected:
       LUTHIER_REPORT_FATAL_ON_ERROR(
           llvm::make_error<rocprofiler::RocprofilerError>(llvm::formatv(
               "Expected rocprofiler to register {0} API table(s), "
-              "instead got {0}",
+              "instead got {1}",
               ApiTableEnumInfo<TableType>::NumApiTables, NumTables)));
     }
     if (Type != TableType) {
       LUTHIER_REPORT_FATAL_ON_ERROR(
           llvm::make_error<rocprofiler::RocprofilerError>(llvm::formatv(
               "Expected to get API table of type {0}, but instead got "
-              "{0}",
+              "{1}",
               TableType, Type)));
     }
     if (Tables == nullptr) {

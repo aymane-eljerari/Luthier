@@ -125,7 +125,7 @@ template <hsa_extension_t ExtensionType,
 class HsaExtensionTableSnapshot final
     : public ApiTableRegistrationCallbackProvider<ROCPROFILER_HSA_TABLE> {
 
-  ExtensionApiTableType ExtensionTable;
+  ExtensionApiTableType ExtensionTable{};
 
 public:
   /// On initialization, requests a snapshot of the \c ExtensionType from the
