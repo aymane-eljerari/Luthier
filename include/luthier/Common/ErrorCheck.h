@@ -20,8 +20,6 @@
 #ifndef LUTHIER_COMMON_ERROR_CHECK_H
 #define LUTHIER_COMMON_ERROR_CHECK_H
 
-/// TODO: Rework these macros, and unify their uses across the project
-
 /// \brief Reports a fatal usage error if the passed \p llvm::Error argument is
 /// not in a success state
 ///
@@ -49,9 +47,17 @@
       return std::move(LuthierReturnOnErr);                                    \
   } while (false)
 
-#define LUTHIER_MAKE_ERROR(ErrorType, ErrorMsg)                                \
-  llvm::make_error<ErrorType>(                                                 \
-      ErrorMsg, std::source_location::current(),                               \
-      luthier::GenericLuthierError::StackTraceInitializer())
+/// \brief Constructs a \c luthier::LuthierError subclass \p ErrorType wrapped
+/// in an \c llvm::Error.
+///
+/// \c __VA_ARGS__ are the \em leading constructor arguments. The call-site
+/// source location and stack trace — which are always the trailing two
+/// constructor parameters of every Luthier error= type — are appended
+/// automatically, so this one macro works for every \c LuthierError subclass
+/// regardless of its leading arguments.
+#define LUTHIER_MAKE_ERROR(ErrorType, ...)                                     \
+  ::llvm::make_error<ErrorType>(__VA_ARGS__,                                   \
+                                ::std::source_location::current(),             \
+                                ErrorType::StackTraceInitializer())
 
 #endif

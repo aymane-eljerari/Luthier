@@ -20,6 +20,7 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_HSA_HSA_ERROR_H
 #define LUTHIER_HSA_HSA_ERROR_H
+#include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/ROCmLibraryError.h"
 #include <hsa/hsa.h>
 #include <llvm/Support/FormatVariadic.h>
@@ -54,31 +55,22 @@ public:
 
 #define LUTHIER_HSA_CALL_ERROR_CHECK(Expr, ErrorMsg)                           \
   [&]() -> ::llvm::Error {                                                     \
-    if (const hsa_status_t Status = Expr; Status != HSA_STATUS_SUCCESS) {      \
-      return ::llvm::make_error<::luthier::hsa::HsaError>(                     \
-          ErrorMsg, Status, ::std::source_location::current(),                 \
-          ::luthier::hsa::HsaError::StackTraceInitializer());                  \
-    }                                                                          \
+    if (const hsa_status_t Status = Expr; Status != HSA_STATUS_SUCCESS)        \
+      return LUTHIER_MAKE_ERROR(::luthier::hsa::HsaError, ErrorMsg, Status);   \
     return ::llvm::Error::success();                                           \
   }()
 
 #define LUTHIER_MAKE_HSA_ERROR(ErrorMsg)                                       \
-  ::llvm::make_error<::luthier::hsa::HsaError>(                                \
-      ErrorMsg, ::std::nullopt, ::std::source_location::current(),             \
-      ::luthier::hsa::HsaError::StackTraceInitializer())
+  LUTHIER_MAKE_ERROR(::luthier::hsa::HsaError, ErrorMsg, ::std::nullopt)
 
 #define LUTHIER_MAKE_HSA_ERROR_WITH_STATUS(ErrorMsg, Status)                   \
-  ::llvm::make_error<::luthier::hsa::HsaError>(                                \
-      ErrorMsg, Status, ::std::source_location::current(),                     \
-      ::luthier::hsa::HsaError::StackTraceInitializer())
+  LUTHIER_MAKE_ERROR(::luthier::hsa::HsaError, ErrorMsg, Status)
 
 #define LUTHIER_HSA_ERROR_CHECK(Expr, ErrorMsg)                                \
   [&]() -> ::llvm::Error {                                                     \
-    if (!(Expr)) {                                                             \
-      return ::llvm::make_error<::luthier::hsa::HsaError>(                     \
-          ErrorMsg, ::std::nullopt, ::std::source_location::current(),         \
-          ::luthier::hsa::HsaError::StackTraceInitializer());                  \
-    }                                                                          \
+    if (!(Expr))                                                               \
+      return LUTHIER_MAKE_ERROR(::luthier::hsa::HsaError, ErrorMsg,            \
+                                ::std::nullopt);                               \
     return ::llvm::Error::success();                                           \
   }()
 

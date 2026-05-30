@@ -19,6 +19,7 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_HIP_HIP_ERROR_H
 #define LUTHIER_HIP_HIP_ERROR_H
+#include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/ROCmLibraryError.h"
 #include <hip/hip_runtime.h>
 
@@ -49,11 +50,10 @@ public:
 };
 
 #define LUTHIER_HIP_CALL_ERROR_CHECK(Expr, ErrorMsg)                           \
-  [&]() -> llvm::Error {                                                       \
-    if (const hipError_t Status = Expr; Status != hipSuccess) {                \
-      return llvm::make_error<luthier::hip::HipError>(ErrorMsg, Status);       \
-    }                                                                          \
-    return llvm::Error::success();                                             \
+  [&]() -> ::llvm::Error {                                                     \
+    if (const hipError_t Status = Expr; Status != hipSuccess)                  \
+      return LUTHIER_MAKE_ERROR(::luthier::hip::HipError, ErrorMsg, Status);   \
+    return ::llvm::Error::success();                                           \
   }()
 
 } // namespace luthier::hip

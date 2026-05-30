@@ -20,6 +20,7 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_COMMON_GENERIC_LUTHIER_ERROR_H
 #define LUTHIER_COMMON_GENERIC_LUTHIER_ERROR_H
+#include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/LuthierError.h"
 #include <llvm/Support/FormatVariadic.h>
 
@@ -52,9 +53,7 @@ public:
 };
 
 #define LUTHIER_MAKE_GENERIC_ERROR(ErrorMsg)                                   \
-  llvm::make_error<luthier::GenericLuthierError>(                              \
-      ErrorMsg, std::source_location::current(),                               \
-      luthier::GenericLuthierError::StackTraceInitializer())
+  LUTHIER_MAKE_ERROR(luthier::GenericLuthierError, ErrorMsg)
 
 #define LUTHIER_GENERIC_ERROR_CHECK(Expr, ErrorMsg)                            \
   (Expr) ? llvm::Error::success() : LUTHIER_MAKE_GENERIC_ERROR(ErrorMsg)

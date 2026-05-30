@@ -20,6 +20,7 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_ERROR_ROCPROFILER_ERROR_H
 #define LUTHIER_ERROR_ROCPROFILER_ERROR_H
+#include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/ROCmLibraryError.h"
 #include <llvm/Support/Error.h>
 #include <rocprofiler-sdk/fwd.h>
@@ -54,13 +55,12 @@ public:
 };
 
 #define LUTHIER_ROCPROFILER_CALL_ERROR_CHECK(Expr, ErrorMsg)                   \
-  [&]() -> llvm::Error {                                                       \
+  [&]() -> ::llvm::Error {                                                     \
     if (const rocprofiler_status_t Status = Expr;                              \
-        Status != ROCPROFILER_STATUS_SUCCESS) {                                \
-      return llvm::make_error<luthier::rocprofiler::RocprofilerError>(         \
-          ErrorMsg, Status);                                                   \
-    }                                                                          \
-    return llvm::Error::success();                                             \
+        Status != ROCPROFILER_STATUS_SUCCESS)                                  \
+      return LUTHIER_MAKE_ERROR(::luthier::rocprofiler::RocprofilerError,      \
+                                ErrorMsg, Status);                             \
+    return ::llvm::Error::success();                                           \
   }()
 } // namespace luthier::rocprofiler
 
