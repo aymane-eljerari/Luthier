@@ -22,6 +22,7 @@
 #define LUTHIER_ROCPROFILER_API_TABLE_REGISTRATION_CALLBACK_PROVIDER_H
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/Rocprofiler/ApiTableEnumInfo.h"
 #include "luthier/Rocprofiler/RocprofilerError.h"
 #include <atomic>
@@ -226,7 +227,9 @@ public:
       return;
 
     int RocprofilerFiniStatus = 0;
-    LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_ROCPROFILER_CALL_ERROR_CHECK(
+    /// Abort rather than exit: this runs in a destructor that may execute
+    /// during program shutdown, where exit() would re-enter the exit sequence.
+    LUTHIER_ABORT_ON_FATAL_ERROR(LUTHIER_ROCPROFILER_CALL_ERROR_CHECK(
         rocprofiler_is_finalized(&RocprofilerFiniStatus),
         "Failed to check rocprofiler's finalization status."));
     /// Case (a): rocprofiler is finalizing or finalized — expected
@@ -245,18 +248,18 @@ public:
     /// state has already been cleared — so we use a side-channel flag
     /// recorded by a chained \c std::set_terminate handler.
     if (HostAbortedDuringExecution.load()) {
-      llvm::errs() << "[ApiTableRegistrationCallbackProvider] warning: "
-                   << "destroyed after host-side std::terminate; "
-                   << "rocprofiler-sdk had not invoked the registration "
-                   << "callback yet\n";
+      luthier::errs() << "[ApiTableRegistrationCallbackProvider] warning: "
+                      << "destroyed after host-side std::terminate; "
+                      << "rocprofiler-sdk had not invoked the registration "
+                      << "callback yet\n";
       return;
     }
 
     /// Rocprofiler is not finalizing and the host is not aborting, but the
     /// callback was never invoked — destroying now leaves a dangling
     /// registration that rocprofiler will invoke on the next API table
-    /// registration.
-    LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_ROCPROFILER_ERROR(
+    /// registration. Abort (not exit) since we may be inside shutdown.
+    LUTHIER_ABORT_ON_FATAL_ERROR(LUTHIER_MAKE_ROCPROFILER_ERROR(
         "ApiTableRegistrationCallbackProvider destroyed while "
         "rocprofiler-sdk is not finalizing, but the "
         "registration callback was never invoked."));

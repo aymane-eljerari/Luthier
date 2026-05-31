@@ -34,6 +34,26 @@
           llvm::Twine(llvm::toString(std::move(LuthierReportFatalOnErr))));    \
   } while (false)
 
+/// \brief Aborts the process if the passed \p llvm::Error argument is not in a
+/// success state.
+///
+/// Identical to \c LUTHIER_REPORT_FATAL_ON_ERROR except it routes through
+/// \c llvm::reportFatalInternalError, which calls \c abort() rather than
+/// \c exit(1). Prefer this over \c LUTHIER_REPORT_FATAL_ON_ERROR in contexts
+/// where running static destructors / atexit handlers is unsafe — most notably
+/// destructors that may execute during program shutdown, where \c exit() would
+/// re-enter the exit / static-destruction sequence (undefined behavior).
+///
+/// The argument is bound by forwarding reference (no move on capture) and the
+/// error is consumed with a single move into \c llvm::toString. The \c std::move
+/// is required so the macro also accepts lvalue \c llvm::Error arguments.
+#define LUTHIER_ABORT_ON_FATAL_ERROR(...)                                      \
+  do {                                                                         \
+    if (auto &&LuthierAbortOnErr = (__VA_ARGS__))                              \
+      llvm::reportFatalInternalError(                                          \
+          llvm::Twine(llvm::toString(std::move(LuthierAbortOnErr))));          \
+  } while (false)
+
 /// \brief returns from the current function if the passed \p llvm::Error
 /// argument is not in a success state
 ///
