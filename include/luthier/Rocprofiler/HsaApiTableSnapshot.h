@@ -60,7 +60,7 @@ public:
   /// encountered by the constructor
   explicit HsaApiTableSnapshot(llvm::Error &Err)
       : ApiTableRegistrationCallbackProvider(
-            [&](llvm::ArrayRef<::HsaApiTable *> Tables, uint64_t, uint64_t) {
+            [this](llvm::ArrayRef<::HsaApiTable *> Tables, uint64_t, uint64_t) {
               /// Capture only the first registration. When the application
               /// finalizes and re-initializes HSA, rocprofiler-sdk invokes this
               /// callback again with a non-zero library instance, but the
@@ -157,8 +157,8 @@ public:
   /// encountered by the constructor
   explicit HsaExtensionTableSnapshot(llvm::Error &Err)
       : ApiTableRegistrationCallbackProvider(
-            [&](llvm::ArrayRef<::HsaApiTable *> Tables, uint64_t,
-                uint64_t Instance) {
+            [this](llvm::ArrayRef<::HsaApiTable *> Tables, uint64_t,
+                   uint64_t Instance) {
               /// Query the extension only on the first registration. When the
               /// application finalizes and re-initializes HSA, rocprofiler-sdk
               /// invokes this callback again with \c Instance > 0, but the

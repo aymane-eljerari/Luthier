@@ -39,10 +39,10 @@ private:
 public:
   explicit HipApiTableSnapshot(llvm::Error &Err)
       : ApiTableRegistrationCallbackProvider<TableType>(
-            [&](llvm::ArrayRef<
-                    typename ApiTableEnumInfo<TableType>::ApiTableType *>
-                    Tables,
-                uint64_t LibVersion, uint64_t LibInstance) {
+            [this](llvm::ArrayRef<
+                       typename ApiTableEnumInfo<TableType>::ApiTableType *>
+                       Tables,
+                   uint64_t LibVersion, uint64_t LibInstance) {
               /// Capture only the first registration. When the application
               /// finalizes and re-initializes the runtime, rocprofiler-sdk
               /// invokes this callback again with \c LibInstance > 0, but the

@@ -30,10 +30,10 @@ template <> struct ApiTableEnumInfo<ROCPROFILER_HSA_TABLE> {
   constexpr static auto ApiTableName = "HSA";
 
   /// Forces the HSA runtime to initialize (and therefore register its API
-  /// table with rocprofiler-sdk) by calling a harmless query function.
-  static void triggerInitialization() {
-    (void)hsa_status_string(HSA_STATUS_SUCCESS, nullptr);
-  }
+  /// table with rocprofiler-sdk) by calling \c hsa_init. A pure query function
+  /// would not suffice: HSA's rocprofiler registration happens only on the
+  /// runtime's Acquire→Load→LoadTools path, which \c hsa_init drives.
+  static void triggerInitialization() { (void)hsa_init(); }
 };
 
 } // namespace luthier::rocprofiler

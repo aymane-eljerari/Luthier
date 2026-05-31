@@ -97,6 +97,11 @@ private:
     });
   }
 
+  /// Whether \c rocprofiler_at_intercept_table_registration succeeded for this
+  /// object. If registration failed, rocprofiler never stored our \c this
+  /// pointer, hence it is safe to destroy the object
+  bool SuccessfullyRegistered = false;
+
 protected:
   /// Keeps track of whether the registration callback has been invoked by
   /// rocprofiler-sdk
@@ -144,9 +149,8 @@ protected:
 
     for (const auto *Table : TablesAsArrayRef) {
       if (!Table) {
-        LUTHIER_REPORT_FATAL_ON_ERROR(
-            llvm::make_error<rocprofiler::RocprofilerError>(
-                "API table passed by rocprofiler is nullptr"));
+        LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_ROCPROFILER_ERROR(
+            "API table passed by rocprofiler is nullptr"));
       }
     }
 
@@ -185,6 +189,7 @@ public:
                       "initialization from "
                       "rocprofiler-sdk",
                       ApiTableEnumInfo<TableType>::ApiTableName)));
+    SuccessfullyRegistered = !Err.operator bool();
   };
 
   /// Destructor
@@ -204,7 +209,15 @@ public:
   /// condition: rocprofiler re-invokes it on every subsequent registration
   /// (e.g. an HSA finalize→re-init bumps the library instance and re-fires),
   /// so finalization is the only state in which it can no longer fire.
+  /// \note If registration with rocprofiler-sdk failed in the constructor, none
+  /// of the above applies — rocprofiler never stored our \c this, so the object
+  /// is unconditionally safe to destroy.
   virtual ~ApiTableRegistrationCallbackProvider() {
+    /// Registration never took effect, so rocprofiler-sdk holds no pointer to
+    /// this object — there is nothing to reconcile.
+    if (!SuccessfullyRegistered)
+      return;
+
     int RocprofilerFiniStatus = 0;
     LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_ROCPROFILER_CALL_ERROR_CHECK(
         rocprofiler_is_finalized(&RocprofilerFiniStatus),

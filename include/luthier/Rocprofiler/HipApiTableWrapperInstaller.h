@@ -66,6 +66,9 @@ public:
                     typename ApiTableEnumInfo<TableType>::ApiTableType *>
                     Tables,
                 uint64_t LibVersion, uint64_t LibInstance) {
+              if (Tables.empty())
+                LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_ROCPROFILER_ERROR(
+                    "No tables were passed to the callback"));
               /// Re-install the wrappers on every (re)registration. When the
               /// application finalizes and re-initializes the runtime,
               /// rocprofiler-sdk invokes this callback again with
