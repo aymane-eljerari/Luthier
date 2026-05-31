@@ -119,6 +119,10 @@ struct LDSBankConflictTool
   uint64_t TotalNumDoubleAddressLDSInstructions = 0;
   unsigned NextInstrIdx = 0;
 
+  /// InstrumentationPipelineTrait callback (optional): reset the per-dispatch
+  /// instruction counter before each sweep.
+  void onBeginDispatchInstrumentation() { NextInstrIdx = 0; }
+
   void onPackets(const hsa_queue_t &Queue, uint64_t PacketIdx,
                  llvm::ArrayRef<luthier::hsa::AqlPacket> Packets,
                  hsa_amd_queue_intercept_packet_writer PacketWriter);
@@ -257,71 +261,6 @@ static luthier::rocprofiler::HsaApiTableSnapshot<::AmdExtTable>
 static luthier::rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
     *LoaderSnapshot{nullptr};
 
-static llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>>
-runInstrumentationPipelineForDispatch(
-    LDSBankConflictTool &T, const hsa_kernel_dispatch_packet_t &Packet) {
-  T.NextInstrIdx = 0;
-
-  llvm::LLVMContext Ctx;
-  auto M = std::make_unique<llvm::Module>("luthier.target", Ctx);
-  M->setTargetTriple(llvm::Triple("amdgcn-amd-amdhsa"));
-
-  // MAM must die before FAM (its proxy-result destructor calls
-  // `FAM->clear()`). C++ destroys in reverse declaration order.
-  llvm::LoopAnalysisManager LAM;
-  llvm::FunctionAnalysisManager FAM;
-  llvm::CGSCCAnalysisManager CGAM;
-  llvm::ModuleAnalysisManager MAM;
-  llvm::PassBuilder PB;
-  PB.registerModuleAnalyses(MAM);
-  PB.registerFunctionAnalyses(FAM);
-  PB.registerLoopAnalyses(LAM);
-  PB.registerCGSCCAnalyses(CGAM);
-  PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
-
-  const auto &KD = *reinterpret_cast<const llvm::amdhsa::kernel_descriptor_t *>(
-      Packet.kernel_object);
-
-  MAM.registerPass([&] {
-    return luthier::InitialEntryPointAnalysis(
-        [&](llvm::Module &, llvm::ModuleAnalysisManager &) {
-          return luthier::EntryPoint(KD);
-        });
-  });
-  MAM.registerPass([&] {
-    return luthier::InitialExecutionPointAnalysis(
-        [&](llvm::Module &, llvm::ModuleAnalysisManager &)
-            -> const llvm::amdhsa::kernel_descriptor_t & { return KD; });
-  });
-  MAM.registerPass([&] {
-    return luthier::MemoryAllocationAnalysis(
-        std::make_unique<luthier::HsaMemoryAllocationAccessor>(
-            T, *::CoreApiSnapshot, *::AmdExtSnapshot,
-            ::LoaderSnapshot->getTable()));
-  });
-  luthier::amdgpu::hsamd::MetadataParser MetadataParserInstance;
-  MAM.registerPass([&] {
-    return luthier::MetadataParserAnalysis(MetadataParserInstance);
-  });
-  MAM.registerPass([] { return luthier::LuthierCallGraphAnalysis(); });
-  MAM.registerPass(
-      [] { return luthier::FunctionPreambleDescriptorAnalysis(); });
-  MAM.registerPass([] { return luthier::IPPredCFGAnalysis(); });
-
-  llvm::SmallVector<char, 0> ObjBuf;
-  llvm::raw_svector_ostream ObjOS(ObjBuf);
-
-  llvm::ModulePassManager MPM;
-  MPM.addPass(luthier::CodeDiscoveryPass(T.Opts.DiscoveryOpts));
-  MPM.addPass(T.buildPipeline(T.Opts.DriverOpts));
-  MPM.addPass(
-      luthier::NewPMAsmPrinter(llvm::CodeGenFileType::ObjectFile, ObjOS));
-  MPM.run(*M, MAM);
-
-  return std::make_unique<llvm::SmallVectorMemoryBuffer>(
-      std::move(ObjBuf), "luthier.instrumented",
-      /*RequiresNullTerminator=*/false);
-}
 
 luthier::InstrumentationPreservedAnalyses
 LDSBankConflictTool::runInstrumentationPass(llvm::Module &IModule,
@@ -455,7 +394,8 @@ void LDSBankConflictTool::onPackets(
         llvm::consumeError(std::move(MissErr));
         std::unique_ptr<llvm::MemoryBuffer> ObjBuf;
         LUTHIER_REPORT_FATAL_ON_ERROR(
-            runInstrumentationPipelineForDispatch(*this, *DispatchPacket)
+            this->runInstrumentationPipelineForDispatch(*KD, Opts.DriverOpts,
+                                                        Opts.DiscoveryOpts)
                 .moveInto(ObjBuf));
         LUTHIER_REPORT_FATAL_ON_ERROR(
             this->loadInstrumented(std::move(ObjBuf), KD, 0).takeError());

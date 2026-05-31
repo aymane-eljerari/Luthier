@@ -175,6 +175,12 @@ struct InstrCountTool
   unsigned NextInstrIdx = 0;
 
   //===---------------------------------------------------------------===//
+  // InstrumentationPipelineTrait callback (optional). Invoked by
+  // runInstrumentationPipelineForDispatch before each per-dispatch sweep.
+  //===---------------------------------------------------------------===//
+  void onBeginDispatchInstrumentation() { NextInstrIdx = 0; }
+
+  //===---------------------------------------------------------------===//
   // PacketMonitorTrait callback. Called for every AQL packet submitted
   // on any intercepted queue.
   //===---------------------------------------------------------------===//
@@ -234,157 +240,6 @@ static luthier::rocprofiler::HsaApiTableSnapshot<::AmdExtTable>
     *AmdExtSnapshot{nullptr};
 static luthier::rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
     *LoaderSnapshot{nullptr};
-
-//===----------------------------------------------------------------------===//
-// Helpers
-//===----------------------------------------------------------------------===//
-
-/// Run \c CodeDiscoveryPass + \c InstrumentationPMDriver + \c NewPMAsmPrinter
-/// for the kernel referenced by \p Packet.kernel_object and return the
-/// resulting relocatable object-file bytes. The \c HsaMemoryAllocationAccessor
-/// pulls the device-side memory contents from the tool's
-/// \c LoadedCodeObjectCache; the discovery pass walks the kernel's
-/// reachable code and emits MIR; the driver runs the full instrumentation
-/// codegen pipeline; the new-PM AsmPrinter dumps an ELF. The
-/// \c TargetMachine the codegen pipeline lowers against is built by the
-/// tool's \c HSATool::buildTargetMachineForKD, which resolves the owning
-/// agent's ISA and folds the kernel's wavefront size / execution mode in.
-static llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>>
-runInstrumentationPipelineForDispatch(
-    InstrCountTool &T, const hsa_kernel_dispatch_packet_t &Packet) {
-  T.NextInstrIdx = 0;
-
-  const auto &KD = *reinterpret_cast<const llvm::amdhsa::kernel_descriptor_t *>(
-      Packet.kernel_object);
-
-  std::unique_ptr<llvm::TargetMachine> TM;
-  LUTHIER_RETURN_ON_ERROR(T.buildTargetMachineForKD(&KD).moveInto(TM));
-
-  llvm::LLVMContext Ctx;
-  auto M = std::make_unique<llvm::Module>("luthier.target", Ctx);
-  M->setTargetTriple(TM->getTargetTriple());
-  M->setDataLayout(TM->createDataLayout());
-
-  llvm::MachineModuleInfo MMI(TM.get());
-
-  // Declaration order matters: C++ destroys these in reverse, and
-  // MAM caches a `FunctionAnalysisManagerModuleProxy::Result` whose
-  // destructor calls `FAM->clear()`. So MAM must die before FAM. Keep
-  // MAM declared LAST among the managers (same convention LLVM uses
-  // in `PassBuilder` examples).
-  llvm::LoopAnalysisManager LAM;
-  llvm::FunctionAnalysisManager FAM;
-  llvm::CGSCCAnalysisManager CGAM;
-  llvm::MachineFunctionAnalysisManager MFAM;
-  llvm::ModuleAnalysisManager MAM;
-
-  // PIC + SI must outlive MPM.run(). StandardInstrumentations is what reads
-  // --print-after-all / --print-before-all / --print-changed / -time-passes
-  // and registers the corresponding PassInstrumentationCallbacks. Without
-  // passing &PIC to the PassBuilder ctor, the outer PM has no instrumentation
-  // hooks — so dumps only fire for passes inside InstrumentationPMDriver,
-  // which sets up its own PIC/SI pair internally.
-  llvm::PassInstrumentationCallbacks PIC;
-  llvm::StandardInstrumentations SI(Ctx, /*DebugLogging=*/false);
-
-  llvm::PassBuilder PB(TM.get(), llvm::PipelineTuningOptions(), std::nullopt,
-                       &PIC);
-  PB.registerModuleAnalyses(MAM);
-  PB.registerFunctionAnalyses(FAM);
-  PB.registerLoopAnalyses(LAM);
-  PB.registerCGSCCAnalyses(CGAM);
-  PB.registerMachineFunctionAnalyses(MFAM);
-  PB.crossRegisterProxies(LAM, FAM, CGAM, MAM, &MFAM);
-  SI.registerCallbacks(PIC, &MAM);
-
-  MAM.registerPass([&] { return llvm::MachineModuleAnalysis(MMI); });
-  MFAM.registerPass([] { return luthier::InstructionTracesAnalysis(); });
-
-  MAM.registerPass([&] {
-    return luthier::InitialEntryPointAnalysis(
-        [&](llvm::Module &, llvm::ModuleAnalysisManager &) {
-          return luthier::EntryPoint(KD);
-        });
-  });
-  MAM.registerPass([&] {
-    return luthier::InitialExecutionPointAnalysis(
-        [&](llvm::Module &, llvm::ModuleAnalysisManager &)
-            -> const llvm::amdhsa::kernel_descriptor_t & { return KD; });
-  });
-  MAM.registerPass([&] {
-    return luthier::MemoryAllocationAnalysis(
-        std::make_unique<luthier::HsaMemoryAllocationAccessor>(
-            T, *::CoreApiSnapshot, *::AmdExtSnapshot,
-            ::LoaderSnapshot->getTable()));
-  });
-  luthier::amdgpu::hsamd::MetadataParser MetadataParserInstance;
-  MAM.registerPass([&] {
-    return luthier::MetadataParserAnalysis(MetadataParserInstance);
-  });
-  MAM.registerPass([] { return luthier::LuthierCallGraphAnalysis(); });
-  MAM.registerPass(
-      [] { return luthier::FunctionPreambleDescriptorAnalysis(); });
-  MAM.registerPass([] { return luthier::IPPredCFGAnalysis(); });
-
-  llvm::SmallVector<char, 0> ObjBuf;
-  llvm::raw_svector_ostream ObjOS(ObjBuf);
-
-  llvm::Triple ToolTriple = TM->getTargetTriple();
-  std::string ToolCPU(TM->getTargetCPU());
-  llvm::SubtargetFeatures ToolFeatures(TM->getTargetFeatureString());
-
-  // Thin module-pass adapter that forwards into the tool's
-  // InjectedPayloadCreationPass<Tool, MachineFunction>::run() so the
-  // driver can hook the pass into its IR pipeline without copying the
-  // singleton tool object.
-  struct InjectPayloadsAdapter
-      : public llvm::PassInfoMixin<InjectPayloadsAdapter> {
-    InstrCountTool *T;
-    explicit InjectPayloadsAdapter(InstrCountTool *T) : T(T) {}
-    llvm::PreservedAnalyses run(llvm::Module &IModule,
-                                llvm::ModuleAnalysisManager &IMAM) {
-      luthier::errs() << "[InjectPayloadsAdapter] run on IModule '"
-                      << IModule.getName() << "'\n";
-      using Base =
-          luthier::InstrumentationPass<InstrCountTool, llvm::Module,
-                                        llvm::MachineFunction>;
-      return static_cast<Base *>(T)->run(IModule, IMAM);
-    }
-  };
-
-  llvm::ModulePassManager MPM;
-  MPM.addPass(luthier::CodeDiscoveryPass(T.Opts.DiscoveryOpts));
-  // Wire up the IR pipeline:
-  //  - IModuleCreatorFn: feed the driver the tool's embedded device-side
-  //    bitcode so the hooks are in the IModule.
-  //  - PreIROptimizationCallback: insert the tool's
-  //    InjectedPayloadCreationPass BEFORE the default per-module -O
-  //    pipeline. The payload functions it creates reference the hooks,
-  //    preventing GlobalDCE from stripping them.
-  MPM.addPass(luthier::InstrumentationPMDriver(
-      T.Opts.DriverOpts, T.getIntrinsicProcessorRegistry(), /*Plugins=*/{},
-      [&T, ToolTriple, ToolCPU,
-       ToolFeatures](llvm::LLVMContext &IModCtx) {
-        auto ModOrErr =
-            T.getEmbeddedModule(ToolTriple, ToolCPU, ToolFeatures, IModCtx);
-        if (!ModOrErr) {
-          llvm::report_fatal_error(ModOrErr.takeError());
-        }
-        return std::move(*ModOrErr);
-      },
-      /*PassBuilderAugmentationCallback=*/[](llvm::PassBuilder &) {},
-      /*PreIROptimizationCallback=*/
-      [&T](llvm::ModulePassManager &IMPM) {
-        IMPM.addPass(InjectPayloadsAdapter(&T));
-      }));
-  MPM.addPass(
-      luthier::NewPMAsmPrinter(llvm::CodeGenFileType::ObjectFile, ObjOS));
-
-  MPM.run(*M, MAM);
-
-  return std::make_unique<llvm::SmallVectorMemoryBuffer>(
-      std::move(ObjBuf), "luthier.instrumented", /*RequiresNullTerminator=*/false);
-}
 
 //===----------------------------------------------------------------------===//
 // InstrCountTool::runInstrumentationPass
@@ -481,7 +336,8 @@ void InstrCountTool::onPackets(
         llvm::consumeError(std::move(MissErr));
         std::unique_ptr<llvm::MemoryBuffer> ObjBuf;
         LUTHIER_REPORT_FATAL_ON_ERROR(
-            runInstrumentationPipelineForDispatch(*this, *DispatchPacket)
+            this->runInstrumentationPipelineForDispatch(*KD, Opts.DriverOpts,
+                                                        Opts.DiscoveryOpts)
                 .moveInto(ObjBuf));
         LUTHIER_REPORT_FATAL_ON_ERROR(
             this->loadInstrumented(std::move(ObjBuf), KD, 0).takeError());

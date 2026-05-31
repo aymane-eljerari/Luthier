@@ -26,6 +26,7 @@
 #include "luthier/HSA/HsaError.h"
 #include "luthier/HSA/ISA.h"
 #include "luthier/HSATooling/DeviceToolCodeFatBinaryLoader.h"
+#include "luthier/HSATooling/InstrumentationPipelineTrait.h"
 #include "luthier/HSATooling/InstrumentedKernelLoaderAndLauncher.h"
 #include "luthier/HSATooling/LLVMUserTrait.h"
 #include "luthier/HSATooling/LoadedCodeObjectCache.h"
@@ -106,6 +107,7 @@ class HSATool : public Singleton<Derived>,
                 public InstrumentedKernelLoaderAndLauncherTrait<Derived>,
                 public InjectedPayloadCreationPass<Derived, TargetUnitT>,
                 public IntrinsicProcessorRegistryTraitBase<Derived>,
+                public InstrumentationPipelineTrait<Derived, TargetUnitT>,
                 public PacketMonitorTrait<Derived> {
 private:
   /// Sentinel \c __managed__ variable. Its only purpose is to give HIP-Clang's

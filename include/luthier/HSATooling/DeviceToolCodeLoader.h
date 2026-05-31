@@ -324,6 +324,24 @@ public:
   DeviceToolCodeLoader(const DeviceToolCodeLoader &) = delete;
   DeviceToolCodeLoader &operator=(const DeviceToolCodeLoader &) = delete;
 
+  /// Accessors for the HSA API-table snapshots the loader was constructed
+  /// with. These expose the underlying, pre-interception function pointers so
+  /// sibling traits (which are not derived from \c DeviceToolCodeLoader and so
+  /// cannot reach the protected members directly) can drive HSA from inside a
+  /// \c withInstance() callback.
+  const rocprofiler::HsaApiTableSnapshot<::CoreApiTable> &
+  getCoreApiTableSnapshot() const {
+    return CoreApiSnapshot;
+  }
+  const rocprofiler::HsaApiTableSnapshot<::AmdExtTable> &
+  getAmdExtTableSnapshot() const {
+    return AmdExtSnapshot;
+  }
+  const rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER> &
+  getLoaderTableSnapshot() const {
+    return LoaderApiSnapshot;
+  }
+
   /// Resolve a device-side global-variable name to its
   /// \c hsa_executable_symbol_t on \p Agent. Callers needing the loaded
   /// address, size, or alignment derive them via
