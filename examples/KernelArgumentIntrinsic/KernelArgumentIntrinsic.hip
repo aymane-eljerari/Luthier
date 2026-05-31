@@ -29,6 +29,7 @@
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/PrettyStackTrace.h>
+#include <llvm/Support/Signals.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
 #include <luthier/Common/ErrorCheck.h>
@@ -205,9 +206,8 @@ KernelArgumentIntrinsicTool::runInstrumentationPass(
   if (MF.empty())
     return luthier::InstrumentationPreservedAnalyses{};
   LUTHIER_REPORT_FATAL_ON_ERROR(this->createInjectedPayload(
-      reinterpret_cast<const void *>(
-          &KernelArgumentIntrinsicTool::accessKernelArg),
-      IModule, MF.begin()->front(), {}));
+      &KernelArgumentIntrinsicTool::accessKernelArg, IModule,
+      MF.begin()->front(), {}));
   return luthier::InstrumentationPreservedAnalyses{};
 }
 

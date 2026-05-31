@@ -251,9 +251,13 @@ public:
   /// device function's Itanium-mangled name. In both cases a single
   /// \c Module::getFunction lookup against the IModule resolves the
   /// payload.
+  ///
+  /// The handle is taken as a typed pointer so callers can pass
+  /// \c &MyTool::myHook directly; \c lookupNameByHandle does the cast to the
+  /// opaque key internally.
+  template <typename T>
   llvm::Expected<llvm::Function *>
-  resolvePayloadHandle(const void *HostHandle,
-                       llvm::Module &InstrumentationModule) {
+  resolvePayloadHandle(T *HostHandle, llvm::Module &InstrumentationModule) {
     auto &Self = static_cast<Derived &>(*this);
     auto NameOrErr = Self.lookupNameByHandle(HostHandle);
     LUTHIER_RETURN_ON_ERROR(NameOrErr.takeError());
@@ -277,9 +281,11 @@ public:
   /// pointer used by HIP to reference a \c __device__ function from the
   /// host side, e.g. \c &MyTool::myHook) instead of a pre-resolved
   /// \c llvm::Function. Resolves the handle via \c resolvePayloadHandle
-  /// then forwards to the \c Function&-taking base overload.
+  /// then forwards to the \c Function&-taking base overload. The handle is
+  /// taken as a typed pointer so callers need not cast to \c void*.
+  template <typename T>
   llvm::Error
-  createInjectedPayload(const void *HostHandle, llvm::Module &IModule,
+  createInjectedPayload(T *HostHandle, llvm::Module &IModule,
                         const llvm::MachineInstr &TargetMI,
                         llvm::ArrayRef<typename InjectedPayloadCreationPass<
                             Derived, TargetUnitT>::PayloadArg>

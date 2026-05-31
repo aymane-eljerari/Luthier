@@ -217,15 +217,36 @@ public:
   }
 
   /// Resolve a HIP host shadow handle (the \c __hipRegister* host-side
-  /// pointer) to its device-side symbol name. Populated at construction,
-  /// so this does not trigger \c ensureLoaded — works before HSA is up.
-  llvm::Expected<llvm::StringRef> lookupNameByHandle(const void *Handle) {
+  /// pointer, e.g. \c &MyTool::MyDeviceVar) to its device-side symbol name.
+  /// Populated at construction, so this does not trigger \c ensureLoaded —
+  /// works before HSA is up.
+  template <typename T>
+  llvm::Expected<llvm::StringRef> lookupNameByHandle(T *Handle) {
     std::lock_guard Lock(Mutex);
-    auto It = HandleToName.find(Handle);
+    auto It = HandleToName.find(reinterpret_cast<const void *>(Handle));
     LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         It != HandleToName.end(),
         "No device-side symbol registered for the given host handle."));
     return llvm::StringRef{It->second};
+  }
+
+  /// Keep the base class's name-based overload visible alongside the
+  /// host-handle overload below
+  using DeviceToolCodeLoader::lookupGlobalVariable;
+
+  /// Resolve a HIP host shadow handle (the \c __hipRegister* host-side
+  /// pointer, e.g. \c &MyTool::MyDeviceVar) to its
+  /// \c hsa_executable_symbol_t on \p Agent. Converts the handle to its
+  /// device-side symbol name via \c lookupNameByHandle, then forwards to the
+  /// base \c DeviceToolCodeLoader::lookupGlobalVariable. As with the
+  /// name-based overload, this triggers \c ensureLoaded on first call. The
+  /// handle is taken as a typed pointer so call sites need not cast.
+  template <typename T>
+  llvm::Expected<hsa_executable_symbol_t>
+  lookupGlobalVariable(T *Handle, hsa_agent_t Agent) {
+    auto NameOrErr = lookupNameByHandle(Handle);
+    LUTHIER_RETURN_ON_ERROR(NameOrErr.takeError());
+    return DeviceToolCodeLoader::lookupGlobalVariable(*NameOrErr, Agent);
   }
 
   /// Override: run the base's deferred load first (slices + dynamic

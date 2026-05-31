@@ -532,8 +532,8 @@ void InstrCountTool::onPackets(
       if (PInfoStatus == HSA_STATUS_SUCCESS &&
           CounterAgentInfo.type != HSA_EXT_POINTER_TYPE_UNKNOWN) {
         hsa_agent_t Agent = CounterAgentInfo.agentOwner;
-        auto SymOrErr = this->lookupGlobalVariable(
-            "_ZN14InstrCountTool7CounterE", Agent);
+        auto SymOrErr =
+            this->lookupGlobalVariable(&InstrCountTool::Counter, Agent);
         if (!SymOrErr) {
           llvm::consumeError(SymOrErr.takeError());
         } else {

@@ -194,8 +194,7 @@ KernelInstrumentTool::runInstrumentationPass(llvm::Module &IModule,
 
   auto &Ctx = IModule.getContext();
   LUTHIER_REPORT_FATAL_ON_ERROR(this->createInjectedPayload(
-      reinterpret_cast<const void *>(&KernelInstrumentTool::instrumentationHook),
-      IModule, *T3,
+      &KernelInstrumentTool::instrumentationHook, IModule, *T3,
       {llvm::ConstantInt::get(llvm::Type::getInt32Ty(Ctx), llvm::AMDGPU::SCC),
        llvm::ConstantInt::get(llvm::Type::getInt32Ty(Ctx), 1)}));
   return luthier::InstrumentationPreservedAnalyses{};
