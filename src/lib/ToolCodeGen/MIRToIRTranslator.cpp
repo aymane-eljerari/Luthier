@@ -567,7 +567,7 @@ llvm::Value *MIRToIRTranslator::materializeFromOverlapping(
                         return std::gcd(A, B.ChunkEnd - B.ChunkStart);
                       });
 
-  // Step 5: Construct a vector type to materialize chunks
+  // Step 6: Construct a vector type to materialize chunks
   auto *WorkingTy = llvm::FixedVectorType::get(
       Builder.getIntNTy(OptimalNumHalves * RegGranule),
       RNumHalves / OptimalNumHalves);
@@ -598,7 +598,7 @@ llvm::Value *MIRToIRTranslator::materializeFromOverlapping(
     }
   };
 
-  // Step 6: Extract and insert chunks.
+  // Step 7: Extract and insert chunks.
   // NonOverlapChunks store absolute offsets; normalize to RStart-relative
   // before calling InsertChunkFn (which expects RStart-relative ChunkStart).
   for (auto &C : NonOverlapChunks) {
@@ -609,7 +609,7 @@ llvm::Value *MIRToIRTranslator::materializeFromOverlapping(
     InsertChunkFn(C.SrcChunkStart, C.ChunkStart, C.ChunkEnd, C.Src->RegKey);
   }
 
-  // Step 7: Final bitcast to requested type
+  // Step 8: Final bitcast to requested type
   return Builder.CreateBitOrPointerCast(Result, &RegType);
 }
 

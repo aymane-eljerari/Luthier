@@ -46,7 +46,6 @@
 #include <llvm/MC/MCDisassembler/MCDisassembler.h>
 #include <llvm/MC/MCInstPrinter.h>
 #include <llvm/MC/TargetRegistry.h>
-#include <unordered_set>
 
 #undef DEBUG_TYPE
 
@@ -337,10 +336,15 @@ parseKDRsrc2(const llvm::amdhsa::kernel_descriptor_t &KD,
       KD.compute_pgm_rsrc2,
       llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_VGPR_WORKITEM_ID)) {
   case 0:
+    // TIDIG_COMP_CNT == 0 → only X is enabled; disable both Y and Z.
     F.addFnAttr("amdgpu-no-workitem-id-y");
+    [[fallthrough]];
   case 1:
+    // TIDIG_COMP_CNT == 1 → X and Y enabled; disable only Z.
     F.addFnAttr("amdgpu-no-workitem-id-z");
+    [[fallthrough]];
   case 2:
+    // TIDIG_COMP_CNT == 2 → X, Y, Z all enabled; nothing to disable.
     break;
   default:
     return LUTHIER_MAKE_GENERIC_ERROR("KD's VGPR workitem ID is not valid");
@@ -686,7 +690,7 @@ parseKDKernelCode(const llvm::amdhsa::kernel_descriptor_t &KD,
   }
 
   return llvm::Error::success();
-};
+}
 
 /// Initializes the \c llvm::Function and \c llvm::MachineFunction for the
 /// entry point for the \p KD
@@ -731,7 +735,6 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
         LUTHIER_RETURN_ON_ERROR(CurrentKDLoadAddrOrErr.takeError());
         if (*CurrentKDLoadAddrOrErr == KDLoadOffset) {
           return CurrentKD;
-          LUTHIER_RETURN_ON_ERROR(Err);
         }
       }
       LUTHIER_RETURN_ON_ERROR(Err);
@@ -1030,7 +1033,7 @@ convertAndAddMCOperandsToMI(llvm::ArrayRef<llvm::MCOperand> MCOperands,
                  << "\n");
       unsigned RegNum = RealToPseudoRegisterMapTable(MCOp.getReg());
       const bool IsDef = MCOpIdx < MCID.getNumDefs();
-      auto Flags = 0x0;
+      unsigned Flags = 0;
       const llvm::MCOperandInfo &OpInfo = MCID.operands().begin()[MCOpIdx];
       if (IsDef && !OpInfo.isOptionalDef()) {
         Flags |= llvm::RegState::Define;
@@ -1569,7 +1572,7 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
       /// created Functions/MFs in the module, so nothing is preserved.
       return llvm::PreservedAnalyses::none();
     }
-    auto [MF, FuncSymRef] = *MFAndFuncSymRefOrErr;
+    [[maybe_unused]] auto [MF, FuncSymRef] = *MFAndFuncSymRefOrErr;
 
     /// Set the function's entry point as an attribute
     setFunctionEntryPoint(MF.getFunction(), CurrentEntryPoint);
