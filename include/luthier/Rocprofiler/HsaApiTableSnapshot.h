@@ -189,18 +189,27 @@ public:
                     "Captured HSA table's core extension pointer is null"));
               }
               if (!hsa::apiTableHasEntry<
-                      &::CoreApiTable::hsa_system_get_extension_table_fn>(
+                      &::CoreApiTable::hsa_system_get_major_extension_table_fn>(
                       *Table.core_)) {
                 LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_HSA_ERROR(
                     "Captured HSA API table doesn't have "
-                    "hsa_system_get_extension_table function"));
+                    "hsa_system_get_major_extension_table function"));
               }
+              /// Use \c hsa_system_get_major_extension_table (explicit length)
+              /// rather than \c hsa_system_get_extension_table. The latter
+              /// derives the table size from the (major, minor) version by
+              /// name-matching a pfn struct (e.g. "hsa_ext_images_1_00_pfn_t"),
+              /// whose major (1) disagrees with the major rocprofiler checks
+              /// the request against (the API-table major, e.g. 2 for images
+              /// and the finalizer) — so that path is unusable for those
+              /// extensions. Passing \c sizeof(ExtensionTable) as the length
+              /// also bounds the runtime's copy to our struct, so a newer
+              /// runtime table can never overflow \c ExtensionTable.
               LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_HSA_CALL_ERROR_CHECK(
-                  Table.core_->hsa_system_get_extension_table_fn(
+                  Table.core_->hsa_system_get_major_extension_table_fn(
                       ExtensionType,
                       hsa::ExtensionApiTableInfo<ExtensionType>::MajorVer,
-                      hsa::ExtensionApiTableInfo<ExtensionType>::StepVer,
-                      &ExtensionTable),
+                      sizeof(ExtensionTable), &ExtensionTable),
                   "Failed to get the extension table"));
             },
             Err) {};
