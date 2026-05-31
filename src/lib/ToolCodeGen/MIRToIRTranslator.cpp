@@ -914,12 +914,58 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
   // ---- System SGPRs ----
 
   // WorkgroupID X/Y/Z → llvm.amdgcn.workgroup.id.{x,y,z}() : i32
+  // On non-architected targets these resolve to the system SGPRs allocated by
+  // CodeDiscoveryPass. On architected-SGPRs targets those SGPRs are not
+  // allocated (the seeds below are no-ops) and the values come from TTMPs —
+  // seeded just after this block.
   scalarIntrinsic(PV::WORKGROUP_ID_X, llvm::Intrinsic::amdgcn_workgroup_id_x,
                   Builder.getInt32Ty());
   scalarIntrinsic(PV::WORKGROUP_ID_Y, llvm::Intrinsic::amdgcn_workgroup_id_y,
                   Builder.getInt32Ty());
   scalarIntrinsic(PV::WORKGROUP_ID_Z, llvm::Intrinsic::amdgcn_workgroup_id_z,
                   Builder.getInt32Ty());
+
+  // On architected-SGPRs targets (GFX12+, or any part built with
+  // +architected-sgprs) the workgroup IDs live in fixed TTMP registers that
+  // the backend reads directly (see SITargetLowering::getPreloadedValue):
+  //   TTMP9        = workgroup id X
+  //   TTMP7[15:0]  = workgroup id Y, TTMP7[31:16] = workgroup id Z
+  // The lifted trace reads those TTMPs, so seed them. (The Y/Z pack into one
+  // register — same OR-merge shape as packed work-item IDs.)
+  if (ST.hasArchitectedSGPRs()) {
+    llvm::Type *I32 = Builder.getInt32Ty();
+    if (Info.hasWorkGroupIDX())
+      seedRegValue(MF.front(), llvm::AMDGPU::TTMP9,
+                   Builder.CreateIntrinsic(
+                       I32, llvm::Intrinsic::amdgcn_workgroup_id_x, {}, nullptr));
+    llvm::Value *Ttmp7 = nullptr;
+    const bool HasZ = Info.hasWorkGroupIDZ();
+    if (Info.hasWorkGroupIDY()) {
+      llvm::Value *Y = Builder.CreateIntrinsic(
+          I32, llvm::Intrinsic::amdgcn_workgroup_id_y, {}, nullptr);
+      // With Z present, Y occupies only TTMP7[15:0]; otherwise it spans the
+      // whole register (the HW guarantees the high half is zero).
+      Ttmp7 = HasZ ? Builder.CreateAnd(Y, Builder.getInt32(0xFFFF)) : Y;
+    }
+    if (HasZ) {
+      llvm::Value *Z = Builder.CreateIntrinsic(
+          I32, llvm::Intrinsic::amdgcn_workgroup_id_z, {}, nullptr);
+      llvm::Value *ZHi = Builder.CreateShl(Z, Builder.getInt32(16));
+      Ttmp7 = Ttmp7 ? Builder.CreateOr(Ttmp7, ZHi) : ZHi;
+    }
+    if (Ttmp7)
+      seedRegValue(MF.front(), llvm::AMDGPU::TTMP7, Ttmp7);
+  }
+
+  // WorkGroupInfo has no PreloadedValue enum entry, so seed it directly from
+  // ArgInfo (CodeDiscoveryPass allocates it when the KD enables it). No
+  // intrinsic — a frozen-poison placeholder, but carrying register provenance.
+  if (Info.getArgInfo().WorkGroupInfo.isRegister()) {
+    llvm::MCRegister WGInfo = Info.getArgInfo().WorkGroupInfo.getRegister();
+    seedRegValue(MF.front(), WGInfo,
+                 Builder.CreateFreeze(llvm::PoisonValue::get(
+                     Builder.getIntNTy(getPhysRegisterSize(WGInfo)))));
+  }
 
   // PrivateSegmentWaveByteOffset: no intrinsic — use placeholder.
   if (llvm::Value *V = makePlaceholder(PV::PRIVATE_SEGMENT_WAVE_BYTE_OFFSET))

@@ -906,13 +906,44 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
         llvm::ArgDescriptor::createRegister(WorkItemZReg, WorkItemZMask));
   }
 
-  /// Workgroup IDs
-  if (!F->hasFnAttribute("amdgpu-no-workgroup-id-x"))
-    MFI->addWorkGroupIDX();
-  if (!F->hasFnAttribute("amdgpu-no-workgroup-id-y"))
-    MFI->addWorkGroupIDY();
-  if (!F->hasFnAttribute("amdgpu-no-workgroup-id-z"))
-    MFI->addWorkGroupIDZ();
+  /// Workgroup IDs. On targets with the architected-SGPRs feature the
+  /// workgroup IDs are sourced from fixed architected registers (TTMP9 for X,
+  /// TTMP7 for the packed Y/Z) rather than from allocated system SGPRs, so we
+  /// must NOT consume system SGPRs for them — this mirrors
+  /// \c SITargetLowering::allocateSystemSGPRs, which gates the workgroup-ID
+  /// SGPR allocation on \c !hasArchitectedSGPRs(). The feature is on by
+  /// default for GFX12+, but is a plain subtarget feature (\c
+  /// +architected-sgprs) that can also be enabled on some GFX9 parts, so gate
+  /// on the predicate rather than a generation check. The \c MIRToIRTranslator
+  /// seeds the architected TTMP registers directly for these targets.
+  if (!ST.hasArchitectedSGPRs()) {
+    if (!F->hasFnAttribute("amdgpu-no-workgroup-id-x"))
+      MFI->addWorkGroupIDX();
+    if (!F->hasFnAttribute("amdgpu-no-workgroup-id-y"))
+      MFI->addWorkGroupIDY();
+    if (!F->hasFnAttribute("amdgpu-no-workgroup-id-z"))
+      MFI->addWorkGroupIDZ();
+  }
+
+  /// Work-group info is an ordinary system SGPR on every target, allocated in
+  /// HSA order right after the workgroup IDs. Its KD bit maps directly to the
+  /// backend's \c hasWorkGroupInfo() (AsmPrinter sets TGID_SIZE_EN from it).
+  if (AMDHSA_BITS_GET(
+          KDOnHost.compute_pgm_rsrc2,
+          llvm::amdhsa::COMPUTE_PGM_RSRC2_ENABLE_SGPR_WORKGROUP_INFO))
+    MFI->addWorkGroupInfo();
+
+  /// The private-segment wave byte offset is the last system SGPR. The backend
+  /// allocates it for every entry function on targets WITHOUT architected flat
+  /// scratch and never on architected ones (see SIMachineFunctionInfo's ctor,
+  /// gated on \c !flatScratchIsArchitected()). It is NOT gated on the
+  /// \c COMPUTE_PGM_RSRC2_ENABLE_PRIVATE_SEGMENT bit — that bit is an
+  /// architected-flat-scratch-only "uses scratch" flag (the
+  /// \c .amdhsa_enable_private_segment directive is rejected on non-architected
+  /// targets), so it would be set exactly where the wave-offset SGPR does NOT
+  /// exist. Mirror the backend's predicate directly.
+  if (!ST.flatScratchIsArchitected())
+    MFI->addPrivateSegmentWaveByteOffset();
 
   /// Kernel functions are 2^8 byte aligned
   MF.setAlignment(llvm::Align(256));
