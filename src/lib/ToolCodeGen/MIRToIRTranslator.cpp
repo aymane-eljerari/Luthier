@@ -764,7 +764,6 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Initializing kernel entry "
                              "registers for '"
                           << MF.getName() << "'\n");
-  /// TODO: preload kernel argument values
   const auto &Info = *MF.getInfo<llvm::SIMachineFunctionInfo>();
 
   using PV = llvm::AMDGPUFunctionArgInfo::PreloadedValue;
@@ -881,6 +880,36 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
   // PrivateSegmentSize: no intrinsic — use placeholder.
   if (llvm::Value *V = makePlaceholder(PV::PRIVATE_SEGMENT_SIZE))
     seed(PV::PRIVATE_SEGMENT_SIZE, V);
+
+  // ---- Preloaded kernel arguments ----
+  //
+  // On targets with the kernarg-preload feature the CP loads `Length` dwords
+  // of the kernarg segment (starting `Offset` dwords in) into the SGPRs
+  // immediately after the user SGPRs, and the kernel reads its arguments from
+  // those SGPRs instead of issuing an s_load. The lifted trace reads them
+  // directly, so seed each preload SGPR with the equivalent kernarg load.
+  //
+  // Machine Function reserves the preload registers as user SGPRs, so the
+  // first preload SGPR is SGPR0 + (NumUserSGPRs - NumKernargPreloadedSGPRs).
+  if (unsigned PreloadLen = Info.getNumKernargPreloadedSGPRs()) {
+    unsigned FirstPreloadSGPR =
+        llvm::AMDGPU::SGPR0 + Info.getNumUserSGPRs() - PreloadLen;
+    unsigned OffsetDwords = MF.getFunction().getFnAttributeAsParsedInteger(
+        "amdgpu.kd.kernarg_preload_offset");
+    llvm::Type *I32 = Builder.getInt32Ty();
+    llvm::Value *KernargPtr = Builder.CreateIntrinsic(
+        Builder.getPtrTy(4), llvm::Intrinsic::amdgcn_kernarg_segment_ptr, {},
+        nullptr);
+    for (unsigned I = 0; I < PreloadLen; ++I) {
+      llvm::Value *Slot = Builder.CreateConstInBoundsGEP1_64(
+          I32, KernargPtr, OffsetDwords + I);
+      auto *Load = Builder.CreateAlignedLoad(I32, Slot, llvm::Align(4));
+      // Kernarg memory is constant for the kernel's lifetime.
+      Load->setMetadata(llvm::LLVMContext::MD_invariant_load,
+                        llvm::MDNode::get(Load->getContext(), {}));
+      seedRegValue(MF.front(), llvm::MCRegister(FirstPreloadSGPR + I), Load);
+    }
+  }
 
   // ---- System SGPRs ----
 
@@ -1896,6 +1925,14 @@ void MIRToIRTranslator::translate() {
         llvm::IRBuilder{BB}.CreateBr(NextBB);
       }
     }
+    /// Safety net: a well-formed trace block ends in a terminator (branch,
+    /// return/tail-call, or endpgm) or falls through to a successor. If a block
+    /// is still terminator-less here — e.g. a truncated trace whose last MBB
+    /// ends in a non-terminator with no fall-through successor — close it with
+    /// \c unreachable so the translated function stays valid IR rather than
+    /// tripping the verifier in a downstream pass.
+    if (!BB->getTerminator())
+      llvm::IRBuilder<>{BB}.CreateUnreachable();
   }
 
   /// Pass 3: insert an EXEC-mask predicate check before every vector MBB's
@@ -1971,20 +2008,21 @@ void MIRToIRTranslator::emitExecPredicateCheck(
 
   /// EXEC value at the entry of the CheckBB. If the vector MBB has MIR
   /// predecessors, place a placeholder PHI that fixupPhis will resolve from
-  /// each predecessor's EXEC state. If it has none (vector MBB is the
-  /// function's entry block), use the hardware-defined all-ones initial
-  /// state — every lane is active at entry
+  /// each predecessor's EXEC state. If it has none, the vector MBB is the
+  /// function's entry block: use the EXEC value seeded at function entry —
+  /// all-ones for a kernel (every lane active), or the incoming EXEC for a
+  /// device function (passed in via the register-file arguments). A vector
+  /// MBB never modifies EXEC (CodeDiscoveryPass splits on EXEC writes), so
+  /// the entry value map still holds the entry EXEC, and the materialized
+  /// value (a constant or an argument-derived value) dominates CheckBB.
   llvm::MCRegister ExecReg = TRI.getExec();
   unsigned ExecWidth = TRI.getRegSizeInBits(ExecReg, MF.getRegInfo());
   llvm::Type *ExecTy = Builder.getIntNTy(ExecWidth);
-  unsigned NumMIRPreds = 0;
-  for (auto *P : VectorMBB.predecessors()) {
-    (void)P;
-    ++NumMIRPreds;
-  }
+  unsigned NumMIRPreds = VectorMBB.pred_size();
   llvm::Value *ExecVal;
   if (NumMIRPreds == 0) {
-    ExecVal = llvm::ConstantInt::getAllOnesValue(ExecTy);
+    ExecVal =
+        &getOperandAsValue(VectorMBB, getRegFileKey(ExecReg), Builder, ExecTy);
   } else {
     llvm::PHINode *ExecPhi =
         Builder.CreatePHI(ExecTy, NumMIRPreds, "exec.check");

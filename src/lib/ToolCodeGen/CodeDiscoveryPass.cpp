@@ -850,13 +850,23 @@ initKernelEntryPointFunction(const llvm::amdhsa::kernel_descriptor_t &KD,
   auto *MFI = MF.getInfo<llvm::SIMachineFunctionInfo>();
   auto &ST = TM.getSubtarget<llvm::GCNSubtarget>(*F);
 
-  /// Set pre-loaded kernel argument field for targets that support it
-  /// For now only the length part is supported by the backend so the offset
-  /// is captured for Luthier use only
+  /// Set pre-loaded kernel argument field for targets that support it.
+  /// The preloaded kernargs occupy the SGPRs immediately after the standard
+  /// user SGPRs; the MIRToIRTranslator seeds them with the equivalent kernarg
+  /// loads (using the captured offset/length attributes).
   if (ST.hasKernargPreload()) {
     unsigned PreloadLength = AMDHSA_BITS_GET(
         KDOnHost.kernarg_preload, llvm::amdhsa::KERNARG_PRELOAD_SPEC_LENGTH);
+    /// Tracks the preload count in \c GCNUserSGPRUsageInfo (so the re-emitted
+    /// KD carries the right preload length).
     MFI->getUserSGPRInfo().allocKernargPreloadSGPRs(PreloadLength);
+    /// \c allocKernargPreloadSGPRs only updates \c GCNUserSGPRUsageInfo; we
+    /// must also advance \c SIMachineFunctionInfo's user-SGPR count, otherwise
+    /// the workgroup-ID system SGPRs added below — placed at
+    /// \c getNextSystemSGPR() == \c SGPR0+NumUserSGPRs+NumSystemSGPRs — would
+    /// alias the registers that hold the preloaded kernargs.
+    for (unsigned I = 0; I < PreloadLength; ++I)
+      (void)MFI->addReservedUserSGPR();
 
     F->addFnAttr("amdgpu.kd.kernarg_preload_length",
                  llvm::formatv("{0}", PreloadLength).str());
