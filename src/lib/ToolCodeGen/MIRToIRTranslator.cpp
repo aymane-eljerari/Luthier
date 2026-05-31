@@ -184,20 +184,19 @@ static llvm::Value *getOrCreateIntOrFloatTypeForReg(
     llvm::DenseMap<llvm::Type *, llvm::Value *> &ValueEntries,
     llvm::IRBuilderBase &Builder) {
   assert(!ValueEntries.empty() && "Value entry map is empty");
-  llvm::Value *IntOrFloatVecVal{nullptr};
   for (auto &[T, V] : ValueEntries) {
     if (T->isIntOrIntVectorTy() || T->isFPOrFPVectorTy())
       return V;
   }
-  /// If we couldn't find a pointer or an int type, do a bitcast on the first
-  /// value in the map
-  if (!IntOrFloatVecVal) {
-    auto &[T, V] = *ValueEntries.begin();
-    llvm::Type *OutTy = Builder.getIntNTy(T->getIntegerBitWidth());
-    IntOrFloatVecVal = Builder.CreateBitOrPointerCast(V, OutTy);
-    ValueEntries[OutTy] = IntOrFloatVecVal;
-  }
-  return IntOrFloatVecVal;
+  /// No int/FP entry exists (e.g. only pointer-typed values). Bitcast the
+  /// first entry to an integer of the same bit width. Use
+  /// \c getPrimitiveSizeInBits (NOT \c getIntegerBitWidth, which asserts on
+  /// non-integer types), matching \c getOrCreateIntOrPtrTypeForReg.
+  auto &[T, V] = *ValueEntries.begin();
+  llvm::Type *OutTy = Builder.getIntNTy(T->getPrimitiveSizeInBits());
+  llvm::Value *Cast = Builder.CreateBitOrPointerCast(V, OutTy);
+  ValueEntries[OutTy] = Cast;
+  return Cast;
 }
 
 /// Given a non-empty set of values mapped to the same register and their
@@ -1885,11 +1884,16 @@ void MIRToIRTranslator::translate() {
       Builder.SetInsertPoint(BB);
       raiseMachineInstr(MI, Builder);
     }
-    if (MBB.canFallThrough() && !MBB.back().isBranch() &&
-        !BB->getTerminator()) {
-      auto NextBB =
-          const_cast<llvm::BasicBlock *>(MBB.getNextNode()->getBasicBlock());
-      llvm::IRBuilder{BB}.CreateBr(NextBB);
+    /// An empty MBB has no terminator instruction, so it trivially "ends in"
+    /// no branch — guard \c MBB.back() against the empty case to avoid
+    /// dereferencing \c --end().
+    bool EndsInBranch = !MBB.empty() && MBB.back().isBranch();
+    if (MBB.canFallThrough() && !EndsInBranch && !BB->getTerminator()) {
+      if (const llvm::MachineBasicBlock *NextMBB = MBB.getNextNode()) {
+        auto *NextBB =
+            const_cast<llvm::BasicBlock *>(NextMBB->getBasicBlock());
+        llvm::IRBuilder{BB}.CreateBr(NextBB);
+      }
     }
   }
 

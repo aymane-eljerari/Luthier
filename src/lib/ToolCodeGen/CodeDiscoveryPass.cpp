@@ -1384,7 +1384,11 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
   /// put a jump to the entry instruction
   if (MFTrace.getInitialEntryPoint().getEntryPointAddress() !=
       FirstTraceStartAddr) {
-    assert(EntryInst != nullptr && "the entry instruction is nullptr");
+    if (!EntryInst)
+      return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+          "Code discovery could not locate the entry-point instruction at "
+          "address {0:x} within the discovered trace.",
+          MFTrace.getInitialEntryPoint().getEntryPointAddress()));
     llvm::MachineBasicBlock *EntryMBB = MF.CreateMachineBasicBlock();
     MF.push_front(EntryMBB);
 
