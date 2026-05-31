@@ -40,6 +40,7 @@
 #include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/PrettyStackTrace.h>
+#include <llvm/Support/Signals.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
@@ -244,56 +245,10 @@ static luthier::rocprofiler::HsaExtensionTableSnapshot<HSA_EXTENSION_AMD_LOADER>
 /// pulls the device-side memory contents from the tool's
 /// \c LoadedCodeObjectCache; the discovery pass walks the kernel's
 /// reachable code and emits MIR; the driver runs the full instrumentation
-/// codegen pipeline; the new-PM AsmPrinter dumps an ELF.
-/// Resolve the LLVM Triple/CPU/Features for the agent that owns
-/// \p KD via \c hsa_amd_pointer_info + agent ISA queries. Returns a
-/// fully-configured \c TargetMachine the codegen pipeline can use.
-static llvm::Expected<std::unique_ptr<llvm::TargetMachine>>
-buildTargetMachineForKD(const llvm::amdhsa::kernel_descriptor_t *KD) {
-  const auto AmdExt = ::AmdExtSnapshot->getTable();
-  const auto Core = ::CoreApiSnapshot->getTable();
-
-  hsa_amd_pointer_info_t PointerInfo{};
-  PointerInfo.size = sizeof(hsa_amd_pointer_info_t);
-  LUTHIER_RETURN_ON_ERROR(LUTHIER_HSA_CALL_ERROR_CHECK(
-      AmdExt.callFunction<hsa_amd_pointer_info>(
-          const_cast<void *>(reinterpret_cast<const void *>(KD)), &PointerInfo,
-          nullptr, nullptr, nullptr),
-      "Failed to query HSA pointer info for kernel descriptor."));
-  hsa_agent_t Agent = PointerInfo.agentOwner;
-
-  llvm::SmallVector<hsa_isa_t, 1> Isas;
-  LUTHIER_RETURN_ON_ERROR(
-      luthier::hsa::agentGetSupportedISAs(Core, Agent, Isas));
-  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-      !Isas.empty(), "Agent reports no supported ISAs."));
-  hsa_isa_t Isa = Isas.front();
-
-  auto TripleOrErr = luthier::hsa::isaGetTargetTriple(Core, Isa);
-  LUTHIER_RETURN_ON_ERROR(TripleOrErr.takeError());
-  auto CPUOrErr = luthier::hsa::isaGetGPUName(Core, Isa);
-  LUTHIER_RETURN_ON_ERROR(CPUOrErr.takeError());
-  auto FeaturesOrErr = luthier::hsa::isaGetSubTargetFeatures(Core, Isa);
-  LUTHIER_RETURN_ON_ERROR(FeaturesOrErr.takeError());
-
-  std::string ErrMsg;
-  const llvm::Target *TheTarget =
-      llvm::TargetRegistry::lookupTarget(*TripleOrErr, ErrMsg);
-  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-      TheTarget != nullptr,
-      llvm::formatv("TargetRegistry::lookupTarget failed for triple {0}: {1}",
-                    TripleOrErr->str(), ErrMsg)));
-
-  llvm::TargetOptions Opts;
-  std::unique_ptr<llvm::TargetMachine> TM(TheTarget->createTargetMachine(
-      *TripleOrErr, *CPUOrErr, FeaturesOrErr->getString(), Opts,
-      /*RM=*/std::nullopt));
-  LUTHIER_RETURN_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
-      TM != nullptr, "createTargetMachine returned nullptr."));
-  TM->setOptLevel(llvm::CodeGenOptLevel::Default);
-  return TM;
-}
-
+/// codegen pipeline; the new-PM AsmPrinter dumps an ELF. The
+/// \c TargetMachine the codegen pipeline lowers against is built by the
+/// tool's \c HSATool::buildTargetMachineForKD, which resolves the owning
+/// agent's ISA and folds the kernel's wavefront size / execution mode in.
 static llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>>
 runInstrumentationPipelineForDispatch(
     InstrCountTool &T, const hsa_kernel_dispatch_packet_t &Packet) {
@@ -303,7 +258,7 @@ runInstrumentationPipelineForDispatch(
       Packet.kernel_object);
 
   std::unique_ptr<llvm::TargetMachine> TM;
-  LUTHIER_RETURN_ON_ERROR(buildTargetMachineForKD(&KD).moveInto(TM));
+  LUTHIER_RETURN_ON_ERROR(T.buildTargetMachineForKD(&KD).moveInto(TM));
 
   llvm::LLVMContext Ctx;
   auto M = std::make_unique<llvm::Module>("luthier.target", Ctx);
