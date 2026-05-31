@@ -116,10 +116,17 @@ protected:
   const CallbackType Callback;
 
   /// API table registration callback for used by rocprofiler-sdk
+  /// \note Declared \c noexcept: rocprofiler-sdk invokes this from C code
+  /// (\c execute_intercepts) between a raw \c mutex.lock()/unlock() with no
+  /// RAII, so an exception escaping here would both leave that mutex locked
+  /// (deadlocking later registrations) and unwind across the C ABI (undefined
+  /// behavior). \c noexcept turns any unexpected escape (e.g. a \c
+  /// std::bad_alloc from \c llvm::formatv under OOM) into a clean
+  /// \c std::terminate instead.
   static void apiRegistrationCallback(rocprofiler_intercept_table_t Type,
                                       uint64_t LibVersion, uint64_t LibInstance,
                                       void **Tables, uint64_t NumTables,
-                                      void *Data) {
+                                      void *Data) noexcept {
     /// Check for errors
     if (NumTables != ApiTableEnumInfo<TableType>::NumApiTables) {
       LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_ROCPROFILER_ERROR(
@@ -261,11 +268,19 @@ public:
     return WasRegistrationInvoked.load();
   }
 
-  /// If the API table is not registered by the application with
-  /// rocprofiler-sdk, forces its initialization by directly calling a
-  /// "harmless" library function directly
+  /// If the API table has not been registered yet, forces the underlying
+  /// library to initialize by invoking an entry point that brings the runtime
+  /// up (\c hsa_init for HSA, or the first dispatch-table access for HIP),
+  /// which in turn drives rocprofiler-sdk's registration of the table.
   /// \note Only use when absolutely sure the underlying library is not going to
-  /// be initialized otherwise
+  /// be initialized otherwise.
+  /// \warning Must NOT be called from within a rocprofiler-sdk
+  /// \c rocprofiler_configure or tool-\c initialize callback. The trigger
+  /// re-enters the runtime's init path, which calls back into rocprofiler-sdk's
+  /// \c rocprofiler_set_api_table — re-entering the same \c std::call_once that
+  /// is already running on this thread is undefined behavior (deadlock or \c
+  /// std::system_error). Call it only after rocprofiler-sdk configuration has
+  /// completed (e.g. from the host application's normal flow).
   /// \note Only available for tables whose \c ApiTableEnumInfo specialization
   /// defines \c triggerInitialization() (e.g. HSA and the HIP runtime, but not
   /// the HIP compiler table); SFINAE removes this overload otherwise.
