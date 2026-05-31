@@ -29,10 +29,11 @@ namespace luthier::test {
 inline ::CoreApiTable buildCoreApiTable() {
   ::CoreApiTable T{};
 
-  // Version — must match what the runtime expects.
-  T.version.major_id = HSA_API_TABLE_MAJOR_VERSION;
+  // Version — must match what the runtime expects for a CoreApiTable (the
+  // sub-table version, not the root ::HsaApiTable version).
+  T.version.major_id = HSA_CORE_API_TABLE_MAJOR_VERSION;
   T.version.minor_id = sizeof(::CoreApiTable);
-  T.version.step_id = 0;
+  T.version.step_id = HSA_CORE_API_TABLE_STEP_VERSION;
 
   // --- System ---
   T.hsa_init_fn = &hsa_init;
@@ -40,6 +41,8 @@ inline ::CoreApiTable buildCoreApiTable() {
   T.hsa_system_get_info_fn = &hsa_system_get_info;
   T.hsa_system_extension_supported_fn = &hsa_system_extension_supported;
   T.hsa_system_get_extension_table_fn = &hsa_system_get_extension_table;
+  T.hsa_system_get_major_extension_table_fn =
+      &hsa_system_get_major_extension_table;
 
   // --- Agents ---
   T.hsa_iterate_agents_fn = &hsa_iterate_agents;
@@ -141,6 +144,24 @@ inline ::CoreApiTable buildCoreApiTable() {
   T.hsa_system_major_extension_supported_fn =
       &hsa_system_major_extension_supported;
 
+  return T;
+}
+
+/// Wraps a sub-table into a root \c ::HsaApiTable with a correct version. Only
+/// \c core_ is required by most consumers; pass others as needed. The pointers
+/// are borrowed — the caller owns the lifetimes.
+inline ::HsaApiTable buildHsaApiTable(::CoreApiTable *Core,
+                                      ::AmdExtTable *AmdExt = nullptr,
+                                      ::FinalizerExtTable *Finalizer = nullptr,
+                                      ::ImageExtTable *Image = nullptr) {
+  ::HsaApiTable T{};
+  T.version.major_id = HSA_API_TABLE_MAJOR_VERSION;
+  T.version.minor_id = sizeof(::HsaApiTable);
+  T.version.step_id = HSA_API_TABLE_STEP_VERSION;
+  T.core_ = Core;
+  T.amd_ext_ = AmdExt;
+  T.finalizer_ext_ = Finalizer;
+  T.image_ext_ = Image;
   return T;
 }
 
