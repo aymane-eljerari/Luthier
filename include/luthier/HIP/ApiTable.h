@@ -20,10 +20,7 @@
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_HIP_API_TABLE_H
 #define LUTHIER_HIP_API_TABLE_H
-/// hip_api_trace.hpp declares function-pointer typedefs for the *entire* HIP
-/// API surface — including the R0000-suffixed deprecated entries and the GL
-/// interop entries — but doesn't include the headers that define those
-/// types. Pull them in here so this header is self-sufficient
+#include "luthier/Rocprofiler/HipApiTableEnumInfo.h"
 #include <hip/amd_detail/hip_api_trace.hpp>
 #include <hip/hip_deprecated.h>
 #include <hip/hip_gl_interop.h>
@@ -1056,23 +1053,14 @@ bool apiTableHasEntry(const HipApiTableType &Table,
          Table.size;
 }
 
-template <rocprofiler_intercept_table_t TableType> struct ApiTableEnumInfo;
-
-template <> struct ApiTableEnumInfo<ROCPROFILER_HIP_COMPILER_TABLE> {
-  using ApiTableType = ::HipCompilerDispatchTable;
-};
-
-template <> struct ApiTableEnumInfo<ROCPROFILER_HIP_RUNTIME_TABLE> {
-  using ApiTableType = ::HipDispatchTable;
-};
-
 template <rocprofiler_intercept_table_t TableType> class ApiTableContainer {
 private:
-  const typename ApiTableEnumInfo<TableType>::ApiTableType &ApiTable{};
+  using ApiTableType = typename ::luthier::rocprofiler::ApiTableEnumInfo<
+      TableType>::ApiTableType;
+  const ApiTableType &ApiTable{};
 
 public:
-  explicit ApiTableContainer(
-      const ApiTableEnumInfo<TableType>::ApiTableType &ApiTable)
+  explicit ApiTableContainer(const ApiTableType &ApiTable)
       : ApiTable(ApiTable) {};
 
   /// \brief Checks if the \c Func is present in the API table snapshot

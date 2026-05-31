@@ -22,48 +22,21 @@
 #define LUTHIER_ROCPROFILER_API_TABLE_REGISTRATION_CALLBACK_PROVIDER_H
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
-#include "luthier/HSA/ApiTable.h"
-#include "luthier/HSA/HsaError.h"
+#include "luthier/Rocprofiler/ApiTableEnumInfo.h"
 #include "luthier/Rocprofiler/RocprofilerError.h"
 #include <atomic>
 #include <exception>
 #include <mutex>
-/// hip_api_trace.hpp declares typedefs for the *entire* HIP API surface —
-/// including the R0000-suffixed deprecated entries and the GL interop
-/// entries — but doesn't itself include the headers that define those
-/// types; Pull them in here
-#include <hip/hip_runtime.h>
-#include <hip/hip_deprecated.h>
-#include <hip/hip_gl_interop.h>
-
-#include <hip/amd_detail/hip_api_trace.hpp>
 #include <rocprofiler-sdk/intercept_table.h>
 #include <rocprofiler-sdk/registration.h>
+#include <type_traits>
 
 namespace luthier::rocprofiler {
 
-/// \brief Struct providing static information regarding the
-/// \c rocprofiler_intercept_table_t enum, including its table type
-/// and the number of tables that are registered with rocprofiler-sdk
-template <rocprofiler_intercept_table_t TableType> struct ApiTableEnumInfo;
-
-template <> struct ApiTableEnumInfo<ROCPROFILER_HSA_TABLE> {
-  using ApiTableType = ::HsaApiTable;
-  constexpr static auto NumApiTables = 1;
-  constexpr static auto ApiTableName = "HSA";
-};
-
-template <> struct ApiTableEnumInfo<ROCPROFILER_HIP_COMPILER_TABLE> {
-  using ApiTableType = ::HipCompilerDispatchTable;
-  constexpr static auto NumApiTables = 1;
-  constexpr static auto ApiTableName = "HIP Compiler";
-};
-
-template <> struct ApiTableEnumInfo<ROCPROFILER_HIP_RUNTIME_TABLE> {
-  using ApiTableType = ::HipDispatchTable;
-  constexpr static auto NumApiTables = 1;
-  constexpr static auto ApiTableName = "HIP Runtime";
-};
+/// \c ApiTableEnumInfo is the library-specific customization point declared in
+/// ApiTableEnumInfo.h. Its specializations live in HsaApiTableEnumInfo.h and
+/// HipApiTableEnumInfo.h; this header depends only on the primary template, so
+/// it pulls in neither HSA nor HIP headers.
 
 /// \brief a generic class used to safely request a callback to be invoked when
 /// an Api table is registered with rocprofiler-sdk. Can be either used as is
@@ -93,6 +66,18 @@ private:
   /// handler reads directly.
   inline static std::atomic<std::terminate_handler> PrevTerminateHandler{
       nullptr};
+
+  /// Both sentinels have static storage duration and are read/written by the
+  /// chained terminate handler, which can fire arbitrarily late during program
+  /// shutdown. Keeping them trivially destructible guarantees no static
+  /// destructor is registered for them, so the handler can never touch a
+  /// destroyed object during exit.
+  static_assert(
+      std::is_trivially_destructible_v<decltype(HostAbortedDuringExecution)>,
+      "HostAbortedDuringExecution must remain trivially destructible");
+  static_assert(
+      std::is_trivially_destructible_v<decltype(PrevTerminateHandler)>,
+      "PrevTerminateHandler must remain trivially destructible");
 
   static void hostAbortedTerminateHandler() noexcept {
     HostAbortedDuringExecution.store(true);
@@ -132,23 +117,21 @@ protected:
                                       void *Data) {
     /// Check for errors
     if (NumTables != ApiTableEnumInfo<TableType>::NumApiTables) {
-      LUTHIER_REPORT_FATAL_ON_ERROR(
-          llvm::make_error<rocprofiler::RocprofilerError>(llvm::formatv(
-              "Expected rocprofiler to register {0} API table(s), "
-              "instead got {1}",
-              ApiTableEnumInfo<TableType>::NumApiTables, NumTables)));
+      LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_ROCPROFILER_ERROR(
+          llvm::formatv("Expected rocprofiler to register {0} API table(s), "
+                        "instead got {1}",
+                        ApiTableEnumInfo<TableType>::NumApiTables, NumTables)));
     }
     if (Type != TableType) {
       LUTHIER_REPORT_FATAL_ON_ERROR(
-          llvm::make_error<rocprofiler::RocprofilerError>(llvm::formatv(
+          LUTHIER_MAKE_ROCPROFILER_ERROR(llvm::formatv(
               "Expected to get API table of type {0}, but instead got "
               "{1}",
               TableType, Type)));
     }
     if (Tables == nullptr) {
-      LUTHIER_REPORT_FATAL_ON_ERROR(
-          llvm::make_error<rocprofiler::RocprofilerError>(
-              "API tables passed by rocprofiler is nullptr"));
+      LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_ROCPROFILER_ERROR(
+          "API tables passed by rocprofiler is nullptr"));
     }
 
     auto &RegProvider =
@@ -205,42 +188,23 @@ public:
   };
 
   /// Destructor
-  /// \note The object must only be destroyed only if: a) rocprofiler is in the
-  /// process of being finalized; or b) rocprofiler has performed the scheduled
-  /// callback by this object, which can be checked via \c
-  /// wasRegistrationCallbackInvoked; or c) rocprofiler-sdk was never
-  /// initialized in the first place (the host aborted before any HSA/HIP
-  /// call could pull rocprofiler in); or d) the destructor is running
-  /// during stack unwinding from an in-flight host-side exception
-  /// (the application is mid-abort, so an unfulfilled callback is a
-  /// symptom of the abort, not a Luthier bug).
+  /// \note The object must only be destroyed only if: a) rocprofiler is
+  /// finalizing or finalized - the registration callback can no longer fire,
+  /// since \c rocprofiler_set_api_table is ignored once finalization has begun;
+  /// or b) the destructor is running while the host is aborting (stack
+  /// unwinding from an uncaught exception / \c std::terminate) — the program is
+  /// on its way out, so an unfulfilled callback is a symptom of the abort, not
+  /// a Luthier bug.
   ///
-  /// Cases (c) and (d) cover the early-abort scenario — e.g. the
-  /// application throws an unhandled \c std::exception from a CImg load
-  /// or a file open before dispatching any kernel. In (c) rocprofiler
-  /// hasn't been initialized at all; in (d) rocprofiler initialized
-  /// (often during static-init or the first ROCm symbol touched on the
-  /// way to the throw) but the host never got around to issuing a HIP
-  /// dispatch. Fataling in either case would escalate an unrelated
-  /// host-side crash into a LUTHIER-FAIL. We distinguish them from a
-  /// genuine "rocprofiler ran but never told us" bug by checking
-  /// \c rocprofiler_is_initialized and \c std::uncaught_exceptions().
+  /// Destroying outside these cases is a use-after-free hazard: rocprofiler-sdk
+  /// cannot de-register the callback (it stores this object's \c this pointer
+  /// in an append-only list) and will invoke it with the dangling pointer the
+  /// next time the runtime registers its API table.
+  /// \note Having already received the callback is NOT a safe-to-destroy
+  /// condition: rocprofiler re-invokes it on every subsequent registration
+  /// (e.g. an HSA finalize→re-init bumps the library instance and re-fires),
+  /// so finalization is the only state in which it can no longer fire.
   virtual ~ApiTableRegistrationCallbackProvider() {
-    /// Case (b): the registration callback already fired — our job is
-    /// done, regardless of rocprofiler's lifecycle state.
-    if (WasRegistrationInvoked.load())
-      return;
-
-    int RocprofilerInitStatus = 0;
-    LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_ROCPROFILER_CALL_ERROR_CHECK(
-        rocprofiler_is_initialized(&RocprofilerInitStatus),
-        "Failed to check rocprofiler's initialization status."));
-    /// Case (c): rocprofiler-sdk was never initialized. Nothing to
-    /// reconcile — the host aborted before any HSA/HIP call brought
-    /// rocprofiler up.
-    if (RocprofilerInitStatus == 0)
-      return;
-
     int RocprofilerFiniStatus = 0;
     LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_ROCPROFILER_CALL_ERROR_CHECK(
         rocprofiler_is_finalized(&RocprofilerFiniStatus),
@@ -250,7 +214,7 @@ public:
     if (RocprofilerFiniStatus != 0)
       return;
 
-    /// Case (d): the host called \c std::terminate (typically via an
+    /// Case (b): the host called \c std::terminate (typically via an
     /// uncaught exception, a noexcept violation, or an unhandled
     /// signal that the runtime translated into a terminate). The
     /// program is on its way out via abort; an unfulfilled callback in
@@ -268,14 +232,14 @@ public:
       return;
     }
 
-    /// Rocprofiler is up and not finalizing, no in-flight exception, but
-    /// the callback was never invoked — that is a genuine programming
-    /// error.
-    LUTHIER_REPORT_FATAL_ON_ERROR(llvm::make_error<llvm::StringError>(
+    /// Rocprofiler is not finalizing and the host is not aborting, but the
+    /// callback was never invoked — destroying now leaves a dangling
+    /// registration that rocprofiler will invoke on the next API table
+    /// registration.
+    LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_MAKE_ROCPROFILER_ERROR(
         "ApiTableRegistrationCallbackProvider destroyed while "
-        "rocprofiler-sdk is initialized and not finalizing, but the "
-        "registration callback was never invoked.",
-        llvm::inconvertibleErrorCode()));
+        "rocprofiler-sdk is not finalizing, but the "
+        "registration callback was never invoked."));
   }
 
   /// Checks whether rocprofiler-sdk has invoked the registration callback and
@@ -289,16 +253,14 @@ public:
   /// "harmless" library function directly
   /// \note Only use when absolutely sure the underlying library is not going to
   /// be initialized otherwise
+  /// \note Only available for tables whose \c ApiTableEnumInfo specialization
+  /// defines \c triggerInitialization() (e.g. HSA and the HIP runtime, but not
+  /// the HIP compiler table); SFINAE removes this overload otherwise.
   template <rocprofiler_intercept_table_t T = TableType,
-            typename = std::enable_if_t<T == ROCPROFILER_HSA_TABLE ||
-                                        T == ROCPROFILER_HIP_RUNTIME_TABLE>>
+            typename = decltype(ApiTableEnumInfo<T>::triggerInitialization())>
   void forceTriggerApiTableCallback() {
-    if (!WasRegistrationInvoked.load()) {
-      if constexpr (TableType == ROCPROFILER_HSA_TABLE)
-        (void)hsa_status_string(HSA_STATUS_SUCCESS, nullptr);
-      else
-        (void)hipApiName(0);
-    }
+    if (!WasRegistrationInvoked.load())
+      ApiTableEnumInfo<T>::triggerInitialization();
   }
 };
 
