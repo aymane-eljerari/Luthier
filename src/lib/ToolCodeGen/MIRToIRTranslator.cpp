@@ -1027,15 +1027,6 @@ llvm::Error MIRToIRTranslator::initRegFileLayouts() {
   return llvm::Error::success();
 }
 
-std::string MIRToIRTranslator::getSubValueSuffixName(unsigned SubValueStart,
-                                                     unsigned NumSubVals) {
-  llvm::Twine T(".sub");
-  for (unsigned I = SubValueStart; I < SubValueStart + NumSubVals; ++I) {
-    T.concat("_" + llvm::Twine(std::to_string(I)));
-  }
-  return T.concat(".").str();
-}
-
 MIRToIRTranslator::RegFileKey
 MIRToIRTranslator::getRegFileKey(llvm::MCRegister Reg) const {
   LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] getRegFileKey for reg "

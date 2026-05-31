@@ -136,7 +136,7 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
     break;
   default:
     return LUTHIER_MAKE_GENERIC_ERROR("Invalid FP 16/64 denorm field " +
-                                      llvm::to_string(Float32Denorm) + ".");
+                                      llvm::to_string(Float1664Denorm) + ".");
   }
   F.addFnAttr("denormal-fp-math", Denorm1664Val);
 
@@ -958,10 +958,14 @@ initLiftedDeviceFunctionEntry(uint64_t DeviceEntryPointAddr,
         llvm::Expected<uint64_t> SymbolAddrOrErr = Symbol.getAddress();
         LUTHIER_RETURN_ON_ERROR(SymbolAddrOrErr.takeError());
         uint64_t SymbolSize = Symbol.getSize();
+        /// Half-open range: [SymbolAddr, SymbolAddr + SymbolSize). An offset
+        /// exactly at \c SymbolAddr + SymbolSize is the first byte of the next
+        /// symbol, not this one. Stop at the first containing symbol.
         if (*SymbolAddrOrErr <= DevFuncLoadOffset &&
-            DevFuncLoadOffset <= (*SymbolAddrOrErr + SymbolSize)) {
+            DevFuncLoadOffset < (*SymbolAddrOrErr + SymbolSize)) {
           FuncSymRef = Symbol;
           EntryFromStartOfSymbol = DevFuncLoadOffset - *SymbolAddrOrErr;
+          break;
         }
       }
     }
@@ -1094,7 +1098,7 @@ convertAndAddMCOperandsToMI(llvm::ArrayRef<llvm::MCOperand> MCOperands,
       }
     } else {
       return LUTHIER_MAKE_GENERIC_ERROR(
-          llvm::formatv("Unexpected MC operand: ", MCOp));
+          llvm::formatv("Unexpected MC operand: {0}", MCOp));
     }
   }
   // Create a (fake) memory operand to keep the machine verifier happy

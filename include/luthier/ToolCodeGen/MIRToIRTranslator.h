@@ -390,10 +390,6 @@ class MIRToIRTranslator {
     return llvm::StringRef(TRI.getName(Reg)).lower() + "_val";
   }
 
-  /// Used to get the value suffix for value extraction operations
-  std::string getSubValueSuffixName(unsigned SubValueStart,
-                                    unsigned NumSubVals);
-
   /// Resolve \p Reg to a \c RegFileKey (register base index + 16-bit-lane
   /// offset + number of 16-bit halves). Performs GFX9- alias translation for
   /// <tt>VCC</tt>/<tt>XNACK_MASK</tt>/<tt>FLAT_SCR</tt> before encoding the
