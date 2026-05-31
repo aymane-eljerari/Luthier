@@ -163,7 +163,7 @@ static llvm::Value *getOrCreateIntOrPtrTypeForReg(
   assert(!ValueEntries.empty() && "Value entry map is empty");
   llvm::Value *VecIntOrPtrVal{nullptr};
   for (auto &[T, V] : ValueEntries) {
-    if (T->isScalableTy() && T->isIntOrPtrTy())
+    if (T->isIntOrPtrTy())
       return V;
     if (T->isIntOrIntVectorTy() || T->isPtrOrPtrVectorTy())
       VecIntOrPtrVal = V;
@@ -174,8 +174,7 @@ static llvm::Value *getOrCreateIntOrPtrTypeForReg(
     auto &[T, V] = *ValueEntries.begin();
     llvm::Type *OutTy = Builder.getIntNTy(T->getPrimitiveSizeInBits());
     VecIntOrPtrVal = Builder.CreateBitOrPointerCast(V, OutTy);
-    if (ValueEntries[OutTy] != VecIntOrPtrVal)
-      ValueEntries[OutTy] = VecIntOrPtrVal;
+    ValueEntries[OutTy] = VecIntOrPtrVal;
   }
   return VecIntOrPtrVal;
 }
@@ -239,6 +238,12 @@ static llvm::Value *breakdownToVecTyFromAvailableValues(
   }
   if (!Pivot)
     Pivot = getOrCreateIntOrFloatTypeForReg(ValueEntries, Builder);
+  /// The fallback pivot may not match the requested slot width. Catch that
+  /// here with a clear message rather than letting it surface as an opaque
+  /// "invalid bitcast" assertion deep inside IRBuilder.
+  assert(Pivot->getType()->getPrimitiveSizeInBits() == TotalWidth &&
+         "no register-value entry matches the requested slot width; cannot "
+         "materialize the vector without corrupting the value");
   llvm::Value *Out = Builder.CreateBitOrPointerCast(Pivot, VecTy);
   ValueEntries[VecTy] = Out;
   return Out;
@@ -656,7 +661,7 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
   llvm::MCRegister BaseReg = std::get<0>(Key);
   unsigned Offset = std::get<1>(Key);
   unsigned NumHalves = std::get<2>(Key);
-  unsigned Allocated = RegFileSize[BaseReg];
+  unsigned Allocated = RegFileSize.at(BaseReg);
   if (Offset + NumHalves > Allocated) {
     assert(Offset != 0 &&
            "offset 0 is not in range of the register file allocation");
@@ -779,7 +784,6 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
   };
 
   /// Seed a single preloaded register with \p Val.
-  /// Annotates non-VGPR values with \c !amdgpu.uniform.
   auto seed = [&](PV Which, llvm::Value *Val) {
     llvm::MCRegister Reg = Info.getPreloadedReg(Which);
     if (!Reg)
@@ -1016,8 +1020,10 @@ llvm::Error MIRToIRTranslator::initRegFileLayouts() {
     NextSlot -= 2;
     return llvm::MCRegister(llvm::AMDGPU::SGPR0 + NextSlot);
   };
-  NextSlot -= 2;
-  VccLoSgpr = llvm::MCRegister(llvm::AMDGPU::SGPR0 + NextSlot);
+  /// VCC is reserved first; route it through the same guarded helper as the
+  /// other specials so a (asserted-against) NumSGPRs < 2 can't underflow the
+  /// unsigned slot counter in release builds.
+  VccLoSgpr = reserveLoPair();
   if (llvm::AMDGPU::isNotGFX10Plus(ST)) {
     if (ST.getTargetID().isXnackSupported())
       XnackMaskLoSgpr = reserveLoPair();
@@ -1160,7 +1166,7 @@ llvm::Value *MIRToIRTranslator::getRegisterFile(
   auto Key = getRegFileKey(Reg);
   llvm::MCRegister RegFileBaseReg = std::get<0>(Key);
   unsigned StartHalves = std::get<1>(Key);
-  unsigned TotalHalves = RegFileSize[RegFileBaseReg];
+  unsigned TotalHalves = RegFileSize.at(RegFileBaseReg);
   assert(TotalHalves != 0 &&
          "register file is not modeled for the current target");
   assert(StartHalves <= TotalHalves && "register offset exceeds file size");
@@ -1271,7 +1277,7 @@ void MIRToIRTranslator::setRegisterFile(const llvm::MachineBasicBlock &MBB,
   auto Key = getRegFileKey(Reg);
   llvm::MCRegister RegFileBaseReg = std::get<0>(Key);
   unsigned StartHalves = std::get<1>(Key);
-  unsigned TotalHalves = RegFileSize[RegFileBaseReg];
+  unsigned TotalHalves = RegFileSize.at(RegFileBaseReg);
   assert(StartHalves <= TotalHalves && "register offset exceeds file size");
 
   auto *SliceVecTy = llvm::cast<llvm::FixedVectorType>(Val->getType());
@@ -1366,7 +1372,7 @@ void MIRToIRTranslator::initDeviceFunctionEntryRegs(
   llvm::Type *I32 = Builder.getInt32Ty();
   for (llvm::MCRegister RegFileBase : FunctionCallArgOrder) {
     /// store register file entries
-    unsigned NumLanes32 = RegFileSize[RegFileBase] / 2u;
+    unsigned NumLanes32 = RegFileSize.at(RegFileBase) / 2u;
     llvm::StringRef BaseName = TRI.getName(RegFileBase);
     for (unsigned I = 0; I < NumLanes32; ++I) {
       // Each 32-bit GPR spans 2 halves (RegGranule = 16 bits), so SGPR_N lives
@@ -1426,7 +1432,7 @@ void MIRToIRTranslator::emitIndirectTailCall(const llvm::MachineInstr &MI,
   CallArgs.reserve(FTy->getNumParams());
 
   for (llvm::MCRegister RegFileBase : FunctionCallArgOrder) {
-    unsigned NumLanes32 = RegFileSize[RegFileBase] / 2;
+    unsigned NumLanes32 = RegFileSize.at(RegFileBase) / 2;
     for (unsigned PI = 0; PI < NumLanes32; ++PI) {
       // Each 32-bit GPR spans 2 halves, so SGPR_N lives at offset 2*N.
       CallArgs.push_back(&getOperandAsValue(
@@ -1478,42 +1484,46 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineOperand &Op,
       // defaults to the register's size (i32 for an SGPR), the resulting
       // ICmp/binop sees mismatched operand types.
       unsigned OpIdx = MI->getOperandNo(&Op);
-      const llvm::MCOperandInfo &OpInfo =
-          MI->getDesc().operands()[OpIdx];
-      unsigned SizeInBytes;
-      if (OpInfo.RegClass == -1) {
-        // Pure-immediate slot. \c SIInstrInfo::getOpSize asserts that
-        // \c OperandType is the generic \c MCOI::OPERAND_IMMEDIATE,
-        // which excludes AMDGPU's own immediate operand kinds (K
-        // immediates, encoded modifiers, split-barrier int32, …).
-        // Decode the size directly from the operand kind so callers
-        // that don't pass an explicit \c OutType still get a properly
-        // sized constant.
-        switch (OpInfo.OperandType) {
-        case llvm::AMDGPU::OPERAND_KIMM64:
-          SizeInBytes = 8;
-          break;
-        case llvm::AMDGPU::OPERAND_KIMM16:
-          SizeInBytes = 2;
-          break;
-        case llvm::AMDGPU::OPERAND_KIMM32:
-        case llvm::AMDGPU::OPERAND_INLINE_SPLIT_BARRIER_INT32:
-        case llvm::AMDGPU::OPERAND_INPUT_MODS:
-        case llvm::MCOI::OPERAND_IMMEDIATE:
-          SizeInBytes = 4;
-          break;
-        default:
-          // Fall back to a 32-bit literal — that's the canonical
-          // VALU literal slot, and a wrong size here would surface
-          // immediately as a type mismatch at the use site rather
-          // than corrupt silently.
-          SizeInBytes = 4;
-          break;
+      const llvm::MCInstrDesc &Desc = MI->getDesc();
+      // Default to a 32-bit literal — the canonical VALU literal slot. This
+      // also covers an immediate that lands at an implicit/appended operand
+      // index (beyond the described operands), where \c operands()[OpIdx]
+      // would read out of bounds.
+      unsigned SizeInBytes = 4;
+      if (OpIdx < Desc.getNumOperands()) {
+        const llvm::MCOperandInfo &OpInfo = Desc.operands()[OpIdx];
+        if (OpInfo.RegClass == -1) {
+          // Pure-immediate slot. \c SIInstrInfo::getOpSize asserts that
+          // \c OperandType is the generic \c MCOI::OPERAND_IMMEDIATE,
+          // which excludes AMDGPU's own immediate operand kinds (K
+          // immediates, encoded modifiers, split-barrier int32, …).
+          // Decode the size directly from the operand kind so callers
+          // that don't pass an explicit \c OutType still get a properly
+          // sized constant.
+          switch (OpInfo.OperandType) {
+          case llvm::AMDGPU::OPERAND_KIMM64:
+            SizeInBytes = 8;
+            break;
+          case llvm::AMDGPU::OPERAND_KIMM16:
+            SizeInBytes = 2;
+            break;
+          case llvm::AMDGPU::OPERAND_KIMM32:
+          case llvm::AMDGPU::OPERAND_INLINE_SPLIT_BARRIER_INT32:
+          case llvm::AMDGPU::OPERAND_INPUT_MODS:
+          case llvm::MCOI::OPERAND_IMMEDIATE:
+            SizeInBytes = 4;
+            break;
+          default:
+            // A wrong size here would surface immediately as a type mismatch
+            // at the use site rather than corrupt silently.
+            SizeInBytes = 4;
+            break;
+          }
+        } else {
+          // Register-or-immediate slot: fall back to the register
+          // class's width.
+          SizeInBytes = TII.getOpSize(MI->getOpcode(), OpIdx);
         }
-      } else {
-        // Register-or-immediate slot: fall back to the register
-        // class's width.
-        SizeInBytes = TII.getOpSize(MI->getOpcode(), OpIdx);
       }
       OutType = llvm::IntegerType::get(Ctx, SizeInBytes * 8);
     }
@@ -1628,7 +1638,7 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineBasicBlock &MBB,
   /// Bounds check: silently drop writes that target an unallocated plain
   /// GPR slot. Specials (TTMP/M0/EXEC/NULL/VCC-on-GFX10+) bypass the
   /// check and are always written through.
-  unsigned Allocated = RegFileSize[BaseReg];
+  unsigned Allocated = RegFileSize.at(BaseReg);
   if (Offset + Size > Allocated) {
     LLVM_DEBUG(llvm::dbgs()
                << "[MIRToIRTranslator] Dropping out-of-range write to "
@@ -1742,12 +1752,12 @@ void MIRToIRTranslator::fixupPhis() {
   /// own predecessors). Those get appended to \c ToBeFixedPhis while we
   /// iterate, so keep draining until the list is empty.
   while (!ToBeFixedPhis.empty()) {
-    // Copy the front entry by value, then pop. `getOperandAsValue` below may
-    // append new entries to `ToBeFixedPhis` (via materializeReg's placeholder
-    // PHIs), which can grow the SmallVector and invalidate any iterator we
-    // kept into it.
-    ToBeFixedRegValuePhiInfo Cur = ToBeFixedPhis.front();
-    ToBeFixedPhis.erase(ToBeFixedPhis.begin());
+    // Pop the back entry by value. `getOperandAsValue` below may append new
+    // entries to `ToBeFixedPhis` (via materializeReg's placeholder PHIs),
+    // which can grow the SmallVector and invalidate any iterator we kept into
+    // it. Draining from the back is O(1) per pop (order is irrelevant — the
+    // loop runs until the worklist is empty).
+    ToBeFixedRegValuePhiInfo Cur = ToBeFixedPhis.pop_back_val();
     for (const llvm::MachineBasicBlock *PredMBB : Cur.MBB->predecessors()) {
       auto *PredBB = const_cast<llvm::BasicBlock *>(PredMBB->getBasicBlock());
       if (!llvm::is_contained(Cur.Phi->blocks(), PredBB)) {
@@ -1957,7 +1967,6 @@ void MIRToIRTranslator::translate() {
 void MIRToIRTranslator::emitExecPredicateCheck(
     const llvm::MachineBasicBlock &VectorMBB, llvm::BasicBlock *CheckBB,
     llvm::BasicBlock *BodyBB, llvm::BasicBlock *SkipBB) {
-  llvm::LLVMContext &Ctx = CheckBB->getContext();
   llvm::IRBuilder<> Builder(CheckBB);
 
   /// EXEC value at the entry of the CheckBB. If the vector MBB has MIR
@@ -2001,13 +2010,6 @@ void MIRToIRTranslator::emitExecPredicateCheck(
   llvm::Value *IsActive =
       Builder.CreateTrunc(Bit, Builder.getInt1Ty(), "exec.is.active");
   Builder.CreateCondBr(IsActive, BodyBB, SkipBB);
-
-  /// Skip-path PHI: kept anchored at the vector MBB so that fixupPhis pulls
-  /// pre-translation register state through from the MIR predecessors. The
-  /// PHI value isn't consumed in the simplified SkipBB→BodyBB topology, but
-  /// it is materialized so downstream analyses that look for a pre-state
-  /// snapshot on the skip edge find one
-  (void)Ctx;
 }
 
 bool MIRToIRTranslator::shouldEmitGPRIndexAccess(const llvm::MachineInstr &MI,
@@ -2066,7 +2068,7 @@ llvm::Value &MIRToIRTranslator::emitIndexedVGPRSrc(const llvm::MachineInstr &MI,
   auto Key = getRegFileKey(Reg);
   llvm::MCRegister BaseReg = std::get<0>(Key);
   unsigned BaseHalves = std::get<1>(Key);
-  unsigned TotalHalves = RegFileSize[BaseReg];
+  unsigned TotalHalves = RegFileSize.at(BaseReg);
   assert(BaseHalves <= TotalHalves && "Base offset exceeds file allocation");
 
   /// Direct read at base register — first slot of the chain.
@@ -2139,7 +2141,7 @@ void MIRToIRTranslator::emitIndexedVGPRDst(const llvm::MachineInstr &MI,
   auto Key = getRegFileKey(Reg);
   llvm::MCRegister BaseReg = std::get<0>(Key);
   unsigned BaseHalves = std::get<1>(Key);
-  unsigned TotalHalves = RegFileSize[BaseReg];
+  unsigned TotalHalves = RegFileSize.at(BaseReg);
   assert(BaseHalves <= TotalHalves && "Base offset exceeds file allocation");
   /// 32-bit slots: each occupies 2 halves.
   unsigned NumSlots = (TotalHalves - BaseHalves) / 2;

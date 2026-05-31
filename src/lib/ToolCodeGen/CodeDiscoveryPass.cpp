@@ -618,7 +618,7 @@ parseKDKernelCode(const llvm::amdhsa::kernel_descriptor_t &KD,
                   const llvm::GCNTargetMachine &TM, llvm::MachineFunction &MF) {
   llvm::Function &F = MF.getFunction();
   auto MFI = MF.getInfo<llvm::SIMachineFunctionInfo>();
-  auto TRI = reinterpret_cast<const llvm::SIRegisterInfo *>(
+  auto TRI = static_cast<const llvm::SIRegisterInfo *>(
       TM.getSubtargetImpl(F)->getRegisterInfo());
   auto &ST = TM.getSubtarget<llvm::GCNSubtarget>(F);
 
@@ -1193,7 +1193,7 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
   llvm::MachineBasicBlock *CurrentMBB = MF.CreateMachineBasicBlock();
 
   const auto &TM =
-      *reinterpret_cast<const llvm::GCNTargetMachine *>(&MF.getTarget());
+      *static_cast<const llvm::GCNTargetMachine *>(&MF.getTarget());
 
   MF.push_back(CurrentMBB);
 
@@ -1238,7 +1238,11 @@ populateMF(const InstructionTraces &MFTrace, llvm::MachineFunction &MF,
                << " with " << Trace->size() << " instructions\n");
 
     while (CurrentInstrAddr <= LastTraceInstrAddr) {
-      const TraceInstr &Inst = Trace->at(CurrentInstrAddr);
+      auto InstIt = Trace->find(CurrentInstrAddr);
+      if (InstIt == Trace->end())
+        return LUTHIER_MAKE_GENERIC_ERROR(llvm::formatv(
+            "Trace has no instruction at address {0:x}.", CurrentInstrAddr));
+      const TraceInstr &Inst = InstIt->second;
       auto MCInst = Inst.getMCInst();
       const unsigned Opcode = getPseudoOpcodeFromReal(MCInst.getOpcode());
       const llvm::MCInstrDesc &MCID = MCInstInfo.get(Opcode);
@@ -1458,7 +1462,7 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
   llvm::MachineModuleInfo &TargetMMI =
       TargetMAM.getResult<llvm::MachineModuleAnalysis>(TargetModule).getMMI();
   auto &TM =
-      *reinterpret_cast<const llvm::GCNTargetMachine *>(&TargetMMI.getTarget());
+      *static_cast<const llvm::GCNTargetMachine *>(&TargetMMI.getTarget());
 
   const MemoryAllocationAccessor &SegAccessor =
       TargetMAM.getResult<MemoryAllocationAnalysis>(TargetModule).getAccessor();
