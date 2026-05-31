@@ -136,14 +136,18 @@ static void computeRegFileSizes(
 }
 
 /// Decode the "denormal-fp-math[-f32]" attribute value (e.g.
-/// "preserve-sign," or ",preserve-sign") into the AMDGPU \c FP_DENORM_*
-/// encoding used by the MODE register.
+/// "preserve-sign,ieee" or "ieee,preserve-sign") into the AMDGPU
+/// \c FP_DENORM_* encoding used by the MODE register.
+///
+/// LLVM encodes the attribute as "<output>,<input>" (NOT input-first); an
+/// empty or absent input component defaults to the output component. See
+/// \c llvm::parseDenormalFPAttribute in llvm/ADT/FloatingPointMode.h.
 static uint32_t decodeDenormAttr(llvm::StringRef AttrVal) {
-  auto [In, Out] = AttrVal.split(',');
-  In = In.trim();
-  Out = Out.trim();
-  bool InFlush = (In == "preserve-sign");
-  bool OutFlush = (Out == "preserve-sign");
+  auto [OutStr, InStr] = AttrVal.split(',');
+  OutStr = OutStr.trim();
+  InStr = InStr.trim();
+  bool OutFlush = (OutStr == "preserve-sign");
+  bool InFlush = InStr.empty() ? OutFlush : (InStr == "preserve-sign");
   if (InFlush && OutFlush)
     return FP_DENORM_FLUSH_IN_FLUSH_OUT;
   if (OutFlush)
@@ -833,6 +837,15 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
       Val = Builder.CreateAnd(Val, Builder.getInt32(MaskNoRZeros));
       if (NumRZeros)
         Val = Builder.CreateShl(Val, Builder.getInt32(NumRZeros));
+      /// Packed work-item IDs (\c FeaturePackedTID) place X/Y/Z in disjoint
+      /// bitfields of the SAME VGPR. Each dimension is seeded separately.
+      /// OR the repositioned field into whatever has already been seeded for
+      /// this register.
+      RegValueMap &State = VM[MF.front()];
+      RegFileKey Key = getRegFileKey(Reg);
+      if (auto It = State.find(Key); It != State.end())
+        if (auto VIt = It->second.find(Val->getType()); VIt != It->second.end())
+          Val = Builder.CreateOr(VIt->second, Val);
     }
 
     seed(Which, Val);
@@ -1091,8 +1104,9 @@ MIRToIRTranslator::getRegFileKey(llvm::MCRegister Reg) const {
       } else if (HwIdx >= TTmpBaseIdx && HwIdx < TTmpBaseIdx + 16) {
         BaseReg = TTMPBaseReg;
       } else if (llvm::AMDGPU::isGFX9Plus(ST) && HwIdx >= SharedBaseIdx &&
-                 SharedBaseIdx < RegFileSize.at(getPhysReg(
-                                     llvm::AMDGPU::SRC_SHARED_BASE))) {
+                 HwIdx < SharedBaseIdx + RegFileSize.at(getPhysReg(
+                                             llvm::AMDGPU::SRC_SHARED_BASE)) /
+                                             2) {
         BaseReg = getPhysReg(llvm::AMDGPU::SRC_SHARED_BASE);
       } else
         llvm_unreachable("SGPR is not contained in any register file");

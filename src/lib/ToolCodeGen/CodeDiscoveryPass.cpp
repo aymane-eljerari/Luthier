@@ -93,19 +93,23 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
   auto Float32Denorm =
       AMDHSA_BITS_GET(KD.compute_pgm_rsrc1,
                       llvm::amdhsa::COMPUTE_PGM_RSRC1_FLOAT_DENORM_MODE_32);
+  /// LLVM parses "denormal-fp-math[-f32]" as "<output>,<input>" and defaults
+  /// an empty input component to the output component, so each component must
+  /// be spelled out explicitly: "preserve-sign," would wrongly round-trip as
+  /// flush-both rather than flush-output-only.
   std::string Denorm32Val;
   switch (Float32Denorm) {
   case FP_DENORM_FLUSH_IN_FLUSH_OUT:
     Denorm32Val = "preserve-sign,preserve-sign";
     break;
   case FP_DENORM_FLUSH_OUT:
-    Denorm32Val = "preserve-sign,";
+    Denorm32Val = "preserve-sign,ieee";
     break;
   case FP_DENORM_FLUSH_IN:
-    Denorm32Val = ",preserve-sign";
+    Denorm32Val = "ieee,preserve-sign";
     break;
   case FP_DENORM_FLUSH_NONE:
-    Denorm32Val = ",";
+    Denorm32Val = "ieee,ieee";
     break;
   default:
     return LUTHIER_MAKE_GENERIC_ERROR("Invalid FP 32 denorm field " +
@@ -122,13 +126,13 @@ parseKDRsrc1(const llvm::amdhsa::kernel_descriptor_t &KD,
     Denorm1664Val = "preserve-sign,preserve-sign";
     break;
   case FP_DENORM_FLUSH_OUT:
-    Denorm1664Val = "preserve-sign,";
+    Denorm1664Val = "preserve-sign,ieee";
     break;
   case FP_DENORM_FLUSH_IN:
-    Denorm1664Val = ",preserve-sign";
+    Denorm1664Val = "ieee,preserve-sign";
     break;
   case FP_DENORM_FLUSH_NONE:
-    Denorm1664Val = ",";
+    Denorm1664Val = "ieee,ieee";
     break;
   default:
     return LUTHIER_MAKE_GENERIC_ERROR("Invalid FP 16/64 denorm field " +
