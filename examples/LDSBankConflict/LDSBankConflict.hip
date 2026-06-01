@@ -24,6 +24,7 @@
 #include <SIInstrInfo.h>
 #include <chrono>
 #include <hip/hip_runtime.h>
+#include <hsa/hsa_ext_amd.h>
 #include <llvm/CodeGen/TargetInstrInfo.h>
 #include <llvm/Demangle/Demangle.h>
 #include <llvm/IR/Constants.h>
@@ -40,6 +41,7 @@
 #include <luthier/Common/ErrorCheck.h>
 #include <luthier/Common/Stacktrace.h>
 #include <luthier/HSA/AqlPacket.h>
+#include <luthier/HSA/ExecutableSymbol.h>
 #include <luthier/HSA/HsaError.h>
 #include <luthier/HSATooling/HSATool.h>
 #include <luthier/HSATooling/HsaMemoryAllocationAccessor.h>
@@ -79,11 +81,11 @@ struct LDSBankConflictTool
   LUTHIER_HOOK_MEMBER_ATTR static void
   countUniqueBanksPerWarpDoubleAddressTwoSource32(
       unsigned M0, unsigned VAddr, uint16_t Offset0, uint16_t Offset1,
-      uint8_t CacheSizeLog2);
+      uint16_t CacheSizeLog2);
   LUTHIER_HOOK_MEMBER_ATTR static void
   countUniqueBanksPerWarpDoubleAddressTwoSource64(
       unsigned M0, unsigned VAddr, uint16_t Offset0, uint16_t Offset1,
-      uint8_t CacheSizeLog2);
+      uint16_t CacheSizeLog2);
 
   struct Options {
     llvm::cl::OptionCategory Cat{"LDS Bank Conflict Options"};
@@ -114,7 +116,7 @@ struct LDSBankConflictTool
 
   std::recursive_mutex Mutex;
   uint32_t NumKernelLaunched = 0;
-  uint64_t TotalNumBankConflicts = 0;
+  double TotalNumBankConflicts = 0;
   uint64_t TotalNumSingleAddressLDSInstructions = 0;
   uint64_t TotalNumDoubleAddressLDSInstructions = 0;
   unsigned NextInstrIdx = 0;
@@ -191,7 +193,7 @@ LDSBankConflictTool::countUniqueBanksPerWarpDoubleAddress(
 LUTHIER_HOOK_MEMBER_ATTR void
 LDSBankConflictTool::countUniqueBanksPerWarpDoubleAddressTwoSource32(
     unsigned M0, unsigned VAddr, uint16_t Offset0, uint16_t Offset1,
-    uint8_t CacheSizeLog2) {
+    uint16_t CacheSizeLog2) {
   unsigned long long ExecMask = __builtin_amdgcn_read_exec();
   const uint32_t LaneId = __lane_id() + 1;
   unsigned FirstActiveThreadId = __ffsll(ExecMask);
@@ -224,7 +226,7 @@ LDSBankConflictTool::countUniqueBanksPerWarpDoubleAddressTwoSource32(
 LUTHIER_HOOK_MEMBER_ATTR void
 LDSBankConflictTool::countUniqueBanksPerWarpDoubleAddressTwoSource64(
     unsigned M0, unsigned VAddr, uint16_t Offset0, uint16_t Offset1,
-    uint8_t CacheSizeLog2) {
+    uint16_t CacheSizeLog2) {
   unsigned long long ExecMask = __builtin_amdgcn_read_exec();
   const uint32_t LaneId = __lane_id() + 1;
   unsigned FirstActiveThreadId = __ffsll(ExecMask);
@@ -423,6 +425,60 @@ void LDSBankConflictTool::onPackets(
               DispatchPacket->completion_signal),
           "Failed to destroy the dispatch packet's completion signal."));
     }
+
+    // Read the device-side counters back into the host accumulators and zero
+    // them for the next dispatch. The injected hooks atomicAdd into these
+    // `__device__` globals; without reading them back here the TotalNum*
+    // values printed in atToolFini stay zero. Mirrors the InstrCount tool.
+    if (ActiveRegion) {
+      const auto *KernelDesc =
+          reinterpret_cast<const llvm::amdhsa::kernel_descriptor_t *>(
+              DispatchPacket->kernel_object);
+      hsa_amd_pointer_info_t PtrInfo{};
+      PtrInfo.size = sizeof(PtrInfo);
+      hsa_status_t PInfoStatus = AmdExt.callFunction<hsa_amd_pointer_info>(
+          const_cast<void *>(reinterpret_cast<const void *>(KernelDesc)),
+          &PtrInfo, /*alloc=*/nullptr, /*num_agents_accessible=*/nullptr,
+          /*accessible=*/nullptr);
+      if (PInfoStatus == HSA_STATUS_SUCCESS &&
+          PtrInfo.type != HSA_EXT_POINTER_TYPE_UNKNOWN) {
+        hsa_agent_t Agent = PtrInfo.agentOwner;
+        // Read a device global into Acc (matched type), then zero it on device.
+        auto readAndZero = [&](auto *Sym, auto &Acc) {
+          using T = std::remove_reference_t<decltype(Acc)>;
+          auto SymOrErr = this->lookupGlobalVariable(Sym, Agent);
+          if (!SymOrErr) {
+            llvm::consumeError(SymOrErr.takeError());
+            return;
+          }
+          auto AddrOrErr =
+              luthier::hsa::executableSymbolGetAddress(Core, *SymOrErr);
+          if (!AddrOrErr) {
+            llvm::consumeError(AddrOrErr.takeError());
+            return;
+          }
+          T Snapshot{};
+          if (Core.callFunction<hsa_memory_copy>(
+                  &Snapshot, reinterpret_cast<void *>(*AddrOrErr),
+                  sizeof(Snapshot)) != HSA_STATUS_SUCCESS)
+            return;
+          Acc += Snapshot;
+          const T Zero{};
+          (void)Core.callFunction<hsa_memory_copy>(
+              reinterpret_cast<void *>(*AddrOrErr), &Zero, sizeof(Zero));
+        };
+        uint64_t SingleAddr = 0, DoubleAddr = 0;
+        float BankConflicts = 0.f;
+        readAndZero(&LDSBankConflictTool::NumSingleAddressLDSInstructions,
+                    SingleAddr);
+        readAndZero(&LDSBankConflictTool::NumDoubleAddressLDSInstructions,
+                    DoubleAddr);
+        readAndZero(&LDSBankConflictTool::NumBankConflicts, BankConflicts);
+        TotalNumSingleAddressLDSInstructions += SingleAddr;
+        TotalNumDoubleAddressLDSInstructions += DoubleAddr;
+        TotalNumBankConflicts += BankConflicts;
+      }
+    }
     NumKernelLaunched++;
   }
 }
@@ -434,7 +490,12 @@ static void atToolFini(void *) {
   std::call_once(Once, []() {
     LDSBankConflictTool::withInstance([](LDSBankConflictTool &T) {
       luthier::errs() << "Total number of LDS instructions: "
-                      << T.TotalNumSingleAddressLDSInstructions << "\n";
+                      << (T.TotalNumSingleAddressLDSInstructions +
+                          T.TotalNumDoubleAddressLDSInstructions)
+                      << " (single-address: "
+                      << T.TotalNumSingleAddressLDSInstructions
+                      << ", double-address: "
+                      << T.TotalNumDoubleAddressLDSInstructions << ")\n";
       luthier::errs() << "Total number of bank conflicts detected: "
                       << T.TotalNumBankConflicts << "\n";
     });

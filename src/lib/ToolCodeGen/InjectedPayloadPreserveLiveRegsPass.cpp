@@ -130,6 +130,32 @@ bool InjectedPayloadPreserveLiveRegsPass::runOnModule(llvm::Module &IModule) {
                    << ": no reg class\n");
         continue;
       }
+      // TODO: Fix this
+      // Skip architectural registers and their sub-halves (VCC/EXEC/FLAT_SCR/
+      // XNACK_MASK). The full 64-bit registers are caught by the
+      // non-allocatable cross-copy check below, but their 32-bit halves
+      // ($vcc_hi, $exec_lo, ...) report an allocatable sreg_32 cross-copy class
+      // and would otherwise slip through and get an ill-formed save/restore:
+      // the payload uses these as scratch (e.g. the bank-conflict hook clobbers
+      // $vcc for its compares), so the half's regunit live range is not jointly
+      // dominated and regalloc aborts with "Use not jointly dominated by defs".
+      // Per this pass's design these are application-level architectural state
+      // the lifted code doesn't expect to survive the instrumentation boundary.
+      bool IsArchReg = false;
+      for (llvm::MCPhysReg ArchReg :
+           {llvm::AMDGPU::VCC, llvm::AMDGPU::EXEC, llvm::AMDGPU::FLAT_SCR,
+            llvm::AMDGPU::XNACK_MASK}) {
+        if (TRI->regsOverlap(PhysReg, ArchReg)) {
+          IsArchReg = true;
+          break;
+        }
+      }
+      if (IsArchReg) {
+        LLVM_DEBUG(llvm::dbgs()
+                   << "  skipping " << llvm::printReg(PhysReg, TRI)
+                   << ": architectural register (not preserved)\n");
+        continue;
+      }
       const llvm::TargetRegisterClass *CrossCopyRC =
           TRI->getCrossCopyRegClass(RC);
       if (!CrossCopyRC) {

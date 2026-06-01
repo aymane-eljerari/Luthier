@@ -899,7 +899,7 @@ def S_FF1_I32_B64_sem : InstSISemantic<S_FF1_I32_B64> {
 //   (Renamed to S_CLZ_I32_U32 in RDNA3+: rdna4-instruction-set-architecture.pdf, page 232.)
 def S_FLBIT_I32_B32_sem : InstSISemantic<S_FLBIT_I32_B32> {
   let Semantic = [
-    (DefVal $clz, (LLVMUnaryIntrinsic int_ctlz, (GetNamedOperand $src0))),
+    (DefVal $clz, (LLVMBinaryIntrinsic int_ctlz, (GetNamedOperand $src0), (ConstantInt si_llvm_i1_ty, 0))),
     (DefVal $result, (LLVMSelect
       (LLVMCmp LLVMICmpEQ, (GetNamedOperand $src0), (ConstantInt si_llvm_i32_ty, 0)),
       (ConstantSignedInt si_llvm_i32_ty, -1),
@@ -923,7 +923,7 @@ def S_FLBIT_I32_B32_sem : InstSISemantic<S_FLBIT_I32_B32> {
 //   (Renamed to S_CLZ_I32_U64 in RDNA3+: rdna4-instruction-set-architecture.pdf, page 232.)
 def S_FLBIT_I32_B64_sem : InstSISemantic<S_FLBIT_I32_B64> {
   let Semantic = [
-    (DefVal $clz, (LLVMUnaryIntrinsic int_ctlz, (GetNamedOperand $src0))),
+    (DefVal $clz, (LLVMBinaryIntrinsic int_ctlz, (GetNamedOperand $src0), (ConstantInt si_llvm_i1_ty, 0))),
     (DefVal $clz32, (LLVMTrunc (GetVal $clz), si_llvm_i32_ty)),
     (DefVal $result, (LLVMSelect
       (LLVMCmp LLVMICmpEQ, (GetNamedOperand $src0), (ConstantInt si_llvm_i64_ty, 0)),
@@ -957,7 +957,7 @@ def S_FLBIT_I32_sem : InstSISemantic<S_FLBIT_I32> {
     (DefVal $sign_ext, (LLVMAShr (GetVal $src),
                                   (ConstantInt si_llvm_i32_ty, 31))),
     (DefVal $tmp, (LLVMXor (GetVal $src), (GetVal $sign_ext))),
-    (DefVal $clz, (LLVMUnaryIntrinsic int_ctlz, (GetVal $tmp))),
+    (DefVal $clz, (LLVMBinaryIntrinsic int_ctlz, (GetVal $tmp), (ConstantInt si_llvm_i1_ty, 0))),
     (DefVal $result, (LLVMSelect
       (LLVMCmp LLVMICmpEQ, (GetVal $clz), (ConstantInt si_llvm_i32_ty, 32)),
       (ConstantSignedInt si_llvm_i32_ty, -1),
@@ -986,7 +986,7 @@ def S_FLBIT_I32_I64_sem : InstSISemantic<S_FLBIT_I32_I64> {
     (DefVal $sign_ext, (LLVMAShr (GetVal $src),
                                   (ConstantInt si_llvm_i64_ty, 63))),
     (DefVal $tmp, (LLVMXor (GetVal $src), (GetVal $sign_ext))),
-    (DefVal $clz, (LLVMUnaryIntrinsic int_ctlz, (GetVal $tmp))),
+    (DefVal $clz, (LLVMBinaryIntrinsic int_ctlz, (GetVal $tmp), (ConstantInt si_llvm_i1_ty, 0))),
     (DefVal $clz32, (LLVMTrunc (GetVal $clz), si_llvm_i32_ty)),
     (DefVal $result, (LLVMSelect
       (LLVMCmp LLVMICmpEQ, (GetVal $clz32), (ConstantInt si_llvm_i32_ty, 64)),

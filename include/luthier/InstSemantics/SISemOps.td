@@ -642,10 +642,17 @@ class LLVMExtractBitsIntStartIntNumBits<dag val,
   assert !lt(!add(startIdx, numBits), inputType.ElemSize), "Total number of bits requested is out of range";
   defvar rightShiftOp = !if(isSigned, LLVMAShr, LLVMLShr);
 
-  dag Op = !if(!eq(numBits, 1),
-             (LLVMAnd (rightShiftOp val, (ConstantInt inputType, startIdx)),
-                      (ConstantInt inputType, !sub(!shl(1, numBits), 1))),
-             (LLVMAnd (rightShiftOp val, (ConstantInt inputType, startIdx))));
+  // Coerce the source to the requested width: the shift/mask constants below
+  // are typed `inputType`, but `val` (e.g. a 32-bit src1 operand feeding a
+  // 64-bit S_BFE_I64) may have a narrower natural width. Without this the
+  // generated shift/sub mixes i32 and i64 operands and trips the constant
+  // folder's "operand types must match" assertion.
+  defvar cval = (LLVMZExtOrTrunc val, inputType);
+
+  // mask = (1 << numBits) - 1, applied for every numBits (the prior numBits!=1
+  // branch dropped the mask, leaving the extracted field unmasked).
+  dag Op = (LLVMAnd (rightShiftOp cval, (ConstantInt inputType, startIdx)),
+                    (ConstantInt inputType, !sub(!shl(1, numBits), 1)));
 }
 
 class LLVMExtractBitsDagStartDagNumBits<dag val, SILLVMType inputType, bit isSigned, dag startIdx, dag numBits> {

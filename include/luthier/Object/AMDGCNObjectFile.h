@@ -459,17 +459,17 @@ public:
 inline llvm::Expected<bool> AMDGCNElfSymbolRef::isKernelDescriptor() const {
   llvm::Expected<llvm::StringRef> SymNameOrErr = getName();
   LUTHIER_RETURN_ON_ERROR(SymNameOrErr.takeError());
-  uint8_t Binding = getBinding();
+  uint8_t Type = getELFType();
   uint64_t Size = getSize();
-  return (Binding == llvm::ELF::STT_OBJECT && SymNameOrErr->ends_with(".kd") &&
+  return (Type == llvm::ELF::STT_OBJECT && SymNameOrErr->ends_with(".kd") &&
           Size == 64) ||
-         (Binding == llvm::ELF::STT_AMDGPU_HSA_KERNEL && Size == 64);
+         (Type == llvm::ELF::STT_AMDGPU_HSA_KERNEL && Size == 64);
 }
 
 inline llvm::Expected<bool> AMDGCNElfSymbolRef::isVariable() const {
   llvm::Expected<bool> IsKdOrErr = isKernelDescriptor();
   LUTHIER_RETURN_ON_ERROR(IsKdOrErr.takeError());
-  return getBinding() == llvm::ELF::STT_OBJECT && !*IsKdOrErr;
+  return getELFType() == llvm::ELF::STT_OBJECT && !*IsKdOrErr;
 }
 
 inline llvm::Expected<bool> AMDGCNElfSymbolRef::isKernelFunction() const {

@@ -1602,7 +1602,18 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineOperand &Op,
       }
       OutType = llvm::IntegerType::get(Ctx, SizeInBytes * 8);
     }
-    return *llvm::ConstantInt::getSigned(OutType, Op.getImm());
+    if (OutType->isIntegerTy())
+      return *llvm::ConstantInt::getSigned(OutType, Op.getImm());
+    // Non-integer destination type (e.g. the <2 x float>/<2 x i16> packed
+    // operand types requested by VOP3P semantics such as V_PK_MUL_F32):
+    // materialize the raw immediate bits as an integer of the same width and
+    // bitcast to the requested type. NB: inline-constant broadcast to packed
+    // lanes is not modeled here; the literal bit pattern is taken as-is, which
+    // matches how the integer path interprets Op.getImm().
+    unsigned Bits = OutType->getPrimitiveSizeInBits();
+    auto *RawInt = llvm::ConstantInt::getSigned(
+        llvm::IntegerType::get(Ctx, Bits), Op.getImm());
+    return *llvm::ConstantExpr::getBitCast(RawInt, OutType);
   }
   case llvm::MachineOperand::MO_GlobalAddress:
     return *const_cast<llvm::GlobalValue *>(Op.getGlobal());
@@ -2205,8 +2216,20 @@ void MIRToIRTranslator::emitIndexedVGPRDst(const llvm::MachineInstr &MI,
       Builder.CreateSelect(En, Idx, llvm::ConstantInt::get(I32, 0));
 
   llvm::Value *ValI32 = Val;
-  if (ValI32->getType() != I32)
-    ValI32 = Builder.CreateBitOrPointerCast(ValI32, I32);
+  if (ValI32->getType() != I32) {
+    unsigned ValBits = ValI32->getType()->getPrimitiveSizeInBits();
+    if (ValBits < 32) {
+      // Sub-32-bit writes (e.g. the f16 result of V_FMA_MIXLO_F16, which
+      // targets the low 16 bits of the 32-bit vdst slot) cannot be bitcast
+      // straight to i32. Mirror the non-indexed path: reinterpret as a
+      // same-width integer if needed, then zero-extend into the i32 slot.
+      if (!ValI32->getType()->isIntegerTy())
+        ValI32 = Builder.CreateBitCast(ValI32, Builder.getIntNTy(ValBits));
+      ValI32 = Builder.CreateZExt(ValI32, I32);
+    } else {
+      ValI32 = Builder.CreateBitOrPointerCast(ValI32, I32);
+    }
+  }
 
   /// Per-slot conditional write across the VGPR file from Reg to the end
   /// of the allocated VGPR space:
