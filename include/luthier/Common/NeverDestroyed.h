@@ -35,7 +35,7 @@ namespace luthier {
 /// \c NeverDestroyed is trivially destructible and its destructor is defaulted,
 /// the destructor is itself trivial. Consequently, when a \c NeverDestroyed is
 /// used as a function-local \c static, the compiler registers \b no
-/// \c __cxa_atexit handler for it and \c T simply leaks at process exit.
+/// \c __cxa_atexit handler for it.
 ///
 /// This is exactly what is wanted for objects that must outlive every other
 /// teardown step — e.g. the standard streams in \c luthier::outs / \c errs /
@@ -45,8 +45,7 @@ namespace luthier {
 /// already-destroyed object.
 /// \note \c T's destructor is never invoked. Only use this for objects whose
 /// resources are reclaimed by process exit (file descriptors, memory). If \c T
-/// buffers output that must reach its sink, arrange an explicit flush (e.g. via
-/// \c std::atexit); see \c luthier::outs.
+/// buffers output that must reach its sink, arrange an explicit cleanup.
 /// \tparam T the type of the owned, never-destroyed object
 template <typename T> class NeverDestroyed {
   alignas(T) std::byte Storage[sizeof(T)];
