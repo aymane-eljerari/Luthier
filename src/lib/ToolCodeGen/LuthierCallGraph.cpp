@@ -17,6 +17,7 @@
 /// Implements the \c LuthierCallGraphAnalysis module analysis.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/LuthierCallGraph.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include "luthier/ToolCodeGen/TargetMachineInstrMDNode.h"
 #include <llvm/Analysis/ConstantFolding.h>
@@ -203,9 +204,9 @@ LuthierCallGraph LuthierCallGraphAnalysis::run(llvm::Module &M,
           auto &Targets = Out.CallTargets[CI];
           if (llvm::is_contained(Targets, Target))
             return;
-          LLVM_DEBUG(llvm::dbgs()
-                     << "[LuthierCallGraph] Resolved call in "
-                     << F.getName() << " → " << Target->getName() << "\n");
+          LLVM_DEBUG(luthier::dbgs()
+                     << "[LuthierCallGraph] Resolved call in " << F.getName()
+                     << " → " << Target->getName() << "\n");
           Targets.push_back(Target);
           KnownCallers[Target].emplace_back(CI, &F);
           Changed = true;
@@ -227,9 +228,8 @@ LuthierCallGraph LuthierCallGraphAnalysis::run(llvm::Module &M,
             for (unsigned Idx = 0;
                  Idx < SiteCI->arg_size() && Idx < F.arg_size(); ++Idx) {
               ValConstMap EmptyMap;
-              if (llvm::Constant *ArgC =
-                      tryEvalConst(SiteCI->getArgOperand(Idx), EmptyMap,
-                                   SiteCache, DL))
+              if (llvm::Constant *ArgC = tryEvalConst(
+                      SiteCI->getArgOperand(Idx), EmptyMap, SiteCache, DL))
                 SubstMap[F.getArg(Idx)] = ArgC;
             }
             if (!SubstMap.empty())
@@ -253,19 +253,18 @@ LuthierCallGraph LuthierCallGraphAnalysis::run(llvm::Module &M,
           llvm::isa<llvm::InlineAsm>(CI->getCalledOperand()))
         continue;
       if (!Out.CallTargets.contains(CI)) {
-        LLVM_DEBUG(llvm::dbgs() << "[LuthierCallGraph] Unresolved call in "
-                                << F.getName() << "\n");
+        LLVM_DEBUG(luthier::dbgs() << "[LuthierCallGraph] Unresolved call in "
+                                   << F.getName() << "\n");
         Out.IncompleteCallSites.insert(CI);
         Out.FullyRecovered = false;
       }
     }
   }
 
-  LLVM_DEBUG(llvm::dbgs() << "[LuthierCallGraph] Resolved "
-                          << Out.CallTargets.size() << " call sites; "
-                          << Out.IncompleteCallSites.size()
-                          << " incomplete; fully_recovered="
-                          << Out.FullyRecovered << "\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[LuthierCallGraph] Resolved " << Out.CallTargets.size()
+             << " call sites; " << Out.IncompleteCallSites.size()
+             << " incomplete; fully_recovered=" << Out.FullyRecovered << "\n");
   return Out;
 }
 

@@ -18,6 +18,7 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/InstructionTracesAnalysis.h"
 #include "luthier/Common/GenericLuthierError.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include "luthier/ToolCodeGen/MemoryAllocationAccessor.h"
 #include "luthier/ToolCodeGen/PseudoOpcodeAndRegMapper.h"
@@ -120,12 +121,13 @@ static llvm::Error disassembleTrace(
       uint16_t PseudoOpcode = getPseudoOpcodeFromReal(Inst.getOpcode());
       llvm::MCInstrDesc PseudoOpcodeDesc = MII.get(PseudoOpcode);
       LLVM_DEBUG(
-          llvm::dbgs() << llvm::formatv("[InstructionTraces] Disassembled "
-                                        "instruction at {0:x}: ",
+          luthier::dbgs() << llvm::formatv("[InstructionTraces] Disassembled "
+                                           "instruction at {0:x}: ",
                                         CurrentDeviceAddress);
-          Inst.dump_pretty(llvm::dbgs(), IP, " ", &Disassembler.getContext());
-          llvm::dbgs() << llvm::formatv(", Size: {0} bytes\n", InstSize);
-          llvm::dbgs() << llvm::formatv(
+          Inst.dump_pretty(luthier::dbgs(), IP, " ",
+                           &Disassembler.getContext());
+          luthier::dbgs() << llvm::formatv(", Size: {0} bytes\n", InstSize);
+          luthier::dbgs() << llvm::formatv(
               "  Flags: Return={0}, IndirectBranch={1}, Call={2}, "
               "UnconditionalBranch={3}\n",
               PseudoOpcodeDesc.isReturn(), PseudoOpcodeDesc.isIndirectBranch(),
@@ -161,7 +163,7 @@ InstructionTraces::discoverTraces(EntryPoint EP,
   uint64_t InitialEntryPointAddr = EP.getEntryPointAddress();
 
   LLVM_DEBUG(
-      llvm::dbgs() << llvm::formatv(
+      luthier::dbgs() << llvm::formatv(
           "[InstructionTraces] Discovering traces for EP from address {0:x}\n",
           InitialEntryPointAddr));
 
@@ -191,8 +193,9 @@ InstructionTraces::discoverTraces(EntryPoint EP,
 
     /// Handle direct branch and call instructions' targets, check if we have
     /// any targets not covered by current discovered traces
-    LLVM_DEBUG(llvm::dbgs() << "\n[InstructionTraces] Processing trace from "
-                            << llvm::formatv("{0:x}", CurrentDeviceAddr)
+    LLVM_DEBUG(luthier::dbgs()
+               << "\n[InstructionTraces] Processing trace from "
+               << llvm::formatv("{0:x}", CurrentDeviceAddr)
                             << " - " << InstTrace->size() << " instructions\n");
 
     for (const auto &[InstAddr, TraceInst] : *InstTrace) {
@@ -201,25 +204,26 @@ InstructionTraces::discoverTraces(EntryPoint EP,
       const llvm::MCInstrDesc &PseudoOpcodeDesc =
           MII.get(getPseudoOpcodeFromReal(Opcode));
 
-      LLVM_DEBUG(llvm::dbgs()
+      LLVM_DEBUG(luthier::dbgs()
                      << llvm::formatv("[InstructionTraces] {0:x}: ", InstAddr);
-                 TraceInst.getMCInst().dump_pretty(llvm::dbgs(), IP.get(), " ",
-                                                   &MCCtx);
-                 llvm::dbgs() << "\n");
+                 TraceInst.getMCInst().dump_pretty(luthier::dbgs(), IP.get(),
+                                                   " ", &MCCtx);
+                 luthier::dbgs() << "\n");
 
       bool IsDirectBranch =
           PseudoOpcodeDesc.isBranch() && !PseudoOpcodeDesc.isIndirectBranch() ||
           Opcode == llvm::AMDGPU::S_CBRANCH_I_FORK;
 
       if (IsDirectBranch) {
-        LLVM_DEBUG(llvm::dbgs() << "[InstructionTraces] Direct branch found at "
-                                << llvm::formatv("{0:x}", InstAddr) << "\n";);
+        LLVM_DEBUG(luthier::dbgs()
+                       << "[InstructionTraces] Direct branch found at "
+                       << llvm::formatv("{0:x}", InstAddr) << "\n";);
         llvm::Expected<uint64_t> TargetOrErr =
             InstructionTracesAnalysis::evaluateDirectBranchOrCall(MCInst,
                                                                   InstAddr);
         LUTHIER_RETURN_ON_ERROR(TargetOrErr.takeError());
 
-        LLVM_DEBUG(llvm::dbgs()
+        LLVM_DEBUG(luthier::dbgs()
                    << "[InstructionTraces] Branch target resolved: "
                    << llvm::formatv("{0:x}\n", *TargetOrErr));
 
@@ -230,7 +234,7 @@ InstructionTraces::discoverTraces(EntryPoint EP,
         if (!InstTrace->contains(*TargetOrErr)) {
           bool HaveVisitedDirectBranchTarget{false};
           for (const auto &[TraceInterval, Trace] : Out->Traces) {
-            LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
+            LLVM_DEBUG(luthier::dbgs() << llvm::formatv(
                            "[InstructionTraces] Checking trace [{0:x}, "
                            "{1:x}] for branch target {2:x}: Contains={3}\n",
                            TraceInterval.first, TraceInterval.second,
@@ -238,7 +242,7 @@ InstructionTraces::discoverTraces(EntryPoint EP,
             if (Trace->contains(*TargetOrErr)) {
               HaveVisitedDirectBranchTarget = true;
               LLVM_DEBUG(
-                  llvm::dbgs()
+                  luthier::dbgs()
                   << "[InstructionTraces] Branch target "
                   << llvm::formatv("{0:x} already in current trace, skipping\n",
                                    *TargetOrErr));
@@ -247,7 +251,7 @@ InstructionTraces::discoverTraces(EntryPoint EP,
           }
           if (!HaveVisitedDirectBranchTarget) {
             LLVM_DEBUG(
-                llvm::dbgs()
+                luthier::dbgs()
                 << "[InstructionTraces] Adding branch target "
                 << llvm::formatv("{0:x} to unvisited set\n", *TargetOrErr));
             UnvisitedTraceAddresses.insert(*TargetOrErr);
@@ -258,7 +262,7 @@ InstructionTraces::discoverTraces(EntryPoint EP,
 
     /// Put the discovered trace in the map if it's not empty
     if (!InstTrace->empty()) {
-      LLVM_DEBUG(llvm::dbgs()
+      LLVM_DEBUG(luthier::dbgs()
                  << "[InstructionTraces] Added trace ["
                  << llvm::formatv("{0:x}, {1:x}]", CurrentDeviceAddr,
                                   TraceDeviceEndAddr)
@@ -269,8 +273,8 @@ InstructionTraces::discoverTraces(EntryPoint EP,
 
     /// Remove the current entry point from the unvisited set
     UnvisitedTraceAddresses.erase(CurrentDeviceAddr);
-    LLVM_DEBUG(llvm::dbgs() << "[InstructionTraces] Removed "
-                            << llvm::formatv("{0:x} from unvisited set\n",
+    LLVM_DEBUG(luthier::dbgs() << "[InstructionTraces] Removed "
+                               << llvm::formatv("{0:x} from unvisited set\n",
                                              CurrentDeviceAddr));
   }
   return std::move(Out);
@@ -289,13 +293,13 @@ InstructionTracesAnalysis::Result InstructionTracesAnalysis::run(
     llvm::MachineFunctionAnalysisManager &TargetMFAM) {
   /// We skip any functions that don't have an entry point associated with
   /// them (i.e. functions added manually by Luthier or the tool)
-  LLVM_DEBUG(llvm::dbgs() << "[InstructionTraces] Running analysis for "
-                          << TargetMF.getName() << "\n";);
+  LLVM_DEBUG(luthier::dbgs() << "[InstructionTraces] Running analysis for "
+                             << TargetMF.getName() << "\n";);
   if (std::optional<EntryPoint> EP =
           getFunctionEntryPoint(TargetMF.getFunction());
       EP.has_value()) {
 
-    LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
+    LLVM_DEBUG(luthier::dbgs() << llvm::formatv(
                    "[InstructionTraces] function {0}'s entry point is at "
                    "{1:x}. Entry point is a kernel? {2}.",
                    TargetMF.getName(), EP->getRawAddress(), EP->isKernel()));
@@ -330,7 +334,7 @@ InstructionTracesAnalysis::Result InstructionTracesAnalysis::run(
       return Result{nullptr};
     }
 
-    LLVM_DEBUG(llvm::dbgs()
+    LLVM_DEBUG(luthier::dbgs()
                    << "[InstructionTraces] Analysis complete for "
                    << TargetMF.getName() << ": Found "
                    << OutOrErr->get()->traces_size() << " traces, "

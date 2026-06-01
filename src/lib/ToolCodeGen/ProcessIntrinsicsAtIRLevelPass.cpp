@@ -20,6 +20,7 @@
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/Intrinsic/IntrinsicProcessor.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include "luthier/ToolCodeGen/IntrinsicProcessorsAnalysis.h"
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
@@ -140,8 +141,8 @@ void appendPlaceholderNamedMDEntry(
 llvm::PreservedAnalyses luthier::ProcessIntrinsicsAtIRLevelPass::run(
     llvm::Module &IModule, llvm::ModuleAnalysisManager &IMAM) {
 
-  LLVM_DEBUG(llvm::dbgs() << "=== ProcessIntrinsicsAtIRLevelPass: module '"
-                          << IModule.getName() << "' ===\n");
+  LLVM_DEBUG(luthier::dbgs() << "=== ProcessIntrinsicsAtIRLevelPass: module '"
+                             << IModule.getName() << "' ===\n");
 
   const auto &IntrinsicsProcessors =
       IMAM.getResult<IntrinsicsProcessorsAnalysis>(IModule);
@@ -170,8 +171,8 @@ llvm::PreservedAnalyses luthier::ProcessIntrinsicsAtIRLevelPass::run(
       }
 
       LLVM_DEBUG({
-        llvm::dbgs() << "\n--- Intrinsic '" << IntrinsicName << "' ("
-                     << F.getNumUses() << " use(s)) ---\n";
+        luthier::dbgs() << "\n--- Intrinsic '" << IntrinsicName << "' ("
+                        << F.getNumUses() << " use(s)) ---\n";
       });
 
       // Iterate over all users of the intrinsic
@@ -190,10 +191,10 @@ llvm::PreservedAnalyses luthier::ProcessIntrinsicsAtIRLevelPass::run(
         }
 
         LLVM_DEBUG({
-          llvm::dbgs() << "  Call site in '"
-                       << CallInst->getFunction()->getName() << "': ";
-          CallInst->print(llvm::dbgs());
-          llvm::dbgs() << "\n";
+          luthier::dbgs() << "  Call site in '"
+                          << CallInst->getFunction()->getName() << "': ";
+          CallInst->print(luthier::dbgs());
+          luthier::dbgs() << "\n";
         });
 
         // Call the IR processor of the intrinsic on the user
@@ -267,12 +268,12 @@ llvm::PreservedAnalyses luthier::ProcessIntrinsicsAtIRLevelPass::run(
         InlineAsmPlaceholderCall->setDebugLoc(CallInst->getDebugLoc());
 
         LLVM_DEBUG({
-          llvm::dbgs() << "  Placeholder key: '" << Key << "'";
+          luthier::dbgs() << "  Placeholder key: '" << Key << "'";
           if (!AuxOperands.empty())
-            llvm::dbgs() << " (" << AuxOperands.size() << " aux value(s))";
-          llvm::dbgs() << "\n  Placeholder: ";
-          InlineAsmPlaceholderCall->print(llvm::dbgs());
-          llvm::dbgs() << "\n";
+            luthier::dbgs() << " (" << AuxOperands.size() << " aux value(s))";
+          luthier::dbgs() << "\n  Placeholder: ";
+          InlineAsmPlaceholderCall->print(luthier::dbgs());
+          luthier::dbgs() << "\n";
         });
 
         CallInst->eraseFromParent();

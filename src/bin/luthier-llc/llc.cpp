@@ -13,6 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "NewPMDriver.h"
+#include "luthier/Common/Debug.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGenTesting/LuthierFile.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -372,6 +374,8 @@ static std::unique_ptr<ToolOutputFile> GetOutputStream(Triple::OSType OS) {
 //
 int main(int argc, char **argv) {
   InitLLVM X(argc, argv);
+ auto FinalizeLuthierStreams =
+      llvm::scope_exit([] { luthier::finalizeStreams(); });
 
   // Enable debug stream buffering.
   EnableDebugBuffering = true;
@@ -419,6 +423,7 @@ int main(int argc, char **argv) {
   // Register the target printer for --version.
   cl::AddExtraVersionPrinter(TargetRegistry::printRegisteredTargetsForVersion);
 
+  luthier::registerDebugCLOptions();
   cl::ParseCommandLineOptions(argc, argv, "llvm system compiler\n");
 
   if (!PassPipeline.empty() && !getRunPassNames().empty()) {

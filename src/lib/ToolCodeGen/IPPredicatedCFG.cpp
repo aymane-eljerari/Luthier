@@ -43,7 +43,7 @@ void IPPredicatedCFG::print(llvm::raw_ostream &OS) const {
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-void IPPredicatedCFG::dump() const { print(llvm::dbgs()); }
+void IPPredicatedCFG::dump() const { print(luthier::dbgs()); }
 #endif
 
 PredicatedMachineBasicBlock &

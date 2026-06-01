@@ -103,19 +103,20 @@ bool InjectedPayloadPEIPass::runOnMachineFunction(llvm::MachineFunction &MF) {
   // custom SVA setup.
   const llvm::Function &F = MF.getFunction();
   if (!F.hasFnAttribute(InjectedPayloadAttribute)) {
-    LLVM_DEBUG(llvm::dbgs() << F.getName()
-                            << " is not an injected payload; skipping.\n");
+    LLVM_DEBUG(luthier::dbgs()
+               << F.getName() << " is not an injected payload; skipping.\n");
     return false;
   }
 
   // Defensive: payloads MUST be marked Naked. If somebody bypassed
   // InjectedPayloadCreationPass::assignToInject and forgot the attribute,
   // stock PEI already ran and emitted a frame we'd be doubling up on.
-  assert(F.hasFnAttribute(llvm::Attribute::Naked) &&
-         "Injected payload must carry Attribute::Naked so stock PEI is a no-op");
+  assert(
+      F.hasFnAttribute(llvm::Attribute::Naked) &&
+      "Injected payload must carry Attribute::Naked so stock PEI is a no-op");
 
-  LLVM_DEBUG(llvm::dbgs() << "Running InjectedPayloadPEIPass on " << F.getName()
-                          << "\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "Running InjectedPayloadPEIPass on " << F.getName() << "\n");
 
   llvm::LLVMContext &Ctx = F.getContext();
   const auto &ST = MF.getSubtarget<llvm::GCNSubtarget>();
@@ -136,8 +137,9 @@ bool InjectedPayloadPEIPass::runOnMachineFunction(llvm::MachineFunction &MF) {
     return false;
   }
   if (!IPIP->contains(F)) {
-    LLVM_DEBUG(llvm::dbgs() << F.getName()
-                            << " has no recorded insertion point; skipping.\n");
+    LLVM_DEBUG(luthier::dbgs()
+               << F.getName()
+               << " has no recorded insertion point; skipping.\n");
     return false;
   }
   const llvm::MachineInstr *TargetMI = IPIP->at(F);
@@ -200,32 +202,34 @@ bool InjectedPayloadPEIPass::runOnMachineFunction(llvm::MachineFunction &MF) {
 
   bool UsesSVA = false;
   if (SVAVGPR && MRI.isPhysRegUsed(SVAVGPR)) {
-    LLVM_DEBUG(llvm::dbgs() << "  SVA VGPR " << llvm::printReg(SVAVGPR, ST.getRegisterInfo())
-                            << " is used\n");
+    LLVM_DEBUG(luthier::dbgs()
+               << "  SVA VGPR " << llvm::printReg(SVAVGPR, ST.getRegisterInfo())
+               << " is used\n");
     UsesSVA = true;
   }
   if (!UsesSVA) {
     for (const auto &[PhysReg, _] : FrameSpillSlots) {
       if (MRI.isPhysRegUsed(PhysReg)) {
-        LLVM_DEBUG(llvm::dbgs() << "  frame reg "
-                                << llvm::printReg(PhysReg, ST.getRegisterInfo())
-                                << " is used\n");
+        LLVM_DEBUG(luthier::dbgs()
+                   << "  frame reg "
+                   << llvm::printReg(PhysReg, ST.getRegisterInfo())
+                   << " is used\n");
         UsesSVA = true;
         break;
       }
     }
   }
   if (!UsesSVA && MFI.hasStackObjects()) {
-    LLVM_DEBUG(llvm::dbgs() << "  MFI has stack objects\n");
+    LLVM_DEBUG(luthier::dbgs() << "  MFI has stack objects\n");
     UsesSVA = true;
   }
   if (!UsesSVA && MFI.hasCalls()) {
-    LLVM_DEBUG(llvm::dbgs() << "  MFI has calls\n");
+    LLVM_DEBUG(luthier::dbgs() << "  MFI has calls\n");
     UsesSVA = true;
   }
   if (!UsesSVA) {
-    LLVM_DEBUG(llvm::dbgs() << F.getName()
-                            << " doesn't use the SVA; skipping PEI.\n");
+    LLVM_DEBUG(luthier::dbgs()
+               << F.getName() << " doesn't use the SVA; skipping PEI.\n");
     return false;
   }
 
@@ -333,8 +337,9 @@ bool InjectedPayloadPEIPass::runOnMachineFunction(llvm::MachineFunction &MF) {
   }
 
   LLVM_DEBUG({
-    llvm::dbgs() << "After InjectedPayloadPEIPass on " << F.getName() << ":\n";
-    MF.print(llvm::dbgs());
+    luthier::dbgs() << "After InjectedPayloadPEIPass on " << F.getName()
+                    << ":\n";
+    MF.print(luthier::dbgs());
   });
   return true;
 }

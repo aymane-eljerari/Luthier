@@ -36,6 +36,7 @@
 // #include "luthier/ToolCodeGen/IntrinsicMIRLoweringPass.h"
 // #include "luthier/ToolCodeGen/IntrinsicProcessorsAnalysis.h"
 // #include "luthier/ToolCodeGen/ProcessIntrinsicsAtIRLevelPass.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/WrapperAnalysisPasses.h"
 #include "luthier/ToolCodeGenTesting/LuthierFile.h"
 #include <AMDGPU.h>
@@ -44,8 +45,8 @@
 #include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/Analysis/RuntimeLibcallInfo.h>
 #include <llvm/CodeGen/MIRParser/MIRParser.h>
-#include <llvm/CodeGen/MachineFunctionAnalysis.h>
 #include <llvm/CodeGen/MIRPrinter.h>
+#include <llvm/CodeGen/MachineFunctionAnalysis.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/MachinePassManager.h>
 #include <llvm/CodeGen/Passes.h>
@@ -441,8 +442,8 @@ InstrumentationPMDriver::run(llvm::Module &TargetAppM,
     if (MustRunIRPipeline)
       IRStagePA = IMPM.run(*IModule, IMAM);
 
-    LLVM_DEBUG(llvm::dbgs() << "Instrumentation Module after IR pipeline:\n";
-               IModule->print(llvm::dbgs(), nullptr));
+    LLVM_DEBUG(luthier::dbgs() << "Instrumentation Module after IR pipeline:\n";
+               IModule->print(luthier::dbgs(), nullptr));
   }
 
   /// MIR / codegen pipeline
