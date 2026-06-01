@@ -19,6 +19,7 @@
 #include "luthier/ToolCodeGen/IPPredicatedLivenessIModulePass.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/IPPredicatedCFG.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAccessedRegsAnalysis.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
@@ -29,9 +30,9 @@
 #include <GCNSubtarget.h>
 #include <SIInstrInfo.h>
 #include <SIRegisterInfo.h>
+#include <algorithm>
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/ADT/SmallVector.h>
-#include <algorithm>
 #include <llvm/CodeGen/LivePhysRegs.h>
 #include <llvm/CodeGen/MachineFunction.h>
 #include <llvm/CodeGen/MachineInstr.h>
@@ -370,7 +371,7 @@ void IModuleIPPredicatedLivenessAnalysis::getAnalysisUsage(
 }
 
 bool IModuleIPPredicatedLivenessAnalysis::runOnModule(llvm::Module &IModule) {
-  LLVM_DEBUG(llvm::dbgs() << "=== " << getPassName() << " ===\n");
+  LLVM_DEBUG(luthier::dbgs() << "=== " << getPassName() << " ===\n");
 
   LiveSetsByPayload.clear();
   LiveInsByPMBB.clear();
@@ -404,8 +405,8 @@ bool IModuleIPPredicatedLivenessAnalysis::runOnModule(llvm::Module &IModule) {
     }
   }
   ResultFullyDiscovered = IsFullyDiscovered;
-  LLVM_DEBUG(llvm::dbgs() << "  IsFullyDiscovered=" << IsFullyDiscovered
-                          << "\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "  IsFullyDiscovered=" << IsFullyDiscovered << "\n");
 
   if (CFG.empty())
     return false;
@@ -488,7 +489,7 @@ bool IModuleIPPredicatedLivenessAnalysis::runOnModule(llvm::Module &IModule) {
   while (AnyChange) {
     AnyChange = false;
     ++Iter;
-    LLVM_DEBUG(llvm::dbgs() << "  iter " << Iter << "\n");
+    LLVM_DEBUG(luthier::dbgs() << "  iter " << Iter << "\n");
     for (PredicatedMachineBasicBlock *PMBB : POOrder) {
       llvm::DenseSet<llvm::MCPhysReg> OutA, OutI;
       computeLiveOut(PMBB, OutA, OutI);
@@ -542,8 +543,8 @@ bool IModuleIPPredicatedLivenessAnalysis::runOnModule(llvm::Module &IModule) {
 
   LLVM_DEBUG({
     for (const auto &[Fn, Sets] : LiveSetsByPayload) {
-      llvm::dbgs() << "  payload " << Fn->getName()
-                   << " active=" << Sets.Active.size()
+      luthier::dbgs() << "  payload " << Fn->getName()
+                      << " active=" << Sets.Active.size()
                    << " inactive=" << Sets.Inactive.size() << "\n";
     }
   });

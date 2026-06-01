@@ -17,6 +17,8 @@
 /// Implements the \c MarkAnnotationsPass class.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolIRCompilation/MarkAnnotationsPass.h"
+
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include <llvm/Analysis/ValueTracking.h>
 #include <llvm/IR/Constants.h>
@@ -65,16 +67,15 @@ MarkAnnotationsPass::run(llvm::Module &M, llvm::ModuleAnalysisManager &) {
       // internal-linkage device functions.
       if (Content == IntrinsicAttribute) {
         F->addFnAttr(IntrinsicAttribute);
-        LLVM_DEBUG(llvm::dbgs()
+        LLVM_DEBUG(luthier::dbgs()
                    << "Marked intrinsic " << F->getName() << ".\n");
       } else if (Content == LUTHIER_STRINGIFY(LUTHIER_HOOK_ATTRIBUTE)) {
         F->addFnAttr(LUTHIER_STRINGIFY(LUTHIER_HOOK_ATTRIBUTE));
         HooksToPreserve.push_back(F);
-        LLVM_DEBUG(llvm::dbgs()
-                   << "Marked hook " << F->getName() << ".\n");
+        LLVM_DEBUG(luthier::dbgs() << "Marked hook " << F->getName() << ".\n");
       } else if (Content == InjectedPayloadAttribute) {
         F->addFnAttr(InjectedPayloadAttribute);
-        LLVM_DEBUG(llvm::dbgs()
+        LLVM_DEBUG(luthier::dbgs()
                    << "Marked injected payload " << F->getName() << ".\n");
       }
     }

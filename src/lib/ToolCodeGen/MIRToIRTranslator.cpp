@@ -20,6 +20,7 @@
 #include "luthier/ToolCodeGen/MIRToIRTranslator.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/MIInlineAsmEmitter.h"
 #include "luthier/ToolCodeGen/MIRConvenience.h"
 #include "luthier/ToolCodeGen/Metadata.h"
@@ -256,10 +257,10 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
   const unsigned WStart = std::get<1>(WrittenRegKey);
   const unsigned WNumHalves = std::get<2>(WrittenRegKey);
   const unsigned WEnd = WStart + WNumHalves;
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] invalidateOverlaps: "
-                          << "base=" << TRI.getName(BaseReg)
-                          << " offset=" << WStart << " halves=" << WNumHalves
-                          << " end=" << WEnd << "\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] invalidateOverlaps: "
+             << "base=" << TRI.getName(BaseReg) << " offset=" << WStart
+             << " halves=" << WNumHalves << " end=" << WEnd << "\n");
 
   struct Preserve {
     uint32_t Offset;
@@ -288,7 +289,7 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
     /// Stored ⊂ Written: fully covered, drop it.
     if (SStart >= WStart && SEnd <= WEnd) {
       LLVM_DEBUG(
-          llvm::dbgs()
+          luthier::dbgs()
           << "  Fully covered (Stored ⊂ Written), erasing stored key: base="
           << TRI.getName(std::get<0>(StoredKey)) << " offset=" << SStart
           << " halves=" << SNumHalves << "\n");
@@ -300,7 +301,7 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
     /// the non-overlapping regions as the largest uniform chunk size that
     /// divides both regions, so a later read can re-compose.
     if (SStart <= WStart && SEnd >= WEnd) {
-      LLVM_DEBUG(llvm::dbgs()
+      LLVM_DEBUG(luthier::dbgs()
                  << "  Partial overwrite (written ⊂ stored), preserving "
                     "non-overlapping parts of stored key: base="
                  << TRI.getName(std::get<0>(StoredKey)) << " offset=" << SStart
@@ -328,8 +329,9 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
         for (uint32_t CI = 0; CI < NumChunks; ++CI) {
           uint32_t AbsOffset = RegionStart + CI * OptHalves;
           uint32_t SrcIdx = (AbsOffset - SStart) / OptHalves;
-          LLVM_DEBUG(llvm::dbgs() << "  Preserving " << OptHalves
-                                  << " halves at offset " << AbsOffset << "\n");
+          LLVM_DEBUG(luthier::dbgs()
+                     << "  Preserving " << OptHalves << " halves at offset "
+                     << AbsOffset << "\n");
           llvm::Value *Elem = Builder.CreateExtractElement(Vec, SrcIdx);
           ToPreserve.push_back({AbsOffset, OptHalves, Elem});
         }
@@ -341,25 +343,28 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
       ToErase.push_back(StoredKey);
       continue;
     }
-    LLVM_DEBUG(llvm::dbgs() << "  Partial overlap, erasing stored key: base="
-                            << TRI.getName(std::get<0>(StoredKey)) << " offset="
-                            << SStart << " halves=" << SNumHalves << "\n");
+    LLVM_DEBUG(luthier::dbgs()
+               << "  Partial overlap, erasing stored key: base="
+               << TRI.getName(std::get<0>(StoredKey)) << " offset=" << SStart
+               << " halves=" << SNumHalves << "\n");
     ToErase.push_back(StoredKey);
   }
 
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] invalidateOverlaps: Erasing "
-                          << ToErase.size() << " entries, preserving "
-                          << ToPreserve.size() << " partial entries\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] invalidateOverlaps: Erasing "
+             << ToErase.size() << " entries, preserving " << ToPreserve.size()
+             << " partial entries\n");
 
   for (auto &K : ToErase) {
-    LLVM_DEBUG(llvm::dbgs()
+    LLVM_DEBUG(luthier::dbgs()
                << "  Deleting entry: [" << TRI.getName(std::get<0>(K)) << ", "
                << std::get<1>(K) << ", " << std::get<2>(K) << "]\n");
     State.erase(K);
   }
   for (const Preserve &P : ToPreserve) {
-    LLVM_DEBUG(llvm::dbgs() << "  Restoring preserved entry at offset "
-                            << P.Offset << ", halves: " << P.NumHalves << "\n");
+    LLVM_DEBUG(luthier::dbgs()
+               << "  Restoring preserved entry at offset " << P.Offset
+               << ", halves: " << P.NumHalves << "\n");
     State[std::make_tuple(BaseReg, P.Offset, P.NumHalves)][P.Val->getType()] =
         P.Val;
   }
@@ -368,12 +373,12 @@ void MIRToIRTranslator::invalidateOverlaps(RegValueMap &State,
 llvm::Value *MIRToIRTranslator::extractChunkFromSource(
     RegValueMap &State, const RegFileKey &RegKey, unsigned VecChunkSize,
     unsigned Idx, unsigned NumChunks, llvm::IRBuilderBase &Builder) {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] extractChunkFromSource: "
-                             "base="
-                          << TRI.getName(std::get<0>(RegKey))
-                          << " offset=" << std::get<1>(RegKey) << " Idx=" << Idx
-                          << " NumChunks=" << NumChunks
-                          << " chunkSize=" << VecChunkSize << "\n";);
+  LLVM_DEBUG(luthier::dbgs() << "[MIRToIRTranslator] extractChunkFromSource: "
+                                "base="
+                             << TRI.getName(std::get<0>(RegKey))
+                             << " offset=" << std::get<1>(RegKey)
+                             << " Idx=" << Idx << " NumChunks=" << NumChunks
+                             << " chunkSize=" << VecChunkSize << "\n";);
   auto &RegValueMap = State[RegKey];
   const unsigned KeyTotalWidth = std::get<2>(RegKey) * RegGranule;
   unsigned VecChunkRegGranMul = VecChunkSize / RegGranule;
@@ -437,8 +442,8 @@ llvm::Value *MIRToIRTranslator::materializeFromOverlapping(
     RegValueMap &State, const llvm::MachineBasicBlock &MBB,
     const RegFileKey &ReadKeyReg, llvm::IRBuilderBase &Builder,
     llvm::Type &RegType) {
-  LLVM_DEBUG(
-      llvm::dbgs() << "[MIRToIRTranslator] materializeFromOverlapping\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] materializeFromOverlapping\n");
 
   llvm::MCRegister BaseReg = std::get<0>(ReadKeyReg);
   const uint32_t RStart = std::get<1>(ReadKeyReg);
@@ -620,10 +625,10 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineBasicBlock &MBB,
   llvm::StringRef RegName = TRI.getName(Reg);
   std::string RegValName = getRegValueName(Reg);
 
-  LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
-                 "[MIRToIRTranslator] Materializing register {0} "
-                 "in MBB {1}\n",
-                 RegName, MBB.getNumber()));
+  LLVM_DEBUG(luthier::dbgs()
+             << llvm::formatv("[MIRToIRTranslator] Materializing register {0} "
+                              "in MBB {1}\n",
+                              RegName, MBB.getNumber()));
   (void)RegName;
 
   auto *BB = const_cast<llvm::BasicBlock *>(MBB.getBasicBlock());
@@ -636,7 +641,7 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineBasicBlock &MBB,
               llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
                 annotateUniformIfNeeded(I, TRI, Reg);
                 LLVM_DEBUG(
-                    llvm::dbgs()
+                    luthier::dbgs()
                     << "[MIRToIRTranslator] Inserting reg read instruction "
                     << *I << "\n");
               }});
@@ -648,11 +653,10 @@ MIRToIRTranslator::getOperandAsValue(const llvm::MachineBasicBlock &MBB,
 llvm::Value &MIRToIRTranslator::getOperandAsValue(
     const llvm::MachineBasicBlock &MBB, const RegFileKey &Key,
     llvm::IRBuilderBase &Builder, llvm::Type *OutRegType) {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] getOperandAsValue: MBB "
-                          << MBB.getNumber()
-                          << " base=" << TRI.getName(std::get<0>(Key))
-                          << " offset=" << std::get<1>(Key)
-                          << " halves=" << std::get<2>(Key) << "\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] getOperandAsValue: MBB " << MBB.getNumber()
+             << " base=" << TRI.getName(std::get<0>(Key)) << " offset="
+             << std::get<1>(Key) << " halves=" << std::get<2>(Key) << "\n");
   RegValueMap &State = VM[MBB];
   /// ---- Bounds check -------------------------------------------------
   /// Out-of-range access returns the file's base register value (s0/v0/
@@ -700,8 +704,8 @@ llvm::Value &MIRToIRTranslator::getOperandAsValue(
 static llvm::Value *buildInitialModeValue(const llvm::Function &F,
                                           const llvm::GCNSubtarget &ST,
                                           llvm::IRBuilderBase &Builder) {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Building initial MODE "
-                             "register value\n");
+  LLVM_DEBUG(luthier::dbgs() << "[MIRToIRTranslator] Building initial MODE "
+                                "register value\n");
   llvm::SIModeRegisterDefaults Defaults(F, ST);
 
   uint32_t Mode = 0;
@@ -761,9 +765,9 @@ static llvm::Value *buildInitialModeValue(const llvm::Function &F,
 }
 
 void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Initializing kernel entry "
-                             "registers for '"
-                          << MF.getName() << "'\n");
+  LLVM_DEBUG(luthier::dbgs() << "[MIRToIRTranslator] Initializing kernel entry "
+                                "registers for '"
+                             << MF.getName() << "'\n");
   const auto &Info = *MF.getInfo<llvm::SIMachineFunctionInfo>();
 
   using PV = llvm::AMDGPUFunctionArgInfo::PreloadedValue;
@@ -901,8 +905,8 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
         Builder.getPtrTy(4), llvm::Intrinsic::amdgcn_kernarg_segment_ptr, {},
         nullptr);
     for (unsigned I = 0; I < PreloadLen; ++I) {
-      llvm::Value *Slot = Builder.CreateConstInBoundsGEP1_64(
-          I32, KernargPtr, OffsetDwords + I);
+      llvm::Value *Slot =
+          Builder.CreateConstInBoundsGEP1_64(I32, KernargPtr, OffsetDwords + I);
       auto *Load = Builder.CreateAlignedLoad(I32, Slot, llvm::Align(4));
       // Kernarg memory is constant for the kernel's lifetime.
       Load->setMetadata(llvm::LLVMContext::MD_invariant_load,
@@ -935,9 +939,10 @@ void MIRToIRTranslator::initKernelEntryRegs(llvm::IRBuilderBase &Builder) {
   if (ST.hasArchitectedSGPRs()) {
     llvm::Type *I32 = Builder.getInt32Ty();
     if (Info.hasWorkGroupIDX())
-      seedRegValue(MF.front(), llvm::AMDGPU::TTMP9,
-                   Builder.CreateIntrinsic(
-                       I32, llvm::Intrinsic::amdgcn_workgroup_id_x, {}, nullptr));
+      seedRegValue(
+          MF.front(), llvm::AMDGPU::TTMP9,
+          Builder.CreateIntrinsic(I32, llvm::Intrinsic::amdgcn_workgroup_id_x,
+                                  {}, nullptr));
     llvm::Value *Ttmp7 = nullptr;
     const bool HasZ = Info.hasWorkGroupIDZ();
     if (Info.hasWorkGroupIDY()) {
@@ -1014,9 +1019,9 @@ MIRToIRTranslator::MIRToIRTranslator(llvm::MachineFunction &MF,
     : MF(MF), TRI(*MF.getSubtarget<llvm::GCNSubtarget>().getRegisterInfo()),
       TII(*MF.getSubtarget<llvm::GCNSubtarget>().getInstrInfo()),
       ST(MF.getSubtarget<llvm::GCNSubtarget>()) {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Creating translator for '"
-                          << MF.getName() << "' with " << MF.size()
-                          << " MBBs\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] Creating translator for '" << MF.getName()
+             << "' with " << MF.size() << " MBBs\n");
   llvm::ErrorAsOutParameter EAO(Err);
   for (const llvm::MachineBasicBlock &MBB : MF)
     VM.try_emplace(std::ref(MBB));
@@ -1060,9 +1065,10 @@ unsigned MIRToIRTranslator::getPhysRegisterSize(llvm::MCRegister Reg) const {
 }
 
 llvm::Error MIRToIRTranslator::initRegFileLayouts() {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Initializing register file "
-                             "layouts for '"
-                          << MF.getName() << "'\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] Initializing register file "
+                "layouts for '"
+             << MF.getName() << "'\n");
   const llvm::Function &F = MF.getFunction();
   const auto &ST = MF.getSubtarget<llvm::GCNSubtarget>();
 
@@ -1110,8 +1116,8 @@ llvm::Error MIRToIRTranslator::initRegFileLayouts() {
 
 MIRToIRTranslator::RegFileKey
 MIRToIRTranslator::getRegFileKey(llvm::MCRegister Reg) const {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] getRegFileKey for reg "
-                          << TRI.getName(Reg) << "\n");
+  LLVM_DEBUG(luthier::dbgs() << "[MIRToIRTranslator] getRegFileKey for reg "
+                             << TRI.getName(Reg) << "\n");
   llvm::MCRegister MCReg = getPhysReg(Reg);
   if (MCReg == llvm::AMDGPU::MODE)
     return std::make_tuple(Reg, 0, 2);
@@ -1192,9 +1198,9 @@ MIRToIRTranslator::getRegFileKey(llvm::MCRegister Reg) const {
   unsigned RegSizeBits = getPhysRegisterSize(Reg);
 
   auto Key = std::make_tuple(BaseReg, Offset, RegSizeBits / RegGranule);
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] -> Key: base="
-                          << TRI.getName(BaseReg) << " offset=" << Offset
-                          << " halves=" << std::get<2>(Key) << "\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] -> Key: base=" << TRI.getName(BaseReg)
+             << " offset=" << Offset << " halves=" << std::get<2>(Key) << "\n");
   return Key;
 }
 
@@ -1224,9 +1230,9 @@ std::string MIRToIRTranslator::getRegfileValueName(llvm::MCRegister BaseReg) {
 llvm::Value *MIRToIRTranslator::getRegisterFile(
     const llvm::MachineBasicBlock &MBB, llvm::MCRegister Reg,
     llvm::IRBuilderBase &Builder, llvm::Type *LaneTy) {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] getRegisterFile: MBB "
-                          << MBB.getNumber() << " reg=" << TRI.getName(Reg)
-                          << "\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] getRegisterFile: MBB " << MBB.getNumber()
+             << " reg=" << TRI.getName(Reg) << "\n");
   /// Always materialize the FULL register file (offset=0..total) under a
   /// single canonical key, then return a shufflevector of just the
   /// requested slice. Earlier versions materialized each slice under its
@@ -1288,7 +1294,7 @@ llvm::Value *MIRToIRTranslator::getRegisterFile(const llvm::MachineInstr &MI,
               llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
                 annotateUniformIfNeeded(I, TRI, Register);
                 LLVM_DEBUG(
-                    llvm::dbgs()
+                    luthier::dbgs()
                     << "[MIRToIRTranslator] Inserting read reg instruction "
                     << *I << "\n");
               }});
@@ -1314,7 +1320,7 @@ void MIRToIRTranslator::setRegisterFile(const llvm::MachineInstr &MI,
               llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
                 annotateUniformIfNeeded(I, TRI, Reg);
                 LLVM_DEBUG(
-                    llvm::dbgs()
+                    luthier::dbgs()
                     << "[MIRToIRTranslator] Inserting read reg instruction "
                     << *I << "\n");
               }});
@@ -1385,9 +1391,9 @@ void MIRToIRTranslator::setRegisterFile(const llvm::MachineBasicBlock &MBB,
 }
 
 llvm::FunctionType *MIRToIRTranslator::getStandardDeviceFunctionType() const {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Getting standard device "
-                             "function type for '"
-                          << MF.getName() << "'\n");
+  LLVM_DEBUG(luthier::dbgs() << "[MIRToIRTranslator] Getting standard device "
+                                "function type for '"
+                             << MF.getName() << "'\n");
   const llvm::Function &F = MF.getFunction();
   if (F.getCallingConv() != llvm::CallingConv::AMDGPU_KERNEL)
     return F.getFunctionType();
@@ -1427,17 +1433,18 @@ MIRToIRTranslator::computeStandardDeviceFunctionType(
   llvm::FunctionType *FuncTy = llvm::FunctionType::get(
       llvm::Type::getVoidTy(Ctx), Fields, /*isVarArg=*/false);
 
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] device function type: "
-                          << *FuncTy << "\n");
+  LLVM_DEBUG(luthier::dbgs() << "[MIRToIRTranslator] device function type: "
+                             << *FuncTy << "\n");
   return FuncTy;
 }
 
 void MIRToIRTranslator::initDeviceFunctionEntryRegs(
     llvm::IRBuilderBase &Builder) {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Initializing device function "
-                             "entry registers for '"
-                          << MF.getName() << "' with "
-                          << MF.getFunction().arg_size() << " arguments\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] Initializing device function "
+                "entry registers for '"
+             << MF.getName() << "' with " << MF.getFunction().arg_size()
+             << " arguments\n");
   llvm::Function &F = const_cast<llvm::Function &>(MF.getFunction());
 
   const llvm::MachineBasicBlock &EntryMBB = MF.front();
@@ -1487,15 +1494,15 @@ void MIRToIRTranslator::emitIndirectTailCall(const llvm::MachineInstr &MI,
     // CodeDiscoveryPass couldn't resolve the call target (e.g. S_CALL_B64
     // with an unresolved address). Skip emission rather than crash — the
     // MIR still records the call site for downstream analysis.
-    LLVM_DEBUG(llvm::dbgs()
+    LLVM_DEBUG(luthier::dbgs()
                << "[MIRToIRTranslator] Skipping call emission in MBB "
                << MI.getParent()->getNumber() << ": target is nullptr\n");
     return;
   }
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Emitting indirect tail call "
-                             "in MBB "
-                          << MI.getParent()->getNumber()
-                          << " target=" << *Target << "\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] Emitting indirect tail call "
+                "in MBB "
+             << MI.getParent()->getNumber() << " target=" << *Target << "\n");
   const llvm::MachineBasicBlock *MBB = MI.getParent();
   assert(MBB && "MI has no parent MBB");
 
@@ -1667,7 +1674,7 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
               llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
                 annotateUniformIfNeeded(I, TRI, Reg);
                 LLVM_DEBUG(
-                    llvm::dbgs()
+                    luthier::dbgs()
                     << "[MIRToIRTranslator] Inserting reg write instruction "
                     << *I << "\n");
               }});
@@ -1687,7 +1694,7 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineInstr &MI,
          "Value type's size is not the same as the type of the register");
   (void)RegSize;
 
-  LLVM_DEBUG(llvm::dbgs() << llvm::formatv(
+  LLVM_DEBUG(luthier::dbgs() << llvm::formatv(
                  "[MIRToIRTranslator] Setting register {0} to value {3} for "
                  "MBB {1} (type: {2})\n",
                  TRI.getName(Reg), MBB->getNumber(),
@@ -1710,12 +1717,11 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineBasicBlock &MBB,
                                            const RegFileKey &Key,
                                            llvm::IRBuilderBase &Builder,
                                            llvm::Value *Val) {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] setRegOperandValue: MBB "
-                          << MBB.getNumber()
-                          << " base=" << TRI.getName(std::get<0>(Key))
-                          << " offset=" << std::get<1>(Key)
-                          << " halves=" << std::get<2>(Key) << " val=" << *Val
-                          << " (type=" << *Val->getType() << ")\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] setRegOperandValue: MBB "
+             << MBB.getNumber() << " base=" << TRI.getName(std::get<0>(Key))
+             << " offset=" << std::get<1>(Key) << " halves=" << std::get<2>(Key)
+             << " val=" << *Val << " (type=" << *Val->getType() << ")\n");
   RegValueMap &State = VM[MBB];
   llvm::MCRegister BaseReg = std::get<0>(Key);
   unsigned Offset = std::get<1>(Key);
@@ -1726,7 +1732,7 @@ void MIRToIRTranslator::setRegOperandValue(const llvm::MachineBasicBlock &MBB,
   /// check and are always written through.
   unsigned Allocated = RegFileSize.at(BaseReg);
   if (Offset + Size > Allocated) {
-    LLVM_DEBUG(llvm::dbgs()
+    LLVM_DEBUG(luthier::dbgs()
                << "[MIRToIRTranslator] Dropping out-of-range write to "
                << " (offset=" << Offset << " halves=" << Size
                << " allocated=" << Allocated << ")\n");
@@ -1829,8 +1835,8 @@ MIRToIRTranslator::getOrdering(const llvm::Value * /*CPolVal*/) const {
 }
 
 void MIRToIRTranslator::fixupPhis() {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Fixing up "
-                          << ToBeFixedPhis.size() << " PHI nodes\n");
+  LLVM_DEBUG(luthier::dbgs() << "[MIRToIRTranslator] Fixing up "
+                             << ToBeFixedPhis.size() << " PHI nodes\n");
   llvm::SmallVector<llvm::PHINode *> SingleValuePhis{};
 
   /// Resolving a per-register PHI may cause \c materializeReg on a
@@ -1856,7 +1862,7 @@ void MIRToIRTranslator::fixupPhis() {
                         I->setMetadata("amdgpu.uniform",
                                        llvm::MDNode::get(I->getContext(), {}));
                       LLVM_DEBUG(
-                          llvm::dbgs()
+                          luthier::dbgs()
                           << "[MIRToIRTranslator] Inserting instruction to "
                              "resolve phi: "
                           << *I << "\n");
@@ -1892,14 +1898,15 @@ void MIRToIRTranslator::fixupPhis() {
 
 void MIRToIRTranslator::raiseMachineInstr(const llvm::MachineInstr &MI,
                                           llvm::IRBuilderBase &Builder) {
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] raiseMachineInstr: " << MI);
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] raiseMachineInstr: " << MI);
 
   switch (MI.getOpcode()) {
 
 #include "SIInstrSemantics.inc"
 
   default: {
-    LLVM_DEBUG(llvm::dbgs()
+    LLVM_DEBUG(luthier::dbgs()
                << "[MIRToIRTranslator] Unmodelled instruction " << MI << "\n");
 
     InlineAsmEmitter->emitInlineAsm(
@@ -1921,9 +1928,9 @@ void MIRToIRTranslator::translate() {
   if (MF.empty())
     return;
 
-  LLVM_DEBUG(
-      llvm::dbgs() << "[MIRToIRTranslator] Translating machine function '"
-                   << MF.getName() << "' with " << MF.size() << " MBBs\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] Translating machine function '"
+             << MF.getName() << "' with " << MF.size() << " MBBs\n");
 
   /// Delete any basic blocks already present in the IR Function
   if (!F.empty())
@@ -1950,20 +1957,20 @@ void MIRToIRTranslator::translate() {
   /// Iterate over the MBBs and raise the machine instructions in each MBB to
   /// LLVM IR
   for (llvm::MachineBasicBlock &MBB : MF) {
-    LLVM_DEBUG(llvm::dbgs()
+    LLVM_DEBUG(luthier::dbgs()
                << "[MIRToIRTranslator] Processing MBB " << MBB.getNumber()
                << " with " << MBB.size() << " instructions\n");
     auto *BB = const_cast<llvm::BasicBlock *>(MBB.getBasicBlock());
     for (llvm::MachineInstr &MI : MBB) {
-      LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Translating MI: ";
-                 MI.print(llvm::dbgs()););
+      LLVM_DEBUG(luthier::dbgs() << "[MIRToIRTranslator] Translating MI: ";
+                 MI.print(luthier::dbgs()););
       llvm::IRBuilder<llvm::InstSimplifyFolder, llvm::IRBuilderCallbackInserter>
           Builder(Ctx, llvm::InstSimplifyFolder{MF.getDataLayout()},
                   llvm::IRBuilderCallbackInserter{[&](llvm::Instruction *I) {
                     if (MI.getPCSections())
                       I->setMetadata(llvm::LLVMContext::MD_pcsections,
                                      MI.getPCSections());
-                    LLVM_DEBUG(llvm::dbgs()
+                    LLVM_DEBUG(luthier::dbgs()
                                << "[MIRToIRTranslator] Inserting translated "
                                   "instruction "
                                << *I << "\n");
@@ -1977,8 +1984,7 @@ void MIRToIRTranslator::translate() {
     bool EndsInBranch = !MBB.empty() && MBB.back().isBranch();
     if (MBB.canFallThrough() && !EndsInBranch && !BB->getTerminator()) {
       if (const llvm::MachineBasicBlock *NextMBB = MBB.getNextNode()) {
-        auto *NextBB =
-            const_cast<llvm::BasicBlock *>(NextMBB->getBasicBlock());
+        auto *NextBB = const_cast<llvm::BasicBlock *>(NextMBB->getBasicBlock());
         llvm::IRBuilder{BB}.CreateBr(NextBB);
       }
     }
@@ -2053,9 +2059,9 @@ void MIRToIRTranslator::translate() {
   /// address) are preserved verbatim
   optimizeNonTraceInsts();
 
-  LLVM_DEBUG(llvm::dbgs() << "[MIRToIRTranslator] Translation complete for '"
-                          << F.getName() << "': " << F.size()
-                          << " basic blocks\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MIRToIRTranslator] Translation complete for '" << F.getName()
+             << "': " << F.size() << " basic blocks\n");
 }
 
 void MIRToIRTranslator::emitExecPredicateCheck(

@@ -18,6 +18,8 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/HSA/SVM.h"
 #include "luthier/HSA/HsaError.h"
+#include "luthier/LLVM/streams.h"
+
 #include <hsa/hsa.h>
 #include <hsa/hsa_ext_amd.h>
 #include <llvm/Support/Debug.h>
@@ -36,7 +38,7 @@ systemIsSvmSupported(const ApiTableContainer<::CoreApiTable> &CoreApi) {
   if (S != HSA_STATUS_SUCCESS) {
     // HIP's rocclr Device::populateOCLDeviceConstants logs + treats this as
     // "HMM disabled" rather than failing. Do the same.
-    LLVM_DEBUG(llvm::dbgs() << "[luthier] hsa_system_get_info("
+    LLVM_DEBUG(luthier::dbgs() << "[luthier] hsa_system_get_info("
                                "HSA_AMD_SYSTEM_INFO_SVM_SUPPORTED) failed "
                                "with status "
                             << S << "; treating HMM as unsupported.\n");

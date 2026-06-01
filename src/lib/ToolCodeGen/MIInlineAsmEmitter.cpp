@@ -19,6 +19,7 @@
 #include "luthier/ToolCodeGen/MIInlineAsmEmitter.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/MIRToIRTranslator.h"
 #include <llvm/CodeGen/AsmPrinter.h>
 #include <llvm/CodeGen/MachineFunction.h>
@@ -97,7 +98,7 @@ void MIInlineAsmEmitter::emitInlineAsm(
   std::string AsmStr = emitAsmString(MI);
 
   LLVM_DEBUG(
-      llvm::dbgs() << "[InlineAsmEmitter] Obtained instruction asm string: "
+      luthier::dbgs() << "[InlineAsmEmitter] Obtained instruction asm string: "
                    << AsmStr << "\n");
 
   struct RegOperandInfo {
@@ -131,7 +132,7 @@ void MIInlineAsmEmitter::emitInlineAsm(
     std::string RegConstraint = '=' + GetRegConstraint(Op.getReg().asMCReg());
 
     LLVM_DEBUG(llvm::StringRef RegName = TRI.getRegAsmName(Op.getReg());
-               llvm::dbgs()
+               luthier::dbgs()
                << "[MIRToIRTranslator] Def Operand info: "
                << "Op idx: " << OpIdx << ", "
                << "Reg name: " << RegName << ", constraint: " << RegConstraint
@@ -147,7 +148,7 @@ void MIInlineAsmEmitter::emitInlineAsm(
     std::string RegConstraint = GetRegConstraint(Op.getReg().asMCReg());
 
     LLVM_DEBUG(llvm::StringRef RegName = TRI.getRegAsmName(Op.getReg());
-               llvm::dbgs()
+               luthier::dbgs()
                << "[MIRToIRTranslator] Use Operand info: "
                << "Op idx: " << OpIdx << ", "
                << "Reg name: " << RegName << ", constraint: " << RegConstraint
