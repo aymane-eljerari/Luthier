@@ -22,11 +22,7 @@
 /// Each stream is held in a \c luthier::NeverDestroyed slot, so it lives for
 /// the whole process and is never torn down by \c llvm_shutdown. This avoids
 /// the static-destruction-order fiasco under \c LD_PRELOAD (a late destructor
-/// ordered after the tool finalizer can still legally use these streams)
-/// without the post-shutdown null-dereference footgun of the older
-/// \c EagerManagedStatic approach. Streams that buffer (\c outs and a buffered
-/// \c dbgs) register an explicit flush at process exit since their destructors
-/// no longer run.
+/// ordered after the tool finalizer can still legally use these streams).
 //===----------------------------------------------------------------------===//
 #include "luthier/LLVM/streams.h"
 #include "luthier/Common/ErrorCheck.h"
