@@ -1,4 +1,4 @@
-//===-- LuthierCallGraph.cpp - Luthier IR call graph analysis -------------===//
+//===-- TraceCallGraph.cpp - Luthier IR call graph analysis ---------------===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file LuthierCallGraph.cpp
-/// Implements the \c LuthierCallGraphAnalysis module analysis.
+/// \file TraceCallGraph.cpp
+/// Implements the \c TraceCallGraphAnalysis module analysis.
 //===----------------------------------------------------------------------===//
-#include "luthier/ToolCodeGen/LuthierCallGraph.h"
+#include "luthier/ToolCodeGen/TraceCallGraph.h"
 #include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include "luthier/ToolCodeGen/TargetMachineInstrMDNode.h"
@@ -33,19 +33,19 @@
 #include <llvm/Support/Format.h>
 
 #undef DEBUG_TYPE
-#define DEBUG_TYPE "luthier-callgraph"
+#define DEBUG_TYPE "trace-callgraph"
 
 namespace luthier {
 
-bool LuthierCallGraph::invalidate(llvm::Module &,
-                                  const llvm::PreservedAnalyses &PA,
-                                  llvm::ModuleAnalysisManager::Invalidator &) {
-  auto PAC = PA.getChecker<LuthierCallGraphAnalysis>();
+bool TraceCallGraph::invalidate(llvm::Module &,
+                                const llvm::PreservedAnalyses &PA,
+                                llvm::ModuleAnalysisManager::Invalidator &) {
+  auto PAC = PA.getChecker<TraceCallGraphAnalysis>();
   return !PAC.preserved() &&
          !PAC.preservedSet<llvm::AllAnalysesOn<llvm::Module>>();
 }
 
-llvm::AnalysisKey LuthierCallGraphAnalysis::Key;
+llvm::AnalysisKey TraceCallGraphAnalysis::Key;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -132,9 +132,9 @@ static uint64_t extractAddr(llvm::Constant *C) {
 // Analysis implementation
 // ---------------------------------------------------------------------------
 
-LuthierCallGraph LuthierCallGraphAnalysis::run(llvm::Module &M,
-                                               llvm::ModuleAnalysisManager &) {
-  LuthierCallGraph Out;
+TraceCallGraph TraceCallGraphAnalysis::run(llvm::Module &M,
+                                           llvm::ModuleAnalysisManager &) {
+  TraceCallGraph Out;
   const llvm::DataLayout &DL = M.getDataLayout();
 
   // Build addr → Function* map from functions that have entry-point
@@ -205,7 +205,7 @@ LuthierCallGraph LuthierCallGraphAnalysis::run(llvm::Module &M,
           if (llvm::is_contained(Targets, Target))
             return;
           LLVM_DEBUG(luthier::dbgs()
-                     << "[LuthierCallGraph] Resolved call in " << F.getName()
+                     << "[TraceCallGraph] Resolved call in " << F.getName()
                      << " → " << Target->getName() << "\n");
           Targets.push_back(Target);
           KnownCallers[Target].emplace_back(CI, &F);
@@ -253,7 +253,7 @@ LuthierCallGraph LuthierCallGraphAnalysis::run(llvm::Module &M,
           llvm::isa<llvm::InlineAsm>(CI->getCalledOperand()))
         continue;
       if (!Out.CallTargets.contains(CI)) {
-        LLVM_DEBUG(luthier::dbgs() << "[LuthierCallGraph] Unresolved call in "
+        LLVM_DEBUG(luthier::dbgs() << "[TraceCallGraph] Unresolved call in "
                                    << F.getName() << "\n");
         Out.IncompleteCallSites.insert(CI);
         Out.FullyRecovered = false;
@@ -262,7 +262,7 @@ LuthierCallGraph LuthierCallGraphAnalysis::run(llvm::Module &M,
   }
 
   LLVM_DEBUG(luthier::dbgs()
-             << "[LuthierCallGraph] Resolved " << Out.CallTargets.size()
+             << "[TraceCallGraph] Resolved " << Out.CallTargets.size()
              << " call sites; " << Out.IncompleteCallSites.size()
              << " incomplete; fully_recovered=" << Out.FullyRecovered << "\n");
   return Out;
@@ -273,11 +273,10 @@ LuthierCallGraph LuthierCallGraphAnalysis::run(llvm::Module &M,
 // ---------------------------------------------------------------------------
 
 llvm::PreservedAnalyses
-LuthierCallGraphPrinter::run(llvm::Module &M,
-                             llvm::ModuleAnalysisManager &MAM) {
-  const LuthierCallGraph &CG = MAM.getResult<LuthierCallGraphAnalysis>(M);
+TraceCallGraphPrinter::run(llvm::Module &M, llvm::ModuleAnalysisManager &MAM) {
+  const TraceCallGraph &CG = MAM.getResult<TraceCallGraphAnalysis>(M);
 
-  OS << "LuthierCallGraph (fully_recovered="
+  OS << "TraceCallGraph (fully_recovered="
      << (CG.isFullyRecovered() ? "yes" : "no") << "):\n";
 
   OS << "  Resolved call sites (" << CG.call_targets_size() << "):\n";

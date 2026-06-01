@@ -25,12 +25,12 @@
 #include "luthier/ToolCodeGen/InitialEntryPointAnalysis.h"
 #include "luthier/ToolCodeGen/InitialExecutionPointAnalysis.h"
 #include "luthier/ToolCodeGen/InstructionTracesAnalysis.h"
-#include "luthier/ToolCodeGen/LuthierCallGraph.h"
 #include "luthier/ToolCodeGen/MIRConvenience.h"
 #include "luthier/ToolCodeGen/MIRToIRTranslator.h"
 #include "luthier/ToolCodeGen/MemoryAllocationAccessor.h"
 #include "luthier/ToolCodeGen/PseudoOpcodeAndRegMapper.h"
 #include "luthier/ToolCodeGen/TargetMachineInstrMDNode.h"
+#include "luthier/ToolCodeGen/TraceCallGraph.h"
 #include <MCTargetDesc/AMDGPUMCExpr.h>
 #include <SIMachineFunctionInfo.h>
 #include <SIRegisterInfo.h>
@@ -1670,8 +1670,8 @@ CodeDiscoveryPass::run(llvm::Module &TargetModule,
 
     /// Go over all discovered call target addresses and add them to be visited
     /// (if not visited already)
-    const LuthierCallGraph &CG =
-        TargetMAM.getResult<LuthierCallGraphAnalysis>(TargetModule);
+    const TraceCallGraph &CG =
+        TargetMAM.getResult<TraceCallGraphAnalysis>(TargetModule);
     for (uint64_t Addr : CG.discovered_addrs()) {
       LLVM_DEBUG(luthier::dbgs()
                  << "[CodeDiscoveryPass] Callgraph discovered target 0x"

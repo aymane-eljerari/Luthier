@@ -2,13 +2,13 @@
 // RUN: ld.lld -shared --unresolved-symbols=ignore-all -o %t %t.o && \
 // RUN: luthier-llc -mtriple=amdgcn-amd-amdhsa -mcpu=gfx1100 \
 // RUN:   %luthier_tool_code_gen_plugin \
-// RUN:   -passes=luthier-mock-load-amdgpu-code-objects,luthier-code-discovery,luthier-callgraph-printer \
+// RUN:   -passes=luthier-mock-load-amdgpu-code-objects,luthier-code-discovery,trace-callgraph-printer \
 // RUN:   -code-object-paths=%t \
 // RUN:   -initial-entrypoint=0:_Z6kernelv.kd \
 // RUN:   -initial-execution-point=0:_Z6kernelv.kd \
 // RUN:   -o - 2>&1 | %tee_out FileCheck %s
 
-// CHECK: LuthierCallGraph (fully_recovered=yes)
+// CHECK: TraceCallGraph (fully_recovered=yes)
 // CHECK: _Z6calleev{{x0x[0-9a-f]+}} -> [_Z3barvx0x0]
 // CHECK: Incomplete call sites (0):
 

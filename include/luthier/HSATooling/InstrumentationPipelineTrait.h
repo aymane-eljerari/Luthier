@@ -45,18 +45,18 @@
 #include "luthier/HSATooling/LoadedCodeObjectCache.h"
 #include "luthier/ToolCodeGen/CodeDiscoveryPass.h"
 #include "luthier/ToolCodeGen/EntryPoint.h"
+#include "luthier/ToolCodeGen/IPPredicatedCFG.h"
 #include "luthier/ToolCodeGen/InitialEntryPointAnalysis.h"
 #include "luthier/ToolCodeGen/InitialExecutionPointAnalysis.h"
 #include "luthier/ToolCodeGen/InstructionTracesAnalysis.h"
 #include "luthier/ToolCodeGen/InstrumentationPMDriver.h"
 #include "luthier/ToolCodeGen/InstrumentationPass.h"
-#include "luthier/ToolCodeGen/IPPredicatedCFG.h"
-#include "luthier/ToolCodeGen/LuthierCallGraph.h"
 #include "luthier/ToolCodeGen/MemoryAllocationAccessor.h"
 #include "luthier/ToolCodeGen/Metadata.h"
 #include "luthier/ToolCodeGen/MetadataParserAnalysis.h"
 #include "luthier/ToolCodeGen/NewPMAsmPrinter.h"
 #include "luthier/ToolCodeGen/PrePostAmbleEmitter.h"
+#include "luthier/ToolCodeGen/TraceCallGraph.h"
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/MachinePassManager.h>
 #include <llvm/IR/LLVMContext.h>
@@ -136,9 +136,8 @@ public:
               D.getCoreApiTableSnapshot(), D.getAmdExtTableSnapshot(),
               D.getLoaderTableSnapshot().getTable()));
     });
-    MAM.registerPass(
-        [&] { return luthier::MetadataParserAnalysis(MDParser); });
-    MAM.registerPass([] { return luthier::LuthierCallGraphAnalysis(); });
+    MAM.registerPass([&] { return luthier::MetadataParserAnalysis(MDParser); });
+    MAM.registerPass([] { return luthier::TraceCallGraphAnalysis(); });
     MAM.registerPass(
         [] { return luthier::FunctionPreambleDescriptorAnalysis(); });
     MAM.registerPass([] { return luthier::IPPredCFGAnalysis(); });
@@ -221,9 +220,8 @@ public:
         // IModule creator: a tool may override via createInstrumentationModule;
         // the default materializes the tool's embedded device-side bitcode so
         // the hooks live in the IModule.
-        [&D, ToolTriple, ToolCPU,
-         ToolFeatures](llvm::LLVMContext &IModCtx)
-            -> std::unique_ptr<llvm::Module> {
+        [&D, ToolTriple, ToolCPU, ToolFeatures](
+            llvm::LLVMContext &IModCtx) -> std::unique_ptr<llvm::Module> {
           if constexpr (requires(Derived &Tool) {
                           Tool.createInstrumentationModule(IModCtx);
                         }) {

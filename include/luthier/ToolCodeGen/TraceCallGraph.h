@@ -1,4 +1,4 @@
-//===-- LuthierCallGraph.h - Luthier IR call graph analysis -----*- C++ -*-===//
+//===-- TraceCallGraph.h - Luthier IR call graph analysis -------*- C++ -*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,8 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //===----------------------------------------------------------------------===//
-/// \file LuthierCallGraph.h
-/// Declares the \c LuthierCallGraph target module analysis that recovers the
+/// \file TraceCallGraph.h
+/// Declares the \c TraceCallGraph target module analysis that recovers the
 /// call graph of a Luthier-translated target IR module.
 ///
 /// Unlike LLVM's LazyCallGraph, this analysis resolves indirect call targets
@@ -25,8 +25,8 @@
 /// multiple target \c Function* values; call sites that cannot be fully
 /// resolved are flagged as incomplete.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_TOOL_CODE_GEN_LUTHIER_CALL_GRAPH_H
-#define LUTHIER_TOOL_CODE_GEN_LUTHIER_CALL_GRAPH_H
+#ifndef LUTHIER_TOOL_CODE_GEN_TRACE_CALL_GRAPH_H
+#define LUTHIER_TOOL_CODE_GEN_TRACE_CALL_GRAPH_H
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/DenseSet.h>
@@ -42,8 +42,8 @@ class Module;
 
 namespace luthier {
 
-/// Result of the \c LuthierCallGraphAnalysis.
-class LuthierCallGraph {
+/// Result of the \c TraceCallGraphAnalysis.
+class TraceCallGraph {
 public:
   using CallTargetsMapT =
       llvm::DenseMap<llvm::CallInst *, llvm::SmallVector<llvm::Function *>>;
@@ -51,7 +51,7 @@ public:
   using IncompleteCallSitesSetT = llvm::DenseSet<llvm::CallInst *>;
 
 private:
-  friend class LuthierCallGraphAnalysis;
+  friend class TraceCallGraphAnalysis;
 
   CallTargetsMapT CallTargets;
 
@@ -154,25 +154,25 @@ public:
 
 /// Module analysis that recovers the IR-level call graph of a
 /// Luthier-translated module.
-class LuthierCallGraphAnalysis
-    : public llvm::AnalysisInfoMixin<LuthierCallGraphAnalysis> {
-  friend llvm::AnalysisInfoMixin<LuthierCallGraphAnalysis>;
+class TraceCallGraphAnalysis
+    : public llvm::AnalysisInfoMixin<TraceCallGraphAnalysis> {
+  friend llvm::AnalysisInfoMixin<TraceCallGraphAnalysis>;
   static llvm::AnalysisKey Key;
 
 public:
-  using Result = LuthierCallGraph;
+  using Result = TraceCallGraph;
 
   Result run(llvm::Module &M, llvm::ModuleAnalysisManager &MAM);
 };
 
-/// Pass that prints the \c LuthierCallGraph result to an output stream.
+/// Pass that prints the \c TraceCallGraph result to an output stream.
 /// Intended to be inserted after \c luthier-code-discovery in the pipeline.
-class LuthierCallGraphPrinter
-    : public llvm::PassInfoMixin<LuthierCallGraphPrinter> {
+class TraceCallGraphPrinter
+    : public llvm::PassInfoMixin<TraceCallGraphPrinter> {
   llvm::raw_ostream &OS;
 
 public:
-  explicit LuthierCallGraphPrinter(llvm::raw_ostream &OS) : OS(OS) {}
+  explicit TraceCallGraphPrinter(llvm::raw_ostream &OS) : OS(OS) {}
 
   llvm::PreservedAnalyses run(llvm::Module &M,
                               llvm::ModuleAnalysisManager &MAM);
