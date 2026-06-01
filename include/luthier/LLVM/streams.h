@@ -14,8 +14,8 @@
 // limitations under the License.
 //===----------------------------------------------------------------------===//
 ///
-/// \file This files defines versions of <tt>llvm::outs</tt>,
-/// <tt>llvm::errs</tt>, and <tt>llvm::nulls</tt> that are safe to use with
+/// \file
+/// Defines versions of <tt>llvm::outs</tt>, <tt>llvm::errs</tt>,/// <tt>llvm::nulls</tt>, and <tt>llvm::dbgs</tt> that are  safe to use with
 /// Luthier tools.
 //===----------------------------------------------------------------------===//
 #ifndef LUTHIER_STREAMS_H
@@ -41,6 +41,17 @@ llvm::raw_fd_ostream &errs();
 /// tool to ensure the underlying \c llvm::raw_fd_ostream is not destroyed
 /// before the tool's finalizer function is called
 llvm::raw_ostream &nulls();
+
+/// A version of \c llvm::dbgs that is safe to use within Luthier
+/// \details Mirrors \c llvm::dbgs: in \c NDEBUG builds it is \c luthier::errs;
+/// otherwise it is a \c llvm::circular_raw_ostream layered over
+/// \c luthier::errs that honors the standard \c -debug /
+/// \c -debug-buffer-size command line options (the buffered content is dumped
+/// at process exit and on fatal-signal handlers).
+/// \note Always use this function instead of \c llvm::dbgs inside a Luthier
+/// tool to ensure the underlying stream is not destroyed before the tool's
+/// finalizer function is called
+llvm::raw_ostream &dbgs();
 
 } // namespace luthier
 
