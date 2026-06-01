@@ -16,7 +16,8 @@
 ///
 /// \file
 /// Defines debug-related functions used in Luthier. Luthier reuses LLVM's debug
-/// machinery directly by wrap debug-only code in \c LLVM_DEBUG(...) from/// <tt>llvm/Support/Debug.h</tt>, keyed by a per-file
+/// machinery directly by wrap debug-only code in \c LLVM_DEBUG(...) from
+/// <tt>llvm/Support/Debug.h</tt>, keyed by a per-file
 /// <tt>\#define DEBUG_TYPE "..."</tt>, and emit to \c luthier::dbgs()
 /// instead of \c llvm::dbgs().
 ///
