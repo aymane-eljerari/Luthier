@@ -239,6 +239,7 @@ static void atToolFini(void *) {
     AmdExtSnapshot = nullptr;
     delete CoreApiSnapshot;
     CoreApiSnapshot = nullptr;
+    luthier::finalizeStreams();
   });
 }
 
@@ -247,6 +248,7 @@ static void atToolFini() { atToolFini(nullptr); }
 static void atToolInit(void *) {
   static std::once_flag Once{};
   std::call_once(Once, [] {
+    luthier::initializeStreams();
     luthier::outs() << "Kernel argument intrinsic tool is launching.\n";
     std::atexit(atToolFini);
 

@@ -33,7 +33,6 @@
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/Common/LuthierError.h"
 #include "luthier/Common/NeverDestroyed.h"
-#include <cstdlib>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Support/FileSystem.h>
@@ -54,13 +53,8 @@ llvm::raw_fd_ostream &outs() {
   LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
       !EC, "Failed to initialize the standard output raw_fd_stream."));
   // The stream is never destroyed, so its destructor will not flush the
-  // buffered standard output. Register a one-time flush at process exit; it
-  // only ever touches the process-lifetime buffer, so it is safe at any
-  // teardown order.
-  static const int FlushAtExit = [] {
-    return std::atexit([] { luthier::outs().flush(); });
-  }();
-  (void)FlushAtExit;
+  // buffered standard output. The caller is responsible for flushing the tail
+  // at the end of tool teardown via finalizeStreams().
   return *S;
 }
 
@@ -116,18 +110,13 @@ llvm::raw_ostream &dbgs() {
   static NeverDestroyed<llvm::circular_raw_ostream> S(
       luthier::errs(), "*** Luthier Debug Log Output ***\n", BufferSize,
       llvm::circular_raw_ostream::REFERENCE_ONLY);
-  // When buffering, the never-run destructor would otherwise drop the buffered
-  // tail. Dump it at normal exit and install the fatal-signal handler, matching
-  // llvm::dbgs. Pure pass-through (BufferSize == 0) needs neither.
+  // When buffering, install the fatal-signal handler so a crash still dumps the
+  // buffered tail (mirrors llvm::dbgs). Normal-exit flushing of the tail is the
+  // caller's responsibility via finalizeStreams(). Pass-through (BufferSize ==
+  // 0) needs neither.
   static const int Init = [] {
-    if (BufferSize != 0) {
+    if (BufferSize != 0)
       llvm::sys::AddSignalHandler(&debugSignalHandler, nullptr);
-      std::atexit([] {
-        auto &D = static_cast<llvm::circular_raw_ostream &>(luthier::dbgs());
-        D.flush();
-        D.flushBufferWithBanner();
-      });
-    }
     return 0;
   }();
   (void)Init;
@@ -139,5 +128,27 @@ llvm::raw_ostream &dbgs() {
 llvm::raw_ostream &dbgs() { return luthier::errs(); }
 
 #endif
+
+void initializeStreams() {
+  (void)outs();
+  (void)errs();
+  (void)nulls();
+#ifndef NDEBUG
+  // Also constructs the circular debug stream and installs its signal handler.
+  (void)dbgs();
+#endif
+}
+
+void finalizeStreams() {
+  // outs() is buffered; flush its tail. errs()/nulls() are unbuffered.
+  outs().flush();
+#ifndef NDEBUG
+  // Dump the buffered debug log with its banner. flushBufferWithBanner() is a
+  // no-op when dbgs() is an unbuffered pass-through (BufferSize == 0).
+  auto &D = static_cast<llvm::circular_raw_ostream &>(dbgs());
+  D.flush();
+  D.flushBufferWithBanner();
+#endif
+}
 
 } // namespace luthier

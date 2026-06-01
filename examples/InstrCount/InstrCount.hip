@@ -441,6 +441,7 @@ static void atToolFini(void *) {
     AmdExtSnapshot = nullptr;
     delete CoreApiSnapshot;
     CoreApiSnapshot = nullptr;
+    luthier::finalizeStreams();
   });
 }
 
@@ -449,6 +450,7 @@ static void atToolFini() { atToolFini(nullptr); }
 static void atToolInit(void *) {
   static std::once_flag Once{};
   std::call_once(Once, [] {
+    luthier::initializeStreams();
     luthier::errs() << "Instruction counter tool is launching.\n";
     std::atexit(atToolFini);
 
