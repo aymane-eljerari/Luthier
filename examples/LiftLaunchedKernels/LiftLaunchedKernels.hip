@@ -29,6 +29,7 @@
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/Signals.h>
 #include <llvm/Support/raw_ostream.h>
+#include <luthier/Common/Debug.h>
 #include <luthier/Common/ErrorCheck.h>
 #include <luthier/Common/Stacktrace.h>
 #include <luthier/HSA/AqlPacket.h>
@@ -206,6 +207,7 @@ static void atToolInit(void *) {
       llvm::report_fatal_error(std::move(Err));
 
     const auto Argv = "";
+    luthier::registerDebugCLOptions();
     LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         llvm::cl::ParseCommandLineOptions(0, &Argv,
                                           "Luthier Lift Launched Kernel Tool",
