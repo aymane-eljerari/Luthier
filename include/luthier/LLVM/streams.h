@@ -15,11 +15,12 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// Defines versions of <tt>llvm::outs</tt>, <tt>llvm::errs</tt>,/// <tt>llvm::nulls</tt>, and <tt>llvm::dbgs</tt> that are  safe to use with
+/// Defines versions of <tt>llvm::outs</tt>, <tt>llvm::errs</tt>,
+/// <tt>llvm::nulls</tt>, and <tt>llvm::dbgs</tt> that are safe to use with
 /// Luthier tools.
 //===----------------------------------------------------------------------===//
-#ifndef LUTHIER_STREAMS_H
-#define LUTHIER_STREAMS_H
+#ifndef LUTHIER_LLVM_STREAMS_H
+#define LUTHIER_LLVM_STREAMS_H
 #include <llvm/Support/raw_ostream.h>
 
 namespace luthier {
