@@ -144,13 +144,27 @@ static llvm::Constant *tryEvalConst(llvm::Value *V, const ValConstMap &SubstMap,
   if (!I || llvm::isa<llvm::PHINode>(I))
     return cache(nullptr);
 
-  // amdgcn_s_getpc() with pcsections → addr + 4
   if (auto *CI = llvm::dyn_cast<llvm::CallInst>(I)) {
-    if (CI->getIntrinsicID() == llvm::Intrinsic::amdgcn_s_getpc) {
+    const llvm::Intrinsic::ID IID = CI->getIntrinsicID();
+
+    // amdgcn_s_getpc() with pcsections → addr + 4
+    if (IID == llvm::Intrinsic::amdgcn_s_getpc) {
       if (auto Addr = getTraceAddr(CI))
         return cache(llvm::ConstantInt::get(CI->getType(), *Addr + 4));
       return cache(nullptr);
     }
+
+    // ssa.copy is a plain SSA copy — the translator emits it for register
+    // moves (e.g. v_mov). Forward through it.
+    if (IID == llvm::Intrinsic::ssa_copy)
+      return cache(
+          tryEvalConst(CI->getArgOperand(0), SubstMap, Cache, DL, FAM));
+
+    // TODO: cross-lane VGPR reads (readfirstlane / readlane / writelane) are
+    // NOT traced. Resolving them properly needs IR-translator changes
+    // (per-lane register-value tracking across basic blocks, recording a lane
+    // value when tracing through VGPRs), which would also enable tracing vector
+    // loads from global memory.
   }
 
   // Load → trace through the unique clobbering store via MemorySSA, in any

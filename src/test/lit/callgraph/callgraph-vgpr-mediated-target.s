@@ -24,10 +24,11 @@
 //
 // The function pointer is computed as a compile-time constant (getpc + rel32),
 // but then routed through VGPRs (v_mov_b32_e32 + v_readfirstlane_b32) before
-// being called.  Because VGPR operations are not constant-foldable, the
-// call target cannot be resolved and the analysis reports fully_recovered=no.
-// This models the general case of a function pointer spilled to the stack
-// (private memory) and restored.
+// being called.  v_readfirstlane lifts to an opaque llvm.amdgcn.readfirstlane
+// that the analysis does not yet trace through (cross-lane VGPR tracking is a
+// known TODO), so the call target is currently left unresolved
+// (fully_recovered=no).  This models the general case of a function pointer
+// round-tripped through VGPR lanes.
 
 	.amdgcn_target "amdgcn-amd-amdhsa--gfx942"
 	.amdhsa_code_object_version 6
