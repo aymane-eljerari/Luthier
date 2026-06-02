@@ -23,6 +23,7 @@
 #include "luthier/ToolCodeGen/MemoryAllocationAccessor.h"
 #include "luthier/ToolCodeGen/PseudoOpcodeAndRegMapper.h"
 #include <AMDGPUTargetMachine.h>
+#include <algorithm>
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/MC/MCAsmInfo.h>
@@ -123,7 +124,7 @@ static llvm::Error disassembleTrace(
       LLVM_DEBUG(
           luthier::dbgs() << llvm::formatv("[InstructionTraces] Disassembled "
                                            "instruction at {0:x}: ",
-                                        CurrentDeviceAddress);
+                                           CurrentDeviceAddress);
           Inst.dump_pretty(luthier::dbgs(), IP, " ",
                            &Disassembler.getContext());
           luthier::dbgs() << llvm::formatv(", Size: {0} bytes\n", InstSize);
@@ -183,7 +184,42 @@ InstructionTraces::discoverTraces(EntryPoint EP,
       *TM.getMCAsmInfo(), *TM.getMCInstrInfo(), *TM.getMCRegisterInfo())););
 
   while (!UnvisitedTraceAddresses.empty()) {
-    uint64_t CurrentDeviceAddr = *UnvisitedTraceAddresses.begin();
+    /// Process the lowest unvisited address first. \c InstructionAddrSet is an
+    /// unordered set, but disassembly only moves forward, so taking the minimum
+    /// guarantees an enclosing lower-address trace is built before a higher
+    /// merge address it subsumes via fall-through is popped — making the
+    /// coverage check below order-independent.
+    uint64_t CurrentDeviceAddr = *std::min_element(
+        UnvisitedTraceAddresses.begin(), UnvisitedTraceAddresses.end());
+
+    /// A branch target can be enqueued before another trace reaches its address
+    /// by fall-through: trace groups deliberately run over direct conditional
+    /// branches (the fall-through path is reachable and must be part of the
+    /// trace), so a trace started at an earlier block can subsume an address
+    /// that was queued as a branch target. If this address has already been
+    /// disassembled as part of a previously discovered trace, skip it so we
+    /// don't create a second, overlapping trace that duplicates the same
+    /// instructions. We scan the discovered intervals and confirm the address
+    /// is an actual instruction boundary within the covering trace.
+    bool AlreadyVisited = false;
+    for (const auto &[TraceInterval, Trace] : Out->Traces) {
+      if (CurrentDeviceAddr >= TraceInterval.first &&
+          CurrentDeviceAddr <= TraceInterval.second &&
+          Trace->contains(CurrentDeviceAddr)) {
+        AlreadyVisited = true;
+        break;
+      }
+    }
+    if (AlreadyVisited) {
+      LLVM_DEBUG(
+          luthier::dbgs() << llvm::formatv(
+              "[InstructionTraces] {0:x} already covered by a discovered "
+              "trace, skipping\n",
+              CurrentDeviceAddr));
+      UnvisitedTraceAddresses.erase(CurrentDeviceAddr);
+      continue;
+    }
+
     auto InstTrace = std::make_unique<Trace>();
     uint64_t TraceDeviceEndAddr{0};
 
@@ -195,8 +231,8 @@ InstructionTraces::discoverTraces(EntryPoint EP,
     /// any targets not covered by current discovered traces
     LLVM_DEBUG(luthier::dbgs()
                << "\n[InstructionTraces] Processing trace from "
-               << llvm::formatv("{0:x}", CurrentDeviceAddr)
-                            << " - " << InstTrace->size() << " instructions\n");
+               << llvm::formatv("{0:x}", CurrentDeviceAddr) << " - "
+               << InstTrace->size() << " instructions\n");
 
     for (const auto &[InstAddr, TraceInst] : *InstTrace) {
       const auto &MCInst = TraceInst.getMCInst();
@@ -275,7 +311,7 @@ InstructionTraces::discoverTraces(EntryPoint EP,
     UnvisitedTraceAddresses.erase(CurrentDeviceAddr);
     LLVM_DEBUG(luthier::dbgs() << "[InstructionTraces] Removed "
                                << llvm::formatv("{0:x} from unvisited set\n",
-                                             CurrentDeviceAddr));
+                                                CurrentDeviceAddr));
   }
   return std::move(Out);
 }

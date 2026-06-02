@@ -33,11 +33,13 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/iterator_range.h>
 #include <llvm/IR/PassManager.h>
+#include <llvm/Support/Compiler.h>
 
 namespace llvm {
 class CallInst;
 class Function;
 class Module;
+class raw_ostream;
 } // namespace llvm
 
 namespace luthier {
@@ -145,6 +147,14 @@ public:
   /// \return \c True iff every indirect call site in the module has been fully
   /// resolved
   bool isFullyRecovered() const { return FullyRecovered; }
+
+  /// Print the recovered call graph — resolved call sites, incomplete call
+  /// sites, and discovered target addresses — to \p OS. Output is sorted so it
+  /// is deterministic across runs.
+  void print(llvm::raw_ostream &OS) const;
+
+  /// Dump the call graph to \c luthier::dbgs()
+  LLVM_DUMP_METHOD void dump() const;
 
   /// The analysis is invalidated whenever the module IR is modified
   /// (e.g. a new function is added or a CFG edge changes)
