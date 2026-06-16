@@ -44,7 +44,7 @@
 #include <luthier/ToolCodeGen/InstrumentationPMDriver.h>
 #include <luthier/ToolCodeGen/InstrumentationPass.h>
 #include <luthier/ToolCodeGen/IPPredicatedCFG.h>
-#include <luthier/ToolCodeGen/LuthierCallGraph.h>
+#include <luthier/ToolCodeGen/TraceCallGraph.h>
 #include <luthier/ToolCodeGen/MemoryAllocationAccessor.h>
 #include <luthier/ToolCodeGen/MetadataParserAnalysis.h>
 #include <luthier/ToolCodeGen/PrePostAmbleEmitter.h>
