@@ -1,4 +1,4 @@
-ARG ROCM_VERSION=6.3.1
+ARG ROCM_VERSION=7.2.4
 
 FROM rocm-$ROCM_VERSION-dev
 
@@ -8,7 +8,7 @@ ARG BUILD_SHARED_LIBS=ON
 ARG LLVM_SRC_DIR=/opt/luthier/src/
 ARG LLVM_ENABLE_EXPENSIVE_CHECKS=OFF
 ARG LLVM_ENABLE_ASSERTIONS=OFF
-ARG LLVM_GIT_REVISION=5e51f7702e2703df95f7a3d57284a1fdef4766b7
+ARG LLVM_GIT_REVISION=amd-staging
 
 # Install neovim from AppImage
 RUN wget https://github.com/neovim/neovim/releases/download/stable/nvim-linux-x86_64.appimage && \
@@ -16,7 +16,6 @@ RUN wget https://github.com/neovim/neovim/releases/download/stable/nvim-linux-x8
     rm nvim-linux-x86_64.appimage && \
     cp -r ./squashfs-root/* / && rm -rf ./squashfs-root/
 
-RUN pip3 install cxxheaderparser pcpp --break-system-packages
 # Clone all LLVM-based ROCm projects in the $LLVM_SRC_DIR directory
 RUN mkdir -p $LLVM_SRC_DIR && cd $LLVM_SRC_DIR && \
     mkdir llvm-project && cd llvm-project &&  \
@@ -83,5 +82,12 @@ RUN cd $LLVM_SRC_DIR/llvm-project/amd/hipcc/ && mkdir build && cd build &&  \
     cmake -G Ninja -DCMAKE_INSTALL_PREFIX=/opt/luthier/ -DCMAKE_PREFIX_PATH="/opt/luthier/"  \
     -DCMAKE_BUILD_TYPE=$LLVM_BUILD_TYPE  \
     .. && LD_LIBRARY_PATH=/opt/luthier/llvm/lib/ ninja install && rm -rf $LLVM_SRC_DIR/llvm-project/amd/hipcc/build/
+## SPIRV Installation
+RUN git clone --depth 1 https://github.com/ROCm/SPIRV-LLVM-Translator && \
+    mkdir SPIRV-LLVM-Translator/build && cd SPIRV-LLVM-Translator/build && \
+    cmake -G Ninja -DCMAKE_BUILD_TYPE=$LLVM_BUILD_TYPE -DCMAKE_INSTALL_PREFIX=/opt/luthier \
+    -DCMAKE_PREFIX_PATH=/opt/luthier -DLLVM_DIR=/opt/luthier/llvm/lib/cmake/llvm .. && \
+    LD_LIBRARY_PATH=/opt/luthier/llvm/lib ninja install && \
+    cd ../../ && rm -rf SPIRV-LLVM-Translator
 
 ENV LD_LIBRARY_PATH="/opt/rocm/lib:/opt/luthier/llvm/lib/:/opt/luthier/lib"
