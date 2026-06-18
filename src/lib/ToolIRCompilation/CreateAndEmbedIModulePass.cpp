@@ -55,7 +55,9 @@ CreateAndEmbedIModulePass::run(llvm::Module &M,
   std::unique_ptr<llvm::Module> Clone = llvm::CloneModule(M);
 
   llvm::ModuleAnalysisManager CloneMAM;
-  llvm::PassBuilder PB;
+  llvm::PassBuilder PB(/*TM=*/nullptr, llvm::PipelineTuningOptions(),
+                       /*PGOOpt=*/std::nullopt, /*PIC=*/nullptr,
+                       /*FS=*/nullptr);
   PB.registerModuleAnalyses(CloneMAM);
 
   llvm::ModulePassManager InnerMPM;
