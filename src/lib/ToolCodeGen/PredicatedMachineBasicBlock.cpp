@@ -18,6 +18,7 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/PredicatedMachineBasicBlock.h"
 #include "luthier/LLVM/CodeGenHelpers.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/IPPredicatedCFG.h"
 #include <SIInstrInfo.h>
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
@@ -83,6 +84,6 @@ void PredicatedMachineBasicBlock::print(llvm::raw_ostream &OS,
   OS << "]\n";
 }
 
-void PredicatedMachineBasicBlock::dump() const { print(llvm::dbgs(), 0); }
+void PredicatedMachineBasicBlock::dump() const { print(luthier::dbgs(), 0); }
 
 } // namespace luthier

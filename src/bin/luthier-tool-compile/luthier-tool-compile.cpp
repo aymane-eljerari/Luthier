@@ -36,6 +36,7 @@
 #include <llvm/Support/Path.h>
 #include <llvm/Support/Program.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/TargetParser/AMDGPUTargetParser.h>
 #include <llvm/TargetParser/Host.h>
 #include <llvm/TargetParser/TargetParser.h>
 #include <optional>

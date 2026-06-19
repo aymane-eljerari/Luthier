@@ -13,6 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "NewPMDriver.h"
+#include "luthier/Common/Debug.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGenTesting/LuthierFile.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
@@ -378,6 +380,8 @@ static std::unique_ptr<ToolOutputFile> GetOutputStream(Triple::OSType OS) {
 //
 int main(int argc, char **argv) {
   InitLLVM X(argc, argv);
+  auto FinalizeLuthierStreams =
+      llvm::scope_exit([] { luthier::finalizeStreams(); });
 
   // Enable debug stream buffering.
   EnableDebugBuffering = true;
@@ -425,6 +429,7 @@ int main(int argc, char **argv) {
   // Register the target printer for --version.
   cl::AddExtraVersionPrinter(TargetRegistry::printRegisteredTargetsForVersion);
 
+  luthier::registerDebugCLOptions();
   cl::ParseCommandLineOptions(argc, argv, "llvm system compiler\n");
 
   if (!PassPipeline.empty() && !getRunPassNames().empty()) {
@@ -521,7 +526,7 @@ static int compileModule(char **argv, SmallVectorImpl<PassPlugin> &PluginList,
 
   // Set attributes on functions as loaded from MIR from command line arguments.
   auto setMIRFunctionAttributes = [&CPUStr, &FeaturesStr](Function &F) {
-    codegen::setFunctionAttributes(CPUStr, FeaturesStr, F);
+    codegen::setFunctionAttributes(F, CPUStr, FeaturesStr);
   };
 
   auto MAttrs = codegen::getMAttrs();
@@ -766,7 +771,7 @@ static int compileModule(char **argv, SmallVectorImpl<PassPlugin> &PluginList,
 
   // Override function attributes based on CPUStr, FeaturesStr, and command line
   // flags.
-  codegen::setFunctionAttributes(CPUStr, FeaturesStr, *M);
+  codegen::setFunctionAttributes(*M, CPUStr, FeaturesStr);
 
   for (auto &Plugin : PluginList) {
     CodeGenFileType CGFT = codegen::getFileType();

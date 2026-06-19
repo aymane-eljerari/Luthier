@@ -13,13 +13,19 @@
 // CHECK: _Z6kernelv -> [_Z3barvx0x0]
 // CHECK: Incomplete call sites (0):
 
-// HIP source (compiled with --offload-device-only for gfx908):
+// HIP-ish source (hand-written for gfx908):
 //
 //   __device__ void bar() {}
 //   __global__ void kernel() { bar(); }
 //
-// This test verifies that a single direct device-function call is fully
-// resolved by the callgraph analysis.
+// The callee address is a compile-time constant (getpc + rel32), but the
+// scalar register pair holding it is spilled to scratch (private memory) via
+// s_scratch_store_dwordx2 and reloaded via s_scratch_load_dwordx2 before the
+// call -- modelling a function pointer spilled under register pressure.  Both
+// scratch accesses use the same SGPR base + immediate offset, so they lift to
+// an addrspace(5) store/load pair against a common pointer.  The callgraph
+// analysis recovers the target by tracing the load back to its must-aliasing
+// clobbering store via MemorySSA, then folding the stored value.
 
 	.amdgcn_target "amdgcn-amd-amdhsa--gfx908"
 	.amdhsa_code_object_version 6
@@ -49,16 +55,24 @@ _Z3barv:
 	.type   _Z6kernelv,@function
 _Z6kernelv:
 	s_mov_b32 s32, 0
+	; scalar scratch base (value is irrelevant to the analysis)
+	s_mov_b32 s2, 0
+	s_mov_b32 s3, 0
+	; compute &bar into s[0:1]
 	s_getpc_b64 s[0:1]
 	s_add_u32 s0, s0, _Z3barv@rel32@lo+4
 	s_addc_u32 s1, s1, _Z3barv@rel32@hi+12
-	s_swappc_b64 s[30:31], s[0:1]
+	; spill the pointer to scratch slot 0, then reload it into s[4:5]
+	s_scratch_store_dwordx2 s[0:1], s[2:3], 0x0
+	s_scratch_load_dwordx2 s[4:5], s[2:3], 0x0
+	s_waitcnt lgkmcnt(0)
+	s_swappc_b64 s[30:31], s[4:5]
 	s_endpgm
 	.section .rodata,"a",@progbits
 	.p2align 6, 0x0
 	.amdhsa_kernel _Z6kernelv
 		.amdhsa_group_segment_fixed_size 0
-		.amdhsa_private_segment_fixed_size 0
+		.amdhsa_private_segment_fixed_size 8
 		.amdhsa_kernarg_size 0
 		.amdhsa_user_sgpr_count 0
 		.amdhsa_user_sgpr_private_segment_buffer 0
@@ -99,7 +113,7 @@ _Z6kernelv:
 	.set _Z6kernelv.num_vgpr, max(1, _Z3barv.num_vgpr)
 	.set _Z6kernelv.num_agpr, max(0, _Z3barv.num_agpr)
 	.set _Z6kernelv.numbered_sgpr, max(33, _Z3barv.numbered_sgpr)
-	.set _Z6kernelv.private_seg_size, 0+max(_Z3barv.private_seg_size)
+	.set _Z6kernelv.private_seg_size, 8+max(_Z3barv.private_seg_size)
 	.set _Z6kernelv.uses_vcc, or(1, _Z3barv.uses_vcc)
 	.set _Z6kernelv.uses_flat_scratch, or(0, _Z3barv.uses_flat_scratch)
 	.set _Z6kernelv.has_dyn_sized_stack, or(0, _Z3barv.has_dyn_sized_stack)
@@ -120,7 +134,7 @@ amdhsa.kernels:
       - 0
     .max_flat_workgroup_size: 1024
     .name:           _Z6kernelv
-    .private_segment_fixed_size: 0
+    .private_segment_fixed_size: 8
     .sgpr_count:     33
     .sgpr_spill_count: 0
     .symbol:         _Z6kernelv.kd

@@ -17,6 +17,8 @@
 /// Implements the \c MockLoadAMDGPUCodeObjects class.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGenTesting/MockLoadAMDGPUCodeObjects.h"
+
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGenTesting/CodeObjectManagerAnalysis.h"
 #include <llvm/IR/Module.h>
 #include <llvm/Support/Debug.h>
@@ -54,15 +56,15 @@ MockLoadAMDGPUCodeObjects::run(llvm::Module &M,
   CodeObjectManagerAnalysis::Result CodeObjectManager =
       MAM.getResult<CodeObjectManagerAnalysis>(M);
 
-  LLVM_DEBUG(llvm::dbgs() << "[MockLoadAMDGPUCodeObjects] "
-                          << Options.CodeObjectPathList.size()
-                          << " code object path(s), "
-                          << Options.ExternalVars.size()
-                          << " external variable definition(s)\n");
+  LLVM_DEBUG(luthier::dbgs()
+             << "[MockLoadAMDGPUCodeObjects] "
+             << Options.CodeObjectPathList.size() << " code object path(s), "
+             << Options.ExternalVars.size()
+             << " external variable definition(s)\n");
 
   /// Go over the code object paths and create buffers for each of them
   for (llvm::StringRef Path : Options.CodeObjectPathList) {
-    LLVM_DEBUG(llvm::dbgs()
+    LLVM_DEBUG(luthier::dbgs()
                << "[MockLoadAMDGPUCodeObjects] Reading code object from "
                << Path << "\n");
     llvm::Expected<llvm::MemoryBuffer &> CodeObjectBufferOrErr =
@@ -77,23 +79,23 @@ MockLoadAMDGPUCodeObjects::run(llvm::Module &M,
       Ctx.emitError(llvm::toString(std::move(Err)));
       return llvm::PreservedAnalyses::all();
     }
-    LLVM_DEBUG(llvm::dbgs()
+    LLVM_DEBUG(luthier::dbgs()
                << "[MockLoadAMDGPUCodeObjects] Loaded " << Path
                << " (load base "
-               << llvm::format_hex(reinterpret_cast<uint64_t>(
-                                       LoadedCodeObjectOrErr->getLoadedRegion()
-                                           .data()),
-                                   18)
-               << ", size "
-               << LoadedCodeObjectOrErr->getLoadedRegion().size() << ")\n");
+               << llvm::format_hex(
+                      reinterpret_cast<uint64_t>(
+                          LoadedCodeObjectOrErr->getLoadedRegion().data()),
+                      18)
+               << ", size " << LoadedCodeObjectOrErr->getLoadedRegion().size()
+               << ")\n");
   }
 
   /// Define the external variables
   for (auto &[SymName, SymAddr] : Options.ExternalVars) {
-    LLVM_DEBUG(llvm::dbgs() << "[MockLoadAMDGPUCodeObjects] Defining external "
-                               "symbol "
-                            << SymName << " at "
-                            << llvm::format_hex(SymAddr, 18) << "\n");
+    LLVM_DEBUG(luthier::dbgs()
+               << "[MockLoadAMDGPUCodeObjects] Defining external "
+                  "symbol "
+               << SymName << " at " << llvm::format_hex(SymAddr, 18) << "\n");
     if (auto Err = Loader.defineExternalSymbol(
             SymName, reinterpret_cast<void *>(SymAddr))) {
       Ctx.emitError(llvm::toString(std::move(Err)));
@@ -102,7 +104,7 @@ MockLoadAMDGPUCodeObjects::run(llvm::Module &M,
   }
 
   /// Finalize the loader
-  LLVM_DEBUG(llvm::dbgs()
+  LLVM_DEBUG(luthier::dbgs()
              << "[MockLoadAMDGPUCodeObjects] Finalizing loader ("
              << Loader.loaded_code_objects_size() << " LCO(s), "
              << Loader.external_symbol_size() << " external symbol(s))\n");

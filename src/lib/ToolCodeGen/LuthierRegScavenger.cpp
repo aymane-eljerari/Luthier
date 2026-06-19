@@ -1,4 +1,4 @@
-//===-- LuthierRegScavenger.cpp ----------------------------------*- C++ -*-===//
+//===-- LuthierRegScavenger.cpp ----------------------------------*- C++-*-===//
 // Copyright @ Northeastern University Computer Architecture Lab
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,6 +30,7 @@
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolCodeGen/LuthierRegScavenger.h"
 
+#include "luthier/LLVM/streams.h"
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/SmallVector.h>
@@ -52,8 +53,8 @@
 
 namespace luthier {
 
-void LuthierRegScavenger::assignRegToScavengingIndex(int FI, llvm::Register Reg,
-                                                     llvm::MachineInstr *Restore) {
+void LuthierRegScavenger::assignRegToScavengingIndex(
+    int FI, llvm::Register Reg, llvm::MachineInstr *Restore) {
   for (ScavengedInfo &Slot : Scavenged) {
     if (Slot.FrameIndex == FI) {
       assert(!Slot.Reg || Slot.Reg == Reg);
@@ -123,8 +124,8 @@ llvm::Register
 LuthierRegScavenger::FindUnusedReg(const llvm::TargetRegisterClass *RC) const {
   for (llvm::Register Reg : *RC) {
     if (!isRegUsed(Reg)) {
-      LLVM_DEBUG(llvm::dbgs() << "LuthierScavenger found unused reg: "
-                              << llvm::printReg(Reg, TRI) << "\n");
+      LLVM_DEBUG(luthier::dbgs() << "LuthierScavenger found unused reg: "
+                                 << llvm::printReg(Reg, TRI) << "\n");
       return Reg;
     }
   }
@@ -144,13 +145,12 @@ LuthierRegScavenger::getRegsAvailable(const llvm::TargetRegisterClass *RC) {
 /// \c MRI.isReserved guard is replaced by a Luthier-aware predicate
 /// that also rejects \p LuthierReservedRegs members.
 static std::pair<llvm::MCPhysReg, llvm::MachineBasicBlock::iterator>
-findSurvivorBackwards(const llvm::MachineRegisterInfo &MRI,
-                      const llvm::DenseSet<llvm::MCPhysReg> &LuthierReservedRegs,
-                      llvm::MachineBasicBlock::iterator From,
-                      llvm::MachineBasicBlock::iterator To,
-                      const llvm::LiveRegUnits &LiveOut,
-                      llvm::ArrayRef<llvm::MCPhysReg> AllocationOrder,
-                      bool RestoreAfter) {
+findSurvivorBackwards(
+    const llvm::MachineRegisterInfo &MRI,
+    const llvm::DenseSet<llvm::MCPhysReg> &LuthierReservedRegs,
+    llvm::MachineBasicBlock::iterator From,
+    llvm::MachineBasicBlock::iterator To, const llvm::LiveRegUnits &LiveOut,
+    llvm::ArrayRef<llvm::MCPhysReg> AllocationOrder, bool RestoreAfter) {
   bool FoundTo = false;
   llvm::MCPhysReg Survivor = 0;
   llvm::MachineBasicBlock::iterator Pos;
@@ -231,10 +231,11 @@ static unsigned getFrameIndexOperandNum(llvm::MachineInstr &MI) {
   return i;
 }
 
-LuthierRegScavenger::ScavengedInfo &LuthierRegScavenger::spill(
-    llvm::Register Reg, const llvm::TargetRegisterClass &RC, int SPAdj,
-    llvm::MachineBasicBlock::iterator Before,
-    llvm::MachineBasicBlock::iterator &UseMI) {
+LuthierRegScavenger::ScavengedInfo &
+LuthierRegScavenger::spill(llvm::Register Reg,
+                           const llvm::TargetRegisterClass &RC, int SPAdj,
+                           llvm::MachineBasicBlock::iterator Before,
+                           llvm::MachineBasicBlock::iterator &UseMI) {
   // Luthier hook: if the caller installed an SVA-lane spill sink and it
   // succeeds, return a synthetic ScavengedInfo without touching the
   // FrameIndex machinery. The sink is expected to emit the spill+reload
@@ -256,8 +257,7 @@ LuthierRegScavenger::ScavengedInfo &LuthierRegScavenger::spill(
   unsigned NeedSize = TRI->getSpillSize(RC);
   llvm::Align NeedAlign = TRI->getSpillAlign(RC);
 
-  unsigned SI = Scavenged.size(),
-           Diff = std::numeric_limits<unsigned>::max();
+  unsigned SI = Scavenged.size(), Diff = std::numeric_limits<unsigned>::max();
   int FIB = MFI.getObjectIndexBegin(), FIE = MFI.getObjectIndexEnd();
   for (unsigned I = 0; I < Scavenged.size(); ++I) {
     if (Scavenged[I].Reg != 0)
@@ -290,7 +290,8 @@ LuthierRegScavenger::ScavengedInfo &LuthierRegScavenger::spill(
                                ": Cannot scavenge register without an "
                                "emergency spill slot or SVA-lane sink!");
     }
-    TII->storeRegToStackSlot(*MBB, Before, Reg, true, FI, &RC, llvm::Register());
+    TII->storeRegToStackSlot(*MBB, Before, Reg, true, FI, &RC,
+                             llvm::Register());
     llvm::MachineBasicBlock::iterator II = std::prev(Before);
     unsigned FIOperandNum = getFrameIndexOperandNum(*II);
     // Stock scavenger passes `this` (RegScavenger*) to eliminateFrameIndex.
@@ -321,20 +322,20 @@ bool LuthierRegScavenger::invokeSVASpillSink(
 }
 
 llvm::Register LuthierRegScavenger::scavengeRegisterBackwards(
-    const llvm::TargetRegisterClass &RC,
-    llvm::MachineBasicBlock::iterator To, bool RestoreAfter, int SPAdj,
-    bool AllowSpill) {
+    const llvm::TargetRegisterClass &RC, llvm::MachineBasicBlock::iterator To,
+    bool RestoreAfter, int SPAdj, bool AllowSpill) {
   const llvm::MachineBasicBlock &MBBR = *To->getParent();
   const llvm::MachineFunction &MF = *MBBR.getParent();
-  llvm::ArrayRef<llvm::MCPhysReg> AllocationOrder = RC.getRawAllocationOrder(MF);
+  llvm::ArrayRef<llvm::MCPhysReg> AllocationOrder =
+      RC.getRawAllocationOrder(MF);
   std::pair<llvm::MCPhysReg, llvm::MachineBasicBlock::iterator> P =
       findSurvivorBackwards(*MRI, LuthierReservedRegs, std::prev(MBBI), To,
                             LiveUnits, AllocationOrder, RestoreAfter);
   llvm::MCPhysReg Reg = P.first;
   llvm::MachineBasicBlock::iterator SpillBefore = P.second;
   if (Reg != 0 && SpillBefore == MBBR.end()) {
-    LLVM_DEBUG(llvm::dbgs() << "LuthierScavenged free register: "
-                            << llvm::printReg(Reg, TRI) << '\n');
+    LLVM_DEBUG(luthier::dbgs() << "LuthierScavenged free register: "
+                               << llvm::printReg(Reg, TRI) << '\n');
     return Reg;
   }
   if (!AllowSpill)
@@ -345,9 +346,9 @@ llvm::Register LuthierRegScavenger::scavengeRegisterBackwards(
   ScavengedInfo &Scav = spill(Reg, RC, SPAdj, SpillBefore, ReloadBefore);
   Scav.Restore = &*std::prev(SpillBefore);
   LiveUnits.removeReg(Reg);
-  LLVM_DEBUG(llvm::dbgs() << "LuthierScavenged register with spill: "
-                          << llvm::printReg(Reg, TRI) << " until "
-                          << *SpillBefore);
+  LLVM_DEBUG(luthier::dbgs()
+             << "LuthierScavenged register with spill: "
+             << llvm::printReg(Reg, TRI) << " until " << *SpillBefore);
   return Reg;
 }
 

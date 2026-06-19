@@ -40,8 +40,8 @@
 // #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
 // #include "luthier/ToolCodeGen/IPPredicatedCFG.h"
 #include "luthier/ToolCodeGen/InitialExecutionPointAnalysis.h"
-#include "luthier/ToolCodeGen/LuthierCallGraph.h"
 #include "luthier/ToolCodeGen/NewPMAsmPrinter.h"
+#include "luthier/ToolCodeGen/TraceCallGraph.h"
 #include <llvm/CodeGen/MIRPrinter.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Plugins/PassPlugin.h>
@@ -322,7 +322,7 @@ llvmGetPassPluginInfo() {
                 *luthier::Loader)));
       });
       MAM.registerPass([]() { return luthier::CodeObjectManagerAnalysis(); });
-      MAM.registerPass([]() { return luthier::LuthierCallGraphAnalysis(); });
+      MAM.registerPass([]() { return luthier::TraceCallGraphAnalysis(); });
       // LRStateValueStorageAndLoadLocationsAnalysis is now a legacy
       // ModulePass on the IModule; the driver registers it directly.
       MAM.registerPass(

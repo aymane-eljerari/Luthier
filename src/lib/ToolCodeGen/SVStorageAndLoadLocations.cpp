@@ -21,6 +21,7 @@
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/Common/LuthierError.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/IPPredicatedLivenessIModulePass.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
 #include "luthier/ToolCodeGen/StateValueArrayStorage.h"
@@ -351,10 +352,10 @@ static std::shared_ptr<StateValueArrayStorage> findFixedStateValueArrayStorage(
 
     LLVM_DEBUG(
 
-        llvm::dbgs()
+        luthier::dbgs()
             << "Number of AGPRs scavenged for fixed location SVA storage: "
             << AGPRsScavenged.size() << "\n";
-        llvm::dbgs()
+        luthier::dbgs()
         << "Number of SGPRs scavenged for fixed location SVA storage: "
         << SGPRsScavenged.size() << "\n";
 
@@ -365,19 +366,20 @@ static std::shared_ptr<StateValueArrayStorage> findFixedStateValueArrayStorage(
     for (const auto &StorageScheme : SupportedStorage) {
       if (StorageScheme == StateValueArrayStorage::SVS_SINGLE_VGPR)
         continue;
-      LLVM_DEBUG(llvm::dbgs() << "Evaluating fixed " << StorageScheme
-                              << " storage scheme.\n";);
+      LLVM_DEBUG(luthier::dbgs() << "Evaluating fixed " << StorageScheme
+                                 << " storage scheme.\n";);
       int NumAGPRsUsedByStorage =
           StateValueArrayStorage::getNumAGPRsUsed(StorageScheme);
       int NumSGPRsUsedByStorage =
           StateValueArrayStorage::getNumSGPRsUsed(StorageScheme);
-      LLVM_DEBUG(llvm::dbgs() << "Number of ARGPs required by the scheme: "
-                              << NumAGPRsUsedByStorage << "\n";
-                 llvm::dbgs() << "Number of SGPRs required by the scheme: "
-                              << NumSGPRsUsedByStorage << "\n";);
+      LLVM_DEBUG(luthier::dbgs() << "Number of ARGPs required by the scheme: "
+                                 << NumAGPRsUsedByStorage << "\n";
+                 luthier::dbgs() << "Number of SGPRs required by the scheme: "
+                                 << NumSGPRsUsedByStorage << "\n";);
       if (NumSGPRsUsedByStorage <= SGPRsScavenged.size() &&
           NumAGPRsUsedByStorage <= AGPRsScavenged.size()) {
-        LLVM_DEBUG(llvm::dbgs() << "Found a suitable fixed storage scheme!\n";);
+        LLVM_DEBUG(luthier::dbgs()
+                       << "Found a suitable fixed storage scheme!\n";);
         auto Out = StateValueArrayStorage::createSVAStorage(
             {}, AGPRsScavenged, SGPRsScavenged, StorageScheme);
         if (Out.takeError()) {
@@ -416,10 +418,12 @@ static std::shared_ptr<StateValueArrayStorage> findStateValueArrayStorageAtMI(
 
     LLVM_DEBUG(
 
-        llvm::dbgs() << "Number of AGPRs scavenged for location SVA storage: "
-                     << AGPRsScavenged.size() << "\n";
-        llvm::dbgs() << "Number of SGPRs scavenged for location SVA storage: "
-                     << SGPRsScavenged.size() << "\n";
+        luthier::dbgs()
+            << "Number of AGPRs scavenged for location SVA storage: "
+            << AGPRsScavenged.size() << "\n";
+        luthier::dbgs()
+        << "Number of SGPRs scavenged for location SVA storage: "
+        << SGPRsScavenged.size() << "\n";
 
     );
 

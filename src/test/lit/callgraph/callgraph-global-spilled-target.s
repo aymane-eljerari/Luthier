@@ -13,13 +13,15 @@
 // CHECK: _Z6kernelv -> [_Z3barvx0x0]
 // CHECK: Incomplete call sites (0):
 
-// HIP source (compiled with --offload-device-only for gfx908):
-//
-//   __device__ void bar() {}
-//   __global__ void kernel() { bar(); }
-//
-// This test verifies that a single direct device-function call is fully
-// resolved by the callgraph analysis.
+// Companion to callgraph-scratch-spilled-target.s: the spill-tracing logic is
+// address-space agnostic, not scratch-specific.  Here the constant callee
+// address (getpc + rel32) is spilled to *global* memory via a scalar
+// s_store_dwordx2 and reloaded via s_load_dwordx2 -- both lift to an
+// addrspace(1) store/load pair against a common base pointer.  The analysis
+// recovers the target by tracing the load back to its clobbering store via
+// MemorySSA, exactly as for the addrspace(5) scratch case.  (Scalar memory ops
+// are used because vector ds_/global_ stores route their data through VGPRs,
+// which are not constant-foldable -- see callgraph-vgpr-mediated-target.s.)
 
 	.amdgcn_target "amdgcn-amd-amdhsa--gfx908"
 	.amdhsa_code_object_version 6
@@ -49,10 +51,18 @@ _Z3barv:
 	.type   _Z6kernelv,@function
 _Z6kernelv:
 	s_mov_b32 s32, 0
+	; global base address (value is irrelevant to the analysis)
+	s_mov_b32 s2, 0
+	s_mov_b32 s3, 0
+	; compute &bar into s[0:1]
 	s_getpc_b64 s[0:1]
 	s_add_u32 s0, s0, _Z3barv@rel32@lo+4
 	s_addc_u32 s1, s1, _Z3barv@rel32@hi+12
-	s_swappc_b64 s[30:31], s[0:1]
+	; spill the pointer to global memory, then reload it into s[4:5]
+	s_store_dwordx2 s[0:1], s[2:3], 0x0
+	s_load_dwordx2 s[4:5], s[2:3], 0x0
+	s_waitcnt lgkmcnt(0)
+	s_swappc_b64 s[30:31], s[4:5]
 	s_endpgm
 	.section .rodata,"a",@progbits
 	.p2align 6, 0x0

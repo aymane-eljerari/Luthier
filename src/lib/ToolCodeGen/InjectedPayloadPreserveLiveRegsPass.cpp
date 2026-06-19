@@ -19,6 +19,7 @@
 #include "luthier/ToolCodeGen/InjectedPayloadPreserveLiveRegsPass.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include "luthier/ToolCodeGen/IPPredicatedLivenessIModulePass.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAccessedRegsAnalysis.h"
@@ -56,7 +57,7 @@ void InjectedPayloadPreserveLiveRegsPass::getAnalysisUsage(
 }
 
 bool InjectedPayloadPreserveLiveRegsPass::runOnModule(llvm::Module &IModule) {
-  LLVM_DEBUG(llvm::dbgs() << "=== " << getPassName() << " ===\n");
+  LLVM_DEBUG(luthier::dbgs() << "=== " << getPassName() << " ===\n");
 
   llvm::MachineModuleInfo &MMI =
       getAnalysis<llvm::MachineModuleInfoWrapperPass>().getMMI();
@@ -76,17 +77,17 @@ bool InjectedPayloadPreserveLiveRegsPass::runOnModule(llvm::Module &IModule) {
 
     const PayloadLiveSets *LS = Liveness.getLiveSetsForPayload(F);
     if (!LS) {
-      LLVM_DEBUG(llvm::dbgs()
+      LLVM_DEBUG(luthier::dbgs()
                  << "  no liveness for payload " << F.getName() << "\n");
       continue;
     }
     LLVM_DEBUG({
       const llvm::TargetRegisterInfo *TRIDbg =
           MF->getSubtarget().getRegisterInfo();
-      llvm::dbgs() << "  payload " << F.getName() << " Active={";
+      luthier::dbgs() << "  payload " << F.getName() << " Active={";
       for (llvm::MCPhysReg R : LS->Active)
-        llvm::dbgs() << " " << llvm::printReg(R, TRIDbg);
-      llvm::dbgs() << " }\n";
+        luthier::dbgs() << " " << llvm::printReg(R, TRIDbg);
+      luthier::dbgs() << " }\n";
     });
 
     // Compute Preserve = Active \ (Reads U Writes). Under the C calling
@@ -125,7 +126,7 @@ bool InjectedPayloadPreserveLiveRegsPass::runOnModule(llvm::Module &IModule) {
     for (llvm::MCPhysReg PhysReg : Preserve) {
       const llvm::TargetRegisterClass *RC = TRI->getPhysRegBaseClass(PhysReg);
       if (!RC) {
-        LLVM_DEBUG(llvm::dbgs()
+        LLVM_DEBUG(luthier::dbgs()
                    << "  skipping " << llvm::printReg(PhysReg, TRI)
                    << ": no reg class\n");
         continue;
@@ -151,7 +152,7 @@ bool InjectedPayloadPreserveLiveRegsPass::runOnModule(llvm::Module &IModule) {
         }
       }
       if (IsArchReg) {
-        LLVM_DEBUG(llvm::dbgs()
+        LLVM_DEBUG(luthier::dbgs()
                    << "  skipping " << llvm::printReg(PhysReg, TRI)
                    << ": architectural register (not preserved)\n");
         continue;
@@ -159,7 +160,7 @@ bool InjectedPayloadPreserveLiveRegsPass::runOnModule(llvm::Module &IModule) {
       const llvm::TargetRegisterClass *CrossCopyRC =
           TRI->getCrossCopyRegClass(RC);
       if (!CrossCopyRC) {
-        LLVM_DEBUG(llvm::dbgs()
+        LLVM_DEBUG(luthier::dbgs()
                    << "  skipping " << llvm::printReg(PhysReg, TRI)
                    << ": no cross-copy class\n");
         continue;
@@ -171,7 +172,7 @@ bool InjectedPayloadPreserveLiveRegsPass::runOnModule(llvm::Module &IModule) {
       // or are application-level architectural state that the lifted
       // code doesn't expect to survive an instrumentation boundary.
       if (!CrossCopyRC->isAllocatable()) {
-        LLVM_DEBUG(llvm::dbgs()
+        LLVM_DEBUG(luthier::dbgs()
                    << "  skipping " << llvm::printReg(PhysReg, TRI)
                    << ": cross-copy class not allocatable\n");
         continue;

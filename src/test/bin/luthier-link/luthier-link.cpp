@@ -27,6 +27,7 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/ToolOutputFile.h>
 #include <llvm/Support/WithColor.h>
+#include <luthier/Common/Debug.h>
 #include <luthier/Common/ErrorCheck.h>
 #include <luthier/Common/GenericLuthierError.h>
 
@@ -44,6 +45,7 @@ static llvm::cl::opt<std::string>
 int main(int Argc, char *Argv[]) {
   llvm::InitLLVM X(Argc, Argv);
 
+  luthier::registerDebugCLOptions();
   llvm::cl::HideUnrelatedOptions(
       {&LuthierLinkOptions, &llvm::getColorCategory()});
   llvm::cl::ParseCommandLineOptions(Argc, Argv, "Luthier link tool\n");

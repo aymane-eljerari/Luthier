@@ -32,8 +32,10 @@
 //   rdna4-instruction-set-architecture.pdf, page 175.
 def S_ADDK_I32_sem : InstSISemantic<S_ADDK_I32> {
   let Semantic = [
-    (DefVal $tmp_add, (LLVMAdd (GetNamedOperand $src0), (GetNamedOperand $simm16))),
-    SetSCCImplicit<(LLVMCmp LLVMICmpUGE, (GetVal $tmp_add), (ConstantInt si_llvm_i32_ty, 0x100000000))>.ret,
+    (DefVal $tmp_add,
+      (LLVMAdd (LLVMZExt (GetNamedOperand $src0), si_llvm_i64_ty),
+               (LLVMZExt (GetNamedOperand $simm16), si_llvm_i64_ty))),
+    SetSCCImplicit<(LLVMCmp LLVMICmpUGE, (GetVal $tmp_add), (ConstantInt si_llvm_i64_ty, 0x100000000))>.ret,
     (SetNamedOperand $sdst, (LLVMTrunc (GetVal $tmp_add), si_llvm_i32_ty))
   ];
 }

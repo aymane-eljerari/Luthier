@@ -33,10 +33,6 @@ template <typename T> struct DenseMapInfo<std::reference_wrapper<T>> {
     return std::reference_wrapper<T>(*DenseMapInfo<T *>::getEmptyKey());
   }
 
-  static std::reference_wrapper<T> getTombstoneKey() {
-    return std::reference_wrapper<T>(*DenseMapInfo<T *>::getTombstoneKey());
-  }
-
   static unsigned getHashValue(const std::reference_wrapper<T> &Val) {
     return DenseMapInfo<T *>::getHashValue(&Val.get());
   }

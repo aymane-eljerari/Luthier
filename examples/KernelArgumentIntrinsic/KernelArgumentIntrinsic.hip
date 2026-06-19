@@ -32,6 +32,7 @@
 #include <llvm/Support/Signals.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
+#include <luthier/Common/Debug.h>
 #include <luthier/Common/ErrorCheck.h>
 #include <luthier/Common/Stacktrace.h>
 #include <luthier/HSA/AqlPacket.h>
@@ -48,7 +49,7 @@
 #include <luthier/ToolCodeGen/InstrumentationPMDriver.h>
 #include <luthier/ToolCodeGen/InstrumentationPass.h>
 #include <luthier/ToolCodeGen/IPPredicatedCFG.h>
-#include <luthier/ToolCodeGen/LuthierCallGraph.h>
+#include <luthier/ToolCodeGen/TraceCallGraph.h>
 #include <luthier/ToolCodeGen/MemoryAllocationAccessor.h>
 #include <luthier/ToolCodeGen/MetadataParserAnalysis.h>
 #include <luthier/ToolCodeGen/NewPMAsmPrinter.h>
@@ -238,6 +239,7 @@ static void atToolFini(void *) {
     AmdExtSnapshot = nullptr;
     delete CoreApiSnapshot;
     CoreApiSnapshot = nullptr;
+    luthier::finalizeStreams();
   });
 }
 
@@ -246,6 +248,7 @@ static void atToolFini() { atToolFini(nullptr); }
 static void atToolInit(void *) {
   static std::once_flag Once{};
   std::call_once(Once, [] {
+    luthier::initializeStreams();
     luthier::outs() << "Kernel argument intrinsic tool is launching.\n";
     std::atexit(atToolFini);
 
@@ -270,6 +273,7 @@ static void atToolInit(void *) {
       llvm::report_fatal_error(std::move(Err));
 
     const auto Argv = "";
+    luthier::registerDebugCLOptions();
     LUTHIER_REPORT_FATAL_ON_ERROR(LUTHIER_GENERIC_ERROR_CHECK(
         llvm::cl::ParseCommandLineOptions(
             0, &Argv, "Luthier Kernel Argument Intrinsic Tool",

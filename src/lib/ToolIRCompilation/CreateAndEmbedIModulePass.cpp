@@ -17,6 +17,7 @@
 /// Implements the \c CreateAndEmbedIModulePass class.
 //===----------------------------------------------------------------------===//
 #include "luthier/ToolIRCompilation/CreateAndEmbedIModulePass.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolIRCompilation/ExternalizeGlobalsPass.h"
 #include "luthier/ToolIRCompilation/FinalizeIntrinsicsPass.h"
 #include "luthier/ToolIRCompilation/MarkAnnotationsPass.h"
@@ -54,7 +55,9 @@ CreateAndEmbedIModulePass::run(llvm::Module &M,
   std::unique_ptr<llvm::Module> Clone = llvm::CloneModule(M);
 
   llvm::ModuleAnalysisManager CloneMAM;
-  llvm::PassBuilder PB;
+  llvm::PassBuilder PB(/*TM=*/nullptr, llvm::PipelineTuningOptions(),
+                       /*PGOOpt=*/std::nullopt, /*PIC=*/nullptr,
+                       /*FS=*/nullptr);
   PB.registerModuleAnalyses(CloneMAM);
 
   llvm::ModulePassManager InnerMPM;
@@ -65,9 +68,9 @@ CreateAndEmbedIModulePass::run(llvm::Module &M,
   InnerMPM.addPass(SubstituteAMDGCNIntrinsicsPass());
   InnerMPM.run(*Clone, CloneMAM);
 
-  LLVM_DEBUG(llvm::dbgs() << "Embedded Module " << Clone->getName()
-                          << " dump:\n";
-             Clone->print(llvm::dbgs(), nullptr));
+  LLVM_DEBUG(luthier::dbgs()
+                 << "Embedded Module " << Clone->getName() << " dump:\n";
+             Clone->print(luthier::dbgs(), nullptr));
 
   llvm::SmallVector<char> Data;
   llvm::raw_svector_ostream OS(Data);

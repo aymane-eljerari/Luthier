@@ -25,6 +25,7 @@
 #include "luthier/ToolCodeGen/SVAPhysVGPRPinPass.h"
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include "luthier/ToolCodeGen/InjectedPayloadAndInstPointAnalysis.h"
 #include "luthier/ToolCodeGen/SVStorageAndLoadLocations.h"
@@ -95,8 +96,8 @@ bool SVAPhysVGPRPinPass::runOnMachineFunction(llvm::MachineFunction &MF) {
   }
   llvm::MCRegister TargetPhys = LoadPlan->StateValueArrayLoadVGPR;
   if (!TargetPhys) {
-    LLVM_DEBUG(llvm::dbgs() << "  no SVA load VGPR for " << F.getName()
-                            << "; nothing to pin\n");
+    LLVM_DEBUG(luthier::dbgs() << "  no SVA load VGPR for " << F.getName()
+                               << "; nothing to pin\n");
     return false;
   }
 
@@ -108,8 +109,8 @@ bool SVAPhysVGPRPinPass::runOnMachineFunction(llvm::MachineFunction &MF) {
   llvm::MachineRegisterInfo &MRI = MF.getRegInfo();
   MRI.setSimpleHint(LaneVGPR, TargetPhys);
 
-  LLVM_DEBUG(llvm::dbgs() << "  pinned LaneVGPR " << llvm::printReg(LaneVGPR)
-                          << " to "
+  LLVM_DEBUG(luthier::dbgs()
+             << "  pinned LaneVGPR " << llvm::printReg(LaneVGPR) << " to "
                           << llvm::printReg(
                                  TargetPhys,
                                  MF.getSubtarget().getRegisterInfo())

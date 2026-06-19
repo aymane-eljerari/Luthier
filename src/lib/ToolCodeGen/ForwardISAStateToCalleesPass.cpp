@@ -22,6 +22,7 @@
 #include "luthier/Common/ErrorCheck.h"
 #include "luthier/Common/GenericLuthierError.h"
 #include "luthier/Intrinsic/IntrinsicProcessor.h"
+#include "luthier/LLVM/streams.h"
 #include "luthier/ToolCodeGen/FunctionAnnotations.h"
 #include "luthier/ToolCodeGen/StateValueArraySpecs.h"
 #include <llvm/ADT/DenseMap.h>
@@ -885,12 +886,12 @@ void rewriteCallSite(llvm::CallBase *CB, llvm::Function *OldCallee,
 llvm::PreservedAnalyses
 ForwardISAStateToCalleesPass::run(llvm::Module &IModule,
                                   llvm::ModuleAnalysisManager &IMAM) {
-  LLVM_DEBUG(llvm::dbgs() << "=== ForwardISAStateToCalleesPass: module '"
+  LLVM_DEBUG(luthier::dbgs() << "=== ForwardISAStateToCalleesPass: module '"
                           << IModule.getName() << "' ===\n");
 
   PlaceholderEffectsMap EffectsByKey = buildPlaceholderEffectsMap(IModule);
   if (EffectsByKey.empty()) {
-    LLVM_DEBUG(llvm::dbgs() << "  No placeholders; nothing to do.\n");
+    LLVM_DEBUG(luthier::dbgs() << "  No placeholders; nothing to do.\n");
     return llvm::PreservedAnalyses::all();
   }
 
@@ -916,7 +917,7 @@ ForwardISAStateToCalleesPass::run(llvm::Module &IModule,
     for (auto &[F, N] : NeedsOrErr->Needs) {
       if (N.empty())
         continue;
-      llvm::dbgs() << "  Needs[" << F->getName() << "]: " << N.SVA.size()
+      luthier::dbgs() << "  Needs[" << F->getName() << "]: " << N.SVA.size()
                    << " SVA, " << N.ReadPhysRegs.size() << " readReg, "
                    << N.WrittenPhysRegs.size() << " writeReg\n";
     }
