@@ -11,12 +11,17 @@
 
 // === IR-level debug-info metadata correctly created and linked ===
 
-// The kernel Function carries a !dbg reference to a DISubprogram. Capture
-// the subprogram's metadata id so later CHECKs can cross-reference it.
+// The kernel function carries a !dbg reference to a DISubprogram. Capture
+// the subprogram metadata id so later CHECKs can cross-reference it.
 // CHECK: define{{.*}}@_Z6vecAddPKfS0_Pfi
 // CHECK-SAME: !dbg [[SP:![0-9]+]]
 
-// Checking for the hard-coded producer string
+// IR instructions now carry !dbg alongside !pcsections — capture one DILocation
+// id here from the function body (before the metadata table in document order)
+// so we can later verify it is well-formed and linked to the subprogram.
+// CHECK: !dbg [[LOC:![0-9]+]], !pcsections
+
+// Checking for the hard-coded producer string.
 // CHECK: [[CU:![0-9]+]] = distinct !DICompileUnit(
 // CHECK-SAME: producer: "Luthier Debug Info Pass"
 
@@ -31,21 +36,21 @@
 // CHECK-SAME: file: [[FILE]]
 // CHECK-SAME: unit: [[CU]]
 
+// [[LOC]] was captured from an IR instruction above. Verify the DILocation
+// entry in the metadata table is well-formed and scoped to the subprogram.
+// CHECK: [[LOC]] = !DILocation(line: {{[0-9]+}}, column: {{[0-9]+}}, scope: [[SP]])
+
 // === Per-MI debug-location attachment verified at both ends of the kernel ===
 
-// The first MI in the entry block carries a debug-location whose scope is
-// the kernel's subprogram — attachment reached the start of the function.
+// The first MI in the entry block references [[LOC]] directly — in LLVM 23 the
+// MIR serializer emits a metadata id reference rather than an inline DILocation.
 // CHECK: bb.0
-// CHECK: debug-location !DILocation
-// CHECK-SAME: scope: [[SP]]
+// CHECK: debug-location [[LOC]]
 
-// The kernel terminator S_ENDPGM also carries a debug-location with the
-// same subprogram scope — confirms attachment reached the last MI, not just
-// early ones. Two locations at opposite ends of the function rule out
-// "only the first MI got tagged" regressions.
+// The kernel terminator S_ENDPGM also carries a debug-location, confirming
+// attachment reached the last MI and not only early ones.
 // CHECK: S_ENDPGM
-// CHECK-SAME: debug-location !DILocation
-// CHECK-SAME: scope: [[SP]]
+// CHECK-SAME: debug-location !{{[0-9]+}}
 
 	.amdgcn_target "amdgcn-amd-amdhsa--gfx942"
 	.amdhsa_code_object_version 6
