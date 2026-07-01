@@ -374,8 +374,8 @@ llvmGetPassPluginInfo() {
             MPM.addPass(luthier::DebugInfoPrinterPass(llvm::outs()));
             return true;
           }
-          if (Name == "luthier-callgraph-printer") {
-            MPM.addPass(luthier::LuthierCallGraphPrinter(llvm::outs()));
+          if (Name == "trace-callgraph-printer") {
+            MPM.addPass(luthier::TraceCallGraphPrinter(llvm::outs()));
             return true;
           }
           // if (Name == "luthier-ip-vector-cfg-printer") {
