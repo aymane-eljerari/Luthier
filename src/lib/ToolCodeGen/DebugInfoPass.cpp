@@ -226,6 +226,17 @@ llvm::PreservedAnalyses DebugInfoPass::run(llvm::Module &M,
     if (!FuncSP)
       continue;
 
+    // PC Section to IR instrcution map used to match MIR to IR instructions
+    llvm::DenseMap<llvm::MDNode*, llvm::SmallVector<llvm::Instruction*>> PCSectionIRMap;
+
+    for (llvm::BasicBlock &BB : F) {
+      for (llvm::Instruction &I : BB) {
+        if (auto *PCS = I.getMetadata(llvm::LLVMContext::MD_pcsections)) {
+          PCSectionIRMap[PCS].push_back(&I);
+        }
+      }
+    }
+
     // Iterate over all Traced Instructions
     for (llvm::MachineBasicBlock &MBB : *MF) {
       for (llvm::MachineInstr &MI : MBB) {
@@ -268,6 +279,15 @@ llvm::PreservedAnalyses DebugInfoPass::run(llvm::Module &M,
             llvm::DILocation *Loc =
                 llvm::DILocation::get(Ctx, Row.Line, Row.Column, FuncSP);
             MI.setDebugLoc(llvm::DebugLoc(Loc));
+            
+            // Match MIR to PC sections to propagate DILocation
+            auto It = PCSectionIRMap.find(MI.getPCSections()); 
+            if (It != PCSectionIRMap.end()) {
+              for (llvm::Instruction *I : It->second) {
+                I->setDebugLoc(llvm::DebugLoc(Loc));
+              }
+            }
+
 
             LLVM_DEBUG({
               std::string FileName;
