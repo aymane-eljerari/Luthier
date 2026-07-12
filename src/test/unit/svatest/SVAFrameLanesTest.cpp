@@ -54,15 +54,14 @@ protected:
 
   std::unique_ptr<llvm::TargetMachine>
   makeTM(llvm::StringRef CPU, llvm::StringRef Features = "") {
-    std::string Triple = "amdgcn-amd-amdhsa";
+    llvm::Triple TT{"amdgcn-amd-amdhsa"};
     std::string Err;
-    const llvm::Target *T = llvm::TargetRegistry::lookupTarget(Triple, Err);
+    const llvm::Target *T = llvm::TargetRegistry::lookupTarget(TT, Err);
     if (!T)
       return nullptr;
     llvm::TargetOptions Opts;
-    return std::unique_ptr<llvm::TargetMachine>(
-        T->createTargetMachine(llvm::Triple(Triple), CPU, Features, Opts,
-                               std::nullopt, std::nullopt));
+    return std::unique_ptr<llvm::TargetMachine>(T->createTargetMachine(
+        TT, CPU, Features, Opts, std::nullopt, std::nullopt));
   }
 
   /// Build a non-empty Module with a single stub function tagged for \p CPU.

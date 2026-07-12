@@ -128,15 +128,19 @@ function(luthier_add_tool target)
     message(FATAL_ERROR
             "luthier_add_tool(${target}): LuthierTooling target not found")
   endif ()
-  # LuthierTooling links LuthierAMDGPU PUBLICly; we need its
-  # INTERFACE_INCLUDE_DIRECTORIES too because LuthierTooling's own
-  # `$<BUILD_INTERFACE:${AMDGPU_INCLUDE_DIR}>` entry evaluates empty (a
-  # pre-existing CMakeLists ordering bug — see
-  # docs/ToolCompileDriver-Phase0-Inventory.md).
+
   set(_tooling_aux_targets "")
   foreach (_aux LuthierAMDGPU luthier::LuthierAMDGPU)
     if (TARGET ${_aux})
       list(APPEND _tooling_aux_targets ${_aux})
+      break ()
+    endif ()
+  endforeach ()
+
+  set(_amdgpu_tablegen_dep "")
+  foreach (_tg LuthierAMDGPUTableGen luthier::LuthierAMDGPUTableGen)
+    if (TARGET ${_tg})
+      set(_amdgpu_tablegen_dep ${_tg})
       break ()
     endif ()
   endforeach ()
@@ -226,9 +230,10 @@ function(luthier_add_tool target)
           OUTPUT "${_fatbin}"
           COMMAND ${_driver} ${_driver_args}
           DEPENDS
-            ${LAT_SOURCES}
-            ${_ir_plugin_target}
-            ${_driver_dep}
+          ${LAT_SOURCES}
+          ${_ir_plugin_target}
+          ${_driver_dep}
+          ${_amdgpu_tablegen_dep}
           WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
           COMMENT "luthier_add_tool(${target}): luthier-tool-compile"
           VERBATIM
